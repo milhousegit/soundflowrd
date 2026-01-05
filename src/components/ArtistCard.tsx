@@ -5,6 +5,7 @@ import { Play, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 import FavoriteButton from './FavoriteButton';
+import { useTap } from '@/hooks/useTap';
 
 interface ArtistCardProps {
   artist: Artist;
@@ -18,13 +19,11 @@ const ArtistCard: React.FC<ArtistCardProps> = ({ artist }) => {
     navigate(`/artist/${artist.id}`);
   };
 
+  const tap = useTap({ onTap: handleNavigate });
+
   return (
     <div
-      onClick={handleNavigate}
-      onTouchEnd={(e) => {
-        e.preventDefault();
-        handleNavigate();
-      }}
+      {...tap}
       className="group p-3 md:p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer touch-manipulation"
     >
       {/* Image */}

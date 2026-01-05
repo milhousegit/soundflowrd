@@ -1,10 +1,11 @@
 import React, { forwardRef } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { Play, Pause, Music, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { Play, Pause, Music, Cloud, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
+import { useTap } from '@/hooks/useTap';
 
 interface TrackCardProps {
   track: Track;
@@ -40,14 +41,12 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const tap = useTap({ onTap: handleClick });
+
     return (
       <div
         ref={ref}
-        onClick={handleClick}
-        onTouchEnd={(e) => {
-          e.preventDefault();
-          handleClick();
-        }}
+        {...tap}
         className={cn(
           "group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200 touch-manipulation",
           "hover:bg-secondary/80 active:scale-[0.99]",

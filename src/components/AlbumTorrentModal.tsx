@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import TapArea from '@/components/TapArea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -447,11 +448,12 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
                         key={torrent.torrentId}
                         className="border rounded-lg overflow-hidden"
                       >
-                        <button
-                          className="w-full p-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                          onClick={() => setExpandedTorrent(
+                        <TapArea
+                          as="button"
+                          onTap={() => setExpandedTorrent(
                             expandedTorrent === torrent.torrentId ? null : torrent.torrentId
                           )}
+                          className="w-full p-3 flex items-center justify-between hover:bg-muted/50 transition-colors touch-manipulation"
                         >
                           <div className="flex items-center gap-3 flex-1 min-w-0">
                             <FolderOpen className="w-5 h-5 text-primary flex-shrink-0" />
@@ -467,7 +469,7 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
                           ) : (
                             <ChevronRight className="w-4 h-4" />
                           )}
-                        </button>
+                        </TapArea>
                         
                         {expandedTorrent === torrent.torrentId && (
                           <div className="border-t bg-muted/30 p-3">
