@@ -1,14 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, CloudDownload } from 'lucide-react';
+import { Play, Clock, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
-import AlbumTorrentModal from '@/components/AlbumTorrentModal';
 import FavoriteButton from '@/components/FavoriteButton';
 import { useSettings } from '@/contexts/SettingsContext';
-import { useAuth } from '@/contexts/AuthContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { getAlbum } from '@/lib/musicbrainz';
 import { mockAlbums, mockTracks } from '@/data/mockData';
@@ -19,16 +17,14 @@ const Album: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
-  const { settings, t } = useSettings();
-  const { profile } = useAuth();
+  const { t } = useSettings();
   const [album, setAlbum] = useState<AlbumType | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isTorrentModalOpen, setIsTorrentModalOpen] = useState(false);
   
   // Get track IDs for sync status checking
   const trackIds = useMemo(() => tracks.map(t => t.id), [tracks]);
-  const { isSynced, isSyncing } = useSyncedTracks(trackIds);
+  const { isSynced, isSyncing, isDownloading } = useSyncedTracks(trackIds);
 
   useEffect(() => {
     const fetchAlbum = async () => {
@@ -150,17 +146,6 @@ const Album: React.FC = () => {
           item={album}
           size="lg"
         />
-        
-        {/* Sync album button for torrent setup */}
-        <Button 
-          variant="ghost" 
-          size="icon"
-          onClick={() => setIsTorrentModalOpen(true)}
-          title={t('language') === 'it' ? "Sincronizza album" : "Sync album"}
-          className={!profile?.real_debrid_api_key ? "opacity-50" : ""}
-        >
-          <CloudDownload className="w-6 h-6" />
-        </Button>
       </div>
 
       {/* Track List */}
@@ -184,22 +169,11 @@ const Album: React.FC = () => {
               showSyncStatus={true}
               isSynced={isSynced(track.id)}
               isSyncing={isSyncing(track.id)}
+              isDownloading={isDownloading(track.id)}
             />
           ))}
         </div>
       </div>
-
-      {/* Album Torrent Modal */}
-      {album && (
-        <AlbumTorrentModal
-          isOpen={isTorrentModalOpen}
-          onClose={() => setIsTorrentModalOpen(false)}
-          albumId={album.id}
-          albumTitle={album.title}
-          artistName={album.artist}
-          tracks={displayTracks}
-        />
-      )}
     </div>
   );
 };

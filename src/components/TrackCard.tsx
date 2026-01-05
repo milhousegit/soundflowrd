@@ -1,7 +1,7 @@
 import React, { forwardRef } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { Play, Pause, Music, Cloud, Loader2 } from 'lucide-react';
+import { Play, Pause, Music, Cloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
@@ -16,16 +16,22 @@ interface TrackCardProps {
   index?: number;
   isSynced?: boolean;
   isSyncing?: boolean;
+  isDownloading?: boolean;
 }
 
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
-  ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing }, ref) => {
+  ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading }, ref) => {
     const { currentTrack, isPlaying, playTrack, toggle } = usePlayer();
-    const { isSynced: hookIsSynced, isSyncing: hookIsSyncing } = useSyncedTracks([track.id]);
+    const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
     
     const isCurrentTrack = currentTrack?.id === track.id;
     const isSynced = propIsSynced !== undefined ? propIsSynced : hookIsSynced(track.id);
     const isSyncing = propIsSyncing !== undefined ? propIsSyncing : hookIsSyncing(track.id);
+    const isDownloading = propIsDownloading !== undefined ? propIsDownloading : hookIsDownloading(track.id);
+
+    // Show cloud icon: blinking when syncing/downloading, solid when synced
+    const showCloudIcon = isSynced || isSyncing || isDownloading;
+    const isBlinking = isSyncing || isDownloading;
 
     const handleClick = () => {
       if (isCurrentTrack) {
@@ -94,13 +100,15 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
             )}>
               {track.title}
             </p>
-            {/* Sync status icon */}
-            {showSyncStatus && (isSynced || isSyncing) && (
-              isSyncing ? (
-                <Loader2 className="w-3.5 h-3.5 text-primary animate-spin flex-shrink-0" />
-              ) : (
-                <Cloud className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-              )
+            {/* Sync status icon - only show when synced or syncing/downloading */}
+            {showSyncStatus && showCloudIcon && (
+              <Cloud 
+                className={cn(
+                  "w-3.5 h-3.5 flex-shrink-0",
+                  isSynced && !isBlinking ? "text-green-500" : "text-primary",
+                  isBlinking && "animate-pulse"
+                )} 
+              />
             )}
           </div>
           {showArtist && (
