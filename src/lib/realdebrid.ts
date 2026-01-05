@@ -25,7 +25,7 @@ export async function searchStreams(
   console.log('Searching streams for:', query);
   
   const { data, error } = await supabase.functions.invoke('real-debrid', {
-    body: { action: 'search', apiKey, query },
+    body: { action: 'search', apiKey, query, debug: true },
   });
 
   if (error) {
@@ -34,8 +34,11 @@ export async function searchStreams(
   }
 
   console.log('Stream search result:', data);
-  
-  // Return the streams from the API
+  if (data?.debug && Array.isArray(data.debug)) {
+    console.groupCollapsed('[real-debrid debug]');
+    for (const line of data.debug) console.log(line);
+    console.groupEnd();
+  }
   if (data?.streams && Array.isArray(data.streams)) {
     return data.streams.map((s: any) => ({
       id: s.id,
