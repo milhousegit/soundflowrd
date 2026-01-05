@@ -203,6 +203,16 @@ const Player: React.FC = () => {
                   </div>
                 </div>
               )}
+              {downloadProgress !== null && !isSearchingStreams && (
+                <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+                  <div className="bg-card rounded-xl p-4 flex flex-col items-center">
+                    <Cloud className="w-8 h-8 text-primary animate-pulse mb-2" />
+                    <span className="text-sm text-foreground">
+                      {t('language') === 'it' ? "Salvataggio in cloud..." : "Saving to cloud..."}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
