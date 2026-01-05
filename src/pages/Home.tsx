@@ -1,17 +1,38 @@
 import React, { useEffect, useState } from 'react';
-import { Track } from '@/types/music';
-import { mockTracks, mockAlbums, mockPlaylists, mockArtists } from '@/data/mockData';
+import { Track, Album, Artist } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
+import { getNewReleases, getPopularArtists } from '@/lib/musicbrainz';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
-import { Clock, TrendingUp, ListMusic, Music } from 'lucide-react';
+import { Clock, TrendingUp, ListMusic, Music, Loader2 } from 'lucide-react';
 import { Play, Pause } from 'lucide-react';
+import { mockPlaylists } from '@/data/mockData';
 
 const Home: React.FC = () => {
   const [recentlyPlayed, setRecentlyPlayed] = useState<Track[]>([]);
+  const [newReleases, setNewReleases] = useState<Album[]>([]);
+  const [popularArtists, setPopularArtists] = useState<Artist[]>([]);
+  const [isLoadingReleases, setIsLoadingReleases] = useState(true);
+  const [isLoadingArtists, setIsLoadingArtists] = useState(true);
+  
   const { settings, t } = useSettings();
   const { currentTrack, isPlaying, playTrack, toggle } = usePlayer();
+
+  // Get country code from language
+  const getCountryFromLanguage = (lang: string): string => {
+    const langToCountry: Record<string, string> = {
+      'it': 'IT',
+      'en': 'US',
+      'es': 'ES',
+      'fr': 'FR',
+      'de': 'DE',
+      'pt': 'PT',
+    };
+    return langToCountry[lang] || 'IT';
+  };
+
+  const country = getCountryFromLanguage(settings.language);
 
   useEffect(() => {
     const stored = localStorage.getItem('recentlyPlayed');
@@ -20,6 +41,38 @@ const Home: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    const fetchNewReleases = async () => {
+      setIsLoadingReleases(true);
+      try {
+        const releases = await getNewReleases(country);
+        setNewReleases(releases);
+      } catch (error) {
+        console.error('Failed to fetch new releases:', error);
+      } finally {
+        setIsLoadingReleases(false);
+      }
+    };
+
+    fetchNewReleases();
+  }, [country]);
+
+  useEffect(() => {
+    const fetchPopularArtists = async () => {
+      setIsLoadingArtists(true);
+      try {
+        const artists = await getPopularArtists(country);
+        setPopularArtists(artists);
+      } catch (error) {
+        console.error('Failed to fetch popular artists:', error);
+      } finally {
+        setIsLoadingArtists(false);
+      }
+    };
+
+    fetchPopularArtists();
+  }, [country]);
+
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return t('goodMorning');
@@ -27,7 +80,7 @@ const Home: React.FC = () => {
     return t('goodEvening');
   };
 
-  const displayRecent = recentlyPlayed.length > 0 ? recentlyPlayed.slice(0, 6) : mockTracks.slice(0, 6);
+  const displayRecent = recentlyPlayed.slice(0, 6);
   const { homeDisplayOptions } = settings;
 
   return (
@@ -39,7 +92,7 @@ const Home: React.FC = () => {
       </div>
 
       {/* Recently Played Grid */}
-      {homeDisplayOptions.showRecentlyPlayed && (
+      {homeDisplayOptions.showRecentlyPlayed && displayRecent.length > 0 && (
         <section>
           <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
             <Clock className="w-5 h-5 md:w-6 md:h-6 text-primary" />
@@ -111,30 +164,46 @@ const Home: React.FC = () => {
         </section>
       )}
 
-      {/* New Releases */}
+      {/* New Releases - ordered by popularity in selected language */}
       {homeDisplayOptions.showNewReleases && (
         <section>
           <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
             <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-primary" />
             <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('newReleases')}</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
-            {mockAlbums.slice(0, 6).map((album) => (
-              <AlbumCard key={album.id} album={album} />
-            ))}
-          </div>
+          {isLoadingReleases ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : newReleases.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+              {newReleases.slice(0, 12).map((album) => (
+                <AlbumCard key={album.id} album={album} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-center py-8">Nessuna nuova uscita disponibile</p>
+          )}
         </section>
       )}
 
-      {/* Popular Artists */}
+      {/* Popular Artists - from selected language/country */}
       {homeDisplayOptions.showPopularArtists && (
         <section>
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-4 md:mb-6">{t('popularArtists')}</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
-            {mockArtists.map((artist) => (
-              <ArtistCard key={artist.id} artist={artist} />
-            ))}
-          </div>
+          {isLoadingArtists ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : popularArtists.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+              {popularArtists.map((artist) => (
+                <ArtistCard key={artist.id} artist={artist} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-center py-8">Nessun artista disponibile</p>
+          )}
         </section>
       )}
     </div>

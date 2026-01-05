@@ -4,10 +4,10 @@ import { Play, Shuffle, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
+import FavoriteButton from '@/components/FavoriteButton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { getArtist } from '@/lib/musicbrainz';
-import { mockArtists, mockTracks, mockAlbums } from '@/data/mockData';
+import { getArtist, getArtistTopTracks } from '@/lib/musicbrainz';
 import { Artist as ArtistType, Album, Track } from '@/types/music';
 
 const Artist: React.FC = () => {
@@ -16,6 +16,7 @@ const Artist: React.FC = () => {
   const { t } = useSettings();
   const [artist, setArtist] = useState<ArtistType | null>(null);
   const [releases, setReleases] = useState<Album[]>([]);
+  const [topTracks, setTopTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -24,17 +25,25 @@ const Artist: React.FC = () => {
       setIsLoading(true);
       
       try {
-        const data = await getArtist(id);
-        setArtist(data);
-        setReleases(data.releases || []);
+        const [artistData, tracksData] = await Promise.all([
+          getArtist(id),
+          getArtistTopTracks(id),
+        ]);
+        
+        setArtist(artistData);
+        
+        // Sort releases by date (most recent first)
+        const sortedReleases = (artistData.releases || []).sort((a, b) => {
+          const dateA = a.releaseDate ? new Date(a.releaseDate).getTime() : 0;
+          const dateB = b.releaseDate ? new Date(b.releaseDate).getTime() : 0;
+          return dateB - dateA;
+        });
+        setReleases(sortedReleases);
+        
+        // Set top tracks (these are actual tracks from the artist)
+        setTopTracks(tracksData.slice(0, 10));
       } catch (error) {
         console.error('Failed to fetch artist:', error);
-        // Fallback to mock data
-        const mockArtist = mockArtists.find(a => a.id === id);
-        if (mockArtist) {
-          setArtist(mockArtist);
-          setReleases(mockAlbums.filter(a => a.artistId === id));
-        }
       } finally {
         setIsLoading(false);
       }
@@ -59,12 +68,16 @@ const Artist: React.FC = () => {
     );
   }
 
-  const artistTracks = mockTracks.filter(t => t.artistId === id);
-  const displayTracks = artistTracks.length > 0 ? artistTracks : mockTracks.slice(0, 5);
-
   const handlePlayAll = () => {
-    if (displayTracks.length > 0) {
-      playTrack(displayTracks[0], displayTracks);
+    if (topTracks.length > 0) {
+      playTrack(topTracks[0], topTracks);
+    }
+  };
+
+  const handleShuffle = () => {
+    if (topTracks.length > 0) {
+      const shuffled = [...topTracks].sort(() => Math.random() - 0.5);
+      playTrack(shuffled[0], shuffled);
     }
   };
 
@@ -108,37 +121,40 @@ const Artist: React.FC = () => {
 
       {/* Actions */}
       <div className="px-4 md:px-8 py-4 md:py-6 flex items-center gap-3 md:gap-4">
-        <Button variant="player" size="player" onClick={handlePlayAll}>
+        <Button variant="player" size="player" onClick={handlePlayAll} disabled={topTracks.length === 0}>
           <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
         </Button>
-        <Button variant="outline" className="gap-2" size="sm">
+        <Button variant="outline" className="gap-2" size="sm" onClick={handleShuffle} disabled={topTracks.length === 0}>
           <Shuffle className="w-4 h-4" />
           Shuffle
         </Button>
+        <FavoriteButton itemType="artist" item={artist} size="md" variant="outline" />
       </div>
 
       {/* Popular Tracks */}
-      <section className="px-4 md:px-8 mb-8 md:mb-10">
-        <h2 className="text-lg md:text-2xl font-bold text-foreground mb-3 md:mb-4">{t('popular')}</h2>
-        <div className="space-y-1">
-          {displayTracks.map((track, index) => (
-            <TrackCard 
-              key={track.id} 
-              track={track}
-              queue={displayTracks}
-              index={index}
-              showArtist={false}
-            />
-          ))}
-        </div>
-      </section>
+      {topTracks.length > 0 && (
+        <section className="px-4 md:px-8 mb-8 md:mb-10">
+          <h2 className="text-lg md:text-2xl font-bold text-foreground mb-3 md:mb-4">{t('popular')}</h2>
+          <div className="space-y-1">
+            {topTracks.map((track, index) => (
+              <TrackCard 
+                key={track.id} 
+                track={track}
+                queue={topTracks}
+                index={index}
+                showArtist={false}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
-      {/* Albums */}
-      {(releases.length > 0 || mockAlbums.filter(a => a.artistId === id).length > 0) && (
+      {/* Discography - sorted by most recent */}
+      {releases.length > 0 && (
         <section className="px-4 md:px-8">
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-3 md:mb-4">{t('discography')}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
-            {(releases.length > 0 ? releases : mockAlbums.filter(a => a.artistId === id).slice(0, 4)).map((album) => (
+            {releases.map((album) => (
               <AlbumCard key={album.id} album={{ ...album, artist: artist.name, artistId: artist.id }} />
             ))}
           </div>

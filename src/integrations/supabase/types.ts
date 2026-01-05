@@ -47,6 +47,69 @@ export type Database = {
         }
         Relationships: []
       }
+      favorites: {
+        Row: {
+          created_at: string
+          id: string
+          item_artist: string | null
+          item_cover_url: string | null
+          item_data: Json | null
+          item_id: string
+          item_title: string
+          item_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_artist?: string | null
+          item_cover_url?: string | null
+          item_data?: Json | null
+          item_id: string
+          item_title: string
+          item_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_artist?: string | null
+          item_cover_url?: string | null
+          item_data?: Json | null
+          item_id?: string
+          item_title?: string
+          item_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          preferred_language: string | null
+          real_debrid_api_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id: string
+          preferred_language?: string | null
+          real_debrid_api_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          preferred_language?: string | null
+          real_debrid_api_key?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       track_file_mappings: {
         Row: {
           album_mapping_id: string

@@ -7,6 +7,64 @@ const corsHeaders = {
 
 const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2';
 const COVER_ART_API = 'https://coverartarchive.org';
+const FANART_API = 'https://webservice.fanart.tv/v3';
+
+// You can get a free API key from https://fanart.tv/get-an-api-key/
+const FANART_API_KEY = Deno.env.get('FANART_API_KEY') || '';
+
+async function getArtistImage(mbid: string): Promise<string | undefined> {
+  // Try fanart.tv first if we have an API key
+  if (FANART_API_KEY) {
+    try {
+      const response = await fetch(`${FANART_API}/music/${mbid}?api_key=${FANART_API_KEY}`);
+      if (response.ok) {
+        const data = await response.json();
+        // Get artistthumb or artistbackground
+        if (data.artistthumb && data.artistthumb.length > 0) {
+          return data.artistthumb[0].url;
+        }
+        if (data.artistbackground && data.artistbackground.length > 0) {
+          return data.artistbackground[0].url;
+        }
+      }
+    } catch (e) {
+      console.log('Fanart.tv fetch failed:', e);
+    }
+  }
+  
+  // Fallback: try to get from Wikipedia/Wikidata via MusicBrainz relations
+  try {
+    const url = `${MUSICBRAINZ_API}/artist/${mbid}?inc=url-rels&fmt=json`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'SoundFlow/1.0.0 (https://soundflow.app)' }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      // Find Wikidata relation
+      const wikidataRel = data.relations?.find((r: any) => r.type === 'wikidata');
+      if (wikidataRel) {
+        const wikidataId = wikidataRel.url?.resource?.split('/').pop();
+        if (wikidataId) {
+          // Get image from Wikidata
+          const wdResponse = await fetch(`https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`);
+          if (wdResponse.ok) {
+            const wdData = await wdResponse.json();
+            const imageFile = wdData.entities?.[wikidataId]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+            if (imageFile) {
+              // Convert to Commons URL
+              const fileName = encodeURIComponent(imageFile.replace(/ /g, '_'));
+              return `https://commons.wikimedia.org/wiki/Special:FilePath/${fileName}?width=500`;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.log('Wikipedia/Wikidata fetch failed:', e);
+  }
+  
+  return undefined;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -14,8 +72,8 @@ serve(async (req) => {
   }
 
   try {
-    const { action, query, id, limit = 25 } = await req.json();
-    console.log(`MusicBrainz request: action=${action}, query=${query}, id=${id}`);
+    const { action, query, id, limit = 25, country = 'IT' } = await req.json();
+    console.log(`MusicBrainz request: action=${action}, query=${query}, id=${id}, country=${country}`);
 
     const headers = {
       'User-Agent': 'SoundFlow/1.0.0 (https://soundflow.app)',
@@ -29,13 +87,30 @@ serve(async (req) => {
         const url = `${MUSICBRAINZ_API}/artist?query=${encodeURIComponent(query)}&limit=${limit}&fmt=json`;
         const response = await fetch(url, { headers });
         const data = await response.json();
-        result = data.artists?.map((a: any) => ({
+        
+        // Get images for top artists
+        const artists = await Promise.all((data.artists || []).slice(0, 10).map(async (a: any) => {
+          const imageUrl = await getArtistImage(a.id);
+          return {
+            id: a.id,
+            name: a.name,
+            imageUrl,
+            genres: a.tags?.slice(0, 3).map((t: any) => t.name) || [],
+            country: a.country,
+            type: a.type,
+          };
+        }));
+        
+        // Add remaining artists without images
+        const remaining = (data.artists || []).slice(10).map((a: any) => ({
           id: a.id,
           name: a.name,
           genres: a.tags?.slice(0, 3).map((t: any) => t.name) || [],
           country: a.country,
           type: a.type,
-        })) || [];
+        }));
+        
+        result = [...artists, ...remaining];
         break;
       }
 
@@ -87,12 +162,23 @@ serve(async (req) => {
         const response = await fetch(url, { headers });
         const data = await response.json();
         
+        // Get artist image
+        const imageUrl = await getArtistImage(id);
+        
         // Get releases with covers
-        const releasesUrl = `${MUSICBRAINZ_API}/release?artist=${id}&limit=20&fmt=json`;
+        const releasesUrl = `${MUSICBRAINZ_API}/release?artist=${id}&limit=30&fmt=json`;
         const releasesRes = await fetch(releasesUrl, { headers });
         const releasesData = await releasesRes.json();
         
-        const releases = await Promise.all((releasesData.releases || []).slice(0, 10).map(async (r: any) => {
+        // Sort by date and get unique albums
+        const sortedReleases = (releasesData.releases || [])
+          .sort((a: any, b: any) => {
+            const dateA = a.date ? new Date(a.date).getTime() : 0;
+            const dateB = b.date ? new Date(b.date).getTime() : 0;
+            return dateB - dateA;
+          });
+        
+        const releases = await Promise.all(sortedReleases.slice(0, 12).map(async (r: any) => {
           let coverUrl;
           try {
             const coverRes = await fetch(`${COVER_ART_API}/release/${r.id}`, { headers });
@@ -114,11 +200,48 @@ serve(async (req) => {
         result = {
           id: data.id,
           name: data.name,
+          imageUrl,
           genres: data.tags?.slice(0, 5).map((t: any) => t.name) || [],
           country: data.country,
           type: data.type,
           releases,
         };
+        break;
+      }
+
+      case 'get-artist-recordings': {
+        // Get popular recordings by this artist
+        const url = `${MUSICBRAINZ_API}/recording?artist=${id}&limit=${limit}&fmt=json`;
+        const response = await fetch(url, { headers });
+        const data = await response.json();
+        
+        // Get album covers for the recordings
+        const recordings = await Promise.all((data.recordings || []).slice(0, limit).map(async (r: any) => {
+          let coverUrl;
+          const albumId = r.releases?.[0]?.id;
+          if (albumId) {
+            try {
+              const coverRes = await fetch(`${COVER_ART_API}/release/${albumId}`, { headers });
+              if (coverRes.ok) {
+                const coverData = await coverRes.json();
+                coverUrl = coverData.images?.[0]?.thumbnails?.small || coverData.images?.[0]?.image;
+              }
+            } catch { /* no cover */ }
+          }
+          
+          return {
+            id: r.id,
+            title: r.title,
+            artist: r['artist-credit']?.[0]?.name || 'Unknown',
+            artistId: r['artist-credit']?.[0]?.artist?.id,
+            duration: r.length ? Math.floor(r.length / 1000) : 0,
+            album: r.releases?.[0]?.title,
+            albumId: r.releases?.[0]?.id,
+            coverUrl,
+          };
+        }));
+        
+        result = recordings;
         break;
       }
 
@@ -152,6 +275,70 @@ serve(async (req) => {
           coverUrl,
           tracks,
         };
+        break;
+      }
+
+      case 'get-new-releases': {
+        // Get recent releases, filter by country if specified
+        const today = new Date();
+        const threeMonthsAgo = new Date(today.setMonth(today.getMonth() - 3));
+        const dateStr = threeMonthsAgo.toISOString().split('T')[0];
+        
+        let queryStr = `date:[${dateStr} TO *]`;
+        if (country) {
+          queryStr += ` AND country:${country}`;
+        }
+        
+        const url = `${MUSICBRAINZ_API}/release?query=${encodeURIComponent(queryStr)}&limit=${limit}&fmt=json`;
+        const response = await fetch(url, { headers });
+        const data = await response.json();
+        
+        result = await Promise.all((data.releases || []).slice(0, limit).map(async (r: any) => {
+          let coverUrl;
+          try {
+            const coverRes = await fetch(`${COVER_ART_API}/release/${r.id}`, { headers });
+            if (coverRes.ok) {
+              const coverData = await coverRes.json();
+              coverUrl = coverData.images?.[0]?.thumbnails?.small || coverData.images?.[0]?.image;
+            }
+          } catch { /* no cover */ }
+          
+          return {
+            id: r.id,
+            title: r.title,
+            artist: r['artist-credit']?.[0]?.name || 'Unknown',
+            artistId: r['artist-credit']?.[0]?.artist?.id,
+            releaseDate: r.date,
+            trackCount: r['track-count'],
+            coverUrl,
+          };
+        }));
+        break;
+      }
+
+      case 'get-popular-artists': {
+        // Search for popular artists from a specific country
+        let queryStr = '*';
+        if (country) {
+          queryStr = `country:${country}`;
+        }
+        
+        const url = `${MUSICBRAINZ_API}/artist?query=${encodeURIComponent(queryStr)}&limit=${limit}&fmt=json`;
+        const response = await fetch(url, { headers });
+        const data = await response.json();
+        
+        // Get images for artists
+        result = await Promise.all((data.artists || []).slice(0, limit).map(async (a: any) => {
+          const imageUrl = await getArtistImage(a.id);
+          return {
+            id: a.id,
+            name: a.name,
+            imageUrl,
+            genres: a.tags?.slice(0, 3).map((t: any) => t.name) || [],
+            country: a.country,
+            type: a.type,
+          };
+        }));
         break;
       }
 

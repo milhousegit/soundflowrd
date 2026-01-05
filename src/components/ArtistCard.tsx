@@ -4,6 +4,7 @@ import { Artist } from '@/types/music';
 import { Play, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
+import FavoriteButton from './FavoriteButton';
 
 interface ArtistCardProps {
   artist: Artist;
@@ -47,7 +48,15 @@ const ArtistCard: React.FC<ArtistCardProps> = ({ artist }) => {
       </div>
 
       {/* Info */}
-      <h3 className="font-semibold text-sm md:text-base text-foreground truncate text-center">{artist.name}</h3>
+      <div className="flex items-center justify-center gap-1">
+        <h3 className="font-semibold text-sm md:text-base text-foreground truncate text-center">{artist.name}</h3>
+        <FavoriteButton
+          itemType="artist"
+          item={artist}
+          size="sm"
+          className="opacity-0 group-hover:opacity-100 transition-opacity"
+        />
+      </div>
       <p className="text-xs md:text-sm text-muted-foreground text-center">{t('artist')}</p>
     </div>
   );
