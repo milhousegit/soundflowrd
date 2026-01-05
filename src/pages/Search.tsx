@@ -33,6 +33,23 @@ const Search: React.FC = () => {
   } | null>(null);
   const { t } = useSettings();
 
+  // Normalize string for matching (remove accents, lowercase, trim)
+  const normalizeForMatch = (str: string): string => {
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/[^\w\s]/g, '') // Remove special chars
+      .trim();
+  };
+
+  // Check if a result matches the query
+  const matchesQuery = (text: string, searchQuery: string): boolean => {
+    const normalizedText = normalizeForMatch(text);
+    const normalizedQuery = normalizeForMatch(searchQuery);
+    return normalizedText.includes(normalizedQuery);
+  };
+
   const performSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults(null);
@@ -42,7 +59,28 @@ const Search: React.FC = () => {
     setIsLoading(true);
     try {
       const data = await searchAll(searchQuery);
-      setResults(data);
+      
+      // Filter results to only show items that contain the search query in their metadata
+      const filteredArtists = data.artists.filter(artist => 
+        matchesQuery(artist.name, searchQuery)
+      );
+      
+      const filteredAlbums = data.albums.filter(album => 
+        matchesQuery(album.title, searchQuery) || 
+        matchesQuery(album.artist, searchQuery)
+      );
+      
+      const filteredTracks = data.tracks.filter(track => 
+        matchesQuery(track.title, searchQuery) || 
+        matchesQuery(track.artist, searchQuery) ||
+        matchesQuery(track.album, searchQuery)
+      );
+      
+      setResults({
+        artists: filteredArtists,
+        albums: filteredAlbums,
+        tracks: filteredTracks,
+      });
     } catch (error) {
       console.error('Search error:', error);
       setResults({ artists: [], albums: [], tracks: [] });
