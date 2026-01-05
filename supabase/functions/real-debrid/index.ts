@@ -1383,19 +1383,38 @@ serve(async (req) => {
           const requestedFileNames = requestedFiles.map(f => f.filename.toLowerCase());
           
           console.log('Requested files:', requestedFileNames);
+          console.log('Total links from RD:', selectResult.links.length);
+          
+          // Real-Debrid returns links for ALL selected files in the torrent (not just the ones we just selected)
+          // We need to match each link to the correct file by unrestricting and comparing filenames
+          // IMPORTANT: Only add streams that match the files we explicitly requested (fileIds param)
           
           for (const rdLink of selectResult.links) {
             const stream = await unrestrictAndGetStream(apiKey, rdLink);
             if (stream) {
-              // Check if this stream matches one of the requested files
               const streamTitleLower = stream.title.toLowerCase();
-              const matchesRequested = requestedFileNames.some(fn => 
-                streamTitleLower === fn || 
-                streamTitleLower.includes(fn.replace(/\.[^.]+$/, '')) ||
-                fn.includes(streamTitleLower.replace(/\.[^.]+$/, ''))
-              );
               
-              if (matchesRequested || requestedFileNames.length === 0) {
+              // Normalize filenames for comparison (remove extension, normalize spaces/separators)
+              const normalizeForMatch = (str: string): string => {
+                return str
+                  .toLowerCase()
+                  .replace(/\.[^.]+$/, '') // remove extension
+                  .replace(/[-_.\s]+/g, ' ') // normalize separators
+                  .trim();
+              };
+              
+              const normalizedStreamTitle = normalizeForMatch(stream.title);
+              
+              // Check if this stream matches one of the REQUESTED files (not all selected files)
+              const matchesRequested = requestedFileNames.some(fn => {
+                const normalizedFn = normalizeForMatch(fn);
+                // Exact match or one contains the other
+                return normalizedStreamTitle === normalizedFn || 
+                       normalizedStreamTitle.includes(normalizedFn) ||
+                       normalizedFn.includes(normalizedStreamTitle);
+              });
+              
+              if (matchesRequested) {
                 console.log('Stream matches requested file:', stream.title);
                 streams.push({
                   ...stream,
@@ -1407,13 +1426,11 @@ serve(async (req) => {
             }
           }
           
-          // If no streams matched (shouldn't happen but just in case), return all
+          // If no streams matched after trying all links, this is a real problem - DON'T use fallback
+          // The fallback was causing the wrong file to play!
           if (streams.length === 0 && selectResult.links.length > 0) {
-            console.log('No streams matched, returning first link as fallback');
-            const fallbackStream = await unrestrictAndGetStream(apiKey, selectResult.links[0]);
-            if (fallbackStream) {
-              streams.push({ ...fallbackStream, source: 'Real-Debrid' });
-            }
+            console.log('WARNING: No streams matched the requested files. Requested:', requestedFileNames);
+            // Return empty - let the client know there's an issue rather than playing wrong file
           }
         }
         
