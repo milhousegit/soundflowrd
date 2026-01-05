@@ -231,29 +231,78 @@ function normalizeQuery(query: string): string[] {
   return words;
 }
 
+// Generate query variants for fuzzy matching
+function generateQueryVariants(query: string): string[] {
+  const words = normalizeQuery(query);
+  if (words.length <= 1) return [query];
+  
+  const variants = new Set<string>();
+  
+  // Original query
+  variants.add(query);
+  
+  // Words joined with different separators
+  variants.add(words.join(' '));      // "salmo hellvisback"
+  variants.add(words.join('-'));      // "salmo-hellvisback"
+  variants.add(words.join('.'));      // "salmo.hellvisback"
+  variants.add(words.join('_'));      // "salmo_hellvisback"
+  variants.add(words.join(''));       // "salmohellvisback" (no separator)
+  
+  // First word only (for broader search)
+  if (words[0].length >= 3) {
+    variants.add(words[0]);
+  }
+  
+  return Array.from(variants);
+}
+
 // Check if a title contains all query words (ignoring separators)
 function matchesAllWords(title: string, queryWords: string[]): boolean {
-  const normalizedTitle = title.toLowerCase().replace(/[\-_.]/g, ' ');
+  const normalizedTitle = title
+    .toLowerCase()
+    .replace(/[\-_.]/g, ' ')
+    .replace(/\s+/g, ' ');
   return queryWords.every(word => normalizedTitle.includes(word));
 }
 
-// Combined search from multiple sources
+// Dedupe results by magnet hash
+function dedupeResults(results: TorrentResult[]): TorrentResult[] {
+  const seen = new Set<string>();
+  return results.filter(r => {
+    // Extract hash from magnet
+    const hashMatch = r.magnet.match(/btih:([a-f0-9]+)/i);
+    const key = hashMatch ? hashMatch[1].toLowerCase() : r.title.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// Combined search from multiple sources with fuzzy matching
 async function searchTorrents(query: string): Promise<TorrentResult[]> {
   console.log('Searching all sources for:', query);
   
   const queryWords = normalizeQuery(query);
+  const queryVariants = generateQueryVariants(query);
   console.log('Query words:', queryWords);
+  console.log('Query variants:', queryVariants);
   
-  // Search multiple sources in parallel
-  const [apibayResults, corsaroResults] = await Promise.all([
-    searchApibay(query).catch(() => []),
-    searchCorsaroNero(query).catch(() => []),
-  ]);
+  // Search with multiple query variants in parallel
+  const searchPromises: Promise<TorrentResult[]>[] = [];
   
-  let allResults = [...apibayResults, ...corsaroResults];
+  for (const variant of queryVariants.slice(0, 3)) { // Limit to 3 variants to avoid too many requests
+    searchPromises.push(searchApibay(variant).catch(() => []));
+    searchPromises.push(searchCorsaroNero(variant).catch(() => []));
+  }
+  
+  const results = await Promise.all(searchPromises);
+  let allResults = results.flat();
+  
+  // Dedupe by magnet hash
+  allResults = dedupeResults(allResults);
+  console.log(`Total unique results after dedupe: ${allResults.length}`);
   
   // Filter results to only include those that contain ALL query words
-  // This handles cases like "Salmo Hellvisback" matching "Salmo - Hellvisback" or "Salmo.Hellvisback"
   if (queryWords.length > 1) {
     const filteredResults = allResults.filter(r => matchesAllWords(r.title, queryWords));
     console.log(`Filtered from ${allResults.length} to ${filteredResults.length} results matching all words`);
@@ -264,10 +313,10 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
     }
   }
   
-  // Sort by seeders (TPB results have seeders, others don't)
+  // Sort by seeders (best first)
   allResults.sort((a, b) => b.seeders - a.seeders);
   
-  console.log(`Found ${allResults.length} total torrents (TPB: ${apibayResults.length}, CNero: ${corsaroResults.length})`);
+  console.log(`Returning ${Math.min(allResults.length, 10)} torrents`);
   return allResults.slice(0, 10);
 }
 
