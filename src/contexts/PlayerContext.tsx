@@ -373,9 +373,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // If no file match found but we have torrents, at least show them
       if (result.torrents.length > 0) {
         addDebugLog('Match manuale richiesto', `Nessun file corrisponde a "${track.title}" (query usata: "${track.album} ${track.artist}")`, 'warning');
+        removeSyncingTrack(track.id);
         return false;
       }
       
+      removeSyncingTrack(track.id);
       return false;
     } catch (error) {
       addDebugLog('Errore ricerca album', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
@@ -459,12 +461,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           
           if (!foundInAlbum && showNoResultsToast) {
             addDebugLog('Nessun risultato', 'Nessuna sorgente trovata', 'error');
+            if (track) removeSyncingTrack(track.id);
             toast.error('Nessun contenuto trovato', {
               description: 'Non è stato trovato nessun risultato per questa traccia.',
             });
           }
         } else if (showNoResultsToast) {
           addDebugLog('Nessun risultato', 'Nessuna sorgente trovata e album non disponibile', 'error');
+          if (track) removeSyncingTrack(track.id);
           toast.error('Nessun contenuto trovato', {
             description: 'Non è stato trovato nessun risultato per questa traccia.',
           });
