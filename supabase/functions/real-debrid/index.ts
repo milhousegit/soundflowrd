@@ -111,31 +111,38 @@ async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
       return results;
     }
     
+    const toAbsoluteUrl = (href: string) => {
+      if (!href) return href;
+      if (href.startsWith('http://') || href.startsWith('https://')) return href;
+      return `https://${domain}${href.startsWith('/') ? '' : '/'}${href}`;
+    };
+
     // Extract torrent links from search results table
-    // Format: href="https://ilcorsaronero.link/torrent/50132/Geolier-Il-Coraggio-Dei-Bambini-..."
-    const torrentLinkRegex = /href="(https:\/\/ilcorsaronero\.link\/torrent\/\d+\/[^"]+)"/g;
+    // Supports absolute and relative links
+    const torrentLinkRegex = /href="((?:https:\/\/ilcorsaronero\.link)?\/torrent\/\d+\/[^"]+)"/g;
     const torrentLinks: string[] = [];
     let match;
-    
+
     while ((match = torrentLinkRegex.exec(html)) !== null) {
-      if (!torrentLinks.includes(match[1])) {
-        torrentLinks.push(match[1]);
+      const url = toAbsoluteUrl(match[1]);
+      if (!torrentLinks.includes(url)) {
+        torrentLinks.push(url);
       }
     }
-    
+
     console.log(`Found ${torrentLinks.length} torrent links on Corsaro Nero`);
     if (torrentLinks.length > 0) {
       console.log('First torrent link:', torrentLinks[0]);
     }
-    
+
     // Extract seeders and size from search results
     // Parse the table rows to get metadata
-    const rowRegex = /<tr[^>]*>[\s\S]*?<a[^>]*href="(https:\/\/ilcorsaronero\.link\/torrent\/\d+\/[^"]+)"[^>]*>([^<]+)<\/a>[\s\S]*?<td[^>]*class="[^"]*text-green[^"]*"[^>]*>\s*(\d+)[\s\S]*?<td[^>]*class="[^"]*tabular-nums[^"]*"[^>]*>\s*([\d.,]+\s*[A-Za-z]+)/g;
-    
+    const rowRegex = /<tr[^>]*>[\s\S]*?<a[^>]*href="((?:https:\/\/ilcorsaronero\.link)?\/torrent\/\d+\/[^"]+)"[^>]*>([^<]+)<\/a>[\s\S]*?<td[^>]*class="[^"]*text-green[^"]*"[^>]*>\s*(\d+)[\s\S]*?<td[^>]*class="[^"]*tabular-nums[^"]*"[^>]*>\s*([\d.,]+\s*[A-Za-z]+)/g;
+
     const torrentMetadata: Map<string, {title: string, seeders: number, size: string}> = new Map();
     let rowMatch;
     while ((rowMatch = rowRegex.exec(html)) !== null) {
-      const url = rowMatch[1];
+      const url = toAbsoluteUrl(rowMatch[1]);
       const title = rowMatch[2].trim();
       const seeders = parseInt(rowMatch[3]) || 0;
       const size = rowMatch[4]?.trim() || 'Unknown';
@@ -337,6 +344,7 @@ async function getAlbumTracks(apiKey: string, magnet: string, source: string): P
   torrentId: string;
   files: {id: number, path: string, filename: string}[];
   links: string[];
+  status?: string;
 } | null> {
   const rdHeaders = { 'Authorization': `Bearer ${apiKey}` };
   
@@ -401,23 +409,33 @@ async function getAlbumTracks(apiKey: string, magnet: string, source: string): P
       body: selectForm,
     });
     
-    // Wait for processing
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Get updated info with links
-    const infoRes2 = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
-      headers: rdHeaders,
-    });
-    
-    if (!infoRes2.ok) return null;
-    
-    const info2 = await infoRes2.json();
-    console.log('Status:', info2.status, 'Links:', info2.links?.length);
-    
-    return { 
-      torrentId, 
+    // Wait/poll for processing and link generation
+    let info2: any = null;
+
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 1500 : 2000));
+
+      const infoRes2 = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
+        headers: rdHeaders,
+      });
+
+      if (!infoRes2.ok) continue;
+
+      info2 = await infoRes2.json();
+      console.log('Status:', info2.status, 'Links:', info2.links?.length, 'Attempt:', attempt);
+
+      if (Array.isArray(info2.links) && info2.links.length > 0) {
+        break;
+      }
+    }
+
+    if (!info2) return null;
+
+    return {
+      torrentId,
       files: audioFiles,
-      links: info2.links || []
+      links: info2.links || [],
+      status: info2.status,
     };
   } catch (error) {
     console.error('Get album tracks error:', error);
@@ -505,8 +523,13 @@ serve(async (req) => {
   }
 
   try {
-    const { action, apiKey, query, link } = await req.json();
+    const { action, apiKey, query, link, debug } = await req.json();
     console.log(`Real-Debrid: action=${action}, query=${query?.slice(0, 50)}`);
+
+    const debugLogs: string[] = [];
+    const dbg = (msg: string) => {
+      if (debug) debugLogs.push(msg);
+    };
 
     if (!apiKey) {
       throw new Error('Real-Debrid API key is required');
@@ -543,9 +566,13 @@ serve(async (req) => {
         
         for (const searchQuery of searchQueries) {
           if (streams.length >= 5) break;
-          
+
           console.log('Trying search query:', searchQuery);
+          dbg(`Trying query: ${searchQuery}`);
+
           const torrents = await searchTorrents(searchQuery);
+          dbg(`Torrents found: ${torrents.length}${torrents.length ? ` | top: ${torrents.slice(0, 3).map(t => t.title.slice(0, 40)).join(' | ')}` : ''}`);
+
           
           for (const torrent of torrents.slice(0, 5)) {
             if (streams.length >= 8) break;
@@ -555,7 +582,8 @@ serve(async (req) => {
             try {
               console.log('Processing album/torrent:', torrent.title.slice(0, 50));
               const albumData = await getAlbumTracks(apiKey, torrent.magnet, torrent.source);
-              
+              dbg(`RD process: ${torrent.source} | ${torrent.title.slice(0, 60)} | status=${albumData?.status ?? 'null'} links=${albumData?.links?.length ?? 0} audio=${albumData?.files?.length ?? 0}`);
+
               if (albumData && albumData.files.length > 0 && albumData.links.length > 0) {
                 // Find best matching track(s) in the album
                 const matchedTracks = findBestTrackMatch(albumData.files, trackName, artistName);
@@ -624,7 +652,7 @@ serve(async (req) => {
         });
         
         console.log(`Returning ${streams.length} streams`);
-        result = { streams };
+        result = debug ? { streams, debug: debugLogs } : { streams };
         break;
       }
 
