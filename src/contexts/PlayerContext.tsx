@@ -1050,20 +1050,22 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // Pre-load next track in queue when current track starts playing
   useEffect(() => {
+    // Skip if conditions aren't met
+    if (!credentials?.realDebridApiKey) return;
+    if (!state.currentTrack || !state.isPlaying) return;
+    
+    const currentTrackId = state.currentTrack.id;
+    const currentAlbumId = state.currentTrack.albumId;
+    const nextIndex = state.queueIndex + 1;
+    if (nextIndex >= state.queue.length) return;
+    
+    const nextTrack = state.queue[nextIndex];
+    if (!nextTrack?.albumId) return;
+    
+    // IMPORTANT: avoid interfering with current playback when the next track is in the same album/torrent.
+    if (nextTrack.albumId === currentAlbumId) return;
+
     const preloadNextTrack = async () => {
-      if (!credentials?.realDebridApiKey) return;
-      if (!state.currentTrack || !state.isPlaying) return;
-      
-      const nextIndex = state.queueIndex + 1;
-      if (nextIndex >= state.queue.length) return;
-      
-      const nextTrack = state.queue[nextIndex];
-      if (!nextTrack?.albumId) return;
-      
-      // IMPORTANT: avoid interfering with current playback when the next track is in the same album/torrent.
-      // Selecting files at provider level changes RD selection state and can swap the currently playing file.
-      if (nextTrack.albumId === state.currentTrack.albumId) return;
-      
       // Check if next track already has a mapping
       const { data: existingMapping } = await supabase
         .from('track_file_mappings')
@@ -1071,12 +1073,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         .eq('track_id', nextTrack.id)
         .maybeSingle();
       
-      if (existingMapping) {
-        // Already synced, nothing to do
-        return;
-      }
+      if (existingMapping) return;
       
-      // Pre-search for the next track (silently, without affecting current UI)
       console.log('Pre-loading next track:', nextTrack.title);
       
       if (nextTrack.album?.trim() && nextTrack.artist?.trim()) {
@@ -1087,7 +1085,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           );
           
           if (result.torrents.length > 0) {
-            // Try to find and select matching file
             const normalizeForMatch = (str: string): string => {
               return str
                 .toLowerCase()
@@ -1107,7 +1104,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 });
                 
                 if (matchingFile) {
-                  // Select this file to start caching
                   await selectFilesAndPlay(credentials.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
                   console.log('Pre-loaded next track file:', matchingFile.filename);
                   break;
@@ -1124,7 +1120,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Delay pre-load to not interfere with current track loading
     const timeout = setTimeout(preloadNextTrack, 5000);
     return () => clearTimeout(timeout);
-  }, [state.currentTrack?.id, state.isPlaying, state.queueIndex, state.queue, credentials]);
+  }, [state.currentTrack, state.isPlaying, state.queueIndex, state.queue, credentials]);
 
   return (
     <PlayerContext.Provider
