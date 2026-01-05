@@ -142,7 +142,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
     const hasErrors = debugLogs.some(log => log.status === 'error');
 
     // Check if we're in a downloading state (torrent found but still downloading)
-    const isDownloading = downloadProgress !== null || torrents.some(t => 
+    const isDownloading = isLoading || downloadProgress !== null || torrents.some(t => 
       ['downloading', 'queued', 'magnet_conversion'].includes(t.status)
     );
     const hasFoundSources = alternatives.length > 0 || torrents.length > 0;

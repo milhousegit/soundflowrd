@@ -390,51 +390,70 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
 
         <div className="flex-1 overflow-hidden flex flex-col gap-4">
           {/* Existing mapping info */}
-          {existingMapping && (
-            <div className="p-3 bg-primary/10 rounded-lg flex items-center justify-between">
-              <div className="text-sm">
-                <span className="text-muted-foreground">Mapping esistente:</span>{' '}
-                <span className="font-medium">{existingMapping.torrent_title}</span>
-                <span className="text-muted-foreground ml-2">
-                  ({existingMapping.track_file_mappings?.length || 0} tracce sincronizzate)
+          {existingMapping && !selectedTorrent && torrents.length === 0 && (
+            <div className="p-3 bg-primary/10 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Mapping esistente:</span>{' '}
+                  <span className="font-medium">{existingMapping.torrent_title}</span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  ({existingMapping.track_file_mappings?.length || 0}/{tracks.length} tracce)
                 </span>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setExistingMapping(null)}
-              >
-                Riconfigura
-              </Button>
-            </div>
-          )}
-
-          {/* Search section */}
-          {!existingMapping && !selectedTorrent && (
-            <>
-              <div className="text-sm text-muted-foreground">
-                Cerca una cartella torrent contenente l'album completo. Il software abbinerà automaticamente le tracce ai file.
-              </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-3">
                 <Button 
                   onClick={handleSearch} 
                   disabled={isSearching}
                   className="flex-1"
-                  size="lg"
+                  variant="outline"
                 >
                   {isSearching ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Ricerca torrent album...
+                      Ricerca...
                     </>
                   ) : (
                     <>
                       <FolderOpen className="w-4 h-4 mr-2" />
-                      Cerca cartella album
+                      Cerca nuovo torrent
                     </>
                   )}
                 </Button>
               </div>
+            </div>
+          )}
+
+          {/* Search section - show when no existing mapping or when torrents found */}
+          {((!existingMapping && !selectedTorrent) || torrents.length > 0) && (
+            <>
+              {!existingMapping && !selectedTorrent && torrents.length === 0 && (
+                <>
+                  <div className="text-sm text-muted-foreground">
+                    Cerca una cartella torrent contenente l'album completo. Il software abbinerà automaticamente le tracce ai file.
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handleSearch} 
+                      disabled={isSearching}
+                      className="flex-1"
+                      size="lg"
+                    >
+                      {isSearching ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Ricerca torrent album...
+                        </>
+                      ) : (
+                        <>
+                          <FolderOpen className="w-4 h-4 mr-2" />
+                          Cerca cartella album
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </>
+              )}
 
               {/* Torrent list */}
               {torrents.length > 0 && (
