@@ -80,6 +80,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   
   // Track ID currently being searched - used to cancel stale searches
   const currentSearchTrackIdRef = useRef<string | null>(null);
+  
+  // Cache for album torrent - reuse when playing multiple tracks from same album
+  const albumCacheRef = useRef<{
+    albumId: string;
+    torrents: TorrentInfo[];
+    searchedAt: number;
+  } | null>(null);
 
   const addDebugLog = useCallback((step: string, details?: string, status: 'info' | 'success' | 'error' | 'warning' = 'info') => {
     setDebugLogs(prev => [...prev, { timestamp: new Date(), step, details, status }]);
@@ -306,6 +313,85 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, []);
 
+  // Try to match track from cached torrents (no network request needed)
+  const matchTrackFromCache = useCallback(async (track: Track): Promise<boolean> => {
+    if (!credentials?.realDebridApiKey || !track.albumId) return false;
+    
+    const cache = albumCacheRef.current;
+    if (!cache || cache.albumId !== track.albumId || cache.torrents.length === 0) {
+      return false;
+    }
+    
+    // Cache is valid (same album) - try to find matching file
+    addDebugLog('Cache album', `Uso cache esistente (${cache.torrents.length} torrent)`, 'info');
+    
+    for (const torrent of cache.torrents) {
+      if (currentSearchTrackIdRef.current !== track.id) {
+        return false;
+      }
+      
+      if (torrent.files && torrent.files.length > 0) {
+        const matchingFile = torrent.files.find((file) => {
+          const matchesFileName = flexibleMatch(file.filename || '', track.title);
+          const matchesPath = flexibleMatch(file.path || '', track.title);
+          return matchesFileName || matchesPath;
+        });
+        
+        if (matchingFile) {
+          addDebugLog('Match da cache', `"${matchingFile.filename}" ≈ "${track.title}"`, 'success');
+          
+          const selectResult = await selectFilesAndPlay(
+            credentials.realDebridApiKey,
+            torrent.torrentId,
+            [matchingFile.id]
+          );
+          
+          if (currentSearchTrackIdRef.current !== track.id) {
+            return false;
+          }
+          
+          if (selectResult.error || selectResult.status === 'error') {
+            continue;
+          }
+          
+          await saveFileMapping({
+            track,
+            torrentId: torrent.torrentId,
+            torrentTitle: torrent.title,
+            fileId: matchingFile.id,
+            fileName: matchingFile.filename,
+            filePath: matchingFile.path,
+          });
+          
+          if (selectResult.streams.length > 0) {
+            setAlternativeStreams(selectResult.streams);
+            setCurrentStreamId(selectResult.streams[0].id);
+            setDownloadProgress(null);
+            setDownloadStatus(null);
+            
+            if (audioRef.current && selectResult.streams[0].streamUrl) {
+              audioRef.current.src = selectResult.streams[0].streamUrl;
+              audioRef.current.play();
+              setState((prev) => ({ ...prev, isPlaying: true }));
+            }
+            
+            addDebugLog('Riproduzione', 'Stream avviato da cache', 'success');
+            return true;
+          }
+          
+          if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
+            setDownloadProgress(selectResult.progress);
+            setDownloadStatus(selectResult.status);
+            addDebugLog('Salvataggio', 'File in download (da cache)', 'success');
+            return true;
+          }
+        }
+      }
+    }
+    
+    return false;
+  }, [credentials, saveFileMapping, addDebugLog]);
+
   // Search for album and try to match track within album files
   const searchAlbumAndMatch = useCallback(async (track: Track): Promise<boolean> => {
     if (!credentials?.realDebridApiKey || !track.album) return false;
@@ -328,6 +414,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (currentSearchTrackIdRef.current !== track.id) {
         console.log('Album search cancelled after fetch - track changed');
         return false;
+      }
+      
+      // Cache the results for this album
+      if (track.albumId && result.torrents.length > 0) {
+        albumCacheRef.current = {
+          albumId: track.albumId,
+          torrents: result.torrents,
+          searchedAt: Date.now(),
+        };
+        addDebugLog('Cache salvata', `${result.torrents.length} torrent per album`, 'info');
       }
       
       setAvailableTorrents(result.torrents);
@@ -986,15 +1082,29 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return;
     }
 
-    // No saved mapping - FIRST try album search, THEN fall back to track search
-    // Questo evita di perdere tempo con la ricerca singola quando l'album esiste.
+    // No saved mapping - try cache first, then album search, then track search
     clearDebugLogs();
     addSyncingTrack(track.id);
     
     if (track.album?.trim() && track.artist?.trim()) {
-      // Try album search first
+      // First: try to match from cached album torrents (instant, no network)
+      const cachedMatch = await matchTrackFromCache(track);
+      
+      if (currentSearchTrackIdRef.current !== track.id) {
+        console.log('Track changed during cache match, aborting');
+        return;
+      }
+      
+      if (cachedMatch) {
+        // Found in cache, done!
+        removeSyncingTrack(track.id);
+        addSyncedTrack(track.id);
+        return;
+      }
+      
+      // Second: try album search (and cache results for future tracks)
       const albumQuery = `${track.album} ${track.artist}`;
-      addDebugLog('Strategia ricerca', `Prima: album (query: "${albumQuery}")`, 'info');
+      addDebugLog('Strategia ricerca', `Ricerca album (query: "${albumQuery}")`, 'info');
       const foundInAlbum = await searchAlbumAndMatch(track);
       
       if (currentSearchTrackIdRef.current !== track.id) {
@@ -1009,7 +1119,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         searchForStreams(trackQuery, true, track, false);
       }
     } else {
-      // No album info, search directly for track (ma logghiamo chiaramente il motivo)
+      // No album info, search directly for track
       const trackQuery = `${track.artist} ${track.title}`;
       addDebugLog('Strategia ricerca', 'Album mancante: parto direttamente dalla traccia', 'warning');
       searchForStreams(trackQuery, true, track, false);
