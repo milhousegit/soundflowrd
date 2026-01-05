@@ -78,31 +78,52 @@ async function searchApibay(query: string): Promise<TorrentResult[]> {
   return results;
 }
 
-// Search 1337x.to
+// Search 1337x.to with Firecrawl (bypasses 403)
 async function search1337x(query: string): Promise<TorrentResult[]> {
   const results: TorrentResult[] = [];
+  
+  const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
+  
+  if (!firecrawlApiKey) {
+    console.log('FIRECRAWL_API_KEY not configured for 1337x, skipping');
+    return results;
+  }
   
   try {
     const domain = '1337x.to';
     const searchUrl = `https://${domain}/search/${encodeURIComponent(query)}/1/`;
-    console.log('Searching 1337x:', query);
+    console.log('Searching 1337x via Firecrawl:', searchUrl);
     
-    const response = await fetch(searchUrl, {
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${firecrawlApiKey}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        url: searchUrl,
+        formats: ['html'],
+        waitFor: 2000,
+      }),
     });
     
     if (!response.ok) {
-      console.log('1337x response not ok:', response.status);
+      const errorText = await response.text();
+      console.error('Firecrawl 1337x error:', response.status, errorText);
       return results;
     }
     
-    const html = await response.text();
+    const data = await response.json();
+    const html = data.data?.html || data.html || '';
+    
+    console.log('1337x Firecrawl HTML length:', html.length);
+    
+    if (!html || html.length < 1000) {
+      console.log('1337x Firecrawl returned insufficient HTML');
+      return results;
+    }
     
     // Extract torrent links from search results
-    // Format: /torrent/123456/torrent-name/
     const torrentLinkRegex = /href="(\/torrent\/\d+\/[^"]+)"/g;
     const torrentLinks: string[] = [];
     let match;
@@ -116,32 +137,41 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
     
     console.log(`Found ${torrentLinks.length} torrent links on 1337x`);
     
-    // Extract seeders and size from search results table
-    const rowRegex = /<a\s+href="(\/torrent\/\d+\/[^"]+)"[^>]*>([^<]+)<\/a>[\s\S]*?<td\s+class="coll-2[^"]*"[^>]*>([^<]+)<\/td>[\s\S]*?<td\s+class="coll-4[^"]*"[^>]*>(\d+)<\/td>/g;
+    // Extract metadata from search results
     const torrentMetadata: Map<string, {title: string, seeders: number, size: string}> = new Map();
     
-    let rowMatch;
-    while ((rowMatch = rowRegex.exec(html)) !== null) {
-      const url = `https://${domain}${rowMatch[1]}`;
-      const title = rowMatch[2].trim();
-      const size = rowMatch[3]?.trim() || 'Unknown';
-      const seeders = parseInt(rowMatch[4]) || 0;
-      torrentMetadata.set(url, { title, seeders, size });
+    // Try to extract from table rows
+    const rowRegex = /<a[^>]*href="(\/torrent\/\d+\/[^"]+)"[^>]*>([^<]+)<\/a>/gi;
+    while ((match = rowRegex.exec(html)) !== null) {
+      const url = `https://${domain}${match[1]}`;
+      const title = match[2].trim();
+      if (title.length > 5) {
+        torrentMetadata.set(url, { title, seeders: 0, size: 'Unknown' });
+      }
     }
     
-    // Visit each torrent page to get magnet link (limit to first 5)
+    // Visit each torrent page via Firecrawl to get magnet (limit to first 5)
     for (const torrentUrl of torrentLinks.slice(0, 5)) {
       try {
-        const torrentRes = await fetch(torrentUrl, {
-          headers: { 
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html',
+        console.log('Fetching 1337x torrent page via Firecrawl:', torrentUrl);
+        
+        const torrentRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${firecrawlApiKey}`,
+            'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            url: torrentUrl,
+            formats: ['html'],
+            waitFor: 1000,
+          }),
         });
         
         if (!torrentRes.ok) continue;
         
-        const torrentHtml = await torrentRes.text();
+        const torrentData = await torrentRes.json();
+        const torrentHtml = torrentData.data?.html || torrentData.html || '';
         
         // Extract magnet link
         const magnetMatch = torrentHtml.match(/href="(magnet:\?xt=urn:btih:[^"]+)"/);
@@ -153,11 +183,20 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
           
           const meta = torrentMetadata.get(torrentUrl);
           
+          // Extract seeders from page
+          const seedersMatch = torrentHtml.match(/[Ss]eeders[:\s]*<[^>]*>(\d+)/i) ||
+                               torrentHtml.match(/class="[^"]*seed[^"]*"[^>]*>(\d+)/i);
+          const seeders = seedersMatch ? parseInt(seedersMatch[1]) || 0 : (meta?.seeders || 0);
+          
+          // Extract size
+          const sizeMatch = torrentHtml.match(/[Ss]ize[:\s]*<[^>]*>([\d.,]+\s*[GMKT]B)/i);
+          const size = sizeMatch ? sizeMatch[1] : (meta?.size || 'Unknown');
+          
           results.push({
             title: meta?.title || title,
             magnet,
-            size: meta?.size || 'Unknown',
-            seeders: meta?.seeders || 0,
+            size,
+            seeders,
             source: '1337x',
           });
           
@@ -168,8 +207,10 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
         continue;
       }
     }
+    
+    console.log(`1337x via Firecrawl returned ${results.length} results`);
   } catch (error) {
-    console.error('1337x error:', error);
+    console.error('1337x Firecrawl error:', error);
   }
   
   return results;
@@ -774,63 +815,47 @@ function dedupeResults(results: TorrentResult[]): TorrentResult[] {
   });
 }
 
-// Combined search from multiple sources with fuzzy matching
-// ext.to is the primary engine (best fuzzy matching), others are fallbacks
+// Combined search from multiple sources
+// Primary: apibay (TPB), Corsaro Nero
+// Secondary: 1337x (via Firecrawl)
 async function searchTorrents(query: string): Promise<TorrentResult[]> {
   console.log('Searching all sources for:', query);
   
-  const queryWords = normalizeQuery(query);
-  const queryVariants = generateQueryVariants(query);
+  // Clean the query first
+  const cleanedQuery = cleanSearchQuery(query);
+  console.log('Cleaned query:', cleanedQuery);
+  
+  const queryWords = normalizeQuery(cleanedQuery);
+  const queryVariants = generateQueryVariants(cleanedQuery);
   console.log('Query words:', queryWords);
   console.log('Query variants:', queryVariants);
   
-  // PHASE 1: Try ext.to first (best fuzzy matching)
-  console.log('Phase 1: Searching ext.to (primary engine)...');
-  let allResults: TorrentResult[] = [];
+  // Search all sources in parallel
+  const searchPromises: Promise<TorrentResult[]>[] = [];
   
-  try {
-    // Search ext.to with original query first
-    const extResults = await searchExtTo(query);
-    console.log(`ext.to returned ${extResults.length} results for original query`);
-    
-    // If not enough results, try variants
-    if (extResults.length < 3) {
-      for (const variant of queryVariants.slice(1, 3)) {
-        const variantResults = await searchExtTo(variant);
-        console.log(`ext.to returned ${variantResults.length} results for variant: ${variant}`);
-        extResults.push(...variantResults);
-      }
-    }
-    
-    allResults = extResults;
-  } catch (error) {
-    console.error('ext.to primary search failed:', error);
+  // Use first 2 variants
+  for (const variant of queryVariants.slice(0, 2)) {
+    // Primary sources (fast, reliable)
+    searchPromises.push(searchApibay(variant).catch((e) => {
+      console.error('apibay error:', e);
+      return [];
+    }));
+    searchPromises.push(searchCorsaroNero(variant).catch((e) => {
+      console.error('CorsaroNero error:', e);
+      return [];
+    }));
+    // Secondary: 1337x via Firecrawl (slower but good results)
+    searchPromises.push(search1337x(variant).catch((e) => {
+      console.error('1337x error:', e);
+      return [];
+    }));
   }
   
-  // PHASE 2: If ext.to found good results, use them; otherwise use fallback sources
-  if (allResults.length >= 3) {
-    console.log(`ext.to found ${allResults.length} results, skipping fallback sources`);
-  } else {
-    console.log('Phase 2: ext.to insufficient results, trying fallback sources...');
-    
-    // Fallback to other sources in parallel
-    const fallbackPromises: Promise<TorrentResult[]>[] = [];
-    
-    for (const variant of queryVariants.slice(0, 2)) {
-      fallbackPromises.push(searchBitsearch(variant).catch(() => []));
-      fallbackPromises.push(searchSolidTorrents(variant).catch(() => []));
-      fallbackPromises.push(searchApibay(variant).catch(() => []));
-      fallbackPromises.push(searchCorsaroNero(variant).catch(() => []));
-      fallbackPromises.push(search1337x(variant).catch(() => []));
-      fallbackPromises.push(searchTorrentGalaxy(variant).catch(() => []));
-    }
-    
-    const fallbackResults = await Promise.all(fallbackPromises);
-    allResults.push(...fallbackResults.flat());
-  }
+  const results = await Promise.all(searchPromises);
+  let allResults = results.flat();
   
   // Log results per source
-  const sources = ['Ext', 'Bit', 'Solid', 'TPB', 'CNero', '1337x', 'TGx'];
+  const sources = ['TPB', 'CNero', '1337x'];
   for (const src of sources) {
     const count = allResults.filter(r => r.source === src).length;
     if (count > 0) console.log(`${src}: ${count} results`);
@@ -840,29 +865,19 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
   allResults = dedupeResults(allResults);
   console.log(`Total unique results after dedupe: ${allResults.length}`);
   
-  // For ext.to results, skip strict word matching (it already does fuzzy matching)
-  // For other sources, apply word filtering
-  const extResults = allResults.filter(r => r.source === 'Ext');
-  const otherResults = allResults.filter(r => r.source !== 'Ext');
-  
-  let filteredOtherResults = otherResults;
-  if (queryWords.length > 1 && otherResults.length > 0) {
-    const filtered = otherResults.filter(r => matchesAllWords(r.title, queryWords));
-    if (filtered.length > 0) {
-      filteredOtherResults = filtered;
+  // Filter results to match query words (but be lenient)
+  if (queryWords.length > 1 && allResults.length > 5) {
+    const filtered = allResults.filter(r => matchesAllWords(r.title, queryWords));
+    console.log(`Filtered from ${allResults.length} to ${filtered.length} results matching all words`);
+    
+    // Only use filtered if we have enough results
+    if (filtered.length >= 2) {
+      allResults = filtered;
     }
   }
   
-  // Combine: ext.to results first (they're already fuzzy matched), then filtered others
-  allResults = [...extResults, ...filteredOtherResults];
-  
-  // Sort by seeders (best first), but keep ext.to results prioritized
-  allResults.sort((a, b) => {
-    // Prioritize ext.to results slightly
-    if (a.source === 'Ext' && b.source !== 'Ext') return -1;
-    if (a.source !== 'Ext' && b.source === 'Ext') return 1;
-    return b.seeders - a.seeders;
-  });
+  // Sort by seeders (best first)
+  allResults.sort((a, b) => b.seeders - a.seeders);
   
   console.log(`Returning ${Math.min(allResults.length, 20)} torrents`);
   return allResults.slice(0, 20);
