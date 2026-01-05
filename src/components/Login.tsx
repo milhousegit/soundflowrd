@@ -71,9 +71,20 @@ const Login: React.FC = () => {
           return;
         }
 
-        // Wait for profile to be created, then update API key
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await updateApiKey(apiKey);
+        // Ensure we have an authenticated session, then save the API key
+        const { error: signInAfterSignUpError } = await signIn(email, password);
+        if (signInAfterSignUpError) {
+          setError(signInAfterSignUpError.message);
+          setIsLoading(false);
+          return;
+        }
+
+        const { error: apiKeyError } = await updateApiKey(apiKey);
+        if (apiKeyError) {
+          setError('Account creato, ma non sono riuscito a salvare la API Key. Riprova dalle Impostazioni.');
+          setIsLoading(false);
+          return;
+        }
         
         toast({
           title: 'Account creato!',

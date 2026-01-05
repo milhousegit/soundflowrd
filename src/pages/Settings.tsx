@@ -1,28 +1,43 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { 
-  User, 
-  Key, 
-  Volume2, 
-  Monitor, 
-  LogOut, 
+import { verifyApiKey } from '@/lib/realdebrid';
+import {
+  User,
+  Key,
+  Volume2,
+  Monitor,
+  LogOut,
   ExternalLink,
   Check,
-  Home
+  Home,
+  Pencil,
+  X,
+  Loader2,
+  Save,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Settings: React.FC = () => {
-  const { credentials, logout } = useAuth();
+  const { profile, updateApiKey, signOut } = useAuth();
   const { settings, updateSettings, t } = useSettings();
   const { toast } = useToast();
 
-  const handleLogout = () => {
-    logout();
+  const [isEditingApiKey, setIsEditingApiKey] = useState(false);
+  const [apiKeyDraft, setApiKeyDraft] = useState('');
+  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+
+  useEffect(() => {
+    if (isEditingApiKey) {
+      setApiKeyDraft(profile?.real_debrid_api_key ?? '');
+    }
+  }, [isEditingApiKey, profile?.real_debrid_api_key]);
+
+  const handleLogout = async () => {
+    await signOut();
     toast({
       title: settings.language === 'it' ? 'Disconnesso' : 'Logged out',
       description: settings.language === 'it' ? 'Hai effettuato il logout con successo.' : 'You have been logged out successfully.',
@@ -58,9 +73,9 @@ const Settings: React.FC = () => {
           <div className="p-3 md:p-4 rounded-xl bg-card space-y-3 md:space-y-4">
             <div>
               <label className="text-xs md:text-sm text-muted-foreground block mb-2">{t('email')}</label>
-              <Input 
-                value={credentials?.email || ''} 
-                disabled 
+              <Input
+                value={profile?.email || ''}
+                disabled
                 className="bg-secondary text-sm md:text-base"
               />
             </div>
@@ -77,22 +92,108 @@ const Settings: React.FC = () => {
           <div className="p-3 md:p-4 rounded-xl bg-card space-y-3 md:space-y-4">
             <div>
               <label className="text-xs md:text-sm text-muted-foreground block mb-2">{t('apiKey')}</label>
-              <div className="flex gap-2">
-                <Input 
-                  value={credentials?.realDebridApiKey ? maskApiKey(credentials.realDebridApiKey) : ''} 
-                  disabled 
-                  className="bg-secondary font-mono text-sm"
-                />
-                <Button 
-                  variant="outline"
-                  size="icon"
-                  onClick={() => window.open('https://real-debrid.com/apitoken', '_blank')}
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </Button>
-              </div>
+
+              {!isEditingApiKey ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={profile?.real_debrid_api_key ? maskApiKey(profile.real_debrid_api_key) : ''}
+                    disabled
+                    className="bg-secondary font-mono text-sm"
+                    placeholder="—"
+                  />
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsEditingApiKey(true)}
+                    title={settings.language === 'it' ? 'Modifica API Key' : 'Edit API Key'}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => window.open('https://real-debrid.com/apitoken', '_blank')}
+                    title={settings.language === 'it' ? 'Apri Real-Debrid' : 'Open Real-Debrid'}
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={apiKeyDraft}
+                    onChange={(e) => setApiKeyDraft(e.target.value)}
+                    type="password"
+                    className="bg-secondary font-mono text-sm"
+                    placeholder="Real-Debrid API Key"
+                  />
+
+                  <Button
+                    variant="default"
+                    size="icon"
+                    disabled={isSavingApiKey}
+                    onClick={async () => {
+                      setIsSavingApiKey(true);
+                      try {
+                        const trimmed = apiKeyDraft.trim();
+                        if (!trimmed) {
+                          toast({
+                            title: settings.language === 'it' ? 'API Key mancante' : 'Missing API Key',
+                            description: settings.language === 'it' ? 'Inserisci una API Key valida.' : 'Please enter a valid API key.',
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+
+                        const verification = await verifyApiKey(trimmed);
+                        if (!verification.valid) {
+                          toast({
+                            title: settings.language === 'it' ? 'API Key non valida' : 'Invalid API Key',
+                            description: settings.language === 'it' ? 'Controlla la key e riprova.' : 'Check your key and try again.',
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+
+                        const { error } = await updateApiKey(trimmed);
+                        if (error) {
+                          toast({
+                            title: settings.language === 'it' ? 'Errore salvataggio' : 'Save error',
+                            description: error.message,
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+
+                        setIsEditingApiKey(false);
+                        toast({
+                          title: settings.language === 'it' ? 'Salvata' : 'Saved',
+                          description: settings.language === 'it' ? 'API Key aggiornata con successo.' : 'API key updated successfully.',
+                        });
+                      } finally {
+                        setIsSavingApiKey(false);
+                      }
+                    }}
+                    title={settings.language === 'it' ? 'Salva' : 'Save'}
+                  >
+                    {isSavingApiKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsEditingApiKey(false)}
+                    disabled={isSavingApiKey}
+                    title={settings.language === 'it' ? 'Annulla' : 'Cancel'}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
             </div>
-            
+
             <div className="flex items-center gap-2 text-xs md:text-sm">
               <Check className="w-4 h-4 text-primary" />
               <span className="text-muted-foreground">{t('connected')} a Real-Debrid</span>

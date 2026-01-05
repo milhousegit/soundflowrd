@@ -112,15 +112,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateApiKey = async (apiKey: string) => {
-    if (!user) return { error: new Error('Not authenticated') };
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id ?? user?.id;
 
+    if (!userId) return { error: new Error('Not authenticated') };
+
+    // Ensure profile exists and persist the key in one call
     const { error } = await supabase
       .from('profiles')
-      .update({ real_debrid_api_key: apiKey })
-      .eq('id', user.id);
+      .upsert(
+        {
+          id: userId,
+          email: session?.user?.email ?? profile?.email ?? null,
+          real_debrid_api_key: apiKey,
+        },
+        { onConflict: 'id' }
+      );
 
     if (!error) {
-      setProfile(prev => prev ? { ...prev, real_debrid_api_key: apiKey } : null);
+      await fetchProfile(userId);
     }
 
     return { error: error as Error | null };
