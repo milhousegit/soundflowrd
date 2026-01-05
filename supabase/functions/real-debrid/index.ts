@@ -175,43 +175,52 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
   return results;
 }
 
-// Search ext.to (torrent aggregator with simple API)
+// Search ext.to and mirrors (torrent aggregator)
 async function searchExtTo(query: string): Promise<TorrentResult[]> {
   const results: TorrentResult[] = [];
   
-  try {
-    // ext.to has a JSON API endpoint
-    const searchUrl = `https://ext.to/api/v2/search/?q=${encodeURIComponent(query)}&category=music`;
-    console.log('Searching ext.to:', searchUrl);
-    
-    const response = await fetch(searchUrl, {
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-      },
-    });
-    
-    if (!response.ok) {
-      console.log('ext.to response not ok:', response.status);
+  // Full browser-like headers to avoid 403
+  const browserHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9,it;q=0.8',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Upgrade-Insecure-Requests': '1',
+  };
+  
+  // Try multiple domains (mirrors)
+  const domains = ['ext.to', 'extratorrent.st'];
+  
+  for (const domain of domains) {
+    try {
+      const searchUrl = `https://${domain}/search/?q=${encodeURIComponent(query)}`;
+      console.log(`Searching ${domain}:`, searchUrl);
       
-      // Fallback to HTML scraping if API doesn't work
-      const htmlUrl = `https://ext.to/search/?q=${encodeURIComponent(query)}&c=music`;
-      console.log('Trying ext.to HTML fallback:', htmlUrl);
+      const response = await fetch(searchUrl, { headers: browserHeaders });
       
-      const htmlResponse = await fetch(htmlUrl, {
-        headers: { 
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/html',
-        },
-      });
+      console.log(`${domain} response status:`, response.status);
       
-      if (!htmlResponse.ok) {
-        console.log('ext.to HTML fallback also failed:', htmlResponse.status);
-        return results;
+      if (!response.ok) {
+        console.log(`${domain} returned ${response.status}, trying next mirror...`);
+        continue;
       }
       
-      const html = await htmlResponse.text();
-      console.log('ext.to HTML length:', html.length);
+      const html = await response.text();
+      console.log(`${domain} HTML length:`, html.length);
+      
+      // Check for Cloudflare challenge
+      if (html.includes('challenge-platform') || html.includes('cf-browser-verification') || html.includes('Just a moment')) {
+        console.log(`${domain} has Cloudflare challenge, trying next mirror...`);
+        continue;
+      }
       
       // Extract magnet links from HTML
       const magnetRegex = /href="(magnet:\?xt=urn:btih:[^"]+)"/gi;
@@ -225,87 +234,90 @@ async function searchExtTo(query: string): Promise<TorrentResult[]> {
         }
       }
       
-      console.log(`Found ${magnets.length} magnets on ext.to (HTML)`);
+      // Also try to find info_hash patterns and construct magnets
+      const hashRegex = /(?:info_hash|btih)[=:\/]([a-f0-9]{40})/gi;
+      while ((match = hashRegex.exec(html)) !== null) {
+        const hash = match[1].toUpperCase();
+        const magnet = `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(query)}`;
+        if (!magnets.some(m => m.toLowerCase().includes(hash.toLowerCase()))) {
+          magnets.push(magnet);
+        }
+      }
+      
+      console.log(`Found ${magnets.length} magnets on ${domain}`);
+      
+      if (magnets.length === 0) {
+        continue;
+      }
+      
+      // Extract title from torrent links - look for title text near magnet links
+      const torrentData: Map<string, { title: string; size: string; seeders: number }> = new Map();
+      
+      // Pattern: title in link before magnet
+      const titleRegex = /<a[^>]*href="\/torrent\/[^"]*"[^>]*title="([^"]+)"|<a[^>]*href="\/torrent\/[^"]*"[^>]*>([^<]+)</gi;
+      const titles: string[] = [];
+      while ((match = titleRegex.exec(html)) !== null) {
+        const title = (match[1] || match[2] || '').trim();
+        if (title && title.length > 3) {
+          titles.push(title);
+        }
+      }
       
       for (const magnet of magnets.slice(0, 15)) {
+        const hashMatch = magnet.match(/btih:([a-f0-9]+)/i);
         const dnMatch = magnet.match(/dn=([^&]+)/);
-        const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
         
-        // Try to extract size and seeders from nearby HTML
+        // Get title from dn parameter or from extracted titles
+        let title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
+        
+        // Try to find better title from page
         const magnetIndex = html.indexOf(magnet.slice(0, 60));
-        let seeders = 0;
-        let size = 'Unknown';
-        
         if (magnetIndex > 0) {
-          const contextHtml = html.slice(Math.max(0, magnetIndex - 1500), magnetIndex + 500);
-          
-          const seedersMatch = contextHtml.match(/(?:seed|SE)[:\s]*(\d+)/i) ||
-                               contextHtml.match(/>(\d+)<\/td>\s*<td[^>]*>\d+<\/td>\s*<td/i);
-          if (seedersMatch) {
-            seeders = parseInt(seedersMatch[1]) || 0;
+          const contextHtml = html.slice(Math.max(0, magnetIndex - 2000), magnetIndex);
+          // Look for title in the context
+          const contextTitleMatch = contextHtml.match(/<a[^>]*title="([^"]{10,})"[^>]*>|<a[^>]*>([^<]{10,})<\/a>\s*(?:<[^>]*>\s*)*<a[^>]*href="magnet/i);
+          if (contextTitleMatch) {
+            const extractedTitle = (contextTitleMatch[1] || contextTitleMatch[2] || '').trim();
+            if (extractedTitle.length > title.length) {
+              title = extractedTitle;
+            }
           }
           
+          // Extract seeders
+          const seedersMatch = contextHtml.match(/(?:seed|SE)[:\s]*(\d+)/i) ||
+                               contextHtml.match(/>(\d+)<\/td>\s*<td[^>]*>\d+<\/td>/i);
+          const seeders = seedersMatch ? parseInt(seedersMatch[1]) || 0 : 0;
+          
+          // Extract size
           const sizeMatch = contextHtml.match(/([\d.,]+)\s*(GB|MB|KB|TB)/i);
-          if (sizeMatch) {
-            size = `${sizeMatch[1]} ${sizeMatch[2]}`;
+          const size = sizeMatch ? `${sizeMatch[1]} ${sizeMatch[2]}` : 'Unknown';
+          
+          if (hashMatch) {
+            torrentData.set(hashMatch[1].toLowerCase(), { title, size, seeders });
           }
         }
         
+        const data = hashMatch ? torrentData.get(hashMatch[1].toLowerCase()) : undefined;
+        
         results.push({
-          title,
+          title: data?.title || title,
           magnet,
-          size,
-          seeders,
+          size: data?.size || 'Unknown',
+          seeders: data?.seeders || 0,
           source: 'Ext',
         });
       }
       
-      return results;
-    }
-    
-    // Parse JSON API response
-    const data = await response.json();
-    console.log('ext.to API response type:', typeof data);
-    
-    if (Array.isArray(data)) {
-      console.log(`ext.to API returned ${data.length} results`);
-      
-      for (const item of data.slice(0, 15)) {
-        if (item.magnet || item.info_hash) {
-          const magnet = item.magnet || `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name || item.title || query)}`;
-          
-          results.push({
-            title: item.name || item.title || 'Unknown',
-            magnet,
-            size: item.size || item.filesize || 'Unknown',
-            seeders: parseInt(item.seeders || item.seed || 0),
-            source: 'Ext',
-          });
-        }
+      if (results.length > 0) {
+        console.log(`${domain} returned ${results.length} results, success!`);
+        return results;
       }
-    } else if (data.results && Array.isArray(data.results)) {
-      console.log(`ext.to API returned ${data.results.length} results (nested)`);
-      
-      for (const item of data.results.slice(0, 15)) {
-        if (item.magnet || item.info_hash) {
-          const magnet = item.magnet || `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name || item.title || query)}`;
-          
-          results.push({
-            title: item.name || item.title || 'Unknown',
-            magnet,
-            size: item.size || item.filesize || 'Unknown',
-            seeders: parseInt(item.seeders || item.seed || 0),
-            source: 'Ext',
-          });
-        }
-      }
+    } catch (error) {
+      console.error(`${domain} error:`, error);
     }
-    
-    console.log(`Returning ${results.length} results from ext.to`);
-  } catch (error) {
-    console.error('ext.to error:', error);
   }
   
+  console.log(`All ext.to mirrors failed, returning ${results.length} results`);
   return results;
 }
 
