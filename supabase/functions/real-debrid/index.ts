@@ -1436,8 +1436,17 @@ serve(async (req) => {
           headers: rdHeaders,
         });
         
+        // If torrent not found or expired, return empty result instead of throwing
         if (!infoRes.ok) {
-          throw new Error('Failed to get torrent info');
+          console.log(`Torrent ${torrentId} not found or expired: ${infoRes.status}`);
+          result = {
+            status: 'not_found',
+            progress: 0,
+            files: [],
+            streams: [],
+            expired: true,
+          };
+          break;
         }
         
         const info = await infoRes.json();
