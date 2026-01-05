@@ -129,7 +129,139 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
   }, []);
 
-  const searchForStreams = useCallback(async (query: string, showNoResultsToast = false) => {
+  // Helper to normalize string for matching
+  const normalizeForMatch = (str: string): string => {
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim();
+  };
+
+  // Helper to save stream mapping to database
+  const saveStreamMapping = useCallback(async (track: Track, stream: StreamResult) => {
+    if (!track.albumId) return;
+    
+    try {
+      let albumMappingId: string | null = null;
+      
+      const { data: existingMapping } = await supabase
+        .from('album_torrent_mappings')
+        .select('id')
+        .eq('album_id', track.albumId)
+        .maybeSingle();
+      
+      if (existingMapping) {
+        albumMappingId = existingMapping.id;
+      } else {
+        const { data: newMapping, error: insertError } = await supabase
+          .from('album_torrent_mappings')
+          .insert({
+            album_id: track.albumId,
+            album_title: track.album || track.title,
+            artist_name: track.artist,
+            torrent_id: stream.id,
+            torrent_title: stream.title || track.title,
+          })
+          .select('id')
+          .single();
+        
+        if (!insertError && newMapping) {
+          albumMappingId = newMapping.id;
+        }
+      }
+
+      if (albumMappingId) {
+        await supabase
+          .from('track_file_mappings')
+          .upsert({
+            album_mapping_id: albumMappingId,
+            track_id: track.id,
+            track_title: track.title,
+            track_position: null,
+            file_id: parseInt(stream.id) || 0,
+            file_path: stream.streamUrl,
+            file_name: stream.title || track.title,
+          }, {
+            onConflict: 'track_id',
+          });
+        
+        console.log('Auto-saved stream mapping for track:', track.title);
+      }
+    } catch (error) {
+      console.error('Failed to auto-save stream mapping:', error);
+    }
+  }, []);
+
+  // Search for album and try to match track within album files
+  const searchAlbumAndMatch = useCallback(async (track: Track): Promise<boolean> => {
+    if (!credentials?.realDebridApiKey || !track.album) return false;
+    
+    console.log('Searching for album:', `${track.album} ${track.artist}`);
+    
+    try {
+      const result = await searchStreams(
+        credentials.realDebridApiKey,
+        `${track.album} ${track.artist}`
+      );
+      
+      setAvailableTorrents(result.torrents);
+      
+      // Look for a torrent with files that match the track title
+      for (const torrent of result.torrents) {
+        if (torrent.files && torrent.files.length > 0) {
+          const normalizedTitle = normalizeForMatch(track.title);
+          
+          // Find a file that contains the track title
+          const matchingFile = torrent.files.find(file => {
+            const normalizedFileName = normalizeForMatch(file.filename);
+            return normalizedFileName.includes(normalizedTitle);
+          });
+          
+          if (matchingFile) {
+            console.log('Found matching file in album torrent:', matchingFile.filename);
+            
+            // Select this file and play it
+            const selectResult = await selectFilesAndPlay(
+              credentials.realDebridApiKey, 
+              torrent.torrentId, 
+              [matchingFile.id]
+            );
+            
+            if (selectResult.streams.length > 0) {
+              setAlternativeStreams(selectResult.streams);
+              setCurrentStreamId(selectResult.streams[0].id);
+              
+              if (audioRef.current && selectResult.streams[0].streamUrl) {
+                audioRef.current.src = selectResult.streams[0].streamUrl;
+                audioRef.current.play();
+                setState(prev => ({ ...prev, isPlaying: true }));
+              }
+              
+              // Auto-save this mapping
+              await saveStreamMapping(track, selectResult.streams[0]);
+              
+              return true;
+            }
+          }
+        }
+      }
+      
+      // If no file match found but we have torrents, at least show them
+      if (result.torrents.length > 0) {
+        console.log('Album torrents found but no exact file match, showing options');
+        return false;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Failed to search album:', error);
+      return false;
+    }
+  }, [credentials, saveStreamMapping]);
+
+  const searchForStreams = useCallback(async (query: string, showNoResultsToast = false, track?: Track) => {
     if (!credentials?.realDebridApiKey) return;
     
     setIsSearchingStreams(true);
@@ -148,18 +280,38 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (result.streams && result.streams.length > 0) {
         setAlternativeStreams(result.streams);
         
-        // Auto-select first stream if available
-        setCurrentStreamId(result.streams[0].id);
-        if (audioRef.current && result.streams[0].streamUrl) {
-          audioRef.current.src = result.streams[0].streamUrl;
-          audioRef.current.play();
-          setState(prev => ({ ...prev, isPlaying: true }));
+        // Auto-select first stream if there's only 1 or few results
+        if (result.streams.length >= 1) {
+          const selectedStream = result.streams[0];
+          setCurrentStreamId(selectedStream.id);
+          
+          if (audioRef.current && selectedStream.streamUrl) {
+            audioRef.current.src = selectedStream.streamUrl;
+            audioRef.current.play();
+            setState(prev => ({ ...prev, isPlaying: true }));
+          }
+          
+          // Auto-save the mapping if we have the track info
+          if (track) {
+            await saveStreamMapping(track, selectedStream);
+          }
         }
-      } else if (showNoResultsToast && result.torrents.length === 0) {
-        // Show toast when no content found and it was requested
-        toast.error('Nessun contenuto trovato', {
-          description: 'Non è stato trovato nessun risultato per questa traccia.',
-        });
+      } else if (result.streams.length === 0 && result.torrents.length === 0) {
+        // No results for track title, try searching for the album
+        if (track && track.album) {
+          console.log('No results for track, trying album search...');
+          const foundInAlbum = await searchAlbumAndMatch(track);
+          
+          if (!foundInAlbum && showNoResultsToast) {
+            toast.error('Nessun contenuto trovato', {
+              description: 'Non è stato trovato nessun risultato per questa traccia.',
+            });
+          }
+        } else if (showNoResultsToast) {
+          toast.error('Nessun contenuto trovato', {
+            description: 'Non è stato trovato nessun risultato per questa traccia.',
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to search streams:', error);
@@ -171,7 +323,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     } finally {
       setIsSearchingStreams(false);
     }
-  }, [credentials]);
+  }, [credentials, saveStreamMapping, searchAlbumAndMatch]);
 
   const selectTorrentFile = useCallback(async (torrentId: string, fileIds: number[]) => {
     if (!credentials?.realDebridApiKey) return;
@@ -313,8 +465,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     // No saved mapping, search for streams via Real-Debrid with artist + title
-    // Pass true to show toast when no results found
-    searchForStreams(`${track.artist} ${track.title}`, true);
+    // Pass true to show toast when no results found, and pass track for auto-save
+    searchForStreams(`${track.artist} ${track.title}`, true, track);
 
     // If track has a stream URL, play it
     if (audioRef.current && track.streamUrl) {
