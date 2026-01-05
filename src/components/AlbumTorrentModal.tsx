@@ -18,6 +18,7 @@ import {
   Cloud
 } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { searchStreams, TorrentInfo, AudioFile } from '@/lib/realdebrid';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -172,6 +173,7 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
   tracks,
 }) => {
   const { settings } = useSettings();
+  const { profile } = useAuth();
   const [isSearching, setIsSearching] = useState(false);
   const [torrents, setTorrents] = useState<TorrentInfo[]>([]);
   const [selectedTorrent, setSelectedTorrent] = useState<TorrentInfo | null>(null);
@@ -198,7 +200,8 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
   };
 
   const handleSearch = async () => {
-    if (!settings.realDebridApiKey) {
+    const apiKey = profile?.real_debrid_api_key;
+    if (!apiKey) {
       toast.error('Real-Debrid API key non configurata');
       return;
     }
@@ -211,7 +214,7 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
     try {
       // Search for album
       const searchQuery = `${artistName} ${albumTitle}`;
-      const result = await searchStreams(settings.realDebridApiKey, searchQuery);
+      const result = await searchStreams(apiKey, searchQuery);
       
       // Filter only torrents with audio files
       const withAudio = result.torrents.filter(t => t.files.length > 0);
