@@ -10,6 +10,7 @@ interface SyncedTrackInfo {
 // Global state for synced tracks
 let syncedTracksCache: Set<string> = new Set();
 let syncingTracksCache: Set<string> = new Set();
+let downloadingTracksCache: Set<string> = new Set();
 let listeners: Set<() => void> = new Set();
 
 const notifyListeners = () => {
@@ -26,15 +27,32 @@ export const removeSyncingTrack = (trackId: string) => {
   notifyListeners();
 };
 
+export const addDownloadingTrack = (trackId: string) => {
+  downloadingTracksCache.add(trackId);
+  notifyListeners();
+};
+
+export const removeDownloadingTrack = (trackId: string) => {
+  downloadingTracksCache.delete(trackId);
+  notifyListeners();
+};
+
 export const addSyncedTrack = (trackId: string) => {
   syncedTracksCache.add(trackId);
   syncingTracksCache.delete(trackId);
+  downloadingTracksCache.delete(trackId);
+  notifyListeners();
+};
+
+export const removeSyncedTrack = (trackId: string) => {
+  syncedTracksCache.delete(trackId);
   notifyListeners();
 };
 
 export const useSyncedTracks = (trackIds?: string[]) => {
   const [syncedTracks, setSyncedTracks] = useState<Set<string>>(syncedTracksCache);
   const [syncingTracks, setSyncingTracks] = useState<Set<string>>(syncingTracksCache);
+  const [downloadingTracks, setDownloadingTracks] = useState<Set<string>>(downloadingTracksCache);
   const [isLoading, setIsLoading] = useState(false);
 
   // Subscribe to global state changes
@@ -42,10 +60,54 @@ export const useSyncedTracks = (trackIds?: string[]) => {
     const listener = () => {
       setSyncedTracks(new Set(syncedTracksCache));
       setSyncingTracks(new Set(syncingTracksCache));
+      setDownloadingTracks(new Set(downloadingTracksCache));
     };
     listeners.add(listener);
     return () => {
       listeners.delete(listener);
+    };
+  }, []);
+
+  // Subscribe to realtime updates from database
+  useEffect(() => {
+    const channel = supabase
+      .channel('track-sync-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'track_file_mappings'
+        },
+        (payload) => {
+          const trackId = payload.new.track_id;
+          if (trackId) {
+            syncedTracksCache.add(trackId);
+            syncingTracksCache.delete(trackId);
+            downloadingTracksCache.delete(trackId);
+            notifyListeners();
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'track_file_mappings'
+        },
+        (payload) => {
+          const trackId = payload.old.track_id;
+          if (trackId) {
+            syncedTracksCache.delete(trackId);
+            notifyListeners();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -92,11 +154,17 @@ export const useSyncedTracks = (trackIds?: string[]) => {
     return syncingTracks.has(trackId);
   }, [syncingTracks]);
 
+  const isDownloading = useCallback((trackId: string) => {
+    return downloadingTracks.has(trackId);
+  }, [downloadingTracks]);
+
   return {
     syncedTracks,
     syncingTracks,
+    downloadingTracks,
     isSynced,
     isSyncing,
+    isDownloading,
     isLoading,
     refetch: fetchSyncedTracks,
   };
