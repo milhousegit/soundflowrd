@@ -48,6 +48,14 @@ interface TrackMatch {
   confidence: number;
 }
 
+// Clean search query: remove - and . that break searches
+function cleanSearchQuery(str: string): string {
+  return str
+    .replace(/[-_.]/g, ' ')  // Replace - . _ with spaces
+    .replace(/\s+/g, ' ')     // Collapse multiple spaces
+    .trim();
+}
+
 // Normalize string for matching
 function normalizeForMatch(str: string): string {
   return str
@@ -243,7 +251,10 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
     setTorrents([]);
 
     try {
-      const searchQuery = `${artistName} ${albumTitle}`;
+      // Clean the search query - remove - and . that break searches
+      const cleanArtist = cleanSearchQuery(artistName);
+      const cleanAlbum = cleanSearchQuery(albumTitle);
+      const searchQuery = `${cleanArtist} ${cleanAlbum}`;
       setLastSearchQuery(searchQuery);
       setManualQuery(searchQuery);
       
@@ -308,8 +319,10 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
     setTrackMatches([]);
 
     try {
-      // Search for album
-      const searchQuery = `${artistName} ${albumTitle}`;
+      // Search for album - clean the query
+      const cleanArtist = cleanSearchQuery(artistName);
+      const cleanAlbum = cleanSearchQuery(albumTitle);
+      const searchQuery = `${cleanArtist} ${cleanAlbum}`;
       const result = await searchStreams(apiKey, searchQuery);
       
       // Filter only torrents with audio files

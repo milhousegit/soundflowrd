@@ -709,12 +709,20 @@ async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
   return results;
 }
 
+// Clean query: remove special characters like - and . that can break searches
+function cleanSearchQuery(query: string): string {
+  return query
+    .replace(/[-_.]/g, ' ')  // Replace - . _ with spaces
+    .replace(/\s+/g, ' ')     // Collapse multiple spaces
+    .trim();
+}
+
 // Normalize query: split into words and filter results that contain all words
 function normalizeQuery(query: string): string[] {
   // Split by spaces and common separators, filter out short words
-  const words = query
+  const words = cleanSearchQuery(query)
     .toLowerCase()
-    .split(/[\s\-_.]+/)
+    .split(/\s+/)
     .filter(w => w.length >= 2);
   return words;
 }
