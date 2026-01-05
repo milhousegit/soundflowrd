@@ -20,11 +20,8 @@ export async function verifyApiKey(apiKey: string): Promise<{ valid: boolean; us
 
 export async function searchStreams(
   apiKey: string, 
-  trackTitle: string, 
-  artistName: string
+  query: string
 ): Promise<StreamResult[]> {
-  const query = `${artistName} ${trackTitle}`;
-  
   console.log('Searching streams for:', query);
   
   const { data, error } = await supabase.functions.invoke('real-debrid', {
@@ -46,7 +43,7 @@ export async function searchStreams(
       streamUrl: s.streamUrl,
       quality: s.quality || 'MP3',
       size: s.size,
-      source: 'Real-Debrid',
+      source: s.source || 'Real-Debrid',
     }));
   }
   

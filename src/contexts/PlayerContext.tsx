@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { Track, PlayerState } from '@/types/music';
-import { StreamResult, searchStreams, unrestrictLink } from '@/lib/realdebrid';
+import { StreamResult, searchStreams } from '@/lib/realdebrid';
 import { useAuth } from './AuthContext';
 
 interface PlayerContextType extends PlayerState {
@@ -17,6 +17,8 @@ interface PlayerContextType extends PlayerState {
   alternativeStreams: StreamResult[];
   selectStream: (stream: StreamResult) => void;
   currentStreamId?: string;
+  isSearchingStreams: boolean;
+  manualSearch: (query: string) => Promise<void>;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -26,6 +28,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const { credentials } = useAuth();
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [currentStreamId, setCurrentStreamId] = useState<string>();
+  const [isSearchingStreams, setIsSearchingStreams] = useState(false);
   
   const [state, setState] = useState<PlayerState>({
     currentTrack: null,
@@ -68,14 +71,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
   }, []);
 
-  const searchForStreams = useCallback(async (track: Track) => {
+  const searchForStreams = useCallback(async (query: string) => {
     if (!credentials?.realDebridApiKey) return;
+    
+    setIsSearchingStreams(true);
+    setAlternativeStreams([]);
     
     try {
       const streams = await searchStreams(
         credentials.realDebridApiKey,
-        track.title,
-        track.artist
+        query
       );
       setAlternativeStreams(streams);
       
@@ -85,12 +90,19 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (audioRef.current && streams[0].streamUrl) {
           audioRef.current.src = streams[0].streamUrl;
           audioRef.current.play();
+          setState(prev => ({ ...prev, isPlaying: true }));
         }
       }
     } catch (error) {
       console.error('Failed to search streams:', error);
+    } finally {
+      setIsSearchingStreams(false);
     }
   }, [credentials]);
+
+  const manualSearch = useCallback(async (query: string) => {
+    await searchForStreams(query);
+  }, [searchForStreams]);
 
   const playTrack = useCallback((track: Track, queue?: Track[]) => {
     setState(prev => ({
@@ -103,8 +115,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       progress: 0,
     }));
 
-    // Search for streams via Real-Debrid
-    searchForStreams(track);
+    // Search for streams via Real-Debrid with artist + title
+    searchForStreams(`${track.artist} ${track.title}`);
 
     // If track has a stream URL, play it
     if (audioRef.current && track.streamUrl) {
@@ -134,13 +146,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const play = useCallback((track?: Track) => {
     if (track) {
       playTrack(track);
-    } else if (audioRef.current && state.currentTrack?.streamUrl) {
+    } else if (audioRef.current) {
       audioRef.current.play();
       setState(prev => ({ ...prev, isPlaying: true }));
     } else {
       setState(prev => ({ ...prev, isPlaying: true }));
     }
-  }, [state.currentTrack, playTrack]);
+  }, [playTrack]);
 
   const pause = useCallback(() => {
     if (audioRef.current) {
@@ -218,6 +230,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         alternativeStreams,
         selectStream,
         currentStreamId,
+        isSearchingStreams,
+        manualSearch,
       }}
     >
       {children}

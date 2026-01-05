@@ -23,71 +23,146 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3): P
   throw new Error('All fetch attempts failed');
 }
 
-// Search using apibay.org (Pirate Bay API)
-async function searchTorrents(query: string): Promise<{title: string, magnet: string, size: string, seeders: number}[]> {
-  const results: {title: string, magnet: string, size: string, seeders: number}[] = [];
+interface TorrentResult {
+  title: string;
+  magnet: string;
+  size: string;
+  seeders: number;
+  source: string;
+}
+
+// Search apibay.org (Pirate Bay API)
+async function searchApibay(query: string): Promise<TorrentResult[]> {
+  const results: TorrentResult[] = [];
   
   try {
-    // Search without category filter to get more results
     const searchUrl = `https://apibay.org/q.php?q=${encodeURIComponent(query)}`;
-    console.log('Searching apibay:', searchUrl);
+    console.log('Searching apibay:', query);
     
     const response = await fetch(searchUrl, {
       headers: { 'Accept': 'application/json' },
     });
     
     if (response.ok) {
-      const text = await response.text();
-      console.log('Apibay raw response length:', text.length);
+      const data = await response.json();
       
-      try {
-        const data = JSON.parse(text);
-        
-        if (Array.isArray(data) && data.length > 0) {
-          for (const item of data) {
-            // Skip "no results" placeholder (id = "0" or id = 0)
-            if (item.id === '0' || item.id === 0) {
-              console.log('Skipping no-results placeholder');
-              continue;
-            }
-            
-            const magnet = `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name)}`;
-            const sizeNum = parseInt(item.size) || 0;
-            const sizeMB = sizeNum > 0 ? `${Math.round(sizeNum / 1024 / 1024)}MB` : 'Unknown';
-            
-            results.push({
-              title: item.name,
-              magnet,
-              size: sizeMB,
-              seeders: parseInt(item.seeders) || 0,
-            });
-          }
+      if (Array.isArray(data)) {
+        for (const item of data) {
+          if (item.id === '0' || item.id === 0) continue;
+          
+          const magnet = `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name)}`;
+          const sizeNum = parseInt(item.size) || 0;
+          const sizeMB = sizeNum > 0 ? `${Math.round(sizeNum / 1024 / 1024)}MB` : 'Unknown';
+          
+          results.push({
+            title: item.name,
+            magnet,
+            size: sizeMB,
+            seeders: parseInt(item.seeders) || 0,
+            source: 'TPB',
+          });
         }
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
       }
     }
   } catch (error) {
-    console.error('Apibay search error:', error);
+    console.error('Apibay error:', error);
   }
   
-  // Sort by seeders (more seeders = faster/more available)
-  results.sort((a, b) => b.seeders - a.seeders);
+  return results;
+}
+
+// Search 1337x via API proxy
+async function search1337x(query: string): Promise<TorrentResult[]> {
+  const results: TorrentResult[] = [];
   
-  console.log(`Found ${results.length} valid torrents`);
-  return results.slice(0, 10);
+  try {
+    // Use 1337x proxy API
+    const searchUrl = `https://1337x.wtf/search/${encodeURIComponent(query)}/1/`;
+    console.log('Searching 1337x:', query);
+    
+    const response = await fetch(searchUrl, {
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html',
+      },
+    });
+    
+    if (response.ok) {
+      const html = await response.text();
+      
+      // Extract torrent links from search results
+      const linkRegex = /href="\/torrent\/(\d+)\/([^"]+)"/g;
+      const matches = [...html.matchAll(linkRegex)];
+      
+      // Get first 5 results
+      for (const match of matches.slice(0, 5)) {
+        const torrentId = match[1];
+        const torrentSlug = match[2];
+        
+        try {
+          // Fetch individual torrent page to get magnet
+          const torrentUrl = `https://1337x.wtf/torrent/${torrentId}/${torrentSlug}/`;
+          const torrentRes = await fetch(torrentUrl, {
+            headers: { 
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+          });
+          
+          if (torrentRes.ok) {
+            const torrentHtml = await torrentRes.text();
+            const magnetMatch = torrentHtml.match(/magnet:\?xt=urn:btih:[^"]+/);
+            
+            if (magnetMatch) {
+              const title = torrentSlug.replace(/-/g, ' ');
+              results.push({
+                title,
+                magnet: magnetMatch[0],
+                size: 'Unknown',
+                seeders: 0,
+                source: '1337x',
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Error fetching torrent:', e);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('1337x error:', error);
+  }
+  
+  return results;
+}
+
+// Combined search from multiple sources
+async function searchTorrents(query: string): Promise<TorrentResult[]> {
+  console.log('Searching all sources for:', query);
+  
+  // Search multiple sources in parallel
+  const [apibayResults] = await Promise.all([
+    searchApibay(query),
+    // 1337x often blocks server IPs, so we'll rely mainly on apibay
+    // search1337x(query).catch(() => []),
+  ]);
+  
+  const allResults = [...apibayResults];
+  
+  // Sort by seeders
+  allResults.sort((a, b) => b.seeders - a.seeders);
+  
+  console.log(`Found ${allResults.length} total torrents`);
+  return allResults.slice(0, 10);
 }
 
 // Add magnet to Real-Debrid and get download links
-async function processMagnet(apiKey: string, magnet: string): Promise<{id: string, links: string[], files: any[]} | null> {
+async function processMagnet(apiKey: string, magnet: string, source: string): Promise<{id: string, links: string[], source: string} | null> {
   const rdHeaders = { 'Authorization': `Bearer ${apiKey}` };
   
   try {
-    // Add magnet
     const formData = new FormData();
     formData.append('magnet', magnet);
     
-    console.log('Adding magnet to RD...');
     const addRes = await fetchWithRetry(`${RD_API}/torrents/addMagnet`, {
       method: 'POST',
       headers: rdHeaders,
@@ -95,26 +170,22 @@ async function processMagnet(apiKey: string, magnet: string): Promise<{id: strin
     });
     
     if (!addRes.ok) {
-      const errorText = await addRes.text();
-      console.log('Failed to add magnet:', errorText);
+      console.log('Failed to add magnet:', await addRes.text());
       return null;
     }
     
     const addData = await addRes.json();
     const torrentId = addData.id;
-    console.log('Torrent added with ID:', torrentId);
+    console.log('Torrent added:', torrentId);
     
-    // Get torrent info to see files
+    // Get torrent info
     const infoRes1 = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
       headers: rdHeaders,
     });
     
-    if (!infoRes1.ok) {
-      return null;
-    }
+    if (!infoRes1.ok) return null;
     
     const info1 = await infoRes1.json();
-    console.log('Torrent status:', info1.status, 'Files:', info1.files?.length);
     
     // Select audio files only
     const audioFileIds: string[] = [];
@@ -129,11 +200,8 @@ async function processMagnet(apiKey: string, magnet: string): Promise<{id: strin
       }
     }
     
-    // If no audio files found, select all
     const filesToSelect = audioFileIds.length > 0 ? audioFileIds.join(',') : 'all';
-    console.log('Selecting files:', filesToSelect);
     
-    // Select files
     const selectForm = new FormData();
     selectForm.append('files', filesToSelect);
     
@@ -143,26 +211,18 @@ async function processMagnet(apiKey: string, magnet: string): Promise<{id: strin
       body: selectForm,
     });
     
-    // Wait for processing
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    // Get updated torrent info
     const infoRes2 = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
       headers: rdHeaders,
     });
     
-    if (!infoRes2.ok) {
-      return null;
-    }
+    if (!infoRes2.ok) return null;
     
     const info2 = await infoRes2.json();
-    console.log('Final status:', info2.status, 'Links:', info2.links?.length);
+    console.log('Status:', info2.status, 'Links:', info2.links?.length);
     
-    return { 
-      id: torrentId, 
-      links: info2.links || [],
-      files: info2.files || []
-    };
+    return { id: torrentId, links: info2.links || [], source };
   } catch (error) {
     console.error('Process magnet error:', error);
     return null;
@@ -176,40 +236,32 @@ serve(async (req) => {
 
   try {
     const { action, apiKey, query, link } = await req.json();
-    console.log(`Real-Debrid request: action=${action}, query=${query?.slice(0, 50)}`);
+    console.log(`Real-Debrid: action=${action}, query=${query?.slice(0, 50)}`);
 
     if (!apiKey) {
       throw new Error('Real-Debrid API key is required');
     }
 
-    const rdHeaders = {
-      'Authorization': `Bearer ${apiKey}`,
-    };
-
+    const rdHeaders = { 'Authorization': `Bearer ${apiKey}` };
     let result;
 
     switch (action) {
       case 'search': {
-        // Verify API key first with retry
+        // Verify API key
         const userRes = await fetchWithRetry(`${RD_API}/user`, { headers: rdHeaders });
         if (!userRes.ok) {
           throw new Error('Invalid Real-Debrid API key');
         }
 
-        console.log('Searching for:', query);
-        
         const torrents = await searchTorrents(query);
-        console.log(`Processing ${torrents.length} torrents`);
+        const streams: {id: string, title: string, streamUrl: string, quality: string, size: string, source: string}[] = [];
         
-        const streams: {id: string, title: string, streamUrl: string, quality: string, size: string}[] = [];
-        
-        // Process magnets
         for (const torrent of torrents.slice(0, 5)) {
           if (streams.length >= 5) break;
           
           try {
-            console.log('Processing:', torrent.title.slice(0, 50));
-            const processed = await processMagnet(apiKey, torrent.magnet);
+            console.log('Processing:', torrent.title.slice(0, 40));
+            const processed = await processMagnet(apiKey, torrent.magnet, torrent.source);
             
             if (processed && processed.links.length > 0) {
               for (const rdLink of processed.links.slice(0, 3)) {
@@ -223,34 +275,32 @@ serve(async (req) => {
                 });
                 
                 if (unrestrictRes.ok) {
-                  const unrestrictData = await unrestrictRes.json();
-                  const filename = unrestrictData.filename?.toLowerCase() || '';
+                  const data = await unrestrictRes.json();
+                  const filename = data.filename?.toLowerCase() || '';
                   
-                  // Only include audio files
                   if (filename.endsWith('.mp3') || filename.endsWith('.flac') || 
                       filename.endsWith('.m4a') || filename.endsWith('.wav') ||
                       filename.endsWith('.aac') || filename.endsWith('.ogg') ||
-                      unrestrictData.mimeType?.includes('audio')) {
+                      data.mimeType?.includes('audio')) {
                     
                     streams.push({
                       id: `${processed.id}-${streams.length}`,
-                      title: unrestrictData.filename || torrent.title,
-                      streamUrl: unrestrictData.download,
+                      title: data.filename || torrent.title,
+                      streamUrl: data.download,
                       quality: filename.includes('flac') ? 'FLAC' : 
                                filename.includes('320') ? '320kbps' : 
                                filename.includes('256') ? '256kbps' : 'MP3',
-                      size: unrestrictData.filesize ? 
-                            `${Math.round(unrestrictData.filesize / 1024 / 1024)}MB` : 
-                            torrent.size,
+                      size: data.filesize ? `${Math.round(data.filesize / 1024 / 1024)}MB` : torrent.size,
+                      source: processed.source,
                     });
                     
-                    console.log('Added stream:', unrestrictData.filename?.slice(0, 50));
+                    console.log('Added:', data.filename?.slice(0, 40));
                   }
                 }
               }
             }
           } catch (e) {
-            console.error('Error processing torrent:', e);
+            console.error('Processing error:', e);
           }
         }
         
@@ -270,12 +320,10 @@ serve(async (req) => {
         });
 
         if (!response.ok) {
-          const error = await response.text();
-          throw new Error(`Failed to unrestrict link: ${error}`);
+          throw new Error(`Failed to unrestrict: ${await response.text()}`);
         }
 
         result = await response.json();
-        console.log('Unrestricted link:', result.download?.slice(0, 100));
         break;
       }
 

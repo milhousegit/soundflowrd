@@ -14,7 +14,8 @@ import {
   Music,
   Bug,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
@@ -40,6 +41,8 @@ const Player: React.FC = () => {
     alternativeStreams,
     selectStream,
     currentStreamId,
+    isSearchingStreams,
+    manualSearch,
   } = usePlayer();
   const { t } = useSettings();
   
@@ -53,6 +56,10 @@ const Player: React.FC = () => {
     setShowBugsModal(false);
   };
 
+  const handleManualSearch = (query: string) => {
+    manualSearch(query);
+  };
+
   // Mobile expanded view
   if (isExpanded) {
     return (
@@ -60,13 +67,18 @@ const Player: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-background flex flex-col md:hidden animate-slide-up">
           {/* Header */}
           <div className="flex items-center justify-between p-4">
-            <Button variant="ghost" size="iconSm" onClick={() => setIsExpanded(false)}>
+            <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)}>
               <ChevronDown className="w-6 h-6" />
             </Button>
-            <span className="text-sm text-muted-foreground">Now Playing</span>
+            <div className="flex items-center gap-2">
+              {isSearchingStreams && (
+                <Loader2 className="w-4 h-4 text-primary animate-spin" />
+              )}
+              <span className="text-sm text-muted-foreground">Now Playing</span>
+            </div>
             <Button 
               variant="ghost" 
-              size="iconSm"
+              size="icon"
               onClick={() => setShowBugsModal(true)}
               className="text-muted-foreground hover:text-destructive"
             >
@@ -76,7 +88,7 @@ const Player: React.FC = () => {
 
           {/* Cover */}
           <div className="flex-1 flex items-center justify-center p-8">
-            <div className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl">
+            <div className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative">
               {currentTrack.coverUrl ? (
                 <img 
                   src={currentTrack.coverUrl} 
@@ -90,6 +102,16 @@ const Player: React.FC = () => {
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <Music className="w-24 h-24 text-muted-foreground" />
+                </div>
+              )}
+              {isSearchingStreams && (
+                <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+                  <div className="bg-card rounded-xl p-4 flex flex-col items-center">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
+                    <span className="text-sm text-foreground">
+                      {t('language') === 'it' ? "Cercando..." : "Searching..."}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -117,7 +139,7 @@ const Player: React.FC = () => {
 
           {/* Controls */}
           <div className="flex items-center justify-center gap-8 p-8 pb-12">
-            <Button variant="playerSecondary" size="iconLg" onClick={previous}>
+            <Button variant="playerSecondary" size="icon" onClick={previous}>
               <SkipBack className="w-8 h-8" />
             </Button>
             <Button variant="player" className="h-16 w-16" onClick={toggle}>
@@ -127,7 +149,7 @@ const Player: React.FC = () => {
                 <Play className="w-8 h-8 ml-1" />
               )}
             </Button>
-            <Button variant="playerSecondary" size="iconLg" onClick={next}>
+            <Button variant="playerSecondary" size="icon" onClick={next}>
               <SkipForward className="w-8 h-8" />
             </Button>
           </div>
@@ -139,6 +161,9 @@ const Player: React.FC = () => {
           alternatives={alternativeStreams}
           onSelect={handleSelectStream}
           currentStreamId={currentStreamId}
+          isLoading={isSearchingStreams}
+          onManualSearch={handleManualSearch}
+          currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
         />
       </>
     );
@@ -152,12 +177,17 @@ const Player: React.FC = () => {
         onClick={() => setIsExpanded(true)}
       >
         <div className="h-full flex items-center px-4 gap-3">
-          <div className="w-12 h-12 rounded-lg bg-secondary overflow-hidden flex-shrink-0">
+          <div className="w-12 h-12 rounded-lg bg-secondary overflow-hidden flex-shrink-0 relative">
             {currentTrack.coverUrl ? (
               <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <Music className="w-5 h-5 text-muted-foreground" />
+              </div>
+            )}
+            {isSearchingStreams && (
+              <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+                <Loader2 className="w-5 h-5 text-primary animate-spin" />
               </div>
             )}
           </div>
@@ -167,7 +197,7 @@ const Player: React.FC = () => {
           </div>
           <Button 
             variant="playerSecondary" 
-            size="iconSm"
+            size="icon"
             onClick={(e) => { e.stopPropagation(); toggle(); }}
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
@@ -188,7 +218,7 @@ const Player: React.FC = () => {
         <div className="h-full flex items-center px-6 gap-6">
           {/* Track Info */}
           <div className="flex items-center gap-4 w-72 min-w-0">
-            <div className="w-14 h-14 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">
+            <div className="w-14 h-14 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0 relative">
               {currentTrack.coverUrl ? (
                 <img 
                   src={currentTrack.coverUrl} 
@@ -202,6 +232,11 @@ const Player: React.FC = () => {
               ) : (
                 <Music className="w-6 h-6 text-muted-foreground" />
               )}
+              {isSearchingStreams && (
+                <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                </div>
+              )}
             </div>
             <div className="min-w-0">
               <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
@@ -212,17 +247,17 @@ const Player: React.FC = () => {
           {/* Controls */}
           <div className="flex-1 flex flex-col items-center gap-2 max-w-2xl">
             <div className="flex items-center gap-4">
-              <Button variant="playerSecondary" size="iconSm" onClick={previous}>
+              <Button variant="playerSecondary" size="icon" onClick={previous}>
                 <SkipBack className="w-5 h-5" />
               </Button>
-              <Button variant="player" size="player" onClick={toggle}>
+              <Button variant="player" size="icon" onClick={toggle}>
                 {isPlaying ? (
                   <Pause className="w-5 h-5" />
                 ) : (
                   <Play className="w-5 h-5 ml-0.5" />
                 )}
               </Button>
-              <Button variant="playerSecondary" size="iconSm" onClick={next}>
+              <Button variant="playerSecondary" size="icon" onClick={next}>
                 <SkipForward className="w-5 h-5" />
               </Button>
             </div>
@@ -248,16 +283,23 @@ const Player: React.FC = () => {
           <div className="flex items-center gap-3 w-48">
             <Button 
               variant="playerSecondary" 
-              size="iconSm"
+              size="icon"
               onClick={() => setShowBugsModal(true)}
-              className="text-muted-foreground hover:text-destructive"
+              className={cn(
+                "text-muted-foreground hover:text-destructive relative",
+                isSearchingStreams && "text-primary"
+              )}
               title={t('bugs')}
             >
-              <Bug className="w-5 h-5" />
+              {isSearchingStreams ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Bug className="w-5 h-5" />
+              )}
             </Button>
             <Button 
               variant="playerSecondary" 
-              size="iconSm"
+              size="icon"
               onClick={() => setVolume(volume === 0 ? 0.7 : 0)}
             >
               {volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
@@ -279,6 +321,9 @@ const Player: React.FC = () => {
         alternatives={alternativeStreams}
         onSelect={handleSelectStream}
         currentStreamId={currentStreamId}
+        isLoading={isSearchingStreams}
+        onManualSearch={handleManualSearch}
+        currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
       />
     </>
   );
