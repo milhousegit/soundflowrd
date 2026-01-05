@@ -1249,7 +1249,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [next, previous]);
 
-  // Pre-load next track in queue when current track starts playing
+  // Pre-sync next track in queue when current track starts playing
   useEffect(() => {
     // Skip if conditions aren't met
     if (!credentials?.realDebridApiKey) return;
@@ -1261,67 +1261,137 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (nextIndex >= state.queue.length) return;
     
     const nextTrack = state.queue[nextIndex];
-    if (!nextTrack?.albumId) return;
-    
-    // IMPORTANT: avoid interfering with current playback when the next track is in the same album/torrent.
-    if (nextTrack.albumId === currentAlbumId) return;
+    if (!nextTrack) return;
 
-    const preloadNextTrack = async () => {
-      // Check if next track already has a mapping
+    const preSyncNextTrack = async () => {
+      // Check if next track already has a mapping (already synced)
       const { data: existingMapping } = await supabase
         .from('track_file_mappings')
         .select('id')
         .eq('track_id', nextTrack.id)
         .maybeSingle();
       
-      if (existingMapping) return;
+      if (existingMapping) {
+        console.log('Next track already synced:', nextTrack.title);
+        return;
+      }
       
-      console.log('Pre-loading next track:', nextTrack.title);
+      console.log('Pre-syncing next track:', nextTrack.title);
       
-      if (nextTrack.album?.trim() && nextTrack.artist?.trim()) {
-        try {
+      // Show syncing indicator on the next track
+      addSyncingTrack(nextTrack.id);
+      
+      try {
+        // If same album, try to use the cache first
+        if (nextTrack.albumId === currentAlbumId && albumCacheRef.current?.albumId === currentAlbumId) {
+          const cache = albumCacheRef.current;
+          
+          for (const torrent of cache.torrents) {
+            if (torrent.files && torrent.files.length > 0) {
+              const matchingFile = torrent.files.find(file => {
+                const matchesFileName = flexibleMatch(file.filename || '', nextTrack.title);
+                const matchesPath = flexibleMatch(file.path || '', nextTrack.title);
+                return matchesFileName || matchesPath;
+              });
+              
+              if (matchingFile) {
+                console.log('Pre-sync from cache:', matchingFile.filename);
+                
+                // Select file to start caching (don't play)
+                const result = await selectFilesAndPlay(
+                  credentials.realDebridApiKey,
+                  torrent.torrentId,
+                  [matchingFile.id]
+                );
+                
+                if (!result.error && result.status !== 'error') {
+                  // Save the mapping
+                  await saveFileMapping({
+                    track: nextTrack,
+                    torrentId: torrent.torrentId,
+                    torrentTitle: torrent.title,
+                    fileId: matchingFile.id,
+                    fileName: matchingFile.filename,
+                    filePath: matchingFile.path,
+                  });
+                  
+                  console.log('Pre-synced next track from cache:', nextTrack.title);
+                  removeSyncingTrack(nextTrack.id);
+                  addSyncedTrack(nextTrack.id);
+                  return;
+                }
+              }
+            }
+          }
+        }
+        
+        // Different album or no cache - search for album
+        if (nextTrack.album?.trim() && nextTrack.artist?.trim()) {
           const result = await searchStreams(
             credentials.realDebridApiKey,
             `${nextTrack.album} ${nextTrack.artist}`
           );
           
           if (result.torrents.length > 0) {
-            const normalizeForMatch = (str: string): string => {
-              return str
-                .toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-z0-9\s]/g, '')
-                .trim();
-            };
-            
-            const titleWords = normalizeForMatch(nextTrack.title).split(/\s+/).filter(w => w.length > 1);
+            // Cache for this album if different from current
+            if (nextTrack.albumId && nextTrack.albumId !== currentAlbumId) {
+              albumCacheRef.current = {
+                albumId: nextTrack.albumId,
+                torrents: result.torrents,
+                searchedAt: Date.now(),
+              };
+            }
             
             for (const torrent of result.torrents) {
               if (torrent.files && torrent.files.length > 0) {
                 const matchingFile = torrent.files.find(file => {
-                  const normalizedFile = normalizeForMatch(file.filename || '');
-                  return titleWords.every(word => normalizedFile.includes(word));
+                  const matchesFileName = flexibleMatch(file.filename || '', nextTrack.title);
+                  const matchesPath = flexibleMatch(file.path || '', nextTrack.title);
+                  return matchesFileName || matchesPath;
                 });
                 
                 if (matchingFile) {
-                  await selectFilesAndPlay(credentials.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
-                  console.log('Pre-loaded next track file:', matchingFile.filename);
-                  break;
+                  // Select file to start caching
+                  const selectResult = await selectFilesAndPlay(
+                    credentials.realDebridApiKey,
+                    torrent.torrentId,
+                    [matchingFile.id]
+                  );
+                  
+                  if (!selectResult.error && selectResult.status !== 'error') {
+                    await saveFileMapping({
+                      track: nextTrack,
+                      torrentId: torrent.torrentId,
+                      torrentTitle: torrent.title,
+                      fileId: matchingFile.id,
+                      fileName: matchingFile.filename,
+                      filePath: matchingFile.path,
+                    });
+                    
+                    console.log('Pre-synced next track:', nextTrack.title);
+                    removeSyncingTrack(nextTrack.id);
+                    addSyncedTrack(nextTrack.id);
+                    return;
+                  }
                 }
               }
             }
           }
-        } catch (error) {
-          console.log('Pre-load failed for next track, will load on play:', error);
         }
+        
+        // Failed to pre-sync
+        console.log('Could not pre-sync next track:', nextTrack.title);
+        removeSyncingTrack(nextTrack.id);
+      } catch (error) {
+        console.log('Pre-sync failed for next track:', error);
+        removeSyncingTrack(nextTrack.id);
       }
     };
     
-    // Delay pre-load to not interfere with current track loading
-    const timeout = setTimeout(preloadNextTrack, 5000);
+    // Delay pre-sync to not interfere with current track loading
+    const timeout = setTimeout(preSyncNextTrack, 3000);
     return () => clearTimeout(timeout);
-  }, [state.currentTrack, state.isPlaying, state.queueIndex, state.queue, credentials]);
+  }, [state.currentTrack, state.isPlaying, state.queueIndex, state.queue, credentials, saveFileMapping]);
 
   return (
     <PlayerContext.Provider
