@@ -1,20 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { verifyApiKey } from '@/lib/realdebrid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Music2, Mail, Lock, Key, Headphones, Loader2, AlertCircle, UserPlus, LogIn } from 'lucide-react';
+import { Music2, Mail, Lock, Key, Headphones, Loader2, AlertCircle, UserPlus, LogIn, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
-const authSchema = z.object({
+const loginSchema = z.object({
+  email: z.string().email('Email non valida'),
+  password: z.string().min(6, 'La password deve avere almeno 6 caratteri'),
+});
+
+const signupSchema = z.object({
   email: z.string().email('Email non valida'),
   password: z.string().min(6, 'La password deve avere almeno 6 caratteri'),
   apiKey: z.string().min(10, 'API Key non valida'),
 });
 
 const Login: React.FC = () => {
-  const { signIn, signUp, updateApiKey } = useAuth();
+  const { signIn, signUp, updateApiKey, profile } = useAuth();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,30 +28,37 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'login' | 'signup'>('login');
 
+  // Clear API key field when switching to login mode (not needed for login)
+  useEffect(() => {
+    if (mode === 'login') {
+      setApiKey('');
+    }
+  }, [mode]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    // Validate input
-    const validation = authSchema.safeParse({ email, password, apiKey });
-    if (!validation.success) {
-      setError(validation.error.errors[0].message);
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      // Verify Real-Debrid API key first
-      const verification = await verifyApiKey(apiKey);
-      
-      if (!verification.valid) {
-        setError('API Key Real-Debrid non valida. Controlla e riprova.');
-        setIsLoading(false);
-        return;
-      }
-
       if (mode === 'signup') {
+        // Validate signup input (requires API key)
+        const validation = signupSchema.safeParse({ email, password, apiKey });
+        if (!validation.success) {
+          setError(validation.error.errors[0].message);
+          setIsLoading(false);
+          return;
+        }
+
+        // Verify Real-Debrid API key first
+        const verification = await verifyApiKey(apiKey);
+        
+        if (!verification.valid) {
+          setError('API Key Real-Debrid non valida. Controlla e riprova.');
+          setIsLoading(false);
+          return;
+        }
+
         const { error: signUpError } = await signUp(email, password);
         
         if (signUpError) {
@@ -68,6 +80,14 @@ const Login: React.FC = () => {
           description: `Benvenuto ${verification.username || email}`,
         });
       } else {
+        // Login mode - only email and password required
+        const validation = loginSchema.safeParse({ email, password });
+        if (!validation.success) {
+          setError(validation.error.errors[0].message);
+          setIsLoading(false);
+          return;
+        }
+
         const { error: signInError } = await signIn(email, password);
         
         if (signInError) {
@@ -79,13 +99,10 @@ const Login: React.FC = () => {
           setIsLoading(false);
           return;
         }
-
-        // Update API key on login
-        await updateApiKey(apiKey);
         
         toast({
           title: 'Bentornato!',
-          description: `Accesso effettuato come ${verification.username || email}`,
+          description: `Accesso effettuato`,
         });
       }
     } catch (err) {
@@ -170,18 +187,28 @@ const Login: React.FC = () => {
               />
             </div>
 
-            <div className="relative">
-              <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                type="password"
-                placeholder="Real-Debrid API Key"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="pl-12"
-                required
-              />
-            </div>
+            {/* API Key only shown for signup */}
+            {mode === 'signup' && (
+              <div className="relative">
+                <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  type="password"
+                  placeholder="Real-Debrid API Key"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="pl-12"
+                  required
+                />
+              </div>
+            )}
           </div>
+
+          {mode === 'login' && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 text-primary text-sm">
+              <CheckCircle className="w-4 h-4 flex-shrink-0" />
+              <span>La tua API Key Real-Debrid è già salvata nel profilo</span>
+            </div>
+          )}
 
           <Button
             type="submit"
@@ -198,17 +225,19 @@ const Login: React.FC = () => {
             )}
           </Button>
 
-          <p className="text-center text-xs md:text-sm text-muted-foreground">
-            Ottieni la tua API Key da{' '}
-            <a
-              href="https://real-debrid.com/apitoken"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              Real-Debrid
-            </a>
-          </p>
+          {mode === 'signup' && (
+            <p className="text-center text-xs md:text-sm text-muted-foreground">
+              Ottieni la tua API Key da{' '}
+              <a
+                href="https://real-debrid.com/apitoken"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Real-Debrid
+              </a>
+            </p>
+          )}
         </form>
       </div>
     </div>

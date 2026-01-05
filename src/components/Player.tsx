@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -56,6 +56,12 @@ const Player: React.FC = () => {
   
   const [showBugsModal, setShowBugsModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Swipe to close state
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startY = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   if (!currentTrack) return null;
 
@@ -88,13 +94,58 @@ const Player: React.FC = () => {
     await selectTorrentFile(torrentId, fileIds);
   };
 
+  // Touch handlers for swipe to close
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startY.current = e.touches[0].clientY;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - startY.current;
+    // Only allow dragging down
+    if (diff > 0) {
+      setDragY(diff);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    // If dragged more than 150px, close the player
+    if (dragY > 150) {
+      setIsExpanded(false);
+    }
+    setDragY(0);
+  };
+
+  // Calculate opacity and scale based on drag
+  const dragProgress = Math.min(dragY / 300, 1);
+  const expandedStyle = {
+    transform: `translateY(${dragY}px) scale(${1 - dragProgress * 0.05})`,
+    opacity: 1 - dragProgress * 0.3,
+    transition: isDragging ? 'none' : 'all 0.3s ease-out',
+  };
+
   // Mobile expanded view
   if (isExpanded) {
     return (
       <>
-        <div className="fixed inset-0 z-50 bg-background flex flex-col md:hidden animate-slide-up">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4">
+        <div 
+          ref={containerRef}
+          className="fixed inset-0 z-50 bg-background flex flex-col md:hidden"
+          style={expandedStyle}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Drag indicator */}
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 bg-muted-foreground/30 rounded-full" />
+          </div>
+
+          {/* Header with safe area */}
+          <div className="flex items-center justify-between px-4 pt-safe">
             <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)}>
               <ChevronDown className="w-6 h-6" />
             </Button>
@@ -179,8 +230,8 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center justify-center gap-8 p-8 pb-12">
+          {/* Controls with safe area for home indicator */}
+          <div className="flex items-center justify-center gap-8 p-8 pb-safe" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
             <Button variant="playerSecondary" size="icon" onClick={previous}>
               <SkipBack className="w-8 h-8" />
             </Button>
@@ -217,31 +268,34 @@ const Player: React.FC = () => {
     );
   }
 
+  // Calculate navbar height (48px content + safe area)
+  const navbarHeight = 48;
+
   return (
     <>
-      {/* Mobile mini player - positioned above navbar with safe area */}
+      {/* Mobile mini player - positioned above navbar */}
       <div 
-        className="fixed left-0 right-0 h-16 glass border-t border-border z-40 md:hidden"
-        style={{ bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))' }}
+        className="fixed left-0 right-0 h-14 glass border-t border-border z-40 md:hidden"
+        style={{ bottom: `calc(${navbarHeight}px + env(safe-area-inset-bottom, 0px))` }}
         onClick={() => setIsExpanded(true)}
       >
-        <div className="h-full flex items-center px-4 gap-3">
-          <div className="w-12 h-12 rounded-lg bg-secondary overflow-hidden flex-shrink-0 relative">
+        <div className="h-full flex items-center px-3 gap-3">
+          <div className="w-10 h-10 rounded-lg bg-secondary overflow-hidden flex-shrink-0 relative">
             {currentTrack.coverUrl ? (
               <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <Music className="w-5 h-5 text-muted-foreground" />
+                <Music className="w-4 h-4 text-muted-foreground" />
               </div>
             )}
             {isSearchingStreams && (
               <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                <Loader2 className="w-4 h-4 text-primary animate-spin" />
               </div>
             )}
             {downloadProgress !== null && !isSearchingStreams && (
               <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                <span className="text-xs font-bold text-primary">{downloadProgress}%</span>
+                <span className="text-[10px] font-bold text-primary">{downloadProgress}%</span>
               </div>
             )}
           </div>
@@ -252,14 +306,15 @@ const Player: React.FC = () => {
           <Button 
             variant="playerSecondary" 
             size="icon"
+            className="h-9 w-9"
             onClick={(e) => { e.stopPropagation(); toggle(); }}
           >
-            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
           </Button>
-          <ChevronUp className="w-5 h-5 text-muted-foreground" />
+          <ChevronUp className="w-4 h-4 text-muted-foreground" />
         </div>
         {/* Progress bar */}
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-secondary">
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary">
           <div 
             className="h-full bg-primary transition-all"
             style={{ width: `${(progress / (duration || 1)) * 100}%` }}
