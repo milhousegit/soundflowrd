@@ -25,6 +25,8 @@ export async function searchStreams(
 ): Promise<StreamResult[]> {
   const query = `${artistName} ${trackTitle}`;
   
+  console.log('Searching streams for:', query);
+  
   const { data, error } = await supabase.functions.invoke('real-debrid', {
     body: { action: 'search', apiKey, query },
   });
@@ -34,8 +36,20 @@ export async function searchStreams(
     return [];
   }
 
-  // In a real implementation, this would return actual stream results
-  // For now, we return mock data structure
+  console.log('Stream search result:', data);
+  
+  // Return the streams from the API
+  if (data?.streams && Array.isArray(data.streams)) {
+    return data.streams.map((s: any) => ({
+      id: s.id,
+      title: s.title,
+      streamUrl: s.streamUrl,
+      quality: s.quality || 'MP3',
+      size: s.size,
+      source: 'Real-Debrid',
+    }));
+  }
+  
   return [];
 }
 
