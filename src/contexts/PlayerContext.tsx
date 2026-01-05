@@ -333,6 +333,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setAvailableTorrents(result.torrents);
       addDebugLog('Risultati album', `Trovati ${result.torrents.length} torrent`, result.torrents.length > 0 ? 'success' : 'warning');
       
+      let foundAnyMatchingFile = false;
+
       // Look for a torrent with files that match the track title
       for (const torrent of result.torrents) {
         // Check if search is still valid before processing each torrent
@@ -340,91 +342,109 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           console.log('Album search cancelled during torrent loop - track changed');
           return false;
         }
-        
+
         if (torrent.files && torrent.files.length > 0) {
           addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
-          
+
           // Log normalized track title for debugging
           const normalizedTrackTitle = normalizeForMatch(track.title);
           const trackWords = extractSignificantWords(track.title);
-          console.log(`Looking for track "${track.title}" -> normalized: "${normalizedTrackTitle}", words: [${trackWords.join(', ')}]`);
-          
+          console.log(
+            `Looking for track "${track.title}" -> normalized: "${normalizedTrackTitle}", words: [${trackWords.join(', ')}]`
+          );
+
           // Find a file that contains the track title (check both filename and path)
-          const matchingFile = torrent.files.find(file => {
+          const matchingFile = torrent.files.find((file) => {
             const normalizedFileName = normalizeForMatch(file.filename || '');
             const matchesFileName = flexibleMatch(file.filename || '', track.title);
             const matchesPath = flexibleMatch(file.path || '', track.title);
             const matches = matchesFileName || matchesPath;
-            
-            console.log(`  Checking file "${file.filename}" -> normalized: "${normalizedFileName}" -> match: ${matches}`);
-            
+
+            console.log(
+              `  Checking file "${file.filename}" -> normalized: "${normalizedFileName}" -> match: ${matches}`
+            );
+
             if (matches) {
               addDebugLog('Match trovato', `"${file.filename}" ≈ "${track.title}"`, 'success');
             }
             return matches;
           });
-          
+
           if (matchingFile) {
+            foundAnyMatchingFile = true;
             addDebugLog('File trovato', `Match: "${matchingFile.filename}"`, 'success');
-            
-            // Select this file and play it
+
+            // Select this file and play it (or start cloud caching)
             const selectResult = await selectFilesAndPlay(
-              credentials.realDebridApiKey, 
-              torrent.torrentId, 
+              credentials.realDebridApiKey,
+              torrent.torrentId,
               [matchingFile.id]
             );
-            
+
             // Check if search is still valid after async operation
             if (currentSearchTrackIdRef.current !== track.id) {
               console.log('Album search cancelled after file select - track changed');
               return false;
             }
-            
+
             // Check for errors
             if (selectResult.error || selectResult.status === 'error') {
               addDebugLog('Errore selezione file', selectResult.error || 'Errore sconosciuto', 'error');
               continue; // Try next torrent
             }
-            
+
+            // IMPORTANT: save mapping as soon as we successfully selected a specific file
+            // Even if the torrent is still downloading/queued, we want the mapping to be shared across devices.
+            await saveFileMapping({
+              track,
+              torrentId: torrent.torrentId,
+              torrentTitle: torrent.title,
+              fileId: matchingFile.id,
+              fileName: matchingFile.filename,
+              filePath: matchingFile.path,
+            });
+
             if (selectResult.streams.length > 0) {
               setAlternativeStreams(selectResult.streams);
               setCurrentStreamId(selectResult.streams[0].id);
               setDownloadProgress(null);
               setDownloadStatus(null);
-              
+
               if (audioRef.current && selectResult.streams[0].streamUrl) {
                 audioRef.current.src = selectResult.streams[0].streamUrl;
                 audioRef.current.play();
-                setState(prev => ({ ...prev, isPlaying: true }));
+                setState((prev) => ({ ...prev, isPlaying: true }));
               }
-              
-              await saveFileMapping({
-                track,
-                torrentId: torrent.torrentId,
-                torrentTitle: torrent.title,
-                fileId: matchingFile.id,
-                fileName: matchingFile.filename,
-                filePath: matchingFile.path,
-              });
+
               addDebugLog('Riproduzione', 'Stream avviato e mappatura salvata', 'success');
-              
               return true;
-            } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
+            }
+
+            if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
               setDownloadProgress(selectResult.progress);
               setDownloadStatus(selectResult.status);
-              addDebugLog('Salvataggio', 'Salvataggio in cloud', 'success');
-              // Don't return yet, show the download progress
-            } else {
-              addDebugLog('Stato torrent', `Stato: ${selectResult.status}, nessuno stream pronto`, 'warning');
+              addDebugLog('Salvataggio', 'Salvataggio in cloud (mappatura salvata)', 'success');
+
+              // We found the correct file and started caching: DO NOT show "Match manuale richiesto".
+              // Returning true stops the loop and avoids misleading UI.
+              return true;
             }
+
+            addDebugLog('Stato torrent', `Stato: ${selectResult.status}, nessuno stream pronto`, 'warning');
           } else {
             // Log all file names for debugging
-            const fileNames = torrent.files.map(f => f.filename).join(', ');
+            const fileNames = torrent.files.map((f) => f.filename).join(', ');
             addDebugLog('Nessun match', `Cercavo "${track.title}" in: ${fileNames.substring(0, 200)}...`, 'warning');
           }
         }
       }
-      
+
+      // If we found a matching file but never got a valid select result, don't claim manual match
+      if (foundAnyMatchingFile) {
+        removeSyncingTrack(track.id);
+        return false;
+      }
+
       // If no file match found but we have torrents, at least show them
       if (result.torrents.length > 0) {
         addDebugLog('Match manuale richiesto', `Nessun file corrisponde a "${track.title}" (query usata: "${track.album} ${track.artist}")`, 'warning');
