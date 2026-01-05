@@ -167,6 +167,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '') // remove accents
       .replace(/[''`]/g, '') // remove apostrophes
+      .replace(/\([^)]*\)/g, '') // remove content in parentheses (like subtitles)
+      .replace(/\[[^\]]*\]/g, '') // remove content in brackets
       .replace(/[^a-z0-9\s]/g, ' ') // replace special chars with space
       .replace(/\s+/g, ' ') // collapse multiple spaces
       .trim();
@@ -175,15 +177,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Extract significant words from a string (ignore short words and common terms)
   const extractSignificantWords = (str: string): string[] => {
     const normalized = normalizeForMatch(str);
-    // Filter out very short words and common filler words
-    const stopWords = ['a', 'e', 'i', 'o', 'u', 'il', 'la', 'lo', 'le', 'un', 'una', 'di', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra', 'the', 'a', 'an', 'of', 'to', 'and', 'or', 'for', 'mp3', 'flac', 'wav', 'm4a', 'aac', 'ogg'];
+    // Filter out very short words, numbers, and common filler words
+    const stopWords = ['a', 'e', 'i', 'o', 'u', 'il', 'la', 'lo', 'le', 'gli', 'un', 'una', 'uno', 'di', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra', 'del', 'della', 'dei', 'degli', 'al', 'alla', 'the', 'a', 'an', 'of', 'to', 'and', 'or', 'for', 'mp3', 'flac', 'wav', 'm4a', 'aac', 'ogg'];
     return normalized
       .split(/\s+/)
-      .filter(w => w.length > 1 && !stopWords.includes(w));
+      .filter(w => w.length > 1 && !stopWords.includes(w) && !/^\d+$/.test(w));
   };
 
   // Helper to check if file name contains track title words (flexible matching)
-  // e.g. "16 - L'EMOZIONE NON HA VOCE.flac" should match "L'emozione non ha voce"
+  // e.g. "06 - L'EMOZIONE NON HA VOCE.mp3" should match "L'emozione non ha voce (Io non so parlar d'amore)"
   const flexibleMatch = (fileName: string, trackTitle: string): boolean => {
     const normalizedFile = normalizeForMatch(fileName);
     const normalizedTitle = normalizeForMatch(trackTitle);
@@ -193,23 +195,45 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return true;
     }
     
+    // Check if normalized title is contained in normalized file
+    if (normalizedTitle.length > 3 && normalizedFile.includes(normalizedTitle)) {
+      return true;
+    }
+    
     // Extract significant words from track title
     const titleWords = extractSignificantWords(trackTitle);
     if (titleWords.length === 0) return false;
     
-    // All significant words from the track title must be present in the filename
-    const allWordsPresent = titleWords.every(word => normalizedFile.includes(word));
+    // Check how many title words are present in the filename
+    const matchingWords = titleWords.filter(word => normalizedFile.includes(word));
     
-    if (allWordsPresent) {
+    // If ALL significant words match, it's definitely a match
+    if (matchingWords.length === titleWords.length) {
       return true;
     }
     
-    // Try matching with a minimum word overlap (for cases with partial matches)
-    // At least 70% of words must match
-    const matchingWords = titleWords.filter(word => normalizedFile.includes(word));
-    const matchRatio = matchingWords.length / titleWords.length;
+    // For titles with 4+ words, require at least 3 matching words
+    if (titleWords.length >= 4 && matchingWords.length >= 3) {
+      return true;
+    }
     
-    return matchRatio >= 0.7 && matchingWords.length >= 2;
+    // For shorter titles (2-3 words), require all words to match
+    if (titleWords.length <= 3 && matchingWords.length === titleWords.length) {
+      return true;
+    }
+    
+    // Special case: check if the filename words are a subset of the title words
+    // This handles cases where the file has a shorter name than the track title
+    const fileWords = extractSignificantWords(fileName);
+    if (fileWords.length >= 2) {
+      const fileWordsInTitle = fileWords.filter(fw => titleWords.includes(fw));
+      // If most file words are in the title, it's likely a match
+      if (fileWordsInTitle.length >= fileWords.length * 0.8 && fileWordsInTitle.length >= 2) {
+        return true;
+      }
+    }
+    
+    return false;
   };
 
   // Helper to save a **file** mapping (torrent + specific file id) to database
