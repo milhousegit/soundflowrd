@@ -255,17 +255,22 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
 
           {/* Content */}
           <div className="p-4 overflow-y-auto max-h-[55vh]">
-            {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
-                <p className="text-muted-foreground">
-                  {t('language') === 'it' ? "Cercando fonti audio..." : "Searching audio sources..."}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t('language') === 'it' ? "Potrebbe richiedere alcuni secondi" : "This may take a few seconds"}
-                </p>
+            {/* Show loading indicator inline if searching but we have some results already */}
+            {isLoading && (
+              <div className="flex items-center gap-3 p-3 mb-4 rounded-lg bg-primary/10 border border-primary/20">
+                <Loader2 className="w-5 h-5 text-primary animate-spin flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {t('language') === 'it' ? "Ricerca in corso..." : "Searching..."}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('language') === 'it' ? "Puoi controllare i risultati mentre cerco" : "You can check results while searching"}
+                  </p>
+                </div>
               </div>
-            ) : !hasFoundSources && !isDownloading ? (
+            )}
+            
+            {!hasFoundSources && !isDownloading && !isLoading ? (
               <div className="text-center py-8">
                 <Music className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                 <p className="text-muted-foreground">{t('noAlternatives')}</p>
@@ -275,7 +280,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                     : "Try manual search above"}
                 </p>
               </div>
-            ) : !hasFoundSources && isDownloading ? (
+            ) : !hasFoundSources && isDownloading && !isLoading ? (
               <div className="text-center py-8">
                 <div className="relative w-16 h-16 mx-auto mb-4">
                   <Cloud className="w-16 h-16 text-primary" />
@@ -288,7 +293,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
                   {t('language') === 'it' 
-                    ? "Stiamo aggiungendo la canzone a Real-Debrid per te..." 
+                    ? "Stiamo aggiungendo la canzone a Real-Debrid per te..."
                     : "Adding the song to Real-Debrid for you..."}
                 </p>
               </div>

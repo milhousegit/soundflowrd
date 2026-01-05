@@ -20,7 +20,7 @@ const MobileNav: React.FC = () => {
       className="fixed bottom-0 left-0 right-0 z-40 glass border-t border-border md:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      <div className="h-20 flex items-center justify-around px-2">
+      <div className="h-16 flex items-center justify-around px-4">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
@@ -28,12 +28,11 @@ const MobileNav: React.FC = () => {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors",
-                isActive ? "text-primary" : "text-muted-foreground"
+                "flex items-center justify-center w-14 h-14 rounded-xl transition-colors",
+                isActive ? "text-primary bg-primary/10" : "text-muted-foreground active:bg-secondary"
               )}
             >
-              <item.icon className={cn("w-5 h-5", isActive && "text-primary")} />
-              <span className="text-[9px] font-medium leading-none">{item.label}</span>
+              <item.icon className={cn("w-6 h-6", isActive && "text-primary")} />
             </NavLink>
           );
         })}
