@@ -357,28 +357,45 @@ serve(async (req) => {
       }
 
       case 'get-popular-artists': {
-        // Search for popular artists from a specific country
-        let queryStr = '*';
-        if (country) {
-          queryStr = `country:${country}`;
+        // Use a list of known popular artists per country for better results
+        const popularByCountry: Record<string, string[]> = {
+          'IT': ['Måneskin', 'Laura Pausini', 'Eros Ramazzotti', 'Andrea Bocelli', 'Zucchero', 'Jovanotti', 'Ligabue', 'Vasco Rossi', 'Tiziano Ferro', 'Gianna Nannini', 'Caparezza', 'Salmo', 'Ghali', 'Sfera Ebbasta', 'Fedez'],
+          'US': ['Taylor Swift', 'Drake', 'Beyoncé', 'Kendrick Lamar', 'Post Malone', 'Billie Eilish', 'The Weeknd', 'Doja Cat', 'SZA', 'Bad Bunny', 'Travis Scott', 'Ariana Grande'],
+          'ES': ['Rosalía', 'Bad Bunny', 'J Balvin', 'Enrique Iglesias', 'Shakira', 'Alejandro Sanz', 'Pablo Alborán', 'Malú', 'David Bisbal', 'Aitana'],
+          'FR': ['Stromae', 'Daft Punk', 'David Guetta', 'Aya Nakamura', 'Jul', 'Ninho', 'Angèle', 'Christine and the Queens', 'Indila', 'Zaz'],
+          'DE': ['Rammstein', 'Kraftwerk', 'Scorpions', 'Nena', 'Tokio Hotel', 'Seeed', 'Cro', 'Sido', 'Marteria', 'Peter Fox'],
+          'PT': ['Amália Rodrigues', 'Mariza', 'Salvador Sobral', 'Ana Moura', 'David Carreira', 'Diogo Piçarra', 'Bárbara Tinoco', 'Blaya'],
+        };
+        
+        const artistNames = popularByCountry[country || 'IT'] || popularByCountry['IT'];
+        const shuffledNames = artistNames.sort(() => Math.random() - 0.5).slice(0, limit);
+        
+        const artists: any[] = [];
+        
+        for (const name of shuffledNames) {
+          try {
+            const url = `${MUSICBRAINZ_API}/artist?query=${encodeURIComponent(`artist:"${name}"`)}&limit=1&fmt=json`;
+            const response = await fetchWithRetry(url, { headers });
+            const data = await response.json();
+            
+            if (data.artists?.[0]) {
+              const a = data.artists[0];
+              const imageUrl = await getArtistImage(a.id);
+              artists.push({
+                id: a.id,
+                name: a.name,
+                imageUrl,
+                genres: a.tags?.slice(0, 3).map((t: any) => t.name) || [],
+                country: a.country,
+                type: a.type,
+              });
+            }
+          } catch (e) {
+            console.error(`Error fetching artist ${name}:`, e);
+          }
         }
         
-        const url = `${MUSICBRAINZ_API}/artist?query=${encodeURIComponent(queryStr)}&limit=${limit}&fmt=json`;
-        const response = await fetchWithRetry(url, { headers });
-        const data = await response.json();
-        
-        // Get images for artists
-        result = await Promise.all((data.artists || []).slice(0, limit).map(async (a: any) => {
-          const imageUrl = await getArtistImage(a.id);
-          return {
-            id: a.id,
-            name: a.name,
-            imageUrl,
-            genres: a.tags?.slice(0, 3).map((t: any) => t.name) || [],
-            country: a.country,
-            type: a.type,
-          };
-        }));
+        result = artists;
         break;
       }
 
