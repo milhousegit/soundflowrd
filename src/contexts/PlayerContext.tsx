@@ -160,35 +160,56 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
   }, []);
 
-  // Helper to normalize string for matching
+  // Helper to normalize string for matching - keeps only alphanumeric and spaces
   const normalizeForMatch = (str: string): string => {
     return str
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/[\u0300-\u036f]/g, '') // remove accents
+      .replace(/[''`]/g, '') // remove apostrophes
+      .replace(/[^a-z0-9\s]/g, ' ') // replace special chars with space
+      .replace(/\s+/g, ' ') // collapse multiple spaces
       .trim();
   };
 
+  // Extract significant words from a string (ignore short words and common terms)
+  const extractSignificantWords = (str: string): string[] => {
+    const normalized = normalizeForMatch(str);
+    // Filter out very short words and common filler words
+    const stopWords = ['a', 'e', 'i', 'o', 'u', 'il', 'la', 'lo', 'le', 'un', 'una', 'di', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra', 'the', 'a', 'an', 'of', 'to', 'and', 'or', 'for', 'mp3', 'flac', 'wav', 'm4a', 'aac', 'ogg'];
+    return normalized
+      .split(/\s+/)
+      .filter(w => w.length > 1 && !stopWords.includes(w));
+  };
+
   // Helper to check if file name contains track title words (flexible matching)
-  // e.g. "16 - TITOLI DI CODA.flac" should match "TITOLI DI CODA"
+  // e.g. "16 - L'EMOZIONE NON HA VOCE.flac" should match "L'emozione non ha voce"
   const flexibleMatch = (fileName: string, trackTitle: string): boolean => {
     const normalizedFile = normalizeForMatch(fileName);
     const normalizedTitle = normalizeForMatch(trackTitle);
     
-    // First try exact substring match
+    // First try exact substring match (after normalization)
     if (normalizedFile.includes(normalizedTitle)) {
       return true;
     }
     
-    // Split track title into words and check if all words are present in the filename
-    const titleWords = normalizedTitle.split(/\s+/).filter(w => w.length > 1);
+    // Extract significant words from track title
+    const titleWords = extractSignificantWords(trackTitle);
     if (titleWords.length === 0) return false;
     
     // All significant words from the track title must be present in the filename
     const allWordsPresent = titleWords.every(word => normalizedFile.includes(word));
     
-    return allWordsPresent;
+    if (allWordsPresent) {
+      return true;
+    }
+    
+    // Try matching with a minimum word overlap (for cases with partial matches)
+    // At least 70% of words must match
+    const matchingWords = titleWords.filter(word => normalizedFile.includes(word));
+    const matchRatio = matchingWords.length / titleWords.length;
+    
+    return matchRatio >= 0.7 && matchingWords.length >= 2;
   };
 
   // Helper to save a **file** mapping (torrent + specific file id) to database
@@ -299,13 +320,22 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (torrent.files && torrent.files.length > 0) {
           addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
           
+          // Log normalized track title for debugging
+          const normalizedTrackTitle = normalizeForMatch(track.title);
+          const trackWords = extractSignificantWords(track.title);
+          console.log(`Looking for track "${track.title}" -> normalized: "${normalizedTrackTitle}", words: [${trackWords.join(', ')}]`);
+          
           // Find a file that contains the track title (check both filename and path)
           const matchingFile = torrent.files.find(file => {
+            const normalizedFileName = normalizeForMatch(file.filename || '');
             const matchesFileName = flexibleMatch(file.filename || '', track.title);
             const matchesPath = flexibleMatch(file.path || '', track.title);
             const matches = matchesFileName || matchesPath;
+            
+            console.log(`  Checking file "${file.filename}" -> normalized: "${normalizedFileName}" -> match: ${matches}`);
+            
             if (matches) {
-              addDebugLog('Match trovato', `"${file.filename}" contiene parole di "${track.title}"`, 'success');
+              addDebugLog('Match trovato', `"${file.filename}" ≈ "${track.title}"`, 'success');
             }
             return matches;
           });
