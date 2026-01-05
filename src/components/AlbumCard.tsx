@@ -14,10 +14,10 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
   return (
     <div
       onClick={() => navigate(`/album/${album.id}`)}
-      className="group p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer"
+      className="group p-3 md:p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer"
     >
       {/* Cover */}
-      <div className="relative aspect-square rounded-lg overflow-hidden mb-4 bg-muted">
+      <div className="relative aspect-square rounded-lg overflow-hidden mb-3 md:mb-4 bg-muted">
         {album.coverUrl ? (
           <img 
             src={album.coverUrl} 
@@ -26,7 +26,7 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Music className="w-12 h-12 text-muted-foreground" />
+            <Music className="w-8 md:w-12 h-8 md:h-12 text-muted-foreground" />
           </div>
         )}
         
@@ -34,19 +34,19 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
         <Button
           variant="player"
           size="player"
-          className="absolute bottom-2 right-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300"
+          className="absolute bottom-2 right-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 h-10 w-10 md:h-12 md:w-12"
           onClick={(e) => {
             e.stopPropagation();
             // Play album
           }}
         >
-          <Play className="w-5 h-5 ml-0.5" />
+          <Play className="w-4 md:w-5 h-4 md:h-5 ml-0.5" />
         </Button>
       </div>
 
       {/* Info */}
-      <h3 className="font-semibold text-foreground truncate mb-1">{album.title}</h3>
-      <p className="text-sm text-muted-foreground truncate">
+      <h3 className="font-semibold text-sm md:text-base text-foreground truncate mb-1">{album.title}</h3>
+      <p className="text-xs md:text-sm text-muted-foreground truncate">
         {album.releaseDate?.split('-')[0]} • {album.artist}
       </p>
     </div>
