@@ -1,1 +1,7 @@
 project_id = "ytkmoujvriqetljjfito"
+
+[functions.musicbrainz]
+verify_jwt = false
+
+[functions.real-debrid]
+verify_jwt = false
