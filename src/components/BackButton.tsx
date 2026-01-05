@@ -15,7 +15,7 @@ const BackButton: React.FC<BackButtonProps> = ({ className = '' }) => {
       variant="ghost"
       size="icon"
       onClick={() => navigate(-1)}
-      className={`md:hidden ${className}`}
+      className={className}
       aria-label="Torna indietro"
     >
       <ChevronLeft className="w-6 h-6" />
