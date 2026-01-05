@@ -351,7 +351,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             addDebugLog('Mappatura salvata', 'Sorgente salvata per uso futuro', 'success');
           }
         }
-      } else if (result.streams?.length === 0 && result.torrents.length === 0) {
+      } else if ((!result.streams || result.streams.length === 0) && result.torrents.length === 0) {
         // No results for track title, try searching for the album
         addDebugLog('Nessun risultato diretto', 'Provo ricerca per album...', 'warning');
         
