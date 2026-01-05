@@ -1,7 +1,7 @@
 import React, { forwardRef, useState, useEffect } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
-import { StreamResult, PendingDownload } from '@/lib/realdebrid';
-import { X, Music, Check, Search, Loader2, Download, RefreshCw } from 'lucide-react';
+import { StreamResult, TorrentInfo, AudioFile } from '@/lib/realdebrid';
+import { X, Music, Check, Search, Loader2, Download, RefreshCw, ChevronDown, ChevronRight, Folder, FileAudio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -11,35 +11,44 @@ interface BugsModalProps {
   isOpen: boolean;
   onClose: () => void;
   alternatives: StreamResult[];
-  pendingDownloads?: PendingDownload[];
+  torrents?: TorrentInfo[];
   onSelect: (stream: StreamResult) => void;
+  onSelectFile?: (torrentId: string, fileIds: number[]) => void;
+  onRefreshTorrent?: (torrentId: string) => void;
   currentStreamId?: string;
   isLoading?: boolean;
   onManualSearch?: (query: string) => void;
-  onRefreshPending?: (torrentId: string) => void;
   currentTrackInfo?: { title: string; artist: string };
 }
 
 const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
-  ({ isOpen, onClose, alternatives, pendingDownloads = [], onSelect, currentStreamId, isLoading, onManualSearch, onRefreshPending, currentTrackInfo }, ref) => {
+  ({ isOpen, onClose, alternatives, torrents = [], onSelect, onSelectFile, onRefreshTorrent, currentStreamId, isLoading, onManualSearch, currentTrackInfo }, ref) => {
     const { t } = useSettings();
     const [manualQuery, setManualQuery] = useState('');
+    const [expandedTorrents, setExpandedTorrents] = useState<Set<string>>(new Set());
     const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
+    const [selectingFiles, setSelectingFiles] = useState<Set<string>>(new Set());
 
-    // Auto-refresh pending downloads every 10 seconds
+    // Auto-refresh downloading torrents every 15 seconds
     useEffect(() => {
-      if (!isOpen || pendingDownloads.length === 0 || !onRefreshPending) return;
+      if (!isOpen || torrents.length === 0 || !onRefreshTorrent) return;
+      
+      const downloadingTorrents = torrents.filter(t => 
+        t.status === 'downloading' || t.status === 'queued' || t.status === 'magnet_conversion'
+      );
+      
+      if (downloadingTorrents.length === 0) return;
       
       const interval = setInterval(() => {
-        pendingDownloads.forEach(p => {
-          if (!refreshingIds.has(p.torrentId)) {
-            onRefreshPending(p.torrentId);
+        downloadingTorrents.forEach(t => {
+          if (!refreshingIds.has(t.torrentId)) {
+            onRefreshTorrent(t.torrentId);
           }
         });
-      }, 10000);
+      }, 15000);
       
       return () => clearInterval(interval);
-    }, [isOpen, pendingDownloads, onRefreshPending, refreshingIds]);
+    }, [isOpen, torrents, onRefreshTorrent, refreshingIds]);
 
     if (!isOpen) return null;
 
@@ -55,14 +64,41 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
       }
     };
 
-    const handleRefreshPending = async (torrentId: string) => {
-      if (!onRefreshPending || refreshingIds.has(torrentId)) return;
+    const toggleTorrentExpand = (torrentId: string) => {
+      setExpandedTorrents(prev => {
+        const next = new Set(prev);
+        if (next.has(torrentId)) {
+          next.delete(torrentId);
+        } else {
+          next.add(torrentId);
+        }
+        return next;
+      });
+    };
+
+    const handleRefreshTorrent = async (torrentId: string) => {
+      if (!onRefreshTorrent || refreshingIds.has(torrentId)) return;
       
       setRefreshingIds(prev => new Set(prev).add(torrentId));
-      await onRefreshPending(torrentId);
+      await onRefreshTorrent(torrentId);
       setRefreshingIds(prev => {
         const next = new Set(prev);
         next.delete(torrentId);
+        return next;
+      });
+    };
+
+    const handleSelectFile = async (torrentId: string, file: AudioFile) => {
+      if (!onSelectFile || selectingFiles.has(`${torrentId}-${file.id}`)) return;
+      
+      const key = `${torrentId}-${file.id}`;
+      setSelectingFiles(prev => new Set(prev).add(key));
+      
+      await onSelectFile(torrentId, [file.id]);
+      
+      setSelectingFiles(prev => {
+        const next = new Set(prev);
+        next.delete(key);
         return next;
       });
     };
@@ -72,7 +108,19 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
         case 'downloading': return t('language') === 'it' ? 'In download...' : 'Downloading...';
         case 'queued': return t('language') === 'it' ? 'In coda...' : 'Queued...';
         case 'magnet_conversion': return t('language') === 'it' ? 'Conversione...' : 'Converting...';
+        case 'downloaded': return t('language') === 'it' ? 'Pronto' : 'Ready';
+        case 'waiting_files_selection': return t('language') === 'it' ? 'Seleziona file' : 'Select files';
         default: return status;
+      }
+    };
+
+    const getStatusColor = (status: string) => {
+      switch (status) {
+        case 'downloaded': return 'text-green-500';
+        case 'downloading': return 'text-blue-500';
+        case 'queued': return 'text-yellow-500';
+        case 'waiting_files_selection': return 'text-orange-500';
+        default: return 'text-muted-foreground';
       }
     };
 
@@ -85,7 +133,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
         />
         
         {/* Modal */}
-        <div className="relative w-full max-w-lg max-h-[80vh] bg-card rounded-t-2xl md:rounded-2xl border border-border overflow-hidden animate-slide-up">
+        <div className="relative w-full max-w-2xl max-h-[85vh] bg-card rounded-t-2xl md:rounded-2xl border border-border overflow-hidden animate-slide-up">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border">
             <div>
@@ -125,13 +173,13 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               {t('language') === 'it' 
-                ? "Prova a cercare con parole diverse se non trovi risultati" 
-                : "Try different keywords if you don't find results"}
+                ? "Clicca su un torrent per vedere i file audio e selezionare la traccia" 
+                : "Click on a torrent to see audio files and select a track"}
             </p>
           </div>
 
           {/* Content */}
-          <div className="p-4 overflow-y-auto max-h-[50vh]">
+          <div className="p-4 overflow-y-auto max-h-[55vh]">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
@@ -142,7 +190,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                   {t('language') === 'it' ? "Potrebbe richiedere alcuni secondi" : "This may take a few seconds"}
                 </p>
               </div>
-            ) : alternatives.length === 0 && pendingDownloads.length === 0 ? (
+            ) : alternatives.length === 0 && torrents.length === 0 ? (
               <div className="text-center py-8">
                 <Music className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                 <p className="text-muted-foreground">{t('noAlternatives')}</p>
@@ -155,75 +203,145 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
             ) : (
               <div className="space-y-2">
                 {/* Ready streams */}
-                {alternatives.map((alt) => (
-                  <button
-                    key={alt.id}
-                    onClick={() => onSelect(alt)}
-                    className={cn(
-                      "w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left",
-                      currentStreamId === alt.id 
-                        ? "bg-primary/20 border border-primary/50" 
-                        : "bg-secondary hover:bg-secondary/80"
-                    )}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-foreground truncate">{alt.title}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {alt.quality} {alt.size && `• ${alt.size}`}
-                        {alt.source && ` • ${alt.source}`}
-                      </p>
+                {alternatives.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 py-2">
+                      <Check className="w-4 h-4 text-green-500" />
+                      <span className="text-sm font-medium text-foreground">
+                        {t('language') === 'it' ? 'Pronti per la riproduzione' : 'Ready to play'}
+                      </span>
                     </div>
-                    {currentStreamId === alt.id && (
-                      <Check className="w-5 h-5 text-primary flex-shrink-0" />
-                    )}
-                  </button>
-                ))}
+                    {alternatives.map((alt) => (
+                      <button
+                        key={alt.id}
+                        onClick={() => onSelect(alt)}
+                        className={cn(
+                          "w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left",
+                          currentStreamId === alt.id 
+                            ? "bg-primary/20 border border-primary/50" 
+                            : "bg-secondary hover:bg-secondary/80"
+                        )}
+                      >
+                        <FileAudio className="w-5 h-5 text-primary flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate">{alt.title}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {alt.quality} {alt.size && `• ${alt.size}`}
+                            {alt.source && ` • ${alt.source}`}
+                          </p>
+                        </div>
+                        {currentStreamId === alt.id && (
+                          <Check className="w-5 h-5 text-primary flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </>
+                )}
                 
-                {/* Pending downloads */}
-                {pendingDownloads.length > 0 && (
+                {/* Torrents with files */}
+                {torrents.length > 0 && (
                   <>
                     {alternatives.length > 0 && (
-                      <div className="flex items-center gap-2 py-2">
+                      <div className="flex items-center gap-2 py-2 mt-4">
                         <div className="flex-1 h-px bg-border" />
                         <span className="text-xs text-muted-foreground">
-                          {t('language') === 'it' ? 'In download' : 'Downloading'}
+                          {t('language') === 'it' ? 'Torrent disponibili' : 'Available torrents'}
                         </span>
                         <div className="flex-1 h-px bg-border" />
                       </div>
                     )}
                     
-                    {pendingDownloads.map((pending) => (
-                      <div
-                        key={pending.torrentId}
-                        className="w-full flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-dashed border-border"
-                      >
-                        <Download className="w-5 h-5 text-muted-foreground animate-pulse" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-foreground truncate">{pending.title}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Progress value={pending.progress} className="flex-1 h-1.5" />
-                            <span className="text-xs text-muted-foreground whitespace-nowrap">
-                              {pending.progress > 0 ? `${pending.progress}%` : getStatusText(pending.status)}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {pending.source} • {t('language') === 'it' ? 'Sarà pronto a breve' : 'Will be ready soon'}
-                          </p>
+                    {torrents.map((torrent) => {
+                      const isExpanded = expandedTorrents.has(torrent.torrentId);
+                      const isDownloading = ['downloading', 'queued', 'magnet_conversion'].includes(torrent.status);
+                      
+                      return (
+                        <div key={torrent.torrentId} className="rounded-lg border border-border overflow-hidden">
+                          {/* Torrent header */}
+                          <button
+                            onClick={() => toggleTorrentExpand(torrent.torrentId)}
+                            className="w-full flex items-center gap-3 p-3 bg-secondary/50 hover:bg-secondary/80 transition-colors text-left"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                            )}
+                            <Folder className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-foreground truncate">{torrent.title}</p>
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className={getStatusColor(torrent.status)}>
+                                  {getStatusText(torrent.status)}
+                                </span>
+                                <span className="text-muted-foreground">•</span>
+                                <span className="text-muted-foreground">{torrent.files.length} file audio</span>
+                                <span className="text-muted-foreground">•</span>
+                                <span className="text-muted-foreground">{torrent.size}</span>
+                                <span className="text-muted-foreground">•</span>
+                                <span className="text-muted-foreground">{torrent.source}</span>
+                              </div>
+                              {isDownloading && torrent.progress > 0 && (
+                                <Progress value={torrent.progress} className="h-1 mt-2" />
+                              )}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRefreshTorrent(torrent.torrentId);
+                              }}
+                              disabled={refreshingIds.has(torrent.torrentId)}
+                              className="flex-shrink-0"
+                            >
+                              <RefreshCw className={cn(
+                                "w-4 h-4",
+                                refreshingIds.has(torrent.torrentId) && "animate-spin"
+                              )} />
+                            </Button>
+                          </button>
+                          
+                          {/* Expanded file list */}
+                          {isExpanded && torrent.files.length > 0 && (
+                            <div className="border-t border-border bg-background/50">
+                              {torrent.files.map((file) => {
+                                const isSelecting = selectingFiles.has(`${torrent.torrentId}-${file.id}`);
+                                
+                                return (
+                                  <button
+                                    key={file.id}
+                                    onClick={() => handleSelectFile(torrent.torrentId, file)}
+                                    disabled={isSelecting}
+                                    className="w-full flex items-center gap-3 p-3 hover:bg-secondary/50 transition-colors text-left border-b border-border/50 last:border-b-0"
+                                  >
+                                    {isSelecting ? (
+                                      <Loader2 className="w-4 h-4 text-primary animate-spin flex-shrink-0" />
+                                    ) : (
+                                      <FileAudio className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                                    )}
+                                    <span className="flex-1 text-sm text-foreground truncate">
+                                      {file.filename}
+                                    </span>
+                                    {file.selected && (
+                                      <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          
+                          {isExpanded && torrent.files.length === 0 && (
+                            <div className="p-4 text-center text-sm text-muted-foreground border-t border-border">
+                              {t('language') === 'it' 
+                                ? 'Nessun file audio trovato in questo torrent' 
+                                : 'No audio files found in this torrent'}
+                            </div>
+                          )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRefreshPending(pending.torrentId)}
-                          disabled={refreshingIds.has(pending.torrentId)}
-                          className="flex-shrink-0"
-                        >
-                          <RefreshCw className={cn(
-                            "w-4 h-4",
-                            refreshingIds.has(pending.torrentId) && "animate-spin"
-                          )} />
-                        </Button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </>
                 )}
               </div>
