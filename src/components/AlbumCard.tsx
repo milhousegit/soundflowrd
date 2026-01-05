@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Album } from '@/types/music';
 import { Play, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import FavoriteButton from './FavoriteButton';
 
 interface AlbumCardProps {
   album: Album;
@@ -45,10 +46,20 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
       </div>
 
       {/* Info */}
-      <h3 className="font-semibold text-sm md:text-base text-foreground truncate mb-1">{album.title}</h3>
-      <p className="text-xs md:text-sm text-muted-foreground truncate">
-        {album.releaseDate?.split('-')[0]} • {album.artist}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-sm md:text-base text-foreground truncate mb-1">{album.title}</h3>
+          <p className="text-xs md:text-sm text-muted-foreground truncate">
+            {album.releaseDate?.split('-')[0]} • {album.artist}
+          </p>
+        </div>
+        <FavoriteButton
+          itemType="album"
+          item={album}
+          size="sm"
+          className="opacity-0 group-hover:opacity-100 transition-opacity -mt-1"
+        />
+      </div>
     </div>
   );
 };

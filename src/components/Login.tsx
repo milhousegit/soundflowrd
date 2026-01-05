@@ -3,41 +3,93 @@ import { useAuth } from '@/contexts/AuthContext';
 import { verifyApiKey } from '@/lib/realdebrid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Music2, Mail, Lock, Key, Headphones, Loader2, AlertCircle } from 'lucide-react';
+import { Music2, Mail, Lock, Key, Headphones, Loader2, AlertCircle, UserPlus, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { z } from 'zod';
+
+const authSchema = z.object({
+  email: z.string().email('Email non valida'),
+  password: z.string().min(6, 'La password deve avere almeno 6 caratteri'),
+  apiKey: z.string().min(10, 'API Key non valida'),
+});
 
 const Login: React.FC = () => {
-  const { login } = useAuth();
+  const { signIn, signUp, updateApiKey } = useAuth();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-    
+
+    // Validate input
+    const validation = authSchema.safeParse({ email, password, apiKey });
+    if (!validation.success) {
+      setError(validation.error.errors[0].message);
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // Verify Real-Debrid API key
+      // Verify Real-Debrid API key first
       const verification = await verifyApiKey(apiKey);
       
       if (!verification.valid) {
-        setError('Invalid Real-Debrid API key. Please check and try again.');
+        setError('API Key Real-Debrid non valida. Controlla e riprova.');
         setIsLoading(false);
         return;
       }
 
-      login({ email, password, realDebridApiKey: apiKey });
-      
-      toast({
-        title: 'Welcome!',
-        description: `Logged in as ${verification.username || email}`,
-      });
+      if (mode === 'signup') {
+        const { error: signUpError } = await signUp(email, password);
+        
+        if (signUpError) {
+          if (signUpError.message.includes('already registered')) {
+            setError('Email già registrata. Prova ad accedere.');
+          } else {
+            setError(signUpError.message);
+          }
+          setIsLoading(false);
+          return;
+        }
+
+        // Wait for profile to be created, then update API key
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await updateApiKey(apiKey);
+        
+        toast({
+          title: 'Account creato!',
+          description: `Benvenuto ${verification.username || email}`,
+        });
+      } else {
+        const { error: signInError } = await signIn(email, password);
+        
+        if (signInError) {
+          if (signInError.message.includes('Invalid login')) {
+            setError('Email o password non corretti.');
+          } else {
+            setError(signInError.message);
+          }
+          setIsLoading(false);
+          return;
+        }
+
+        // Update API key on login
+        await updateApiKey(apiKey);
+        
+        toast({
+          title: 'Bentornato!',
+          description: `Accesso effettuato come ${verification.username || email}`,
+        });
+      }
     } catch (err) {
-      setError('Failed to verify API key. Please try again.');
+      setError('Errore durante la verifica. Riprova.');
     } finally {
       setIsLoading(false);
     }
@@ -58,10 +110,32 @@ const Login: React.FC = () => {
             <Headphones className="w-8 h-8 md:w-10 md:h-10 text-primary-foreground" />
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">SoundFlow</h1>
-          <p className="text-sm md:text-base text-muted-foreground">Your personal music player</p>
+          <p className="text-sm md:text-base text-muted-foreground">Il tuo player musicale personale</p>
         </div>
 
-        {/* Login Form */}
+        {/* Mode Toggle */}
+        <div className="flex gap-2 mb-4 justify-center">
+          <Button
+            type="button"
+            variant={mode === 'login' ? 'default' : 'ghost'}
+            onClick={() => setMode('login')}
+            className="gap-2"
+          >
+            <LogIn className="w-4 h-4" />
+            Accedi
+          </Button>
+          <Button
+            type="button"
+            variant={mode === 'signup' ? 'default' : 'ghost'}
+            onClick={() => setMode('signup')}
+            className="gap-2"
+          >
+            <UserPlus className="w-4 h-4" />
+            Registrati
+          </Button>
+        </div>
+
+        {/* Login/Signup Form */}
         <form onSubmit={handleSubmit} className="glass rounded-2xl p-6 md:p-8 space-y-5 md:space-y-6 animate-scale-in">
           {error && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
@@ -92,6 +166,7 @@ const Login: React.FC = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-12"
                 required
+                minLength={6}
               />
             </div>
 
@@ -118,13 +193,13 @@ const Login: React.FC = () => {
             ) : (
               <>
                 <Music2 className="w-5 h-5" />
-                Login
+                {mode === 'login' ? 'Accedi' : 'Registrati'}
               </>
             )}
           </Button>
 
           <p className="text-center text-xs md:text-sm text-muted-foreground">
-            Get your API Key from{' '}
+            Ottieni la tua API Key da{' '}
             <a
               href="https://real-debrid.com/apitoken"
               target="_blank"

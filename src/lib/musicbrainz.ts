@@ -40,6 +40,15 @@ export async function getArtist(id: string): Promise<Artist & { releases: Album[
   return data;
 }
 
+export async function getArtistTopTracks(id: string): Promise<Track[]> {
+  const { data, error } = await supabase.functions.invoke('musicbrainz', {
+    body: { action: 'get-artist-recordings', id, limit: 10 },
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
 export async function getAlbum(id: string): Promise<Album & { tracks: Track[] }> {
   const { data, error } = await supabase.functions.invoke('musicbrainz', {
     body: { action: 'get-release', id },
@@ -47,6 +56,24 @@ export async function getAlbum(id: string): Promise<Album & { tracks: Track[] }>
 
   if (error) throw error;
   return data;
+}
+
+export async function getNewReleases(country?: string): Promise<Album[]> {
+  const { data, error } = await supabase.functions.invoke('musicbrainz', {
+    body: { action: 'get-new-releases', country: country || 'IT', limit: 20 },
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getPopularArtists(country?: string): Promise<Artist[]> {
+  const { data, error } = await supabase.functions.invoke('musicbrainz', {
+    body: { action: 'get-popular-artists', country: country || 'IT', limit: 12 },
+  });
+
+  if (error) throw error;
+  return data || [];
 }
 
 export async function searchAll(query: string) {

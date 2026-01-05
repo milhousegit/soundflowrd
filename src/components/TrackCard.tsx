@@ -3,16 +3,18 @@ import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { Play, Pause, Music } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import FavoriteButton from './FavoriteButton';
 
 interface TrackCardProps {
   track: Track;
   queue?: Track[];
   showArtist?: boolean;
+  showFavorite?: boolean;
   index?: number;
 }
 
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
-  ({ track, queue, showArtist = true, index }, ref) => {
+  ({ track, queue, showArtist = true, showFavorite = true, index }, ref) => {
     const { currentTrack, isPlaying, playTrack, toggle } = usePlayer();
     const isCurrentTrack = currentTrack?.id === track.id;
 
@@ -84,6 +86,16 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
             <p className="text-xs md:text-sm text-muted-foreground truncate">{track.artist}</p>
           )}
         </div>
+
+        {/* Favorite button */}
+        {showFavorite && (
+          <FavoriteButton
+            itemType="track"
+            item={track}
+            size="sm"
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
+          />
+        )}
 
         {/* Duration */}
         <span className="text-xs md:text-sm text-muted-foreground flex-shrink-0">
