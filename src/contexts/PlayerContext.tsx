@@ -611,14 +611,36 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const selectTorrentFile = useCallback(async (torrentId: string, fileIds: number[]) => {
     if (!credentials?.realDebridApiKey) return;
 
-    addDebugLog('Selezione file', `Torrent: ${torrentId}, File IDs: ${fileIds.join(', ')}`, 'info');
+    const fileId = fileIds[0];
+
+    // Optimistic UI: immediately mark the chosen file as the current mapping
+    if (Number.isFinite(fileId)) {
+      setCurrentMappedFileId(fileId);
+      setAvailableTorrents(prev => prev.map(t => {
+        if (t.torrentId !== torrentId) return t;
+        return {
+          ...t,
+          files: (t.files || []).map(f => ({ ...f, selected: f.id === fileId })),
+        };
+      }));
+    }
+
+    // Stop current playback and clear previous streams so we don't keep playing the old file
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+    setAlternativeStreams([]);
+    setCurrentStreamId(undefined);
+
+    addDebugLog('Selezione file', `Torrent: ${torrentId}, File ID: ${fileId}`, 'info');
 
     try {
       const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, fileIds);
 
       if (result.streams.length > 0) {
-        // Add streams and auto-play first one
-        setAlternativeStreams(prev => [...result.streams, ...prev]);
+        // Replace streams and auto-play first one
+        setAlternativeStreams(result.streams);
         setCurrentStreamId(result.streams[0].id);
         setDownloadProgress(null);
         setDownloadStatus(null);
@@ -631,7 +653,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         // Persist mapping using the **fileId** (not stream.id)
         const currentTrack = state.currentTrack;
-        const fileId = fileIds[0];
         const torrent = availableTorrents.find(t => t.torrentId === torrentId);
         const file = torrent?.files?.find(f => f.id === fileId);
 
@@ -649,8 +670,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         addDebugLog('Riproduzione', `Stream pronto: ${result.streams[0].title}`, 'success');
       } else if (result.status === 'downloading' || result.status === 'queued' || result.status === 'magnet_conversion') {
         // Update torrent status in the list
-        setAvailableTorrents(prev => prev.map(t => 
-          t.torrentId === torrentId 
+        setAvailableTorrents(prev => prev.map(t =>
+          t.torrentId === torrentId
             ? { ...t, status: result.status, progress: result.progress }
             : t
         ));

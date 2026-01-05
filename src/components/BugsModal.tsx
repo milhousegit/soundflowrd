@@ -423,7 +423,9 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                             <div className="border-t border-border bg-background/50">
                               {torrent.files.map((file) => {
                                 const isSelecting = selectingFiles.has(`${torrent.torrentId}-${file.id}`);
-                                const isMapped = currentMappedFileId === file.id || file.selected;
+                                // Only the saved mapping for THIS track should be marked as synced.
+                                // Real-Debrid may report multiple "selected" files at torrent level, but that must not be treated as track mapping.
+                                const isMapped = currentMappedFileId === file.id;
                                 
                                 return (
                                   <TapArea
