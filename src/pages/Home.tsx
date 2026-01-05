@@ -7,7 +7,9 @@ import { getNewReleases, getPopularArtists } from '@/lib/musicbrainz';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import TapArea from '@/components/TapArea';
-import { Clock, TrendingUp, ListMusic, Music, Loader2 } from 'lucide-react';
+import AlbumCardSkeleton from '@/components/skeletons/AlbumCardSkeleton';
+import ArtistCardSkeleton from '@/components/skeletons/ArtistCardSkeleton';
+import { Clock, TrendingUp, ListMusic, Music } from 'lucide-react';
 import { Play, Pause } from 'lucide-react';
 
 const Home: React.FC = () => {
@@ -206,8 +208,10 @@ const Home: React.FC = () => {
             <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('newReleases')}</h2>
           </div>
           {isLoadingReleases ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <AlbumCardSkeleton key={i} />
+              ))}
             </div>
           ) : newReleases.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
@@ -226,8 +230,10 @@ const Home: React.FC = () => {
         <section>
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-4 md:mb-6">{t('popularArtists')}</h2>
           {isLoadingArtists ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <ArtistCardSkeleton key={i} />
+              ))}
             </div>
           ) : popularArtists.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">

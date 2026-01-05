@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { Search as SearchIcon, X, Loader2 } from 'lucide-react';
+import { Search as SearchIcon, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import TapArea from '@/components/TapArea';
+import SearchResultsSkeleton from '@/components/skeletons/SearchResultsSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { searchAll } from '@/lib/musicbrainz';
 import { Track, Album, Artist } from '@/types/music';
@@ -86,9 +87,7 @@ const Search: React.FC = () => {
 
       {/* Loading */}
       {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
+        <SearchResultsSkeleton />
       )}
 
       {/* Results */}

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Loader2, CloudDownload } from 'lucide-react';
+import { Play, Clock, Music, CloudDownload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import AlbumTorrentModal from '@/components/AlbumTorrentModal';
@@ -62,11 +63,7 @@ const Album: React.FC = () => {
   }, [id]);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <AlbumPageSkeleton />;
   }
 
   if (!album) {
