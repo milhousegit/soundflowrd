@@ -20,7 +20,7 @@ const MobileNav: React.FC = () => {
       className="fixed bottom-0 left-0 right-0 z-40 glass border-t border-border md:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      <div className="h-14 flex items-center justify-around px-2">
+      <div className="h-18 flex items-center justify-around px-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
