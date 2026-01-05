@@ -76,53 +76,107 @@ async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
   const results: TorrentResult[] = [];
   
   try {
-    // Il Corsaro Nero search - try multiple domains
-    const domains = ['ilcorsaronero.link', 'ilcorsaronero.info', 'ilcorsaronero.ch'];
+    const domain = 'ilcorsaronero.link';
+    const searchUrl = `https://${domain}/search?q=${encodeURIComponent(query)}`;
+    console.log('Searching Corsaro Nero:', searchUrl);
     
-    for (const domain of domains) {
+    const response = await fetch(searchUrl, {
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+    
+    if (!response.ok) {
+      console.log('Corsaro Nero response not ok:', response.status);
+      return results;
+    }
+    
+    const html = await response.text();
+    
+    // Extract torrent links from search results table
+    // Format: href="https://ilcorsaronero.link/torrent/50132/Geolier-Il-Coraggio-Dei-Bambini-..."
+    const torrentLinkRegex = /href="(https:\/\/ilcorsaronero\.link\/torrent\/\d+\/[^"]+)"/g;
+    const torrentLinks: string[] = [];
+    let match;
+    
+    while ((match = torrentLinkRegex.exec(html)) !== null) {
+      if (!torrentLinks.includes(match[1])) {
+        torrentLinks.push(match[1]);
+      }
+    }
+    
+    console.log(`Found ${torrentLinks.length} torrent links on Corsaro Nero`);
+    
+    // Extract seeders and size from search results
+    // Parse the table rows to get metadata
+    const rowRegex = /<tr[^>]*>[\s\S]*?<a[^>]*href="(https:\/\/ilcorsaronero\.link\/torrent\/\d+\/[^"]+)"[^>]*>([^<]+)<\/a>[\s\S]*?<td[^>]*class="[^"]*text-green[^"]*"[^>]*>\s*(\d+)[\s\S]*?<td[^>]*class="[^"]*tabular-nums[^"]*"[^>]*>\s*([\d.,]+\s*[A-Za-z]+)/g;
+    
+    const torrentMetadata: Map<string, {title: string, seeders: number, size: string}> = new Map();
+    let rowMatch;
+    while ((rowMatch = rowRegex.exec(html)) !== null) {
+      const url = rowMatch[1];
+      const title = rowMatch[2].trim();
+      const seeders = parseInt(rowMatch[3]) || 0;
+      const size = rowMatch[4]?.trim() || 'Unknown';
+      torrentMetadata.set(url, { title, seeders, size });
+    }
+    
+    // Visit each torrent page to get magnet link (limit to first 5)
+    for (const torrentUrl of torrentLinks.slice(0, 5)) {
       try {
-        const searchUrl = `https://${domain}/argh.php?search=${encodeURIComponent(query)}`;
-        console.log('Searching Corsaro Nero:', domain);
+        console.log('Fetching torrent page:', torrentUrl);
         
-        const response = await fetch(searchUrl, {
+        const torrentRes = await fetch(torrentUrl, {
           headers: { 
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html',
           },
         });
         
-        if (response.ok) {
-          const html = await response.text();
+        if (!torrentRes.ok) continue;
+        
+        const torrentHtml = await torrentRes.text();
+        
+        // Extract hash from page - it's in a <kbd> element
+        const hashMatch = torrentHtml.match(/<kbd[^>]*>\s*([a-f0-9]{40})\s*<\/kbd>/i);
+        
+        // Also try to extract magnet directly
+        const magnetMatch = torrentHtml.match(/href="(magnet:\?xt=urn:btih:[^"]+)"/);
+        
+        if (hashMatch || magnetMatch) {
+          let magnet: string;
+          let title: string;
           
-          // Extract magnet links from page
-          const magnetRegex = /magnet:\?xt=urn:btih:[a-zA-Z0-9]+[^"'\s<>]*/gi;
-          const magnets = html.match(magnetRegex) || [];
-          
-          // Extract titles - look for links with torrent info
-          const titleRegex = /<a[^>]*href="[^"]*magnet[^"]*"[^>]*>([^<]+)<\/a>/gi;
-          const rowRegex = /<tr[^>]*class="[^"]*odd|even[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
-          
-          // Simple extraction - get unique magnets
-          const uniqueMagnets = [...new Set(magnets)];
-          
-          for (let i = 0; i < Math.min(uniqueMagnets.length, 5); i++) {
-            const magnet = uniqueMagnets[i];
-            const dnMatch = magnet.match(/dn=([^&]+)/);
-            const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : `Corsaro Result ${i + 1}`;
-            
-            results.push({
-              title,
-              magnet,
-              size: 'Unknown',
-              seeders: 0,
-              source: 'CNero',
-            });
+          if (magnetMatch) {
+            magnet = magnetMatch[1].replace(/&amp;/g, '&');
+          } else {
+            const hash = hashMatch![1];
+            // Extract title from h1
+            const titleMatch = torrentHtml.match(/<h1[^>]*class="[^"]*font-bold[^"]*"[^>]*>([^<]+)<\/h1>/);
+            title = titleMatch ? titleMatch[1].trim() : torrentUrl.split('/').pop()?.replace(/-/g, ' ') || 'Unknown';
+            magnet = `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(title)}`;
           }
           
-          if (results.length > 0) break; // Found results, stop trying other domains
+          // Get title from magnet or metadata
+          const dnMatch = magnet.match(/dn=([^&]+)/);
+          title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
+          
+          // Get metadata from search page if available
+          const meta = torrentMetadata.get(torrentUrl);
+          
+          results.push({
+            title,
+            magnet,
+            size: meta?.size || 'Unknown',
+            seeders: meta?.seeders || 0,
+            source: 'CNero',
+          });
+          
+          console.log('Added Corsaro Nero result:', title.slice(0, 50));
         }
-      } catch (domainError) {
-        console.log(`Corsaro Nero ${domain} failed:`, domainError);
+      } catch (pageError) {
+        console.log('Error fetching torrent page:', pageError);
         continue;
       }
     }
