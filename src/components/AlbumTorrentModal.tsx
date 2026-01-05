@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import TapArea from '@/components/TapArea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { 
-  Bug, 
   Loader2, 
   FolderOpen, 
   Music, 
@@ -15,7 +16,10 @@ import {
   Save,
   ChevronRight,
   ChevronDown,
-  Cloud
+  Cloud,
+  Search,
+  AlertCircle,
+  Info
 } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -181,6 +185,14 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [existingMapping, setExistingMapping] = useState<any>(null);
   const [expandedTorrent, setExpandedTorrent] = useState<string | null>(null);
+  
+  // New states for auto-search and manual fallback
+  const [hasAutoSearched, setHasAutoSearched] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [lastSearchQuery, setLastSearchQuery] = useState<string>('');
+  const [manualQuery, setManualQuery] = useState('');
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const autoSearchRef = useRef(false);
 
   // Check for existing mapping
   useEffect(() => {
@@ -188,6 +200,25 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
       checkExistingMapping();
     }
   }, [isOpen, albumId]);
+  
+  // Auto-search when modal opens (only once per open)
+  useEffect(() => {
+    if (isOpen && !autoSearchRef.current && !existingMapping) {
+      autoSearchRef.current = true;
+      handleAutoSearch();
+    }
+    if (!isOpen) {
+      // Reset state when modal closes
+      autoSearchRef.current = false;
+      setHasAutoSearched(false);
+      setTorrents([]);
+      setSelectedTorrent(null);
+      setTrackMatches([]);
+      setSearchError(null);
+      setManualQuery('');
+      setShowDebugInfo(false);
+    }
+  }, [isOpen, existingMapping]);
 
   const checkExistingMapping = async () => {
     const { data } = await supabase
@@ -197,6 +228,71 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
       .maybeSingle();
     
     setExistingMapping(data);
+  };
+  
+  const handleAutoSearch = async () => {
+    const apiKey = profile?.real_debrid_api_key;
+    if (!apiKey) {
+      setSearchError('Real-Debrid API key non configurata');
+      setHasAutoSearched(true);
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+    setTorrents([]);
+
+    try {
+      const searchQuery = `${artistName} ${albumTitle}`;
+      setLastSearchQuery(searchQuery);
+      setManualQuery(searchQuery);
+      
+      console.log('Auto-searching for:', searchQuery);
+      const result = await searchStreams(apiKey, searchQuery);
+      
+      const withAudio = result.torrents.filter(t => t.files.length > 0);
+      setTorrents(withAudio);
+      
+      if (withAudio.length === 0) {
+        setSearchError(`Nessun risultato per "${searchQuery}"`);
+      } else if (withAudio.length === 1) {
+        // If only one result, auto-select it
+        handleSelectAllFiles(withAudio[0]);
+      }
+    } catch (error) {
+      console.error('Auto-search error:', error);
+      setSearchError(error instanceof Error ? error.message : 'Errore nella ricerca automatica');
+    } finally {
+      setIsSearching(false);
+      setHasAutoSearched(true);
+    }
+  };
+
+  const handleManualSearch = async () => {
+    const apiKey = profile?.real_debrid_api_key;
+    if (!apiKey || !manualQuery.trim()) return;
+
+    setIsSearching(true);
+    setSearchError(null);
+    setTorrents([]);
+
+    try {
+      setLastSearchQuery(manualQuery);
+      console.log('Manual searching for:', manualQuery);
+      const result = await searchStreams(apiKey, manualQuery);
+      
+      const withAudio = result.torrents.filter(t => t.files.length > 0);
+      setTorrents(withAudio);
+      
+      if (withAudio.length === 0) {
+        setSearchError(`Nessun risultato per "${manualQuery}"`);
+      }
+    } catch (error) {
+      console.error('Manual search error:', error);
+      setSearchError(error instanceof Error ? error.message : 'Errore nella ricerca');
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const handleSearch = async () => {
@@ -392,8 +488,21 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden flex flex-col gap-4">
+          {/* Loading state - auto search in progress */}
+          {isSearching && !hasAutoSearched && (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <Loader2 className="w-10 h-10 animate-spin text-primary" />
+              <div className="text-center">
+                <p className="font-medium">Ricerca automatica in corso...</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Cercando "{artistName} {albumTitle}"
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Existing mapping info */}
-          {existingMapping && !selectedTorrent && torrents.length === 0 && (
+          {existingMapping && !selectedTorrent && torrents.length === 0 && !isSearching && (
             <div className="p-3 bg-primary/10 rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm">
@@ -406,7 +515,7 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
               </div>
               <div className="flex gap-2 mt-3">
                 <Button 
-                  onClick={handleSearch} 
+                  onClick={handleAutoSearch} 
                   disabled={isSearching}
                   className="flex-1"
                   variant="outline"
@@ -418,7 +527,7 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
                     </>
                   ) : (
                     <>
-                      <FolderOpen className="w-4 h-4 mr-2" />
+                      <RefreshCw className="w-4 h-4 mr-2" />
                       Cerca nuovo torrent
                     </>
                   )}
@@ -427,36 +536,91 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
             </div>
           )}
 
-          {/* Search section - show when no existing mapping or when torrents found */}
-          {((!existingMapping && !selectedTorrent) || torrents.length > 0) && (
-            <>
-              {!existingMapping && !selectedTorrent && torrents.length === 0 && (
-                <>
-                  <div className="text-sm text-muted-foreground">
-                    Cerca una cartella torrent contenente l'album completo. Il software abbinerà automaticamente le tracce ai file.
+          {/* No results - Manual search UI */}
+          {hasAutoSearched && !isSearching && torrents.length === 0 && !existingMapping && !selectedTorrent && (
+            <div className="space-y-4">
+              {/* Error/No results message */}
+              <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-destructive">
+                      {searchError || 'Nessun risultato trovato'}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Prova a cercare manualmente con termini diversi
+                    </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      onClick={handleSearch} 
-                      disabled={isSearching}
-                      className="flex-1"
-                      size="lg"
-                    >
-                      {isSearching ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Ricerca torrent album...
-                        </>
-                      ) : (
-                        <>
-                          <FolderOpen className="w-4 h-4 mr-2" />
-                          Cerca cartella album
-                        </>
-                      )}
+                </div>
+              </div>
+              
+              {/* Manual search input */}
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    value={manualQuery}
+                    onChange={(e) => setManualQuery(e.target.value)}
+                    placeholder="Cerca torrent..."
+                    className="flex-1"
+                    onKeyDown={(e) => e.key === 'Enter' && handleManualSearch()}
+                  />
+                  <Button onClick={handleManualSearch} disabled={isSearching || !manualQuery.trim()}>
+                    {isSearching ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Debug info collapsible */}
+                <Collapsible open={showDebugInfo} onOpenChange={setShowDebugInfo}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground">
+                      <Info className="w-4 h-4" />
+                      {showDebugInfo ? 'Nascondi' : 'Mostra'} dettagli ricerca
+                      {showDebugInfo ? <ChevronDown className="w-4 h-4 ml-auto" /> : <ChevronRight className="w-4 h-4 ml-auto" />}
                     </Button>
-                  </div>
-                </>
-              )}
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="mt-2 p-3 bg-muted/50 rounded-lg text-xs font-mono space-y-2">
+                      <div>
+                        <span className="text-muted-foreground">Query cercata:</span>
+                        <p className="text-foreground break-all">"{lastSearchQuery}"</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Artista:</span>
+                        <p className="text-foreground">{artistName}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Album:</span>
+                        <p className="text-foreground">{albumTitle}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Tracce nell'album:</span>
+                        <p className="text-foreground">{tracks.length}</p>
+                      </div>
+                      {searchError && (
+                        <div>
+                          <span className="text-destructive">Errore:</span>
+                          <p className="text-destructive">{searchError}</p>
+                        </div>
+                      )}
+                      <div className="pt-2 border-t border-border">
+                        <span className="text-muted-foreground">Suggerimenti:</span>
+                        <ul className="list-disc list-inside text-foreground mt-1 space-y-1">
+                          <li>Prova solo il nome dell'artista</li>
+                          <li>Prova nome artista + album senza spazi</li>
+                          <li>Rimuovi caratteri speciali o parentesi</li>
+                          <li>Prova con varianti del nome (es. "discografia")</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            </div>
+          )}
 
               {/* Torrent list */}
               {torrents.length > 0 && (
@@ -533,13 +697,11 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
                             </div>
                           </div>
                         )}
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
-            </>
-          )}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
 
           {/* Match section */}
           {selectedTorrent && (
