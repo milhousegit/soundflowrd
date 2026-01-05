@@ -39,12 +39,13 @@ const Player: React.FC = () => {
     seek,
     setVolume,
     alternativeStreams,
-    pendingDownloads,
+    availableTorrents,
     selectStream,
+    selectTorrentFile,
+    refreshTorrent,
     currentStreamId,
     isSearchingStreams,
     manualSearch,
-    refreshPendingDownload,
   } = usePlayer();
   const { t } = useSettings();
   
@@ -60,6 +61,10 @@ const Player: React.FC = () => {
 
   const handleManualSearch = (query: string) => {
     manualSearch(query);
+  };
+
+  const handleSelectFile = async (torrentId: string, fileIds: number[]) => {
+    await selectTorrentFile(torrentId, fileIds);
   };
 
   // Mobile expanded view
@@ -161,12 +166,13 @@ const Player: React.FC = () => {
           isOpen={showBugsModal}
           onClose={() => setShowBugsModal(false)}
           alternatives={alternativeStreams}
-          pendingDownloads={pendingDownloads}
+          torrents={availableTorrents}
           onSelect={handleSelectStream}
+          onSelectFile={handleSelectFile}
+          onRefreshTorrent={refreshTorrent}
           currentStreamId={currentStreamId}
           isLoading={isSearchingStreams}
           onManualSearch={handleManualSearch}
-          onRefreshPending={refreshPendingDownload}
           currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
         />
       </>
@@ -323,12 +329,13 @@ const Player: React.FC = () => {
         isOpen={showBugsModal}
         onClose={() => setShowBugsModal(false)}
         alternatives={alternativeStreams}
-        pendingDownloads={pendingDownloads}
+        torrents={availableTorrents}
         onSelect={handleSelectStream}
+        onSelectFile={handleSelectFile}
+        onRefreshTorrent={refreshTorrent}
         currentStreamId={currentStreamId}
         isLoading={isSearchingStreams}
         onManualSearch={handleManualSearch}
-        onRefreshPending={refreshPendingDownload}
         currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
       />
     </>

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { Track, PlayerState } from '@/types/music';
-import { StreamResult, PendingDownload, searchStreams, checkTorrentStatus } from '@/lib/realdebrid';
+import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
 import { useAuth } from './AuthContext';
 
 interface PlayerContextType extends PlayerState {
@@ -15,12 +15,13 @@ interface PlayerContextType extends PlayerState {
   playTrack: (track: Track, queue?: Track[]) => void;
   clearQueue: () => void;
   alternativeStreams: StreamResult[];
-  pendingDownloads: PendingDownload[];
+  availableTorrents: TorrentInfo[];
   selectStream: (stream: StreamResult) => void;
+  selectTorrentFile: (torrentId: string, fileIds: number[]) => Promise<void>;
+  refreshTorrent: (torrentId: string) => Promise<void>;
   currentStreamId?: string;
   isSearchingStreams: boolean;
   manualSearch: (query: string) => Promise<void>;
-  refreshPendingDownload: (torrentId: string) => Promise<void>;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -29,7 +30,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials } = useAuth();
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
-  const [pendingDownloads, setPendingDownloads] = useState<PendingDownload[]>([]);
+  const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
   const [currentStreamId, setCurrentStreamId] = useState<string>();
   const [isSearchingStreams, setIsSearchingStreams] = useState(false);
   
@@ -79,18 +80,21 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     
     setIsSearchingStreams(true);
     setAlternativeStreams([]);
-    setPendingDownloads([]);
+    setAvailableTorrents([]);
     
     try {
       const result = await searchStreams(
         credentials.realDebridApiKey,
         query
       );
-      setAlternativeStreams(result.streams);
-      setPendingDownloads(result.pendingDownloads);
       
-      // Auto-select first stream if available
-      if (result.streams.length > 0) {
+      setAvailableTorrents(result.torrents);
+      
+      // If any torrent has ready streams (cached), get them
+      if (result.streams && result.streams.length > 0) {
+        setAlternativeStreams(result.streams);
+        
+        // Auto-select first stream if available
         setCurrentStreamId(result.streams[0].id);
         if (audioRef.current && result.streams[0].streamUrl) {
           audioRef.current.src = result.streams[0].streamUrl;
@@ -105,19 +109,61 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [credentials]);
 
-  const refreshPendingDownload = useCallback(async (torrentId: string) => {
+  const selectTorrentFile = useCallback(async (torrentId: string, fileIds: number[]) => {
+    if (!credentials?.realDebridApiKey) return;
+    
+    console.log('Selecting files:', torrentId, fileIds);
+    
+    try {
+      const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, fileIds);
+      console.log('Select result:', result);
+      
+      if (result.streams.length > 0) {
+        // Add streams and auto-play first one
+        setAlternativeStreams(prev => [...result.streams, ...prev]);
+        setCurrentStreamId(result.streams[0].id);
+        
+        if (audioRef.current && result.streams[0].streamUrl) {
+          audioRef.current.src = result.streams[0].streamUrl;
+          audioRef.current.play();
+          setState(prev => ({ ...prev, isPlaying: true }));
+        }
+      } else if (result.status === 'downloading' || result.status === 'queued' || result.status === 'magnet_conversion') {
+        // Update torrent status in the list
+        setAvailableTorrents(prev => prev.map(t => 
+          t.torrentId === torrentId 
+            ? { ...t, status: result.status, progress: result.progress }
+            : t
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to select files:', error);
+    }
+  }, [credentials]);
+
+  const refreshTorrent = useCallback(async (torrentId: string) => {
     if (!credentials?.realDebridApiKey) return;
     
     try {
       const result = await checkTorrentStatus(credentials.realDebridApiKey, torrentId);
       console.log('Torrent status check:', torrentId, result);
       
-      if (result.status === 'ready' && result.streams.length > 0) {
-        // Remove from pending, add to streams
-        setPendingDownloads(prev => prev.filter(p => p.torrentId !== torrentId));
-        setAlternativeStreams(prev => [...prev, ...result.streams]);
+      // Update torrent in list
+      setAvailableTorrents(prev => prev.map(t => 
+        t.torrentId === torrentId 
+          ? { ...t, status: result.status, progress: result.progress, files: result.files.length > 0 ? result.files : t.files }
+          : t
+      ));
+      
+      if (result.streams.length > 0) {
+        // Add new streams
+        setAlternativeStreams(prev => {
+          const existingIds = new Set(prev.map(s => s.id));
+          const newStreams = result.streams.filter(s => !existingIds.has(s.id));
+          return [...prev, ...newStreams];
+        });
         
-        // Auto-play first new stream if nothing is playing
+        // Auto-play if nothing is playing
         if (!currentStreamId && result.streams.length > 0) {
           setCurrentStreamId(result.streams[0].id);
           if (audioRef.current && result.streams[0].streamUrl) {
@@ -126,13 +172,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setState(prev => ({ ...prev, isPlaying: true }));
           }
         }
-      } else {
-        // Update progress
-        setPendingDownloads(prev => prev.map(p => 
-          p.torrentId === torrentId 
-            ? { ...p, status: result.status, progress: result.progress }
-            : p
-        ));
       }
     } catch (error) {
       console.error('Failed to check torrent status:', error);
@@ -267,12 +306,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         playTrack,
         clearQueue,
         alternativeStreams,
-        pendingDownloads,
+        availableTorrents,
         selectStream,
+        selectTorrentFile,
+        refreshTorrent,
         currentStreamId,
         isSearchingStreams,
         manualSearch,
-        refreshPendingDownload,
       }}
     >
       {children}

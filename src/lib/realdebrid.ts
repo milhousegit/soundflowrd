@@ -10,17 +10,28 @@ export interface StreamResult {
   status?: 'ready' | 'downloading' | 'queued' | 'pending';
 }
 
-export interface PendingDownload {
+export interface AudioFile {
+  id: number;
+  path: string;
+  filename: string;
+  selected?: boolean;
+}
+
+export interface TorrentInfo {
   torrentId: string;
   title: string;
+  size: string;
+  source: string;
+  seeders: number;
   status: string;
   progress: number;
-  source: string;
+  files: AudioFile[];
+  hasLinks: boolean;
 }
 
 export interface SearchResult {
-  streams: StreamResult[];
-  pendingDownloads: PendingDownload[];
+  torrents: TorrentInfo[];
+  streams?: StreamResult[];
 }
 
 export async function verifyApiKey(apiKey: string): Promise<{ valid: boolean; username?: string; premium?: boolean }> {
@@ -44,7 +55,7 @@ export async function searchStreams(
 
   if (error) {
     console.error('Stream search error:', error);
-    return { streams: [], pendingDownloads: [] };
+    return { torrents: [] };
   }
 
   console.log('Stream search result:', data);
@@ -54,56 +65,75 @@ export async function searchStreams(
     console.groupEnd();
   }
 
-  const streams: StreamResult[] = [];
-  const pendingDownloads: PendingDownload[] = [];
+  const torrents: TorrentInfo[] = [];
   
-  // Process ready streams
-  if (data?.streams && Array.isArray(data.streams)) {
-    for (const s of data.streams) {
-      streams.push({
-        id: s.id,
-        title: s.title,
-        streamUrl: s.streamUrl,
-        quality: s.quality || 'MP3',
-        size: s.size,
-        source: s.source || 'Real-Debrid',
-        status: 'ready',
+  if (data?.torrents && Array.isArray(data.torrents)) {
+    for (const t of data.torrents) {
+      torrents.push({
+        torrentId: t.torrentId,
+        title: t.title,
+        size: t.size || 'Unknown',
+        source: t.source || 'Unknown',
+        seeders: t.seeders || 0,
+        status: t.status || 'unknown',
+        progress: t.progress || 0,
+        files: t.files || [],
+        hasLinks: t.hasLinks || false,
       });
     }
   }
   
-  // Process pending downloads
-  if (data?.pendingDownloads && Array.isArray(data.pendingDownloads)) {
-    for (const p of data.pendingDownloads) {
-      pendingDownloads.push({
-        torrentId: p.torrentId,
-        title: p.title,
-        status: p.status,
-        progress: p.progress || 0,
-        source: p.source || 'Real-Debrid',
-      });
-    }
-  }
-  
-  return { streams, pendingDownloads };
+  return { torrents };
 }
 
-export async function checkTorrentStatus(
+export async function selectFilesAndPlay(
   apiKey: string,
-  torrentId: string
+  torrentId: string,
+  fileIds: number[]
 ): Promise<{ status: string; progress: number; streams: StreamResult[] }> {
+  console.log('Selecting files:', torrentId, fileIds);
+  
   const { data, error } = await supabase.functions.invoke('real-debrid', {
-    body: { action: 'checkTorrent', apiKey, torrentId },
+    body: { action: 'selectFiles', apiKey, torrentId, fileIds },
   });
 
   if (error) {
-    console.error('Check torrent error:', error);
+    console.error('Select files error:', error);
     return { status: 'error', progress: 0, streams: [] };
   }
 
   return {
     status: data?.status || 'unknown',
     progress: data?.progress || 0,
+    streams: (data?.streams || []).map((s: any) => ({
+      id: s.id,
+      title: s.title,
+      streamUrl: s.streamUrl,
+      quality: s.quality || 'MP3',
+      size: s.size,
+      source: s.source || 'Real-Debrid',
+      status: 'ready' as const,
+    })),
+  };
+}
+
+export async function checkTorrentStatus(
+  apiKey: string,
+  torrentId: string
+): Promise<{ status: string; progress: number; files: AudioFile[]; streams: StreamResult[] }> {
+  const { data, error } = await supabase.functions.invoke('real-debrid', {
+    body: { action: 'checkTorrent', apiKey, torrentId },
+  });
+
+  if (error) {
+    console.error('Check torrent error:', error);
+    return { status: 'error', progress: 0, files: [], streams: [] };
+  }
+
+  return {
+    status: data?.status || 'unknown',
+    progress: data?.progress || 0,
+    files: data?.files || [],
     streams: (data?.streams || []).map((s: any) => ({
       id: s.id,
       title: s.title,
