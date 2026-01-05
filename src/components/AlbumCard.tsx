@@ -12,10 +12,18 @@ interface AlbumCardProps {
 const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
   const navigate = useNavigate();
 
+  const handleNavigate = () => {
+    navigate(`/album/${album.id}`);
+  };
+
   return (
     <div
-      onClick={() => navigate(`/album/${album.id}`)}
-      className="group p-3 md:p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer"
+      onClick={handleNavigate}
+      onTouchEnd={(e) => {
+        e.preventDefault();
+        handleNavigate();
+      }}
+      className="group p-3 md:p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer touch-manipulation"
     >
       {/* Cover */}
       <div className="relative aspect-square rounded-lg overflow-hidden mb-3 md:mb-4 bg-muted">

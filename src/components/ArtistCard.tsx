@@ -14,10 +14,18 @@ const ArtistCard: React.FC<ArtistCardProps> = ({ artist }) => {
   const navigate = useNavigate();
   const { t } = useSettings();
 
+  const handleNavigate = () => {
+    navigate(`/artist/${artist.id}`);
+  };
+
   return (
     <div
-      onClick={() => navigate(`/artist/${artist.id}`)}
-      className="group p-3 md:p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer"
+      onClick={handleNavigate}
+      onTouchEnd={(e) => {
+        e.preventDefault();
+        handleNavigate();
+      }}
+      className="group p-3 md:p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer touch-manipulation"
     >
       {/* Image */}
       <div className="relative aspect-square rounded-full overflow-hidden mb-3 md:mb-4 bg-muted">
