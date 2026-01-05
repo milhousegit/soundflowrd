@@ -78,7 +78,7 @@ async function searchApibay(query: string): Promise<TorrentResult[]> {
   return results;
 }
 
-// Search 1337x.to with Firecrawl (bypasses 403)
+// Search 1337x.to with Firecrawl (bypasses 403) - use category-music for better results
 async function search1337x(query: string): Promise<TorrentResult[]> {
   const results: TorrentResult[] = [];
   
@@ -90,8 +90,9 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
   }
   
   try {
+    // Use category-music endpoint for better music results
     const domain = '1337x.to';
-    const searchUrl = `https://${domain}/search/${encodeURIComponent(query)}/1/`;
+    const searchUrl = `https://${domain}/category-search/${encodeURIComponent(query)}/Music/1/`;
     console.log('Searching 1337x via Firecrawl:', searchUrl);
     
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
@@ -102,8 +103,8 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
       },
       body: JSON.stringify({
         url: searchUrl,
-        formats: ['html'],
-        waitFor: 2000,
+        formats: ['html', 'rawHtml'],
+        waitFor: 3000,
       }),
     });
     
@@ -114,105 +115,187 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
     }
     
     const data = await response.json();
-    const html = data.data?.html || data.html || '';
+    const html = data.data?.html || data.data?.rawHtml || data.html || data.rawHtml || '';
     
     console.log('1337x Firecrawl HTML length:', html.length);
     
-    if (!html || html.length < 1000) {
-      console.log('1337x Firecrawl returned insufficient HTML');
+    // Log first 500 chars to debug what we're getting
+    if (html.length < 5000) {
+      console.log('1337x HTML preview:', html.slice(0, 500));
+    }
+    
+    if (!html || html.length < 2000) {
+      console.log('1337x Firecrawl returned insufficient HTML, trying regular search');
+      
+      // Try regular search URL as fallback
+      const fallbackUrl = `https://${domain}/search/${encodeURIComponent(query)}/1/`;
+      console.log('Trying 1337x fallback URL:', fallbackUrl);
+      
+      const fallbackRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${firecrawlApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: fallbackUrl,
+          formats: ['html', 'rawHtml'],
+          waitFor: 3000,
+        }),
+      });
+      
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        const fallbackHtml = fallbackData.data?.html || fallbackData.data?.rawHtml || '';
+        console.log('1337x fallback HTML length:', fallbackHtml.length);
+        
+        if (fallbackHtml.length > html.length) {
+          return parse1337xResults(fallbackHtml, domain, firecrawlApiKey);
+        }
+      }
+      
       return results;
     }
     
-    // Extract torrent links from search results
-    const torrentLinkRegex = /href="(\/torrent\/\d+\/[^"]+)"/g;
-    const torrentLinks: string[] = [];
-    let match;
-    
-    while ((match = torrentLinkRegex.exec(html)) !== null) {
-      const url = `https://${domain}${match[1]}`;
-      if (!torrentLinks.includes(url)) {
-        torrentLinks.push(url);
-      }
-    }
-    
-    console.log(`Found ${torrentLinks.length} torrent links on 1337x`);
-    
-    // Extract metadata from search results
-    const torrentMetadata: Map<string, {title: string, seeders: number, size: string}> = new Map();
-    
-    // Try to extract from table rows
-    const rowRegex = /<a[^>]*href="(\/torrent\/\d+\/[^"]+)"[^>]*>([^<]+)<\/a>/gi;
-    while ((match = rowRegex.exec(html)) !== null) {
-      const url = `https://${domain}${match[1]}`;
-      const title = match[2].trim();
-      if (title.length > 5) {
-        torrentMetadata.set(url, { title, seeders: 0, size: 'Unknown' });
-      }
-    }
-    
-    // Visit each torrent page via Firecrawl to get magnet (limit to first 5)
-    for (const torrentUrl of torrentLinks.slice(0, 5)) {
-      try {
-        console.log('Fetching 1337x torrent page via Firecrawl:', torrentUrl);
-        
-        const torrentRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${firecrawlApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            url: torrentUrl,
-            formats: ['html'],
-            waitFor: 1000,
-          }),
-        });
-        
-        if (!torrentRes.ok) continue;
-        
-        const torrentData = await torrentRes.json();
-        const torrentHtml = torrentData.data?.html || torrentData.html || '';
-        
-        // Extract magnet link
-        const magnetMatch = torrentHtml.match(/href="(magnet:\?xt=urn:btih:[^"]+)"/);
-        
-        if (magnetMatch) {
-          const magnet = magnetMatch[1].replace(/&amp;/g, '&');
-          const dnMatch = magnet.match(/dn=([^&]+)/);
-          const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
-          
-          const meta = torrentMetadata.get(torrentUrl);
-          
-          // Extract seeders from page
-          const seedersMatch = torrentHtml.match(/[Ss]eeders[:\s]*<[^>]*>(\d+)/i) ||
-                               torrentHtml.match(/class="[^"]*seed[^"]*"[^>]*>(\d+)/i);
-          const seeders = seedersMatch ? parseInt(seedersMatch[1]) || 0 : (meta?.seeders || 0);
-          
-          // Extract size
-          const sizeMatch = torrentHtml.match(/[Ss]ize[:\s]*<[^>]*>([\d.,]+\s*[GMKT]B)/i);
-          const size = sizeMatch ? sizeMatch[1] : (meta?.size || 'Unknown');
-          
-          results.push({
-            title: meta?.title || title,
-            magnet,
-            size,
-            seeders,
-            source: '1337x',
-          });
-          
-          console.log('Added 1337x result:', (meta?.title || title).slice(0, 50));
-        }
-      } catch (pageError) {
-        console.log('Error fetching 1337x torrent page:', pageError);
-        continue;
-      }
-    }
-    
-    console.log(`1337x via Firecrawl returned ${results.length} results`);
+    return parse1337xResults(html, domain, firecrawlApiKey);
   } catch (error) {
     console.error('1337x Firecrawl error:', error);
   }
   
+  return results;
+}
+
+// Parse 1337x search results HTML
+async function parse1337xResults(html: string, domain: string, firecrawlApiKey: string): Promise<TorrentResult[]> {
+  const results: TorrentResult[] = [];
+  
+  // Extract torrent links from search results - multiple patterns
+  const patterns = [
+    /href="(\/torrent\/\d+\/[^"]+)"/gi,
+    /href='(\/torrent\/\d+\/[^']+)'/gi,
+    /<a[^>]+href="([^"]*\/torrent\/\d+[^"]*)"/gi,
+  ];
+  
+  const torrentLinks: string[] = [];
+  
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+      let path = match[1];
+      if (!path.startsWith('/')) {
+        const urlMatch = path.match(/\/torrent\/\d+\/[^"']*/);
+        if (urlMatch) path = urlMatch[0];
+        else continue;
+      }
+      const url = `https://${domain}${path}`;
+      if (!torrentLinks.includes(url) && url.includes('/torrent/')) {
+        torrentLinks.push(url);
+      }
+    }
+  }
+  
+  console.log(`Found ${torrentLinks.length} torrent links on 1337x`);
+  
+  if (torrentLinks.length === 0) {
+    // Log more of the HTML to debug
+    console.log('1337x no links found, HTML sample:', html.slice(0, 1000));
+    return results;
+  }
+  
+  // Extract metadata from search results
+  const torrentMetadata: Map<string, {title: string, seeders: number, size: string}> = new Map();
+  
+  // Try to extract from table rows - look for title in links
+  const rowRegex = /<a[^>]*href="(\/torrent\/\d+\/[^"]+)"[^>]*>([^<]+)<\/a>/gi;
+  let match;
+  while ((match = rowRegex.exec(html)) !== null) {
+    const url = `https://${domain}${match[1]}`;
+    const title = match[2].trim();
+    if (title.length > 5) {
+      torrentMetadata.set(url, { title, seeders: 0, size: 'Unknown' });
+    }
+  }
+  
+  // Visit each torrent page via Firecrawl to get magnet (limit to first 5)
+  for (const torrentUrl of torrentLinks.slice(0, 5)) {
+    try {
+      console.log('Fetching 1337x torrent page:', torrentUrl);
+      
+      const torrentRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${firecrawlApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: torrentUrl,
+          formats: ['html'],
+          waitFor: 2000,
+        }),
+      });
+      
+      if (!torrentRes.ok) {
+        console.log('1337x torrent page fetch failed:', torrentRes.status);
+        continue;
+      }
+      
+      const torrentData = await torrentRes.json();
+      const torrentHtml = torrentData.data?.html || torrentData.html || '';
+      
+      console.log('1337x torrent page HTML length:', torrentHtml.length);
+      
+      // Extract magnet link - multiple patterns
+      const magnetPatterns = [
+        /href="(magnet:\?xt=urn:btih:[^"]+)"/i,
+        /href='(magnet:\?xt=urn:btih:[^']+)'/i,
+        /(magnet:\?xt=urn:btih:[a-f0-9]{40}[^"'\s]*)/i,
+      ];
+      
+      let magnetLink = '';
+      for (const pattern of magnetPatterns) {
+        const magnetMatch = torrentHtml.match(pattern);
+        if (magnetMatch) {
+          magnetLink = magnetMatch[1].replace(/&amp;/g, '&');
+          break;
+        }
+      }
+      
+      if (magnetLink) {
+        const dnMatch = magnetLink.match(/dn=([^&]+)/);
+        const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
+        
+        const meta = torrentMetadata.get(torrentUrl);
+        
+        // Extract seeders from page
+        const seedersMatch = torrentHtml.match(/[Ss]eeders[:\s]*<[^>]*>(\d+)/i) ||
+                             torrentHtml.match(/class="[^"]*seeds[^"]*"[^>]*>(\d+)/i) ||
+                             torrentHtml.match(/<span[^>]*class="[^"]*green[^"]*"[^>]*>(\d+)/i);
+        const seeders = seedersMatch ? parseInt(seedersMatch[1]) || 0 : (meta?.seeders || 0);
+        
+        // Extract size
+        const sizeMatch = torrentHtml.match(/[Ss]ize[:\s]*<[^>]*>([\d.,]+\s*[GMKT]i?B)/i) ||
+                         torrentHtml.match(/([\d.,]+)\s*([GMKT]i?B)/i);
+        const size = sizeMatch ? `${sizeMatch[1]}${sizeMatch[2] || ''}` : (meta?.size || 'Unknown');
+        
+        results.push({
+          title: meta?.title || title,
+          magnet: magnetLink,
+          size,
+          seeders,
+          source: '1337x',
+        });
+        
+        console.log('Added 1337x result:', (meta?.title || title).slice(0, 50));
+      } else {
+        console.log('No magnet found in 1337x page');
+      }
+    } catch (pageError) {
+      console.log('Error fetching 1337x torrent page:', pageError);
+      continue;
+    }
+  }
+  
+  console.log(`1337x via Firecrawl returned ${results.length} results`);
   return results;
 }
 
