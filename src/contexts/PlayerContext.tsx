@@ -385,7 +385,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [credentials, saveFileMapping, addDebugLog]);
 
-  const searchForStreams = useCallback(async (query: string, showNoResultsToast = false, track?: Track) => {
+  const searchForStreams = useCallback(async (
+    query: string,
+    showNoResultsToast = false,
+    track?: Track,
+    clearLogs: boolean = true
+  ) => {
     if (!credentials?.realDebridApiKey) {
       addDebugLog('Errore API', 'API Key Real-Debrid non configurata', 'error');
       return;
@@ -394,7 +399,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Store the track ID we're searching for
     const searchTrackId = track?.id || null;
     
-    clearDebugLogs();
+    if (clearLogs) {
+      clearDebugLogs();
+    }
     setIsSearchingStreams(true);
     setAlternativeStreams([]);
     setAvailableTorrents([]);
@@ -703,7 +710,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [credentials, currentStreamId, addDebugLog]);
 
   const manualSearch = useCallback(async (query: string) => {
-    await searchForStreams(query, true);
+    await searchForStreams(query, true, undefined, true);
   }, [searchForStreams]);
 
   // Load saved mapping to show in BugsModal for editing
@@ -874,12 +881,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     // No saved mapping - FIRST try album search, THEN fall back to track search
-    // This is more efficient as album searches have higher success rate
+    // Questo evita di perdere tempo con la ricerca singola quando l'album esiste.
+    clearDebugLogs();
     addSyncingTrack(track.id);
     
-    if (track.album && track.artist) {
+    if (track.album?.trim() && track.artist?.trim()) {
       // Try album search first
-      addDebugLog('Strategia ricerca', 'Provo prima ricerca per album...', 'info');
+      const albumQuery = `${track.album} ${track.artist}`;
+      addDebugLog('Strategia ricerca', `Prima: album (query: "${albumQuery}")`, 'info');
       const foundInAlbum = await searchAlbumAndMatch(track);
       
       if (currentSearchTrackIdRef.current !== track.id) {
@@ -889,12 +898,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       if (!foundInAlbum) {
         // Album search failed, try track search as fallback
-        addDebugLog('Fallback', 'Album non trovato, provo ricerca per traccia singola...', 'warning');
-        searchForStreams(`${track.artist} ${track.title}`, true, track);
+        const trackQuery = `${track.artist} ${track.title}`;
+        addDebugLog('Fallback', `Album non trovato: provo traccia (query: "${trackQuery}")`, 'warning');
+        searchForStreams(trackQuery, true, track, false);
       }
     } else {
-      // No album info, search directly for track
-      searchForStreams(`${track.artist} ${track.title}`, true, track);
+      // No album info, search directly for track (ma logghiamo chiaramente il motivo)
+      const trackQuery = `${track.artist} ${track.title}`;
+      addDebugLog('Strategia ricerca', 'Album mancante: parto direttamente dalla traccia', 'warning');
+      searchForStreams(trackQuery, true, track, false);
     }
 
     // If track has a stream URL, play it
