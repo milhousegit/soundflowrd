@@ -23,6 +23,7 @@ interface PlayerContextType extends PlayerState {
   setVolume: (volume: number) => void;
   addToQueue: (tracks: Track[]) => void;
   playTrack: (track: Track, queue?: Track[]) => void;
+  playQueueIndex: (index: number) => void;
   clearQueue: () => void;
   alternativeStreams: StreamResult[];
   availableTorrents: TorrentInfo[];
@@ -1036,6 +1037,17 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setState(prev => ({ ...prev, queue: [], queueIndex: 0 }));
   }, []);
 
+  const playQueueIndex = useCallback((index: number) => {
+    if (index >= 0 && index < state.queue.length) {
+      const track = state.queue[index];
+      setState(prev => ({
+        ...prev,
+        queueIndex: index,
+      }));
+      playTrack(track, state.queue);
+    }
+  }, [state.queue, playTrack]);
+
   // Update Media Session action handlers when next/previous change
   useEffect(() => {
     if ('mediaSession' in navigator) {
@@ -1135,6 +1147,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setVolume,
         addToQueue,
         playTrack,
+        playQueueIndex,
         clearQueue,
         alternativeStreams,
         availableTorrents,

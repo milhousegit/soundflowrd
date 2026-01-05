@@ -5,6 +5,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import BugsModal from './BugsModal';
+import QueueModal from './QueueModal';
 import { 
   Play, 
   Pause, 
@@ -17,7 +18,8 @@ import {
   ChevronUp,
   ChevronDown,
   Loader2,
-  Cloud
+  Cloud,
+  ListMusic
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
@@ -36,6 +38,8 @@ const Player: React.FC = () => {
     progress, 
     duration, 
     volume,
+    queue,
+    queueIndex,
     toggle, 
     next, 
     previous, 
@@ -54,10 +58,13 @@ const Player: React.FC = () => {
     downloadStatus,
     loadSavedMapping,
     currentMappedFileId,
+    playQueueIndex,
+    clearQueue,
   } = usePlayer();
   const { t } = useSettings();
   
   const [showBugsModal, setShowBugsModal] = useState(false);
+  const [showQueueModal, setShowQueueModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoadingMapping, setIsLoadingMapping] = useState(false);
   
@@ -169,14 +176,24 @@ const Player: React.FC = () => {
               )}
               <span className="text-sm text-muted-foreground">Now Playing</span>
             </div>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={handleOpenBugsModal}
-              className="text-muted-foreground hover:text-destructive"
-            >
-              <Bug className="w-5 h-5" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => setShowQueueModal(true)}
+                className="text-muted-foreground hover:text-primary"
+              >
+                <ListMusic className="w-5 h-5" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={handleOpenBugsModal}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Bug className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
 
           {/* Cover */}
@@ -288,6 +305,15 @@ const Player: React.FC = () => {
           downloadProgress={downloadProgress}
           downloadStatus={downloadStatus}
           currentMappedFileId={currentMappedFileId}
+        />
+        
+        <QueueModal
+          isOpen={showQueueModal}
+          onClose={() => setShowQueueModal(false)}
+          queue={queue}
+          currentIndex={queueIndex}
+          onPlayTrack={playQueueIndex}
+          onClearQueue={clearQueue}
         />
       </>
     );
@@ -432,8 +458,17 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          {/* Volume & Bugs */}
-          <div className="flex items-center gap-3 w-48">
+          {/* Queue, Volume & Bugs */}
+          <div className="flex items-center gap-3 w-56">
+            <Button 
+              variant="playerSecondary" 
+              size="icon"
+              onClick={() => setShowQueueModal(true)}
+              className="text-muted-foreground hover:text-primary"
+              title="Coda"
+            >
+              <ListMusic className="w-5 h-5" />
+            </Button>
             <Button 
               variant="playerSecondary" 
               size="icon"
@@ -484,6 +519,15 @@ const Player: React.FC = () => {
         downloadProgress={downloadProgress}
         downloadStatus={downloadStatus}
         currentMappedFileId={currentMappedFileId}
+      />
+      
+      <QueueModal
+        isOpen={showQueueModal}
+        onClose={() => setShowQueueModal(false)}
+        queue={queue}
+        currentIndex={queueIndex}
+        onPlayTrack={playQueueIndex}
+        onClearQueue={clearQueue}
       />
     </>
   );
