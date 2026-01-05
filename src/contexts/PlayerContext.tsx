@@ -732,7 +732,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       } else {
         setCurrentMappedFileId(undefined);
-        addDebugLog('Nessuna mappatura', 'Nessun torrent salvato per questa traccia', 'info');
+        addDebugLog('Nessuna mappatura', 'Nessuna mappatura eseguita in precedenza, proseguo con la ricerca', 'info');
       }
     } catch (error) {
       console.error('Failed to load saved mapping:', error);
@@ -849,11 +849,29 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return;
     }
 
-    // No saved mapping, search for streams via Real-Debrid with artist + title
-    // Pass true to show toast when no results found, and pass track for auto-save
-    // Mark track as syncing (first time playback)
+    // No saved mapping - FIRST try album search, THEN fall back to track search
+    // This is more efficient as album searches have higher success rate
     addSyncingTrack(track.id);
-    searchForStreams(`${track.artist} ${track.title}`, true, track);
+    
+    if (track.album && track.artist) {
+      // Try album search first
+      addDebugLog('Strategia ricerca', 'Provo prima ricerca per album...', 'info');
+      const foundInAlbum = await searchAlbumAndMatch(track);
+      
+      if (currentSearchTrackIdRef.current !== track.id) {
+        console.log('Track changed during album search, aborting');
+        return;
+      }
+      
+      if (!foundInAlbum) {
+        // Album search failed, try track search as fallback
+        addDebugLog('Fallback', 'Album non trovato, provo ricerca per traccia singola...', 'warning');
+        searchForStreams(`${track.artist} ${track.title}`, true, track);
+      }
+    } else {
+      // No album info, search directly for track
+      searchForStreams(`${track.artist} ${track.title}`, true, track);
+    }
 
     // If track has a stream URL, play it
     if (audioRef.current && track.streamUrl) {
