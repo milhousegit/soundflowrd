@@ -146,16 +146,15 @@ const Album: React.FC = () => {
         />
         
         {/* Sync album button for torrent setup */}
-        {settings.realDebridApiKey && (
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => setIsTorrentModalOpen(true)}
-            title={t('language') === 'it' ? "Sincronizza album" : "Sync album"}
-          >
-            <CloudDownload className="w-5 h-5" />
-          </Button>
-        )}
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={() => setIsTorrentModalOpen(true)}
+          title={t('language') === 'it' ? "Sincronizza album" : "Sync album"}
+          className={!settings.realDebridApiKey ? "opacity-50" : ""}
+        >
+          <CloudDownload className="w-6 h-6" />
+        </Button>
       </div>
 
       {/* Track List */}
