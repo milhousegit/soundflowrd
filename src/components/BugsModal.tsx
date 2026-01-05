@@ -39,9 +39,9 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
     // Auto-expand torrent with saved mapping when modal opens
     useEffect(() => {
       if (isOpen && torrents.length > 0 && currentMappedFileId !== undefined) {
-        // Find the torrent that contains the mapped file
-        const torrentWithMappedFile = torrents.find(t => 
-          t.files.some(f => f.id === currentMappedFileId || f.selected)
+        // Find the torrent that contains the mapped file (track mapping, not RD "selected" state)
+        const torrentWithMappedFile = torrents.find(t =>
+          t.files.some(f => f.id === currentMappedFileId)
         );
         if (torrentWithMappedFile) {
           setExpandedTorrents(new Set([torrentWithMappedFile.torrentId]));
@@ -347,7 +347,8 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                     {torrents.map((torrent) => {
                       const isExpanded = expandedTorrents.has(torrent.torrentId);
                       const isDownloading = ['downloading', 'queued', 'magnet_conversion'].includes(torrent.status);
-                      const hasMappedFile = torrent.files.some(f => f.id === currentMappedFileId || f.selected);
+                      // "Synced" here means "mapped for the current track"
+                      const hasMappedFile = torrent.files.some(f => f.id === currentMappedFileId);
                       
                       return (
                         <div key={torrent.torrentId} className={cn(
