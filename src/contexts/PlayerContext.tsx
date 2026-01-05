@@ -704,11 +704,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
       
       if (result.streams.length > 0) {
-        // Add new streams
+        // Replace streams completely to avoid duplicates - use Set to dedupe by stream URL
         setAlternativeStreams(prev => {
-          const existingIds = new Set(prev.map(s => s.id));
-          const newStreams = result.streams.filter(s => !existingIds.has(s.id));
-          return [...prev, ...newStreams];
+          const allStreams = [...result.streams, ...prev];
+          const seen = new Map<string, StreamResult>();
+          allStreams.forEach(s => {
+            if (!seen.has(s.streamUrl)) {
+              seen.set(s.streamUrl, s);
+            }
+          });
+          return Array.from(seen.values());
         });
         
         setDownloadProgress(null);
@@ -944,18 +949,22 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [searchForStreams, credentials]);
 
   const selectStream = useCallback(async (stream: StreamResult) => {
-    // Switch stream for current playback, but do NOT persist mapping here.
-    // StreamResult.id is not a stable numeric file id, so saving it causes wrong/duplicate mappings.
+    // Switch stream for current playback immediately - no download needed since stream is already ready
     setCurrentStreamId(stream.id);
+    
+    // Clear any download progress since we're switching to a ready stream
+    setDownloadProgress(null);
+    setDownloadStatus(null);
+    
     if (audioRef.current && stream.streamUrl) {
-      const currentTime = audioRef.current.currentTime;
       audioRef.current.src = stream.streamUrl;
-      audioRef.current.currentTime = currentTime;
-      if (state.isPlaying) {
-        audioRef.current.play();
-      }
+      audioRef.current.currentTime = 0;
+      audioRef.current.play();
+      setState(prev => ({ ...prev, isPlaying: true }));
     }
-  }, [state.isPlaying]);
+    
+    addDebugLog('Stream selezionato', `Riproduco: ${stream.title}`, 'success');
+  }, [addDebugLog]);
 
   const play = useCallback((track?: Track) => {
     if (track) {
@@ -1038,6 +1047,80 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       });
     }
   }, [next, previous]);
+
+  // Pre-load next track in queue when current track starts playing
+  useEffect(() => {
+    const preloadNextTrack = async () => {
+      if (!credentials?.realDebridApiKey) return;
+      if (!state.currentTrack || !state.isPlaying) return;
+      
+      const nextIndex = state.queueIndex + 1;
+      if (nextIndex >= state.queue.length) return;
+      
+      const nextTrack = state.queue[nextIndex];
+      if (!nextTrack?.albumId) return;
+      
+      // Check if next track already has a mapping
+      const { data: existingMapping } = await supabase
+        .from('track_file_mappings')
+        .select('id')
+        .eq('track_id', nextTrack.id)
+        .maybeSingle();
+      
+      if (existingMapping) {
+        // Already synced, nothing to do
+        return;
+      }
+      
+      // Pre-search for the next track (silently, without affecting current UI)
+      console.log('Pre-loading next track:', nextTrack.title);
+      
+      if (nextTrack.album?.trim() && nextTrack.artist?.trim()) {
+        try {
+          const result = await searchStreams(
+            credentials.realDebridApiKey,
+            `${nextTrack.album} ${nextTrack.artist}`
+          );
+          
+          if (result.torrents.length > 0) {
+            // Try to find and select matching file
+            const normalizeForMatch = (str: string): string => {
+              return str
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9\s]/g, '')
+                .trim();
+            };
+            
+            const titleWords = normalizeForMatch(nextTrack.title).split(/\s+/).filter(w => w.length > 1);
+            
+            for (const torrent of result.torrents) {
+              if (torrent.files && torrent.files.length > 0) {
+                const matchingFile = torrent.files.find(file => {
+                  const normalizedFile = normalizeForMatch(file.filename || '');
+                  return titleWords.every(word => normalizedFile.includes(word));
+                });
+                
+                if (matchingFile) {
+                  // Select this file to start caching
+                  await selectFilesAndPlay(credentials.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
+                  console.log('Pre-loaded next track file:', matchingFile.filename);
+                  break;
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.log('Pre-load failed for next track, will load on play:', error);
+        }
+      }
+    };
+    
+    // Delay pre-load to not interfere with current track loading
+    const timeout = setTimeout(preloadNextTrack, 5000);
+    return () => clearTimeout(timeout);
+  }, [state.currentTrack?.id, state.isPlaying, state.queueIndex, state.queue, credentials]);
 
   return (
     <PlayerContext.Provider
