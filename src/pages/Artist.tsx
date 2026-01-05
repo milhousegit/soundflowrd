@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Play, Shuffle, User, Loader2 } from 'lucide-react';
+import { Play, Shuffle, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import ArtistPageSkeleton from '@/components/skeletons/ArtistPageSkeleton';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
@@ -54,11 +55,7 @@ const Artist: React.FC = () => {
   }, [id]);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <ArtistPageSkeleton />;
   }
 
   if (!artist) {
