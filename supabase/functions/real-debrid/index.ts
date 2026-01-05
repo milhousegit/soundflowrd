@@ -197,8 +197,6 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
   const [apibayResults, corsaroResults] = await Promise.all([
     searchApibay(query).catch(() => []),
     searchCorsaroNero(query).catch(() => []),
-    // 1337x often blocks server IPs
-    // search1337x(query).catch(() => []),
   ]);
   
   const allResults = [...apibayResults, ...corsaroResults];
@@ -208,6 +206,149 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
   
   console.log(`Found ${allResults.length} total torrents (TPB: ${apibayResults.length}, CNero: ${corsaroResults.length})`);
   return allResults.slice(0, 10);
+}
+
+// Normalize string for matching
+function normalizeString(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/[^a-z0-9]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Match track in file list
+function findBestTrackMatch(files: {id: number, path: string, filename: string}[], trackName: string, artistName?: string): {id: number, path: string, filename: string, score: number}[] {
+  const normalizedTrack = normalizeString(trackName);
+  const normalizedArtist = artistName ? normalizeString(artistName) : '';
+  const trackWords = normalizedTrack.split(' ').filter(w => w.length > 2);
+  
+  const scored = files.map(file => {
+    const normalizedFile = normalizeString(file.filename);
+    
+    let score = 0;
+    
+    // Exact track name match
+    if (normalizedFile.includes(normalizedTrack)) {
+      score += 100;
+    }
+    
+    // Word matches
+    for (const word of trackWords) {
+      if (normalizedFile.includes(word)) {
+        score += 10;
+      }
+    }
+    
+    // Artist name match (bonus)
+    if (normalizedArtist && normalizedFile.includes(normalizedArtist)) {
+      score += 20;
+    }
+    
+    // Penalty for compilation/various artists
+    if (normalizedFile.includes('various') || normalizedFile.includes('compilation')) {
+      score -= 30;
+    }
+    
+    return { ...file, score };
+  });
+  
+  return scored.filter(f => f.score > 0).sort((a, b) => b.score - a.score);
+}
+
+// Get all audio files from a torrent
+async function getAlbumTracks(apiKey: string, magnet: string, source: string): Promise<{
+  torrentId: string;
+  files: {id: number, path: string, filename: string}[];
+  links: string[];
+} | null> {
+  const rdHeaders = { 'Authorization': `Bearer ${apiKey}` };
+  
+  try {
+    const formData = new FormData();
+    formData.append('magnet', magnet);
+    
+    const addRes = await fetchWithRetry(`${RD_API}/torrents/addMagnet`, {
+      method: 'POST',
+      headers: rdHeaders,
+      body: formData,
+    });
+    
+    if (!addRes.ok) {
+      console.log('Failed to add magnet:', await addRes.text());
+      return null;
+    }
+    
+    const addData = await addRes.json();
+    const torrentId = addData.id;
+    console.log('Torrent added:', torrentId);
+    
+    // Get torrent info to see files
+    const infoRes1 = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
+      headers: rdHeaders,
+    });
+    
+    if (!infoRes1.ok) return null;
+    
+    const info1 = await infoRes1.json();
+    
+    // Get all audio files
+    const audioFiles: {id: number, path: string, filename: string}[] = [];
+    const audioFileIds: string[] = [];
+    
+    if (info1.files && Array.isArray(info1.files)) {
+      for (const file of info1.files) {
+        const filepath = file.path || '';
+        const filename = filepath.split('/').pop() || filepath;
+        const lowerFilename = filename.toLowerCase();
+        
+        if (lowerFilename.endsWith('.mp3') || lowerFilename.endsWith('.flac') || 
+            lowerFilename.endsWith('.m4a') || lowerFilename.endsWith('.wav') ||
+            lowerFilename.endsWith('.aac') || lowerFilename.endsWith('.ogg')) {
+          audioFiles.push({ id: file.id, path: filepath, filename });
+          audioFileIds.push(file.id.toString());
+        }
+      }
+    }
+    
+    console.log(`Found ${audioFiles.length} audio files in torrent`);
+    
+    if (audioFileIds.length === 0) return null;
+    
+    // Select all audio files
+    const selectForm = new FormData();
+    selectForm.append('files', audioFileIds.join(','));
+    
+    await fetchWithRetry(`${RD_API}/torrents/selectFiles/${torrentId}`, {
+      method: 'POST',
+      headers: rdHeaders,
+      body: selectForm,
+    });
+    
+    // Wait for processing
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Get updated info with links
+    const infoRes2 = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
+      headers: rdHeaders,
+    });
+    
+    if (!infoRes2.ok) return null;
+    
+    const info2 = await infoRes2.json();
+    console.log('Status:', info2.status, 'Links:', info2.links?.length);
+    
+    return { 
+      torrentId, 
+      files: audioFiles,
+      links: info2.links || []
+    };
+  } catch (error) {
+    console.error('Get album tracks error:', error);
+    return null;
+  }
 }
 
 // Add magnet to Real-Debrid and get download links
@@ -308,56 +449,105 @@ serve(async (req) => {
           throw new Error('Invalid Real-Debrid API key');
         }
 
-        const torrents = await searchTorrents(query);
-        const streams: {id: string, title: string, streamUrl: string, quality: string, size: string, source: string}[] = [];
+        // Parse query for track and artist/album info
+        const queryParts = query.split(' - ');
+        const artistName = queryParts.length > 1 ? queryParts[0].trim() : undefined;
+        const trackName = queryParts.length > 1 ? queryParts.slice(1).join(' - ').trim() : query;
         
-        for (const torrent of torrents.slice(0, 5)) {
+        console.log(`Searching - Artist: ${artistName}, Track: ${trackName}`);
+
+        // Strategy 1: Search for album (artist name + optional album keywords)
+        // Strategy 2: Search for track name directly
+        const searchQueries = [
+          query, // Original query
+          artistName ? `${artistName} album discography` : undefined,
+          artistName ? `${artistName} discography flac` : undefined,
+        ].filter(Boolean) as string[];
+
+        const streams: {id: string, title: string, streamUrl: string, quality: string, size: string, source: string, matchedTrack?: string}[] = [];
+        const processedMagnets = new Set<string>();
+        
+        for (const searchQuery of searchQueries) {
           if (streams.length >= 5) break;
           
-          try {
-            console.log('Processing:', torrent.title.slice(0, 40));
-            const processed = await processMagnet(apiKey, torrent.magnet, torrent.source);
+          console.log('Trying search query:', searchQuery);
+          const torrents = await searchTorrents(searchQuery);
+          
+          for (const torrent of torrents.slice(0, 5)) {
+            if (streams.length >= 8) break;
+            if (processedMagnets.has(torrent.magnet)) continue;
+            processedMagnets.add(torrent.magnet);
             
-            if (processed && processed.links.length > 0) {
-              for (const rdLink of processed.links.slice(0, 3)) {
-                const unrestrictForm = new FormData();
-                unrestrictForm.append('link', rdLink);
+            try {
+              console.log('Processing album/torrent:', torrent.title.slice(0, 50));
+              const albumData = await getAlbumTracks(apiKey, torrent.magnet, torrent.source);
+              
+              if (albumData && albumData.files.length > 0 && albumData.links.length > 0) {
+                // Find best matching track(s) in the album
+                const matchedTracks = findBestTrackMatch(albumData.files, trackName, artistName);
                 
-                const unrestrictRes = await fetchWithRetry(`${RD_API}/unrestrict/link`, {
-                  method: 'POST',
-                  headers: rdHeaders,
-                  body: unrestrictForm,
-                });
+                // If we have matches, prioritize them; otherwise show all tracks from album
+                const tracksToProcess = matchedTracks.length > 0 
+                  ? matchedTracks.slice(0, 3) 
+                  : albumData.files.slice(0, 3).map(f => ({ ...f, score: 0 }));
                 
-                if (unrestrictRes.ok) {
-                  const data = await unrestrictRes.json();
-                  const filename = data.filename?.toLowerCase() || '';
+                for (let i = 0; i < Math.min(tracksToProcess.length, albumData.links.length); i++) {
+                  const track = tracksToProcess[i];
+                  const rdLink = albumData.links[i];
                   
-                  if (filename.endsWith('.mp3') || filename.endsWith('.flac') || 
-                      filename.endsWith('.m4a') || filename.endsWith('.wav') ||
-                      filename.endsWith('.aac') || filename.endsWith('.ogg') ||
-                      data.mimeType?.includes('audio')) {
+                  if (!rdLink) continue;
+                  
+                  const unrestrictForm = new FormData();
+                  unrestrictForm.append('link', rdLink);
+                  
+                  const unrestrictRes = await fetchWithRetry(`${RD_API}/unrestrict/link`, {
+                    method: 'POST',
+                    headers: rdHeaders,
+                    body: unrestrictForm,
+                  });
+                  
+                  if (unrestrictRes.ok) {
+                    const data = await unrestrictRes.json();
+                    const filename = data.filename?.toLowerCase() || '';
                     
-                    streams.push({
-                      id: `${processed.id}-${streams.length}`,
-                      title: data.filename || torrent.title,
-                      streamUrl: data.download,
-                      quality: filename.includes('flac') ? 'FLAC' : 
-                               filename.includes('320') ? '320kbps' : 
-                               filename.includes('256') ? '256kbps' : 'MP3',
-                      size: data.filesize ? `${Math.round(data.filesize / 1024 / 1024)}MB` : torrent.size,
-                      source: processed.source,
-                    });
-                    
-                    console.log('Added:', data.filename?.slice(0, 40));
+                    if (filename.endsWith('.mp3') || filename.endsWith('.flac') || 
+                        filename.endsWith('.m4a') || filename.endsWith('.wav') ||
+                        filename.endsWith('.aac') || filename.endsWith('.ogg') ||
+                        data.mimeType?.includes('audio')) {
+                      
+                      const quality = filename.includes('flac') ? 'FLAC' : 
+                                     filename.includes('320') ? '320kbps' : 
+                                     filename.includes('256') ? '256kbps' : 'MP3';
+                      
+                      streams.push({
+                        id: `${albumData.torrentId}-${i}-${streams.length}`,
+                        title: data.filename || track.filename || torrent.title,
+                        streamUrl: data.download,
+                        quality,
+                        size: data.filesize ? `${Math.round(data.filesize / 1024 / 1024)}MB` : torrent.size,
+                        source: torrent.source,
+                        matchedTrack: track.score > 0 ? track.filename : undefined,
+                      });
+                      
+                      console.log(`Added track (score: ${track.score}):`, data.filename?.slice(0, 40));
+                    }
                   }
                 }
               }
+            } catch (e) {
+              console.error('Processing error:', e);
             }
-          } catch (e) {
-            console.error('Processing error:', e);
           }
         }
+        
+        // Sort streams: matched tracks first, then by quality
+        streams.sort((a, b) => {
+          if (a.matchedTrack && !b.matchedTrack) return -1;
+          if (!a.matchedTrack && b.matchedTrack) return 1;
+          const qualityOrder = { 'FLAC': 4, '320kbps': 3, '256kbps': 2, 'MP3': 1 };
+          return (qualityOrder[b.quality as keyof typeof qualityOrder] || 0) - 
+                 (qualityOrder[a.quality as keyof typeof qualityOrder] || 0);
+        });
         
         console.log(`Returning ${streams.length} streams`);
         result = { streams };
