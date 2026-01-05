@@ -3,9 +3,10 @@ import { Track, Album, Artist } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useFavorites } from '@/hooks/useFavorites';
-import { getNewReleases, getPopularArtists, searchArtists } from '@/lib/musicbrainz';
+import { getNewReleases, getPopularArtists } from '@/lib/musicbrainz';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
+import TapArea from '@/components/TapArea';
 import { Clock, TrendingUp, ListMusic, Music, Loader2 } from 'lucide-react';
 import { Play, Pause } from 'lucide-react';
 
@@ -147,10 +148,10 @@ const Home: React.FC = () => {
             {displayRecent.map((track) => {
               const isCurrentTrack = currentTrack?.id === track.id;
               return (
-                <div 
+                <TapArea
                   key={track.id}
-                  onClick={() => isCurrentTrack ? toggle() : playTrack(track, displayRecent)}
-                  className="group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-all cursor-pointer"
+                  onTap={() => (isCurrentTrack ? toggle() : playTrack(track, displayRecent))}
+                  className="group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-all cursor-pointer touch-manipulation"
                 >
                   <div className="w-12 h-12 md:w-16 md:h-16 rounded overflow-hidden flex-shrink-0 bg-muted relative">
                     {track.coverUrl ? (
@@ -172,7 +173,7 @@ const Home: React.FC = () => {
                     <p className="font-semibold text-sm md:text-base text-foreground truncate">{track.title}</p>
                     <p className="text-xs md:text-sm text-muted-foreground truncate">{track.artist}</p>
                   </div>
-                </div>
+                </TapArea>
               );
             })}
           </div>

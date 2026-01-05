@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
+import TapArea from '@/components/TapArea';
 import { useSettings } from '@/contexts/SettingsContext';
 import { searchAll } from '@/lib/musicbrainz';
 import { Track, Album, Artist } from '@/types/music';
@@ -151,13 +152,13 @@ const Search: React.FC = () => {
           <h2 className="text-lg md:text-xl font-bold text-foreground mb-4 md:mb-6">{t('exploreByGenre')}</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             {genres.map((genre) => (
-              <div
+              <TapArea
                 key={genre.name}
-                onClick={() => handleQueryChange(genre.name)}
-                className={`aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} p-3 md:p-4 flex items-end cursor-pointer hover:scale-[1.02] transition-transform`}
+                onTap={() => handleQueryChange(genre.name)}
+                className={`aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} p-3 md:p-4 flex items-end cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
               >
                 <h3 className="text-lg md:text-xl font-bold text-white">{genre.name}</h3>
-              </div>
+              </TapArea>
             ))}
           </div>
         </div>

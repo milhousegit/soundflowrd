@@ -4,6 +4,7 @@ import { StreamResult, TorrentInfo, AudioFile } from '@/lib/realdebrid';
 import { DebugLogEntry } from '@/contexts/PlayerContext';
 import { X, Music, Check, Search, Loader2, Download, RefreshCw, ChevronDown, ChevronRight, Folder, FileAudio, AlertCircle, Info, CheckCircle, AlertTriangle, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import TapArea from '@/components/TapArea';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -289,13 +290,14 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                       </span>
                     </div>
                     {alternatives.map((alt) => (
-                      <button
+                      <TapArea
+                        as="button"
                         key={alt.id}
-                        onClick={() => onSelect(alt)}
+                        onTap={() => onSelect(alt)}
                         className={cn(
-                          "w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left",
-                          currentStreamId === alt.id 
-                            ? "bg-primary/20 border border-primary/50" 
+                          "w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left touch-manipulation",
+                          currentStreamId === alt.id
+                            ? "bg-primary/20 border border-primary/50"
                             : "bg-secondary hover:bg-secondary/80"
                         )}
                       >
@@ -310,7 +312,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                         {currentStreamId === alt.id && (
                           <Check className="w-5 h-5 text-primary flex-shrink-0" />
                         )}
-                      </button>
+                      </TapArea>
                     ))}
                   </>
                 )}
@@ -335,9 +337,10 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                       return (
                         <div key={torrent.torrentId} className="rounded-lg border border-border overflow-hidden">
                           {/* Torrent header */}
-                          <button
-                            onClick={() => toggleTorrentExpand(torrent.torrentId)}
-                            className="w-full flex items-center gap-3 p-3 bg-secondary/50 hover:bg-secondary/80 transition-colors text-left"
+                          <TapArea
+                            as="button"
+                            onTap={() => toggleTorrentExpand(torrent.torrentId)}
+                            className="w-full flex items-center gap-3 p-3 bg-secondary/50 hover:bg-secondary/80 transition-colors text-left touch-manipulation"
                           >
                             {isExpanded ? (
                               <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -385,7 +388,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                                 refreshingIds.has(torrent.torrentId) && "animate-spin"
                               )} />
                             </div>
-                          </button>
+                          </TapArea>
                           
                           {/* Expanded file list */}
                           {isExpanded && torrent.files.length > 0 && (
@@ -394,11 +397,12 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                                 const isSelecting = selectingFiles.has(`${torrent.torrentId}-${file.id}`);
                                 
                                 return (
-                                  <button
+                                  <TapArea
+                                    as="button"
                                     key={file.id}
-                                    onClick={() => handleSelectFile(torrent.torrentId, file)}
+                                    onTap={() => handleSelectFile(torrent.torrentId, file)}
                                     disabled={isSelecting}
-                                    className="w-full flex items-center gap-3 p-3 hover:bg-secondary/50 transition-colors text-left border-b border-border/50 last:border-b-0"
+                                    className="w-full flex items-center gap-3 p-3 hover:bg-secondary/50 transition-colors text-left border-b border-border/50 last:border-b-0 touch-manipulation"
                                   >
                                     {isSelecting ? (
                                       <Loader2 className="w-4 h-4 text-primary animate-spin flex-shrink-0" />
@@ -411,7 +415,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                                     {file.selected && (
                                       <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
                                     )}
-                                  </button>
+                                  </TapArea>
                                 );
                               })}
                             </div>

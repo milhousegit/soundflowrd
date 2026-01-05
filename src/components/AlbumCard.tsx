@@ -4,6 +4,7 @@ import { Album } from '@/types/music';
 import { Play, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FavoriteButton from './FavoriteButton';
+import { useTap } from '@/hooks/useTap';
 
 interface AlbumCardProps {
   album: Album;
@@ -16,13 +17,11 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
     navigate(`/album/${album.id}`);
   };
 
+  const tap = useTap({ onTap: handleNavigate });
+
   return (
     <div
-      onClick={handleNavigate}
-      onTouchEnd={(e) => {
-        e.preventDefault();
-        handleNavigate();
-      }}
+      {...tap}
       className="group p-3 md:p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer touch-manipulation"
     >
       {/* Cover */}
