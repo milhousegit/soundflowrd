@@ -7,6 +7,7 @@ import TrackCard from '@/components/TrackCard';
 import AlbumTorrentModal from '@/components/AlbumTorrentModal';
 import FavoriteButton from '@/components/FavoriteButton';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { getAlbum } from '@/lib/musicbrainz';
 import { mockAlbums, mockTracks } from '@/data/mockData';
@@ -18,6 +19,7 @@ const Album: React.FC = () => {
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { settings, t } = useSettings();
+  const { profile } = useAuth();
   const [album, setAlbum] = useState<AlbumType | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -158,7 +160,7 @@ const Album: React.FC = () => {
           size="icon"
           onClick={() => setIsTorrentModalOpen(true)}
           title={t('language') === 'it' ? "Sincronizza album" : "Sync album"}
-          className={!settings.realDebridApiKey ? "opacity-50" : ""}
+          className={!profile?.real_debrid_api_key ? "opacity-50" : ""}
         >
           <CloudDownload className="w-6 h-6" />
         </Button>
