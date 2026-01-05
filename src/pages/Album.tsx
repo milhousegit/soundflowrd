@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Loader2, Bug } from 'lucide-react';
+import { Play, Clock, Music, Loader2, Bug, CloudDownload, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
 import AlbumTorrentModal from '@/components/AlbumTorrentModal';
@@ -10,6 +10,7 @@ import { usePlayer } from '@/contexts/PlayerContext';
 import { getAlbum } from '@/lib/musicbrainz';
 import { mockAlbums, mockTracks } from '@/data/mockData';
 import { Album as AlbumType, Track } from '@/types/music';
+import { useSyncedTracks } from '@/hooks/useSyncedTracks';
 
 const Album: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +21,10 @@ const Album: React.FC = () => {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTorrentModalOpen, setIsTorrentModalOpen] = useState(false);
+  
+  // Get track IDs for sync status checking
+  const trackIds = useMemo(() => tracks.map(t => t.id), [tracks]);
+  const { isSynced, isSyncing } = useSyncedTracks(trackIds);
 
   useEffect(() => {
     const fetchAlbum = async () => {
@@ -140,15 +145,19 @@ const Album: React.FC = () => {
           size="lg"
         />
         
-        {/* Bug button for torrent setup */}
+        {/* Sync album button for torrent setup */}
         {settings.realDebridApiKey && (
           <Button 
             variant="outline" 
-            size="icon"
+            size="default"
             onClick={() => setIsTorrentModalOpen(true)}
-            title="Configura torrent album"
+            className="gap-2"
+            title={t('language') === 'it' ? "Sincronizza album" : "Sync album"}
           >
-            <Bug className="w-5 h-5" />
+            <CloudDownload className="w-5 h-5" />
+            <span className="hidden md:inline">
+              {t('language') === 'it' ? "Sincronizza" : "Sync"}
+            </span>
           </Button>
         )}
       </div>
@@ -171,6 +180,9 @@ const Album: React.FC = () => {
               queue={displayTracks}
               index={index}
               showArtist={true}
+              showSyncStatus={true}
+              isSynced={isSynced(track.id)}
+              isSyncing={isSyncing(track.id)}
             />
           ))}
         </div>

@@ -2,7 +2,7 @@ import React, { forwardRef, useState, useEffect } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { StreamResult, TorrentInfo, AudioFile } from '@/lib/realdebrid';
 import { DebugLogEntry } from '@/contexts/PlayerContext';
-import { X, Music, Check, Search, Loader2, Download, RefreshCw, ChevronDown, ChevronRight, Folder, FileAudio, AlertCircle, Info, CheckCircle, AlertTriangle } from 'lucide-react';
+import { X, Music, Check, Search, Loader2, Download, RefreshCw, ChevronDown, ChevronRight, Folder, FileAudio, AlertCircle, Info, CheckCircle, AlertTriangle, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -184,20 +184,6 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
             </div>
           </div>
 
-          {/* Download Progress Bar */}
-          {downloadProgress !== null && downloadStatus && (
-            <div className="px-4 py-2 border-b border-border bg-secondary/30">
-              <div className="flex items-center gap-2 mb-1">
-                <Download className="w-4 h-4 text-primary animate-pulse" />
-                <span className="text-sm font-medium text-foreground">
-                  {t('language') === 'it' ? 'Download in corso...' : 'Downloading...'}
-                </span>
-                <span className="text-sm text-muted-foreground ml-auto">{downloadProgress}%</span>
-              </div>
-              <Progress value={downloadProgress} className="h-2" />
-            </div>
-          )}
-
           {/* Debug Logs Panel */}
           {showDebugLogs && debugLogs.length > 0 && (
             <div className="max-h-48 overflow-y-auto border-b border-border bg-secondary/20">
@@ -276,7 +262,10 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
               </div>
             ) : !hasFoundSources && isDownloading ? (
               <div className="text-center py-8">
-                <Download className="w-12 h-12 text-primary mx-auto mb-3 animate-bounce" />
+                <div className="relative w-16 h-16 mx-auto mb-4">
+                  <Cloud className="w-16 h-16 text-primary" />
+                  <Loader2 className="w-6 h-6 text-primary-foreground absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin" />
+                </div>
                 <p className="text-foreground font-medium">
                   {t('language') === 'it' 
                     ? "Sei il primo a riprodurla!" 
@@ -284,15 +273,9 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
                   {t('language') === 'it' 
-                    ? "Stiamo scaricando la canzone per te..." 
-                    : "Downloading the song for you..."}
+                    ? "Stiamo aggiungendo la canzone a Real-Debrid per te..." 
+                    : "Adding the song to Real-Debrid for you..."}
                 </p>
-                {downloadProgress !== null && (
-                  <div className="mt-4 max-w-xs mx-auto">
-                    <Progress value={downloadProgress} className="h-2" />
-                    <p className="text-xs text-muted-foreground mt-1">{downloadProgress}%</p>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -379,21 +362,29 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                                 <Progress value={torrent.progress} className="h-1 mt-2" />
                               )}
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
+                            <div
+                              role="button"
+                              tabIndex={0}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleRefreshTorrent(torrent.torrentId);
                               }}
-                              disabled={refreshingIds.has(torrent.torrentId)}
-                              className="flex-shrink-0"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.stopPropagation();
+                                  handleRefreshTorrent(torrent.torrentId);
+                                }
+                              }}
+                              className={cn(
+                                "flex-shrink-0 p-2 rounded-md hover:bg-secondary transition-colors",
+                                refreshingIds.has(torrent.torrentId) && "pointer-events-none opacity-50"
+                              )}
                             >
                               <RefreshCw className={cn(
                                 "w-4 h-4",
                                 refreshingIds.has(torrent.torrentId) && "animate-spin"
                               )} />
-                            </Button>
+                            </div>
                           </button>
                           
                           {/* Expanded file list */}

@@ -13,13 +13,15 @@ import {
   RefreshCw,
   Save,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  Cloud
 } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { searchStreams, TorrentInfo, AudioFile } from '@/lib/realdebrid';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Track } from '@/types/music';
+import { addSyncedTrack } from '@/hooks/useSyncedTracks';
 
 interface AlbumTorrentModalProps {
   isOpen: boolean;
@@ -282,6 +284,9 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
           );
 
         if (tracksError) throw tracksError;
+        
+        // Mark all matched tracks as synced
+        matchedTracks.forEach(m => addSyncedTrack(m.trackId));
       }
 
       toast.success(`Album configurato: ${matchedTracks.length}/${tracks.length} tracce abbinate automaticamente`);
@@ -355,6 +360,9 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
           );
 
         if (tracksError) throw tracksError;
+        
+        // Mark all matched tracks as synced
+        matchedTracks.forEach(m => addSyncedTrack(m.trackId));
       }
 
       toast.success(`Salvati ${matchedTracks.length}/${tracks.length} match`);
