@@ -373,6 +373,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       } else if (result.torrents.length > 0 && (!result.streams || result.streams.length === 0)) {
         addDebugLog('Solo torrent', `${result.torrents.length} torrent disponibili`, 'info');
         
+        let playbackStarted = false;
+        
         // Try to auto-select if there's a torrent with a matching file
         if (track) {
           const normalizedTitle = normalizeForMatch(track.title);
@@ -416,14 +418,29 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   
                   await saveStreamMapping(track, selectResult.streams[0]);
                   addDebugLog('Riproduzione', 'Stream avviato e mappatura salvata', 'success');
+                  playbackStarted = true;
                   break;
                 } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
                   setDownloadProgress(selectResult.progress);
                   setDownloadStatus(selectResult.status);
                   addDebugLog('Download', `In corso: ${selectResult.progress}%`, 'warning');
+                  playbackStarted = true; // Consider download as "started"
                   break;
                 }
               }
+            }
+          }
+          
+          // If no file matched or playback didn't start, try album search
+          if (!playbackStarted && track.album) {
+            addDebugLog('Nessun match nei torrent', 'Provo ricerca per album...', 'warning');
+            const foundInAlbum = await searchAlbumAndMatch(track);
+            
+            if (!foundInAlbum && showNoResultsToast) {
+              addDebugLog('Nessun risultato album', 'Nessuna sorgente trovata neanche per album', 'error');
+              toast.error('Nessun contenuto trovato', {
+                description: 'Non è stato trovato nessun risultato per questa traccia.',
+              });
             }
           }
         }
