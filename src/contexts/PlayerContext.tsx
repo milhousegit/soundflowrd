@@ -329,7 +329,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
   }, [searchForStreams, credentials]);
 
-  const selectStream = useCallback((stream: StreamResult) => {
+  const selectStream = useCallback(async (stream: StreamResult) => {
     setCurrentStreamId(stream.id);
     if (audioRef.current && stream.streamUrl) {
       const currentTime = audioRef.current.currentTime;
@@ -339,7 +339,71 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         audioRef.current.play();
       }
     }
-  }, [state.isPlaying]);
+
+    // Save stream selection to database for future playback
+    const currentTrack = state.currentTrack;
+    if (currentTrack?.albumId && currentTrack?.id) {
+      try {
+        // First, find or create album_torrent_mapping
+        let albumMappingId: string | null = null;
+        
+        // Check if we have existing album mapping
+        const { data: existingMapping } = await supabase
+          .from('album_torrent_mappings')
+          .select('id')
+          .eq('album_id', currentTrack.albumId)
+          .maybeSingle();
+        
+        if (existingMapping) {
+          albumMappingId = existingMapping.id;
+        } else {
+          // Create new album mapping with stream info
+          const { data: newMapping, error: insertError } = await supabase
+            .from('album_torrent_mappings')
+            .insert({
+              album_id: currentTrack.albumId,
+              album_title: currentTrack.album || currentTrack.title,
+              artist_name: currentTrack.artist,
+              torrent_id: stream.id,
+              torrent_title: stream.title || currentTrack.title,
+            })
+            .select('id')
+            .single();
+          
+          if (!insertError && newMapping) {
+            albumMappingId = newMapping.id;
+          }
+        }
+
+        if (albumMappingId) {
+          // Upsert track file mapping
+          const { error: trackError } = await supabase
+            .from('track_file_mappings')
+            .upsert({
+              album_mapping_id: albumMappingId,
+              track_id: currentTrack.id,
+              track_title: currentTrack.title,
+              track_position: null,
+              file_id: parseInt(stream.id) || 0,
+              file_path: stream.streamUrl,
+              file_name: stream.title || currentTrack.title,
+            }, {
+              onConflict: 'track_id',
+            });
+
+          if (!trackError) {
+            console.log('Saved stream selection for track:', currentTrack.title);
+            toast.success('Sorgente salvata', {
+              description: 'Questa sorgente verrà usata automaticamente la prossima volta.',
+              duration: 2000,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to save stream selection:', error);
+      }
+    }
+  }, [state.isPlaying, state.currentTrack]);
 
   const play = useCallback((track?: Track) => {
     if (track) {
