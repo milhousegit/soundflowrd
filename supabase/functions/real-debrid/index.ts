@@ -221,9 +221,28 @@ async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
   return results;
 }
 
+// Normalize query: split into words and filter results that contain all words
+function normalizeQuery(query: string): string[] {
+  // Split by spaces and common separators, filter out short words
+  const words = query
+    .toLowerCase()
+    .split(/[\s\-_.]+/)
+    .filter(w => w.length >= 2);
+  return words;
+}
+
+// Check if a title contains all query words (ignoring separators)
+function matchesAllWords(title: string, queryWords: string[]): boolean {
+  const normalizedTitle = title.toLowerCase().replace(/[\-_.]/g, ' ');
+  return queryWords.every(word => normalizedTitle.includes(word));
+}
+
 // Combined search from multiple sources
 async function searchTorrents(query: string): Promise<TorrentResult[]> {
   console.log('Searching all sources for:', query);
+  
+  const queryWords = normalizeQuery(query);
+  console.log('Query words:', queryWords);
   
   // Search multiple sources in parallel
   const [apibayResults, corsaroResults] = await Promise.all([
@@ -231,7 +250,19 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
     searchCorsaroNero(query).catch(() => []),
   ]);
   
-  const allResults = [...apibayResults, ...corsaroResults];
+  let allResults = [...apibayResults, ...corsaroResults];
+  
+  // Filter results to only include those that contain ALL query words
+  // This handles cases like "Salmo Hellvisback" matching "Salmo - Hellvisback" or "Salmo.Hellvisback"
+  if (queryWords.length > 1) {
+    const filteredResults = allResults.filter(r => matchesAllWords(r.title, queryWords));
+    console.log(`Filtered from ${allResults.length} to ${filteredResults.length} results matching all words`);
+    
+    // If we have good filtered results, use them; otherwise fall back to all results
+    if (filteredResults.length > 0) {
+      allResults = filteredResults;
+    }
+  }
   
   // Sort by seeders (TPB results have seeders, others don't)
   allResults.sort((a, b) => b.seeders - a.seeders);
