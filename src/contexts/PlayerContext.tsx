@@ -36,6 +36,8 @@ interface PlayerContextType extends PlayerState {
   clearDebugLogs: () => void;
   downloadProgress: number | null;
   downloadStatus: string | null;
+  loadSavedMapping: () => Promise<void>;
+  currentMappedFileId?: number;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -73,6 +75,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
+  const [currentMappedFileId, setCurrentMappedFileId] = useState<number | undefined>();
   
   // Track ID currently being searched - used to cancel stale searches
   const currentSearchTrackIdRef = useRef<string | null>(null);
@@ -637,6 +640,64 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     await searchForStreams(query, true);
   }, [searchForStreams]);
 
+  // Load saved mapping to show in BugsModal for editing
+  const loadSavedMapping = useCallback(async () => {
+    const track = state.currentTrack;
+    if (!credentials?.realDebridApiKey || !track?.albumId) return;
+    
+    try {
+      const { data: trackMapping } = await supabase
+        .from('track_file_mappings')
+        .select('*, album_torrent_mappings!inner(*)')
+        .eq('track_id', track.id)
+        .maybeSingle();
+      
+      if (trackMapping) {
+        console.log('Loading saved mapping for editing:', trackMapping);
+        
+        const torrentId = trackMapping.album_torrent_mappings.torrent_id;
+        const fileId = trackMapping.file_id;
+        
+        setCurrentMappedFileId(fileId);
+        
+        // Get torrent info with all files
+        const result = await checkTorrentStatus(credentials.realDebridApiKey, torrentId);
+        
+        if (result.files.length > 0 || result.streams.length > 0) {
+          // Mark the currently mapped file as selected
+          const filesWithSelection = result.files.map(f => ({
+            ...f,
+            selected: f.id === fileId
+          }));
+          
+          setAvailableTorrents([{
+            torrentId,
+            title: trackMapping.album_torrent_mappings.torrent_title,
+            size: 'Unknown',
+            source: 'Salvato',
+            seeders: 0,
+            status: result.status,
+            progress: result.progress,
+            files: filesWithSelection,
+            hasLinks: result.streams.length > 0,
+          }]);
+          
+          if (result.streams.length > 0) {
+            setAlternativeStreams(result.streams);
+          }
+          
+          addDebugLog('Mappatura caricata', `Torrent: ${trackMapping.album_torrent_mappings.torrent_title}`, 'success');
+        }
+      } else {
+        setCurrentMappedFileId(undefined);
+        addDebugLog('Nessuna mappatura', 'Nessun torrent salvato per questa traccia', 'info');
+      }
+    } catch (error) {
+      console.error('Failed to load saved mapping:', error);
+      addDebugLog('Errore caricamento', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
+    }
+  }, [state.currentTrack, credentials, addDebugLog]);
+
   const playTrack = useCallback(async (track: Track, queue?: Track[]) => {
     // Stop any existing audio and cancel pending searches
     if (audioRef.current) {
@@ -940,6 +1001,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         clearDebugLogs,
         downloadProgress,
         downloadStatus,
+        loadSavedMapping,
+        currentMappedFileId,
       }}
     >
       {children}

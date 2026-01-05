@@ -51,11 +51,14 @@ const Player: React.FC = () => {
     debugLogs,
     downloadProgress,
     downloadStatus,
+    loadSavedMapping,
+    currentMappedFileId,
   } = usePlayer();
   const { t } = useSettings();
   
   const [showBugsModal, setShowBugsModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isLoadingMapping, setIsLoadingMapping] = useState(false);
   
   // Swipe to close state
   const [dragY, setDragY] = useState(0);
@@ -88,6 +91,16 @@ const Player: React.FC = () => {
 
   const handleManualSearch = (query: string) => {
     manualSearch(query);
+  };
+
+  const handleOpenBugsModal = async () => {
+    setShowBugsModal(true);
+    setIsLoadingMapping(true);
+    try {
+      await loadSavedMapping();
+    } finally {
+      setIsLoadingMapping(false);
+    }
   };
 
   const handleSelectFile = async (torrentId: string, fileIds: number[]) => {
@@ -158,7 +171,7 @@ const Player: React.FC = () => {
             <Button 
               variant="ghost" 
               size="icon"
-              onClick={() => setShowBugsModal(true)}
+              onClick={handleOpenBugsModal}
               className="text-muted-foreground hover:text-destructive"
             >
               <Bug className="w-5 h-5" />
@@ -257,12 +270,13 @@ const Player: React.FC = () => {
           onSelectFile={handleSelectFile}
           onRefreshTorrent={refreshTorrent}
           currentStreamId={currentStreamId}
-          isLoading={isSearchingStreams}
+          isLoading={isSearchingStreams || isLoadingMapping}
           onManualSearch={handleManualSearch}
           currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
           debugLogs={debugLogs}
           downloadProgress={downloadProgress}
           downloadStatus={downloadStatus}
+          currentMappedFileId={currentMappedFileId}
         />
       </>
     );
@@ -412,14 +426,14 @@ const Player: React.FC = () => {
             <Button 
               variant="playerSecondary" 
               size="icon"
-              onClick={() => setShowBugsModal(true)}
+              onClick={handleOpenBugsModal}
               className={cn(
                 "text-muted-foreground hover:text-destructive relative",
                 isSearchingStreams && "text-primary"
               )}
               title={t('bugs')}
             >
-              {isSearchingStreams ? (
+              {isSearchingStreams || isLoadingMapping ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <Bug className="w-5 h-5" />
@@ -452,12 +466,13 @@ const Player: React.FC = () => {
         onSelectFile={handleSelectFile}
         onRefreshTorrent={refreshTorrent}
         currentStreamId={currentStreamId}
-        isLoading={isSearchingStreams}
+        isLoading={isSearchingStreams || isLoadingMapping}
         onManualSearch={handleManualSearch}
         currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
         debugLogs={debugLogs}
         downloadProgress={downloadProgress}
         downloadStatus={downloadStatus}
+        currentMappedFileId={currentMappedFileId}
       />
     </>
   );

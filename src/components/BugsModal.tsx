@@ -24,16 +24,30 @@ interface BugsModalProps {
   debugLogs?: DebugLogEntry[];
   downloadProgress?: number | null;
   downloadStatus?: string | null;
+  currentMappedFileId?: number;
 }
 
 const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
-  ({ isOpen, onClose, alternatives, torrents = [], onSelect, onSelectFile, onRefreshTorrent, currentStreamId, isLoading, onManualSearch, currentTrackInfo, debugLogs = [], downloadProgress, downloadStatus }, ref) => {
+  ({ isOpen, onClose, alternatives, torrents = [], onSelect, onSelectFile, onRefreshTorrent, currentStreamId, isLoading, onManualSearch, currentTrackInfo, debugLogs = [], downloadProgress, downloadStatus, currentMappedFileId }, ref) => {
     const { t } = useSettings();
     const [manualQuery, setManualQuery] = useState('');
     const [expandedTorrents, setExpandedTorrents] = useState<Set<string>>(new Set());
     const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
     const [selectingFiles, setSelectingFiles] = useState<Set<string>>(new Set());
     const [showDebugLogs, setShowDebugLogs] = useState(false);
+
+    // Auto-expand torrent with saved mapping when modal opens
+    useEffect(() => {
+      if (isOpen && torrents.length > 0 && currentMappedFileId !== undefined) {
+        // Find the torrent that contains the mapped file
+        const torrentWithMappedFile = torrents.find(t => 
+          t.files.some(f => f.id === currentMappedFileId || f.selected)
+        );
+        if (torrentWithMappedFile) {
+          setExpandedTorrents(new Set([torrentWithMappedFile.torrentId]));
+        }
+      }
+    }, [isOpen, torrents, currentMappedFileId]);
 
     // Auto-refresh downloading torrents every 15 seconds
     useEffect(() => {
@@ -333,9 +347,13 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                     {torrents.map((torrent) => {
                       const isExpanded = expandedTorrents.has(torrent.torrentId);
                       const isDownloading = ['downloading', 'queued', 'magnet_conversion'].includes(torrent.status);
+                      const hasMappedFile = torrent.files.some(f => f.id === currentMappedFileId || f.selected);
                       
                       return (
-                        <div key={torrent.torrentId} className="rounded-lg border border-border overflow-hidden">
+                        <div key={torrent.torrentId} className={cn(
+                          "rounded-lg border overflow-hidden",
+                          hasMappedFile ? "border-primary/50 bg-primary/5" : "border-border"
+                        )}>
                           {/* Torrent header */}
                           <TapArea
                             as="button"
@@ -347,10 +365,20 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                             ) : (
                               <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                             )}
-                            <Folder className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                            <Folder className={cn(
+                              "w-5 h-5 flex-shrink-0",
+                              hasMappedFile ? "text-primary" : "text-muted-foreground"
+                            )} />
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium text-foreground truncate">{torrent.title}</p>
-                              <div className="flex items-center gap-2 text-sm">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-foreground truncate">{torrent.title}</p>
+                                {hasMappedFile && (
+                                  <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                    {t('language') === 'it' ? 'Sincronizzato' : 'Synced'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-sm flex-wrap">
                                 <span className={getStatusColor(torrent.status)}>
                                   {getStatusText(torrent.status)}
                                 </span>
@@ -395,6 +423,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                             <div className="border-t border-border bg-background/50">
                               {torrent.files.map((file) => {
                                 const isSelecting = selectingFiles.has(`${torrent.torrentId}-${file.id}`);
+                                const isMapped = currentMappedFileId === file.id || file.selected;
                                 
                                 return (
                                   <TapArea
@@ -402,19 +431,31 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                                     key={file.id}
                                     onTap={() => handleSelectFile(torrent.torrentId, file)}
                                     disabled={isSelecting}
-                                    className="w-full flex items-center gap-3 p-3 hover:bg-secondary/50 transition-colors text-left border-b border-border/50 last:border-b-0 touch-manipulation"
+                                    className={cn(
+                                      "w-full flex items-center gap-3 p-3 hover:bg-secondary/50 transition-colors text-left border-b border-border/50 last:border-b-0 touch-manipulation",
+                                      isMapped && "bg-primary/10"
+                                    )}
                                   >
                                     {isSelecting ? (
                                       <Loader2 className="w-4 h-4 text-primary animate-spin flex-shrink-0" />
+                                    ) : isMapped ? (
+                                      <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
                                     ) : (
                                       <FileAudio className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                                     )}
-                                    <span className="flex-1 text-sm text-foreground truncate">
-                                      {file.filename}
-                                    </span>
-                                    {file.selected && (
-                                      <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
-                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <span className={cn(
+                                        "text-sm truncate block",
+                                        isMapped ? "text-foreground font-medium" : "text-foreground"
+                                      )}>
+                                        {file.filename}
+                                      </span>
+                                      {isMapped && (
+                                        <span className="text-xs text-green-600">
+                                          {t('language') === 'it' ? 'Attualmente sincronizzato' : 'Currently synced'}
+                                        </span>
+                                      )}
+                                    </div>
                                   </TapArea>
                                 );
                               })}
