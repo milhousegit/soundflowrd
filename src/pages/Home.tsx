@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Track, Album, Artist } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
-import { getNewReleases, getPopularArtists } from '@/lib/musicbrainz';
+import { useFavorites } from '@/hooks/useFavorites';
+import { getNewReleases, getPopularArtists, searchArtists } from '@/lib/musicbrainz';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import { Clock, TrendingUp, ListMusic, Music, Loader2 } from 'lucide-react';
 import { Play, Pause } from 'lucide-react';
-import { mockPlaylists } from '@/data/mockData';
 
 const Home: React.FC = () => {
   const [recentlyPlayed, setRecentlyPlayed] = useState<Track[]>([]);
@@ -18,6 +18,7 @@ const Home: React.FC = () => {
   
   const { settings, t } = useSettings();
   const { currentTrack, isPlaying, playTrack, toggle } = usePlayer();
+  const { favorites, getFavoritesByType } = useFavorites();
 
   // Get country code from language
   const getCountryFromLanguage = (lang: string): string => {
@@ -34,6 +35,9 @@ const Home: React.FC = () => {
 
   const country = getCountryFromLanguage(settings.language);
 
+  // Get favorite artists to use for recommendations
+  const favoriteArtists = getFavoritesByType('artist');
+
   useEffect(() => {
     const stored = localStorage.getItem('recentlyPlayed');
     if (stored) {
@@ -45,8 +49,36 @@ const Home: React.FC = () => {
     const fetchNewReleases = async () => {
       setIsLoadingReleases(true);
       try {
-        const releases = await getNewReleases(country);
-        setNewReleases(releases);
+        // If user has favorite artists, search for their releases
+        if (favoriteArtists.length > 0) {
+          const artistNames = favoriteArtists.slice(0, 3).map(f => f.item_title);
+          const allReleases: Album[] = [];
+          
+          for (const artistName of artistNames) {
+            try {
+              const { data } = await import('@/integrations/supabase/client').then(m => 
+                m.supabase.functions.invoke('musicbrainz', {
+                  body: { action: 'search-releases', query: artistName, limit: 6 },
+                })
+              );
+              if (data) allReleases.push(...data);
+            } catch (e) {
+              console.error('Error fetching releases for', artistName, e);
+            }
+          }
+          
+          // Sort by release date (newest first) and dedupe
+          const uniqueReleases = allReleases.reduce((acc, album) => {
+            if (!acc.find(a => a.id === album.id)) acc.push(album);
+            return acc;
+          }, [] as Album[]);
+          
+          setNewReleases(uniqueReleases.slice(0, 12));
+        } else {
+          // Fallback to popular releases in Italy
+          const releases = await getNewReleases(country);
+          setNewReleases(releases);
+        }
       } catch (error) {
         console.error('Failed to fetch new releases:', error);
       } finally {
@@ -55,14 +87,27 @@ const Home: React.FC = () => {
     };
 
     fetchNewReleases();
-  }, [country]);
+  }, [country, favoriteArtists.length]);
 
   useEffect(() => {
     const fetchPopularArtists = async () => {
       setIsLoadingArtists(true);
       try {
-        const artists = await getPopularArtists(country);
-        setPopularArtists(artists);
+        // If user has favorite artists, find similar/related artists
+        if (favoriteArtists.length > 0) {
+          const favoriteNames = favoriteArtists.map(f => f.item_title.toLowerCase());
+          const artists = await getPopularArtists(country);
+          
+          // Filter out artists the user already has in favorites
+          const filteredArtists = artists.filter(
+            a => !favoriteNames.includes(a.name.toLowerCase())
+          );
+          
+          setPopularArtists(filteredArtists.slice(0, 12));
+        } else {
+          const artists = await getPopularArtists(country);
+          setPopularArtists(artists);
+        }
       } catch (error) {
         console.error('Failed to fetch popular artists:', error);
       } finally {
@@ -71,7 +116,7 @@ const Home: React.FC = () => {
     };
 
     fetchPopularArtists();
-  }, [country]);
+  }, [country, favoriteArtists.length]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -141,25 +186,13 @@ const Home: React.FC = () => {
             <ListMusic className="w-5 h-5 md:w-6 md:h-6 text-primary" />
             <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('yourPlaylists')}</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-6">
-            {mockPlaylists.map((playlist) => (
-              <div 
-                key={playlist.id}
-                className="group p-3 md:p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer"
-              >
-                <div className="aspect-square rounded-lg overflow-hidden mb-3 md:mb-4 bg-muted">
-                  {playlist.coverUrl && (
-                    <img 
-                      src={playlist.coverUrl} 
-                      alt={playlist.name} 
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  )}
-                </div>
-                <h3 className="font-semibold text-sm md:text-base text-foreground truncate">{playlist.name}</h3>
-                <p className="text-xs md:text-sm text-muted-foreground truncate">{playlist.description}</p>
-              </div>
-            ))}
+          <div className="text-center py-8 bg-secondary/30 rounded-xl">
+            <ListMusic className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+            <p className="text-muted-foreground">
+              {t('language') === 'it' 
+                ? "Non hai creato nessuna playlist" 
+                : "You haven't created any playlists"}
+            </p>
           </div>
         </section>
       )}

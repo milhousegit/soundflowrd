@@ -4,6 +4,7 @@ import { Play, Clock, Music, Loader2, Bug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
 import AlbumTorrentModal from '@/components/AlbumTorrentModal';
+import FavoriteButton from '@/components/FavoriteButton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { getAlbum } from '@/lib/musicbrainz';
@@ -131,6 +132,13 @@ const Album: React.FC = () => {
         <Button variant="player" size="player" onClick={handlePlayAll}>
           <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
         </Button>
+        
+        {/* Favorite button */}
+        <FavoriteButton
+          itemType="album"
+          item={album}
+          size="lg"
+        />
         
         {/* Bug button for torrent setup */}
         {settings.realDebridApiKey && (
