@@ -337,7 +337,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
               setDownloadProgress(selectResult.progress);
               setDownloadStatus(selectResult.status);
-              addDebugLog('Download', `Torrent in download: ${selectResult.progress}%`, 'warning');
+              addDebugLog('Salvataggio', 'Salvataggio in cloud', 'success');
               // Don't return yet, show the download progress
             } else {
               addDebugLog('Stato torrent', `Stato: ${selectResult.status}, nessuno stream pronto`, 'warning');
@@ -524,7 +524,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
                   setDownloadProgress(selectResult.progress);
                   setDownloadStatus(selectResult.status);
-                  addDebugLog('Download', `In corso: ${selectResult.progress}%`, 'warning');
+                  addDebugLog('Salvataggio', 'Salvataggio in cloud', 'success');
                   playbackStarted = true; // Consider download as "started"
                   break;
                 }
@@ -625,7 +625,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         ));
         setDownloadProgress(result.progress);
         setDownloadStatus(result.status);
-        addDebugLog('Download avviato', `Stato: ${result.status}, Progresso: ${result.progress}%`, 'warning');
+        addDebugLog('Salvataggio', 'Salvataggio in cloud', 'success');
       }
     } catch (error) {
       addDebugLog('Errore selezione', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');

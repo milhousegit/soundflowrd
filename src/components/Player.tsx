@@ -16,7 +16,8 @@ import {
   Bug,
   ChevronUp,
   ChevronDown,
-  Loader2
+  Loader2,
+  Cloud
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
@@ -309,7 +310,7 @@ const Player: React.FC = () => {
             )}
             {downloadProgress !== null && !isSearchingStreams && (
               <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                <span className="text-[10px] font-bold text-primary">{downloadProgress}%</span>
+                <Cloud className="w-4 h-4 text-primary animate-pulse" />
               </div>
             )}
           </div>
@@ -358,7 +359,7 @@ const Player: React.FC = () => {
               )}
               {downloadProgress !== null && !isSearchingStreams && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                  <span className="text-xs font-bold text-primary">{downloadProgress}%</span>
+                  <Cloud className="w-5 h-5 text-primary animate-pulse" />
                 </div>
               )}
             </div>
