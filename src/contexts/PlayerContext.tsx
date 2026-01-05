@@ -445,10 +445,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         return false;
       }
 
-      // If no file match found but we have torrents, at least show them
+      // If no file match found but we have torrents, show popup for manual match
       if (result.torrents.length > 0) {
         addDebugLog('Match manuale richiesto', `Nessun file corrisponde a "${track.title}" (query usata: "${track.album} ${track.artist}")`, 'warning');
         removeSyncingTrack(track.id);
+        // Show toast for manual matching required
+        toast.warning('Selezione manuale richiesta', {
+          description: 'Non ho trovato un match automatico. Apri il pannello sorgenti per selezionare il file manualmente.',
+          duration: 5000,
+        });
         return false;
       }
       

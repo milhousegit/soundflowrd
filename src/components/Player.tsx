@@ -66,7 +66,6 @@ const Player: React.FC = () => {
   const [showBugsModal, setShowBugsModal] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isLoadingMapping, setIsLoadingMapping] = useState(false);
   
   // Swipe to close state
   const [dragY, setDragY] = useState(0);
@@ -101,14 +100,10 @@ const Player: React.FC = () => {
     manualSearch(query);
   };
 
-  const handleOpenBugsModal = async () => {
+  const handleOpenBugsModal = () => {
+    // Just open the modal - don't trigger loadSavedMapping which could interfere with ongoing search
+    // The modal will show current debug logs and torrents from the ongoing search
     setShowBugsModal(true);
-    setIsLoadingMapping(true);
-    try {
-      await loadSavedMapping();
-    } finally {
-      setIsLoadingMapping(false);
-    }
   };
 
   const handleSelectFile = async (torrentId: string, fileIds: number[]) => {
@@ -298,7 +293,7 @@ const Player: React.FC = () => {
           onSelectFile={handleSelectFile}
           onRefreshTorrent={refreshTorrent}
           currentStreamId={currentStreamId}
-          isLoading={isSearchingStreams || isLoadingMapping}
+          isLoading={isSearchingStreams}
           onManualSearch={handleManualSearch}
           currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
           debugLogs={debugLogs}
@@ -479,7 +474,7 @@ const Player: React.FC = () => {
               )}
               title={t('bugs')}
             >
-              {isSearchingStreams || isLoadingMapping ? (
+              {isSearchingStreams ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <Bug className="w-5 h-5" />
@@ -512,7 +507,7 @@ const Player: React.FC = () => {
         onSelectFile={handleSelectFile}
         onRefreshTorrent={refreshTorrent}
         currentStreamId={currentStreamId}
-        isLoading={isSearchingStreams || isLoadingMapping}
+        isLoading={isSearchingStreams}
         onManualSearch={handleManualSearch}
         currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
         debugLogs={debugLogs}

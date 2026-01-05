@@ -39,9 +39,9 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const isSyncing = propIsSyncing !== undefined ? propIsSyncing : hookIsSyncing(track.id);
     const isDownloading = propIsDownloading !== undefined ? propIsDownloading : hookIsDownloading(track.id);
 
-    // Show cloud icon: blinking when syncing/downloading, solid when synced
+    // Show cloud icon only when synced (solid) or syncing/downloading (pulsing)
     const showCloudIcon = isSynced || isSyncing || isDownloading;
-    const isBlinking = isSyncing || isDownloading;
+    const shouldPulse = (isSyncing || isDownloading) && !isSynced;
 
     const handleClick = () => {
       if (isMenuOpen) return; // Don't trigger play when menu is open
@@ -147,8 +147,8 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
               <Cloud 
                 className={cn(
                   "w-3.5 h-3.5 flex-shrink-0",
-                  isSynced && !isBlinking ? "text-green-500" : "text-primary",
-                  isBlinking && "animate-pulse"
+                  isSynced ? "text-green-500" : "text-primary",
+                  shouldPulse && "animate-pulse"
                 )} 
               />
             )}
