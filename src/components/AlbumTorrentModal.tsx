@@ -390,6 +390,12 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
     try {
       // Delete existing mapping if present
       if (existingMapping) {
+        // Clean old track mappings first to avoid stale/duplicate rows
+        await supabase
+          .from('track_file_mappings')
+          .delete()
+          .eq('album_mapping_id', existingMapping.id);
+
         await supabase
           .from('album_torrent_mappings')
           .delete()
@@ -466,6 +472,12 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
     try {
       // Delete existing mapping if present
       if (existingMapping) {
+        // Clean old track mappings first to avoid stale/duplicate rows
+        await supabase
+          .from('track_file_mappings')
+          .delete()
+          .eq('album_mapping_id', existingMapping.id);
+
         await supabase
           .from('album_torrent_mappings')
           .delete()

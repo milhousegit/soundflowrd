@@ -169,19 +169,28 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       .trim();
   };
 
-  // Helper to save stream mapping to database
-  const saveStreamMapping = useCallback(async (track: Track, stream: StreamResult) => {
+  // Helper to save a **file** mapping (torrent + specific file id) to database
+  const saveFileMapping = useCallback(async (params: {
+    track: Track;
+    torrentId: string;
+    torrentTitle?: string;
+    fileId: number;
+    fileName?: string;
+    filePath?: string;
+  }) => {
+    const { track, torrentId, torrentTitle, fileId, fileName, filePath } = params;
+
     if (!track.albumId) return;
-    
+
     try {
       let albumMappingId: string | null = null;
-      
+
       const { data: existingMapping } = await supabase
         .from('album_torrent_mappings')
         .select('id')
         .eq('album_id', track.albumId)
         .maybeSingle();
-      
+
       if (existingMapping) {
         albumMappingId = existingMapping.id;
       } else {
@@ -191,12 +200,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             album_id: track.albumId,
             album_title: track.album || track.title,
             artist_name: track.artist,
-            torrent_id: stream.id,
-            torrent_title: stream.title || track.title,
+            torrent_id: torrentId,
+            torrent_title: torrentTitle || track.album || track.title,
           })
           .select('id')
           .single();
-        
+
         if (!insertError && newMapping) {
           albumMappingId = newMapping.id;
         }
@@ -205,24 +214,27 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (albumMappingId) {
         await supabase
           .from('track_file_mappings')
-          .upsert({
-            album_mapping_id: albumMappingId,
-            track_id: track.id,
-            track_title: track.title,
-            track_position: null,
-            file_id: parseInt(stream.id) || 0,
-            file_path: stream.streamUrl,
-            file_name: stream.title || track.title,
-          }, {
-            onConflict: 'track_id',
-          });
-        
-        console.log('Auto-saved stream mapping for track:', track.title);
-        // Mark track as synced
+          .upsert(
+            {
+              album_mapping_id: albumMappingId,
+              track_id: track.id,
+              track_title: track.title,
+              track_position: null,
+              file_id: fileId,
+              file_path: filePath || '',
+              file_name: fileName || track.title,
+            },
+            {
+              onConflict: 'track_id',
+            }
+          );
+
+        setCurrentMappedFileId(fileId);
+        console.log('Saved file mapping for track:', track.title, { torrentId, fileId });
         addSyncedTrack(track.id);
       }
     } catch (error) {
-      console.error('Failed to auto-save stream mapping:', error);
+      console.error('Failed to save file mapping:', error);
       removeSyncingTrack(track.id);
     }
   }, []);
@@ -311,7 +323,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 setState(prev => ({ ...prev, isPlaying: true }));
               }
               
-              await saveStreamMapping(track, selectResult.streams[0]);
+              await saveFileMapping({
+                track,
+                torrentId: torrent.torrentId,
+                torrentTitle: torrent.title,
+                fileId: matchingFile.id,
+                fileName: matchingFile.filename,
+                filePath: matchingFile.path,
+              });
               addDebugLog('Riproduzione', 'Stream avviato e mappatura salvata', 'success');
               
               return true;
@@ -340,7 +359,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       addDebugLog('Errore ricerca album', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
       return false;
     }
-  }, [credentials, saveStreamMapping, addDebugLog]);
+  }, [credentials, saveFileMapping, addDebugLog]);
 
   const searchForStreams = useCallback(async (query: string, showNoResultsToast = false, track?: Track) => {
     if (!credentials?.realDebridApiKey) {
@@ -399,11 +418,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             addDebugLog('Riproduzione', `Avviato: "${selectedStream.title}"`, 'success');
           }
           
-          // Auto-save the mapping if we have the track info
-          if (track) {
-            await saveStreamMapping(track, selectedStream);
-            addDebugLog('Mappatura salvata', 'Sorgente salvata per uso futuro', 'success');
-          }
+          // Non auto-salvare qui: gli stream "cached" non includono fileId affidabile.
+          // La mappatura viene salvata solo quando scegliamo un file specifico (selectTorrentFile / match su file).
+
         }
       } else if ((!result.streams || result.streams.length === 0) && result.torrents.length === 0) {
         // No results for track title, try searching for the album
@@ -493,7 +510,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     setState(prev => ({ ...prev, isPlaying: true }));
                   }
                   
-                  await saveStreamMapping(track, selectResult.streams[0]);
+                  await saveFileMapping({
+                    track,
+                    torrentId: torrent.torrentId,
+                    torrentTitle: torrent.title,
+                    fileId: fileToUse.id,
+                    fileName: fileToUse.filename,
+                    filePath: fileToUse.path,
+                  });
                   addDebugLog('Riproduzione', 'Stream avviato e mappatura salvata', 'success');
                   playbackStarted = true;
                   break;
@@ -551,28 +575,46 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setIsSearchingStreams(false);
       }
     }
-  }, [credentials, saveStreamMapping, searchAlbumAndMatch, addDebugLog, clearDebugLogs]);
+  }, [credentials, saveFileMapping, searchAlbumAndMatch, addDebugLog, clearDebugLogs]);
 
   const selectTorrentFile = useCallback(async (torrentId: string, fileIds: number[]) => {
     if (!credentials?.realDebridApiKey) return;
-    
+
     addDebugLog('Selezione file', `Torrent: ${torrentId}, File IDs: ${fileIds.join(', ')}`, 'info');
-    
+
     try {
       const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, fileIds);
-      
+
       if (result.streams.length > 0) {
         // Add streams and auto-play first one
         setAlternativeStreams(prev => [...result.streams, ...prev]);
         setCurrentStreamId(result.streams[0].id);
         setDownloadProgress(null);
         setDownloadStatus(null);
-        
+
         if (audioRef.current && result.streams[0].streamUrl) {
           audioRef.current.src = result.streams[0].streamUrl;
           audioRef.current.play();
           setState(prev => ({ ...prev, isPlaying: true }));
         }
+
+        // Persist mapping using the **fileId** (not stream.id)
+        const currentTrack = state.currentTrack;
+        const fileId = fileIds[0];
+        const torrent = availableTorrents.find(t => t.torrentId === torrentId);
+        const file = torrent?.files?.find(f => f.id === fileId);
+
+        if (currentTrack && fileId !== undefined) {
+          await saveFileMapping({
+            track: currentTrack,
+            torrentId,
+            torrentTitle: torrent?.title,
+            fileId,
+            fileName: file?.filename,
+            filePath: file?.path,
+          });
+        }
+
         addDebugLog('Riproduzione', `Stream pronto: ${result.streams[0].title}`, 'success');
       } else if (result.status === 'downloading' || result.status === 'queued' || result.status === 'magnet_conversion') {
         // Update torrent status in the list
@@ -588,7 +630,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     } catch (error) {
       addDebugLog('Errore selezione', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
     }
-  }, [credentials, addDebugLog]);
+  }, [credentials, addDebugLog, state.currentTrack, availableTorrents, saveFileMapping]);
 
   const refreshTorrent = useCallback(async (torrentId: string) => {
     if (!credentials?.realDebridApiKey) return;
@@ -742,49 +784,58 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         if (trackMapping) {
           console.log('Found saved mapping for track:', track.title, trackMapping);
-          
+
           // Use the saved torrent and file mapping
           const torrentId = trackMapping.album_torrent_mappings.torrent_id;
           const fileId = trackMapping.file_id;
-          
-          // Select and play this specific file
-          const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
-          
-          // Verify track is still current
-          if (currentSearchTrackIdRef.current !== track.id) {
-            console.log('Track changed during file selection, aborting');
-            return;
-          }
-          
-          if (result.streams.length > 0) {
-            setAlternativeStreams(result.streams);
-            setCurrentStreamId(result.streams[0].id);
-            
-            if (audioRef.current && result.streams[0].streamUrl) {
-              audioRef.current.src = result.streams[0].streamUrl;
-              audioRef.current.play();
-              setState(prev => ({ ...prev, isPlaying: true }));
+
+          // Guard: old buggy mappings could have non-sensical file ids (e.g. parsed from stream id)
+          if (!Number.isFinite(fileId) || fileId <= 0) {
+            console.log('Ignoring invalid saved mapping fileId:', fileId);
+          } else {
+            setCurrentMappedFileId(fileId);
+
+            // Select and play this specific file
+            const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
+
+            // Verify track is still current
+            if (currentSearchTrackIdRef.current !== track.id) {
+              console.log('Track changed during file selection, aborting');
+              return;
             }
-            
-            // Save to recently played
-            const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
-            const filtered = recent.filter((t: Track) => t.id !== track.id);
-            const updated = [track, ...filtered].slice(0, 20);
-            localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
-            return;
-          } else if (result.status === 'downloading' || result.status === 'queued') {
-            // Torrent is downloading, show progress
-            setAvailableTorrents([{
-              torrentId,
-              title: trackMapping.album_torrent_mappings.torrent_title,
-              size: 'Unknown',
-              source: 'Saved',
-              seeders: 0,
-              status: result.status,
-              progress: result.progress,
-              files: [],
-              hasLinks: false,
-            }]);
+
+            if (result.streams.length > 0) {
+              setAlternativeStreams(result.streams);
+              setCurrentStreamId(result.streams[0].id);
+
+              if (audioRef.current && result.streams[0].streamUrl) {
+                audioRef.current.src = result.streams[0].streamUrl;
+                audioRef.current.play();
+                setState(prev => ({ ...prev, isPlaying: true }));
+              }
+
+              // Save to recently played
+              const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
+              const filtered = recent.filter((t: Track) => t.id !== track.id);
+              const updated = [track, ...filtered].slice(0, 20);
+              localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+              return;
+            } else if (result.status === 'downloading' || result.status === 'queued') {
+              // Torrent is downloading, show progress
+              setAvailableTorrents([
+                {
+                  torrentId,
+                  title: trackMapping.album_torrent_mappings.torrent_title,
+                  size: 'Unknown',
+                  source: 'Saved',
+                  seeders: 0,
+                  status: result.status,
+                  progress: result.progress,
+                  files: [],
+                  hasLinks: false,
+                },
+              ]);
+            }
           }
         }
       } catch (error) {
@@ -818,6 +869,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [searchForStreams, credentials]);
 
   const selectStream = useCallback(async (stream: StreamResult) => {
+    // Switch stream for current playback, but do NOT persist mapping here.
+    // StreamResult.id is not a stable numeric file id, so saving it causes wrong/duplicate mappings.
     setCurrentStreamId(stream.id);
     if (audioRef.current && stream.streamUrl) {
       const currentTime = audioRef.current.currentTime;
@@ -827,71 +880,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         audioRef.current.play();
       }
     }
-
-    // Save stream selection to database for future playback
-    const currentTrack = state.currentTrack;
-    if (currentTrack?.albumId && currentTrack?.id) {
-      try {
-        // First, find or create album_torrent_mapping
-        let albumMappingId: string | null = null;
-        
-        // Check if we have existing album mapping
-        const { data: existingMapping } = await supabase
-          .from('album_torrent_mappings')
-          .select('id')
-          .eq('album_id', currentTrack.albumId)
-          .maybeSingle();
-        
-        if (existingMapping) {
-          albumMappingId = existingMapping.id;
-        } else {
-          // Create new album mapping with stream info
-          const { data: newMapping, error: insertError } = await supabase
-            .from('album_torrent_mappings')
-            .insert({
-              album_id: currentTrack.albumId,
-              album_title: currentTrack.album || currentTrack.title,
-              artist_name: currentTrack.artist,
-              torrent_id: stream.id,
-              torrent_title: stream.title || currentTrack.title,
-            })
-            .select('id')
-            .single();
-          
-          if (!insertError && newMapping) {
-            albumMappingId = newMapping.id;
-          }
-        }
-
-        if (albumMappingId) {
-          // Upsert track file mapping
-          const { error: trackError } = await supabase
-            .from('track_file_mappings')
-            .upsert({
-              album_mapping_id: albumMappingId,
-              track_id: currentTrack.id,
-              track_title: currentTrack.title,
-              track_position: null,
-              file_id: parseInt(stream.id) || 0,
-              file_path: stream.streamUrl,
-              file_name: stream.title || currentTrack.title,
-            }, {
-              onConflict: 'track_id',
-            });
-
-          if (!trackError) {
-            console.log('Saved stream selection for track:', currentTrack.title);
-            toast.success('Sorgente salvata', {
-              description: 'Questa sorgente verrà usata automaticamente la prossima volta.',
-              duration: 2000,
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Failed to save stream selection:', error);
-      }
-    }
-  }, [state.isPlaying, state.currentTrack]);
+  }, [state.isPlaying]);
 
   const play = useCallback((track?: Track) => {
     if (track) {
