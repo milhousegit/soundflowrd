@@ -73,6 +73,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
+  
+  // Track ID currently being searched - used to cancel stale searches
+  const currentSearchTrackIdRef = useRef<string | null>(null);
 
   const addDebugLog = useCallback((step: string, details?: string, status: 'info' | 'success' | 'error' | 'warning' = 'info') => {
     setDebugLogs(prev => [...prev, { timestamp: new Date(), step, details, status }]);
@@ -225,6 +228,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const searchAlbumAndMatch = useCallback(async (track: Track): Promise<boolean> => {
     if (!credentials?.realDebridApiKey || !track.album) return false;
     
+    // Check if this search is still valid
+    if (currentSearchTrackIdRef.current !== track.id) {
+      console.log('Album search cancelled - track changed');
+      return false;
+    }
+    
     addDebugLog('Ricerca album', `Cerco: "${track.album} ${track.artist}"`, 'info');
     
     try {
@@ -233,11 +242,23 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         `${track.album} ${track.artist}`
       );
       
+      // Check again after async operation
+      if (currentSearchTrackIdRef.current !== track.id) {
+        console.log('Album search cancelled after fetch - track changed');
+        return false;
+      }
+      
       setAvailableTorrents(result.torrents);
       addDebugLog('Risultati album', `Trovati ${result.torrents.length} torrent`, result.torrents.length > 0 ? 'success' : 'warning');
       
       // Look for a torrent with files that match the track title
       for (const torrent of result.torrents) {
+        // Check if search is still valid before processing each torrent
+        if (currentSearchTrackIdRef.current !== track.id) {
+          console.log('Album search cancelled during torrent loop - track changed');
+          return false;
+        }
+        
         if (torrent.files && torrent.files.length > 0) {
           const normalizedTitle = normalizeForMatch(track.title);
           addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
@@ -262,6 +283,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               torrent.torrentId, 
               [matchingFile.id]
             );
+            
+            // Check if search is still valid after async operation
+            if (currentSearchTrackIdRef.current !== track.id) {
+              console.log('Album search cancelled after file select - track changed');
+              return false;
+            }
             
             // Check for errors
             if (selectResult.error || selectResult.status === 'error') {
@@ -318,6 +345,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return;
     }
     
+    // Store the track ID we're searching for
+    const searchTrackId = track?.id || null;
+    
     clearDebugLogs();
     setIsSearchingStreams(true);
     setAlternativeStreams([]);
@@ -333,6 +363,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         query
       );
       
+      // Check if this search is still valid
+      if (searchTrackId && currentSearchTrackIdRef.current !== searchTrackId) {
+        console.log('Search cancelled - track changed during search');
+        return;
+      }
+      
       setAvailableTorrents(result.torrents);
       addDebugLog('Ricerca completata', `Stream pronti: ${result.streams?.length || 0}, Torrent: ${result.torrents.length}`, 
         (result.streams?.length || 0) > 0 ? 'success' : 'info');
@@ -346,6 +382,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (result.streams.length >= 1) {
           const selectedStream = result.streams[0];
           setCurrentStreamId(selectedStream.id);
+          
+          // Final check before playing
+          if (searchTrackId && currentSearchTrackIdRef.current !== searchTrackId) {
+            console.log('Search cancelled before playback - track changed');
+            return;
+          }
           
           if (audioRef.current && selectedStream.streamUrl) {
             audioRef.current.src = selectedStream.streamUrl;
@@ -366,6 +408,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         
         if (track && track.album) {
           const foundInAlbum = await searchAlbumAndMatch(track);
+          
+          // Check if search is still valid
+          if (searchTrackId && currentSearchTrackIdRef.current !== searchTrackId) {
+            console.log('Search cancelled after album search - track changed');
+            return;
+          }
           
           if (!foundInAlbum && showNoResultsToast) {
             addDebugLog('Nessun risultato', 'Nessuna sorgente trovata', 'error');
@@ -389,6 +437,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           const normalizedTitle = normalizeForMatch(track.title);
           
           for (const torrent of result.torrents) {
+            // Check if search is still valid before processing each torrent
+            if (searchTrackId && currentSearchTrackIdRef.current !== searchTrackId) {
+              console.log('Search cancelled during torrent processing - track changed');
+              return;
+            }
+            
             if (torrent.files && torrent.files.length > 0) {
               addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
               
@@ -414,6 +468,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   torrent.torrentId,
                   [fileToUse.id]
                 );
+                
+                // Check if search is still valid after async operation
+                if (searchTrackId && currentSearchTrackIdRef.current !== searchTrackId) {
+                  console.log('Search cancelled after file selection - track changed');
+                  return;
+                }
                 
                 if (selectResult.error || selectResult.status === 'error') {
                   addDebugLog('Errore selezione', selectResult.error || 'Errore sconosciuto', 'error');
@@ -447,8 +507,20 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           
           // If no file matched or playback didn't start, try album search
           if (!playbackStarted && track.album) {
+            // Check if search is still valid
+            if (searchTrackId && currentSearchTrackIdRef.current !== searchTrackId) {
+              console.log('Search cancelled before album fallback - track changed');
+              return;
+            }
+            
             addDebugLog('Nessun match nei torrent', 'Provo ricerca per album...', 'warning');
             const foundInAlbum = await searchAlbumAndMatch(track);
+            
+            // Check if search is still valid
+            if (searchTrackId && currentSearchTrackIdRef.current !== searchTrackId) {
+              console.log('Search cancelled after album fallback - track changed');
+              return;
+            }
             
             if (!foundInAlbum && showNoResultsToast) {
               addDebugLog('Nessun risultato album', 'Nessuna sorgente trovata neanche per album', 'error');
@@ -471,7 +543,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         });
       }
     } finally {
-      setIsSearchingStreams(false);
+      // Only update searching state if this is still the current search
+      if (!searchTrackId || currentSearchTrackIdRef.current === searchTrackId) {
+        setIsSearchingStreams(false);
+      }
     }
   }, [credentials, saveStreamMapping, searchAlbumAndMatch, addDebugLog, clearDebugLogs]);
 
@@ -563,6 +638,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [searchForStreams]);
 
   const playTrack = useCallback(async (track: Track, queue?: Track[]) => {
+    // Stop any existing audio and cancel pending searches
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+    
+    // Set the new track ID for search cancellation
+    currentSearchTrackIdRef.current = track.id;
+    
     setState(prev => ({
       ...prev,
       currentTrack: track,
@@ -572,6 +656,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       duration: track.duration,
       progress: 0,
     }));
+    
+    // Clear previous streams
+    setAlternativeStreams([]);
+    setAvailableTorrents([]);
+    setCurrentStreamId(undefined);
+    setDownloadProgress(null);
+    setDownloadStatus(null);
 
     // First check if we have a saved mapping for this track
     if (credentials?.realDebridApiKey && track.albumId) {
@@ -582,6 +673,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           .eq('track_id', track.id)
           .maybeSingle();
 
+        // Verify track is still current
+        if (currentSearchTrackIdRef.current !== track.id) {
+          console.log('Track changed during mapping lookup, aborting');
+          return;
+        }
+
         if (trackMapping) {
           console.log('Found saved mapping for track:', track.title, trackMapping);
           
@@ -591,6 +688,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           
           // Select and play this specific file
           const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
+          
+          // Verify track is still current
+          if (currentSearchTrackIdRef.current !== track.id) {
+            console.log('Track changed during file selection, aborting');
+            return;
+          }
           
           if (result.streams.length > 0) {
             setAlternativeStreams(result.streams);
@@ -626,6 +729,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       } catch (error) {
         console.error('Failed to check saved mapping:', error);
       }
+    }
+
+    // Verify track is still current before starting search
+    if (currentSearchTrackIdRef.current !== track.id) {
+      console.log('Track changed before search, aborting');
+      return;
     }
 
     // No saved mapping, search for streams via Real-Debrid with artist + title
