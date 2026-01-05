@@ -84,8 +84,12 @@ async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
       headers: { 
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Cache-Control': 'no-cache',
       },
     });
+    
+    console.log('Corsaro Nero response status:', response.status);
     
     if (!response.ok) {
       console.log('Corsaro Nero response not ok:', response.status);
@@ -93,6 +97,19 @@ async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
     }
     
     const html = await response.text();
+    console.log('Corsaro Nero HTML length:', html.length);
+    console.log('Corsaro Nero HTML preview:', html.substring(0, 500));
+    
+    // Check if we got a valid search results page
+    if (html.includes('Sono stati trovati')) {
+      console.log('Found valid search results page');
+    } else if (html.includes('404') || html.includes('Pagina non trovata')) {
+      console.log('Got 404 page from Corsaro Nero');
+      return results;
+    } else if (html.includes('cloudflare') || html.includes('challenge')) {
+      console.log('Got Cloudflare challenge page');
+      return results;
+    }
     
     // Extract torrent links from search results table
     // Format: href="https://ilcorsaronero.link/torrent/50132/Geolier-Il-Coraggio-Dei-Bambini-..."
@@ -107,6 +124,9 @@ async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
     }
     
     console.log(`Found ${torrentLinks.length} torrent links on Corsaro Nero`);
+    if (torrentLinks.length > 0) {
+      console.log('First torrent link:', torrentLinks[0]);
+    }
     
     // Extract seeders and size from search results
     // Parse the table rows to get metadata
