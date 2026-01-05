@@ -140,8 +140,14 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
 
     const hasErrors = debugLogs.some(log => log.status === 'error');
 
+    // Check if we're in a downloading state (torrent found but still downloading)
+    const isDownloading = downloadProgress !== null || torrents.some(t => 
+      ['downloading', 'queued', 'magnet_conversion'].includes(t.status)
+    );
+    const hasFoundSources = alternatives.length > 0 || torrents.length > 0;
+
     return (
-      <div ref={ref} className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+      <div ref={ref} className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
         {/* Backdrop */}
         <div 
           className="absolute inset-0 bg-background/80 backdrop-blur-sm"
@@ -258,7 +264,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                   {t('language') === 'it' ? "Potrebbe richiedere alcuni secondi" : "This may take a few seconds"}
                 </p>
               </div>
-            ) : alternatives.length === 0 && torrents.length === 0 ? (
+            ) : !hasFoundSources && !isDownloading ? (
               <div className="text-center py-8">
                 <Music className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                 <p className="text-muted-foreground">{t('noAlternatives')}</p>
@@ -267,6 +273,26 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                     ? "Prova la ricerca manuale sopra" 
                     : "Try manual search above"}
                 </p>
+              </div>
+            ) : !hasFoundSources && isDownloading ? (
+              <div className="text-center py-8">
+                <Download className="w-12 h-12 text-primary mx-auto mb-3 animate-bounce" />
+                <p className="text-foreground font-medium">
+                  {t('language') === 'it' 
+                    ? "Sei il primo a riprodurla!" 
+                    : "You're the first to play this!"}
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {t('language') === 'it' 
+                    ? "Stiamo scaricando la canzone per te..." 
+                    : "Downloading the song for you..."}
+                </p>
+                {downloadProgress !== null && (
+                  <div className="mt-4 max-w-xs mx-auto">
+                    <Progress value={downloadProgress} className="h-2" />
+                    <p className="text-xs text-muted-foreground mt-1">{downloadProgress}%</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">

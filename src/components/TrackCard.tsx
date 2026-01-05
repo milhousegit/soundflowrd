@@ -36,8 +36,12 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       <div
         ref={ref}
         onClick={handleClick}
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          handleClick();
+        }}
         className={cn(
-          "group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200",
+          "group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200 touch-manipulation",
           "hover:bg-secondary/80 active:scale-[0.99]",
           isCurrentTrack && "bg-secondary"
         )}
