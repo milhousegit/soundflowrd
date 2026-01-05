@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Loader2 } from 'lucide-react';
+import { Play, Clock, Music, Loader2, Bug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
+import AlbumTorrentModal from '@/components/AlbumTorrentModal';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { getAlbum } from '@/lib/musicbrainz';
@@ -13,10 +14,11 @@ const Album: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
-  const { t } = useSettings();
+  const { settings, t } = useSettings();
   const [album, setAlbum] = useState<AlbumType | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isTorrentModalOpen, setIsTorrentModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchAlbum = async () => {
@@ -26,8 +28,8 @@ const Album: React.FC = () => {
       try {
         const data = await getAlbum(id);
         setAlbum(data);
-        setTracks(data.tracks?.map((t: any) => ({
-          ...t,
+        setTracks(data.tracks?.map((tr: any) => ({
+          ...tr,
           artist: data.artist,
           artistId: data.artistId,
           album: data.title,
@@ -40,7 +42,7 @@ const Album: React.FC = () => {
         const mockAlbum = mockAlbums.find(a => a.id === id);
         if (mockAlbum) {
           setAlbum(mockAlbum);
-          setTracks(mockTracks.filter(t => t.albumId === id));
+          setTracks(mockTracks.filter(tr => tr.albumId === id));
         }
       } finally {
         setIsLoading(false);
@@ -66,13 +68,13 @@ const Album: React.FC = () => {
     );
   }
 
-  const displayTracks = tracks.length > 0 ? tracks : mockTracks.slice(0, 8).map(t => ({
-    ...t,
+  const displayTracks = tracks.length > 0 ? tracks : mockTracks.slice(0, 8).map(tr => ({
+    ...tr,
     album: album.title,
     albumId: id,
   }));
 
-  const totalDuration = displayTracks.reduce((acc, t) => acc + (t.duration || 0), 0);
+  const totalDuration = displayTracks.reduce((acc, tr) => acc + (tr.duration || 0), 0);
   const formatTotalDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
@@ -129,6 +131,18 @@ const Album: React.FC = () => {
         <Button variant="player" size="player" onClick={handlePlayAll}>
           <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
         </Button>
+        
+        {/* Bug button for torrent setup */}
+        {settings.realDebridApiKey && (
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => setIsTorrentModalOpen(true)}
+            title="Configura torrent album"
+          >
+            <Bug className="w-5 h-5" />
+          </Button>
+        )}
       </div>
 
       {/* Track List */}
@@ -153,6 +167,18 @@ const Album: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Album Torrent Modal */}
+      {album && (
+        <AlbumTorrentModal
+          isOpen={isTorrentModalOpen}
+          onClose={() => setIsTorrentModalOpen(false)}
+          albumId={album.id}
+          albumTitle={album.title}
+          artistName={album.artist}
+          tracks={displayTracks}
+        />
+      )}
     </div>
   );
 };

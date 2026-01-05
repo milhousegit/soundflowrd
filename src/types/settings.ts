@@ -9,6 +9,7 @@ export interface AppSettings {
   };
   audioQuality: 'high' | 'medium' | 'low';
   crossfade: number; // seconds, 0 = off
+  realDebridApiKey?: string;
 }
 
 export const defaultSettings: AppSettings = {
@@ -22,6 +23,7 @@ export const defaultSettings: AppSettings = {
   },
   audioQuality: 'high',
   crossfade: 0,
+  realDebridApiKey: undefined,
 };
 
 export const translations = {

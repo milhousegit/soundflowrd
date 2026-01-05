@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useRef, useCallback, ReactN
 import { Track, PlayerState } from '@/types/music';
 import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
 import { useAuth } from './AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PlayerContextType extends PlayerState {
   play: (track?: Track) => void;
@@ -182,7 +183,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     await searchForStreams(query);
   }, [searchForStreams]);
 
-  const playTrack = useCallback((track: Track, queue?: Track[]) => {
+  const playTrack = useCallback(async (track: Track, queue?: Track[]) => {
     setState(prev => ({
       ...prev,
       currentTrack: track,
@@ -193,7 +194,62 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       progress: 0,
     }));
 
-    // Search for streams via Real-Debrid with artist + title
+    // First check if we have a saved mapping for this track
+    if (credentials?.realDebridApiKey && track.albumId) {
+      try {
+        const { data: trackMapping } = await supabase
+          .from('track_file_mappings')
+          .select('*, album_torrent_mappings!inner(*)')
+          .eq('track_id', track.id)
+          .maybeSingle();
+
+        if (trackMapping) {
+          console.log('Found saved mapping for track:', track.title, trackMapping);
+          
+          // Use the saved torrent and file mapping
+          const torrentId = trackMapping.album_torrent_mappings.torrent_id;
+          const fileId = trackMapping.file_id;
+          
+          // Select and play this specific file
+          const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
+          
+          if (result.streams.length > 0) {
+            setAlternativeStreams(result.streams);
+            setCurrentStreamId(result.streams[0].id);
+            
+            if (audioRef.current && result.streams[0].streamUrl) {
+              audioRef.current.src = result.streams[0].streamUrl;
+              audioRef.current.play();
+              setState(prev => ({ ...prev, isPlaying: true }));
+            }
+            
+            // Save to recently played
+            const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
+            const filtered = recent.filter((t: Track) => t.id !== track.id);
+            const updated = [track, ...filtered].slice(0, 20);
+            localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+            return;
+          } else if (result.status === 'downloading' || result.status === 'queued') {
+            // Torrent is downloading, show progress
+            setAvailableTorrents([{
+              torrentId,
+              title: trackMapping.album_torrent_mappings.torrent_title,
+              size: 'Unknown',
+              source: 'Saved',
+              seeders: 0,
+              status: result.status,
+              progress: result.progress,
+              files: [],
+              hasLinks: false,
+            }]);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check saved mapping:', error);
+      }
+    }
+
+    // No saved mapping, search for streams via Real-Debrid with artist + title
     searchForStreams(`${track.artist} ${track.title}`);
 
     // If track has a stream URL, play it
@@ -207,7 +263,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const filtered = recent.filter((t: Track) => t.id !== track.id);
     const updated = [track, ...filtered].slice(0, 20);
     localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
-  }, [searchForStreams]);
+  }, [searchForStreams, credentials]);
 
   const selectStream = useCallback((stream: StreamResult) => {
     setCurrentStreamId(stream.id);

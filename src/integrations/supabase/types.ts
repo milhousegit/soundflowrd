@@ -14,7 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      album_torrent_mappings: {
+        Row: {
+          album_id: string
+          album_title: string
+          artist_name: string
+          created_at: string
+          id: string
+          torrent_id: string
+          torrent_title: string
+          updated_at: string
+        }
+        Insert: {
+          album_id: string
+          album_title: string
+          artist_name: string
+          created_at?: string
+          id?: string
+          torrent_id: string
+          torrent_title: string
+          updated_at?: string
+        }
+        Update: {
+          album_id?: string
+          album_title?: string
+          artist_name?: string
+          created_at?: string
+          id?: string
+          torrent_id?: string
+          torrent_title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      track_file_mappings: {
+        Row: {
+          album_mapping_id: string
+          created_at: string
+          file_id: number
+          file_name: string
+          file_path: string
+          id: string
+          track_id: string
+          track_position: number | null
+          track_title: string
+        }
+        Insert: {
+          album_mapping_id: string
+          created_at?: string
+          file_id: number
+          file_name: string
+          file_path: string
+          id?: string
+          track_id: string
+          track_position?: number | null
+          track_title: string
+        }
+        Update: {
+          album_mapping_id?: string
+          created_at?: string
+          file_id?: number
+          file_name?: string
+          file_path?: string
+          id?: string
+          track_id?: string
+          track_position?: number | null
+          track_title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "track_file_mappings_album_mapping_id_fkey"
+            columns: ["album_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "album_torrent_mappings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
