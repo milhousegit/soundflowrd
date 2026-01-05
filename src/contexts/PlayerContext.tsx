@@ -3,6 +3,7 @@ import { Track, PlayerState } from '@/types/music';
 import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface PlayerContextType extends PlayerState {
   play: (track?: Track) => void;
@@ -27,6 +28,29 @@ interface PlayerContextType extends PlayerState {
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
+// Helper function to update Media Session metadata
+const updateMediaSessionMetadata = (track: Track | null, isPlaying: boolean) => {
+  if (!('mediaSession' in navigator) || !track) return;
+
+  const coverUrl = track.coverUrl;
+
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: track.title,
+    artist: track.artist,
+    album: track.album || '',
+    artwork: coverUrl ? [
+      { src: coverUrl, sizes: '96x96', type: 'image/jpeg' },
+      { src: coverUrl, sizes: '128x128', type: 'image/jpeg' },
+      { src: coverUrl, sizes: '192x192', type: 'image/jpeg' },
+      { src: coverUrl, sizes: '256x256', type: 'image/jpeg' },
+      { src: coverUrl, sizes: '384x384', type: 'image/jpeg' },
+      { src: coverUrl, sizes: '512x512', type: 'image/jpeg' },
+    ] : [],
+  });
+
+  navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+};
+
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials } = useAuth();
@@ -44,6 +68,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     queue: [],
     queueIndex: 0,
   });
+
+  // Update Media Session when track or playing state changes
+  useEffect(() => {
+    updateMediaSessionMetadata(state.currentTrack, state.isPlaying);
+  }, [state.currentTrack, state.isPlaying]);
 
   useEffect(() => {
     audioRef.current = new Audio();
@@ -67,6 +96,30 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
 
+    // Setup Media Session action handlers
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', () => {
+        audio.play();
+        setState(prev => ({ ...prev, isPlaying: true }));
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        audio.pause();
+        setState(prev => ({ ...prev, isPlaying: false }));
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        // Will be overwritten with actual previous function
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        // Will be overwritten with actual next function
+      });
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime !== undefined) {
+          audio.currentTime = details.seekTime;
+          setState(prev => ({ ...prev, progress: details.seekTime! }));
+        }
+      });
+    }
+
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
@@ -76,7 +129,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
   }, []);
 
-  const searchForStreams = useCallback(async (query: string) => {
+  const searchForStreams = useCallback(async (query: string, showNoResultsToast = false) => {
     if (!credentials?.realDebridApiKey) return;
     
     setIsSearchingStreams(true);
@@ -102,9 +155,19 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           audioRef.current.play();
           setState(prev => ({ ...prev, isPlaying: true }));
         }
+      } else if (showNoResultsToast && result.torrents.length === 0) {
+        // Show toast when no content found and it was requested
+        toast.error('Nessun contenuto trovato', {
+          description: 'Non è stato trovato nessun risultato per questa traccia.',
+        });
       }
     } catch (error) {
       console.error('Failed to search streams:', error);
+      if (showNoResultsToast) {
+        toast.error('Errore nella ricerca', {
+          description: 'Si è verificato un errore durante la ricerca.',
+        });
+      }
     } finally {
       setIsSearchingStreams(false);
     }
@@ -180,7 +243,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [credentials, currentStreamId]);
 
   const manualSearch = useCallback(async (query: string) => {
-    await searchForStreams(query);
+    await searchForStreams(query, true);
   }, [searchForStreams]);
 
   const playTrack = useCallback(async (track: Track, queue?: Track[]) => {
@@ -250,7 +313,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     // No saved mapping, search for streams via Real-Debrid with artist + title
-    searchForStreams(`${track.artist} ${track.title}`);
+    // Pass true to show toast when no results found
+    searchForStreams(`${track.artist} ${track.title}`, true);
 
     // If track has a stream URL, play it
     if (audioRef.current && track.streamUrl) {
@@ -346,6 +410,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const clearQueue = useCallback(() => {
     setState(prev => ({ ...prev, queue: [], queueIndex: 0 }));
   }, []);
+
+  // Update Media Session action handlers when next/previous change
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        previous();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        next();
+      });
+    }
+  }, [next, previous]);
 
   return (
     <PlayerContext.Provider
