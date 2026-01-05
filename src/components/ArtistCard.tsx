@@ -9,9 +9,10 @@ import { useTap } from '@/hooks/useTap';
 
 interface ArtistCardProps {
   artist: Artist;
+  showFavorite?: boolean;
 }
 
-const ArtistCard: React.FC<ArtistCardProps> = ({ artist }) => {
+const ArtistCard: React.FC<ArtistCardProps> = ({ artist, showFavorite = false }) => {
   const navigate = useNavigate();
   const { t } = useSettings();
 
@@ -57,12 +58,14 @@ const ArtistCard: React.FC<ArtistCardProps> = ({ artist }) => {
       {/* Info */}
       <div className="flex items-center justify-center gap-1">
         <h3 className="font-semibold text-sm md:text-base text-foreground truncate text-center">{artist.name}</h3>
-        <FavoriteButton
-          itemType="artist"
-          item={artist}
-          size="sm"
-          className="opacity-0 group-hover:opacity-100 transition-opacity"
-        />
+        {showFavorite && (
+          <FavoriteButton
+            itemType="artist"
+            item={artist}
+            size="sm"
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
+          />
+        )}
       </div>
       <p className="text-xs md:text-sm text-muted-foreground text-center">{t('artist')}</p>
     </div>
