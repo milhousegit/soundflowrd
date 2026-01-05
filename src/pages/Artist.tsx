@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Play, Shuffle, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
 import FavoriteButton from '@/components/FavoriteButton';
@@ -82,7 +83,11 @@ const Artist: React.FC = () => {
   };
 
   return (
-    <div className="pb-32 animate-fade-in">
+    <div className="pb-32 animate-fade-in relative">
+      {/* Back button mobile */}
+      <div className="absolute top-4 left-4 z-10">
+        <BackButton />
+      </div>
       {/* Hero Section */}
       <div className="relative h-72 md:h-80 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/20 to-background" />

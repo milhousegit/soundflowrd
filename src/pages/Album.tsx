@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Loader2, Bug, CloudDownload, Cloud } from 'lucide-react';
+import { Play, Clock, Music, Loader2, CloudDownload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import AlbumTorrentModal from '@/components/AlbumTorrentModal';
 import FavoriteButton from '@/components/FavoriteButton';
@@ -97,9 +98,14 @@ const Album: React.FC = () => {
   };
 
   return (
-    <div className="pb-32 animate-fade-in">
+    <div className="pb-32 animate-fade-in relative">
+      {/* Back button mobile */}
+      <div className="absolute top-4 left-4 z-10">
+        <BackButton />
+      </div>
+      
       {/* Header */}
-      <div className="relative p-4 md:p-8 pt-8 md:pt-16 flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-8 bg-gradient-to-b from-primary/10 to-transparent">
+      <div className="relative p-4 md:p-8 pt-12 md:pt-16 flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-8 bg-gradient-to-b from-primary/10 to-transparent">
         {/* Cover */}
         <div className="w-40 h-40 md:w-56 md:h-56 rounded-xl overflow-hidden bg-muted shadow-2xl flex-shrink-0">
           {album.coverUrl ? (
