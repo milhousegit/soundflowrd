@@ -238,10 +238,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           const normalizedTitle = normalizeForMatch(track.title);
           addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
           
-          // Find a file that contains the track title
+          // Find a file that contains the track title (check both filename and path)
           const matchingFile = torrent.files.find(file => {
-            const normalizedFileName = normalizeForMatch(file.filename);
-            return normalizedFileName.includes(normalizedTitle);
+            const normalizedFileName = normalizeForMatch(file.filename || '');
+            const normalizedPath = normalizeForMatch(file.path || '');
+            const matches = normalizedFileName.includes(normalizedTitle) || normalizedPath.includes(normalizedTitle);
+            if (matches) {
+              addDebugLog('Match trovato', `"${file.filename}" contiene "${track.title}"`, 'success');
+            }
+            return matches;
           });
           
           if (matchingFile) {
@@ -383,10 +388,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             if (torrent.files && torrent.files.length > 0) {
               addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
               
-              // Find a file that matches the track title
+              // Find a file that matches the track title (check both filename and path)
               const matchingFile = torrent.files.find(file => {
-                const normalizedFileName = normalizeForMatch(file.filename);
-                return normalizedFileName.includes(normalizedTitle);
+                const normalizedFileName = normalizeForMatch(file.filename || '');
+                const normalizedPath = normalizeForMatch(file.path || '');
+                const matches = normalizedFileName.includes(normalizedTitle) || normalizedPath.includes(normalizedTitle);
+                if (matches) {
+                  addDebugLog('Match trovato', `"${file.filename}" contiene "${track.title}"`, 'success');
+                }
+                return matches;
               });
               
               // Or if there's only one file, use it
