@@ -71,12 +71,73 @@ async function searchApibay(query: string): Promise<TorrentResult[]> {
   return results;
 }
 
+// Search Il Corsaro Nero (Italian torrent site)
+async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
+  const results: TorrentResult[] = [];
+  
+  try {
+    // Il Corsaro Nero search - try multiple domains
+    const domains = ['ilcorsaronero.link', 'ilcorsaronero.info', 'ilcorsaronero.ch'];
+    
+    for (const domain of domains) {
+      try {
+        const searchUrl = `https://${domain}/argh.php?search=${encodeURIComponent(query)}`;
+        console.log('Searching Corsaro Nero:', domain);
+        
+        const response = await fetch(searchUrl, {
+          headers: { 
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+          },
+        });
+        
+        if (response.ok) {
+          const html = await response.text();
+          
+          // Extract magnet links from page
+          const magnetRegex = /magnet:\?xt=urn:btih:[a-zA-Z0-9]+[^"'\s<>]*/gi;
+          const magnets = html.match(magnetRegex) || [];
+          
+          // Extract titles - look for links with torrent info
+          const titleRegex = /<a[^>]*href="[^"]*magnet[^"]*"[^>]*>([^<]+)<\/a>/gi;
+          const rowRegex = /<tr[^>]*class="[^"]*odd|even[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
+          
+          // Simple extraction - get unique magnets
+          const uniqueMagnets = [...new Set(magnets)];
+          
+          for (let i = 0; i < Math.min(uniqueMagnets.length, 5); i++) {
+            const magnet = uniqueMagnets[i];
+            const dnMatch = magnet.match(/dn=([^&]+)/);
+            const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : `Corsaro Result ${i + 1}`;
+            
+            results.push({
+              title,
+              magnet,
+              size: 'Unknown',
+              seeders: 0,
+              source: 'CNero',
+            });
+          }
+          
+          if (results.length > 0) break; // Found results, stop trying other domains
+        }
+      } catch (domainError) {
+        console.log(`Corsaro Nero ${domain} failed:`, domainError);
+        continue;
+      }
+    }
+  } catch (error) {
+    console.error('Corsaro Nero error:', error);
+  }
+  
+  return results;
+}
+
 // Search 1337x via API proxy
 async function search1337x(query: string): Promise<TorrentResult[]> {
   const results: TorrentResult[] = [];
   
   try {
-    // Use 1337x proxy API
     const searchUrl = `https://1337x.wtf/search/${encodeURIComponent(query)}/1/`;
     console.log('Searching 1337x:', query);
     
@@ -89,23 +150,17 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
     
     if (response.ok) {
       const html = await response.text();
-      
-      // Extract torrent links from search results
       const linkRegex = /href="\/torrent\/(\d+)\/([^"]+)"/g;
       const matches = [...html.matchAll(linkRegex)];
       
-      // Get first 5 results
-      for (const match of matches.slice(0, 5)) {
+      for (const match of matches.slice(0, 3)) {
         const torrentId = match[1];
         const torrentSlug = match[2];
         
         try {
-          // Fetch individual torrent page to get magnet
           const torrentUrl = `https://1337x.wtf/torrent/${torrentId}/${torrentSlug}/`;
           const torrentRes = await fetch(torrentUrl, {
-            headers: { 
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            },
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
           });
           
           if (torrentRes.ok) {
@@ -113,9 +168,8 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
             const magnetMatch = torrentHtml.match(/magnet:\?xt=urn:btih:[^"]+/);
             
             if (magnetMatch) {
-              const title = torrentSlug.replace(/-/g, ' ');
               results.push({
-                title,
+                title: torrentSlug.replace(/-/g, ' '),
                 magnet: magnetMatch[0],
                 size: 'Unknown',
                 seeders: 0,
@@ -124,7 +178,7 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
             }
           }
         } catch (e) {
-          console.error('Error fetching torrent:', e);
+          console.error('1337x torrent fetch error:', e);
         }
       }
     }
@@ -140,18 +194,19 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
   console.log('Searching all sources for:', query);
   
   // Search multiple sources in parallel
-  const [apibayResults] = await Promise.all([
-    searchApibay(query),
-    // 1337x often blocks server IPs, so we'll rely mainly on apibay
+  const [apibayResults, corsaroResults] = await Promise.all([
+    searchApibay(query).catch(() => []),
+    searchCorsaroNero(query).catch(() => []),
+    // 1337x often blocks server IPs
     // search1337x(query).catch(() => []),
   ]);
   
-  const allResults = [...apibayResults];
+  const allResults = [...apibayResults, ...corsaroResults];
   
-  // Sort by seeders
+  // Sort by seeders (TPB results have seeders, others don't)
   allResults.sort((a, b) => b.seeders - a.seeders);
   
-  console.log(`Found ${allResults.length} total torrents`);
+  console.log(`Found ${allResults.length} total torrents (TPB: ${apibayResults.length}, CNero: ${corsaroResults.length})`);
   return allResults.slice(0, 10);
 }
 
