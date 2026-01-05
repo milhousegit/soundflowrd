@@ -42,7 +42,7 @@ export async function getArtist(id: string): Promise<Artist & { releases: Album[
 
 export async function getArtistTopTracks(id: string): Promise<Track[]> {
   const { data, error } = await supabase.functions.invoke('musicbrainz', {
-    body: { action: 'get-artist-recordings', id, limit: 10 },
+    body: { action: 'get-artist-recordings', id, limit: 5 },
   });
 
   if (error) throw error;

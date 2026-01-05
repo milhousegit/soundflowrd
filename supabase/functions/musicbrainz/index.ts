@@ -250,13 +250,23 @@ serve(async (req) => {
       }
 
       case 'get-artist-recordings': {
-        // Get popular recordings by this artist
-        const url = `${MUSICBRAINZ_API}/recording?artist=${id}&limit=${limit}&fmt=json`;
+        // Get popular recordings by this artist, sorted by rating (popularity)
+        // MusicBrainz allows inc=ratings to get popularity data
+        const url = `${MUSICBRAINZ_API}/recording?artist=${id}&inc=ratings&limit=50&fmt=json`;
         const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         
-        // Get album covers for the recordings
-        const recordings = await Promise.all((data.recordings || []).slice(0, limit).map(async (r: any) => {
+        // Sort by rating (popularity) - higher rating = more popular
+        const sortedRecordings = (data.recordings || [])
+          .sort((a: any, b: any) => {
+            const ratingA = a.rating?.value || 0;
+            const ratingB = b.rating?.value || 0;
+            return ratingB - ratingA;
+          })
+          .slice(0, limit); // Limit after sorting
+        
+        // Get album covers for the top recordings
+        const recordings = await Promise.all(sortedRecordings.map(async (r: any) => {
           let coverUrl;
           const albumId = r.releases?.[0]?.id;
           if (albumId) {
@@ -278,6 +288,7 @@ serve(async (req) => {
             album: r.releases?.[0]?.title,
             albumId: r.releases?.[0]?.id,
             coverUrl,
+            rating: r.rating?.value || 0,
           };
         }));
         
