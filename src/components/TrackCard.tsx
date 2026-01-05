@@ -33,16 +33,16 @@ const TrackCard: React.FC<TrackCardProps> = ({ track, queue, showArtist = true, 
     <div
       onClick={handleClick}
       className={cn(
-        "group flex items-center gap-4 p-3 rounded-lg cursor-pointer transition-all duration-200",
-        "hover:bg-secondary/80",
+        "group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200",
+        "hover:bg-secondary/80 active:scale-[0.99]",
         isCurrentTrack && "bg-secondary"
       )}
     >
       {/* Index or Play button */}
-      <div className="w-8 h-8 flex items-center justify-center">
+      <div className="w-6 md:w-8 h-6 md:h-8 flex items-center justify-center flex-shrink-0">
         {index !== undefined && (
           <span className={cn(
-            "text-sm text-muted-foreground group-hover:hidden",
+            "text-xs md:text-sm text-muted-foreground group-hover:hidden",
             isCurrentTrack && "text-primary hidden"
           )}>
             {index + 1}
@@ -62,7 +62,7 @@ const TrackCard: React.FC<TrackCardProps> = ({ track, queue, showArtist = true, 
       </div>
 
       {/* Cover */}
-      <div className="w-10 h-10 rounded bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
+      <div className="w-10 h-10 md:w-10 md:h-10 rounded bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
         {track.coverUrl ? (
           <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover" />
         ) : (
@@ -73,18 +73,18 @@ const TrackCard: React.FC<TrackCardProps> = ({ track, queue, showArtist = true, 
       {/* Info */}
       <div className="flex-1 min-w-0">
         <p className={cn(
-          "font-medium truncate",
+          "font-medium text-sm md:text-base truncate",
           isCurrentTrack ? "text-primary" : "text-foreground"
         )}>
           {track.title}
         </p>
         {showArtist && (
-          <p className="text-sm text-muted-foreground truncate">{track.artist}</p>
+          <p className="text-xs md:text-sm text-muted-foreground truncate">{track.artist}</p>
         )}
       </div>
 
       {/* Duration */}
-      <span className="text-sm text-muted-foreground">
+      <span className="text-xs md:text-sm text-muted-foreground flex-shrink-0">
         {formatDuration(track.duration)}
       </span>
     </div>

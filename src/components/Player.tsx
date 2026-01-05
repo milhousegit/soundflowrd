@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { usePlayer } from '@/contexts/PlayerContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import BugsModal from './BugsModal';
 import { 
   Play, 
   Pause, 
@@ -9,9 +11,13 @@ import {
   SkipForward, 
   Volume2, 
   VolumeX,
-  Music
+  Music,
+  Bug,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { StreamResult } from '@/lib/realdebrid';
 
 const formatTime = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -30,107 +36,251 @@ const Player: React.FC = () => {
     next, 
     previous, 
     seek,
-    setVolume 
+    setVolume,
+    alternativeStreams,
+    selectStream,
+    currentStreamId,
   } = usePlayer();
+  const { t } = useSettings();
+  
+  const [showBugsModal, setShowBugsModal] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   if (!currentTrack) return null;
 
-  return (
-    <div className="fixed bottom-0 left-0 right-0 h-24 glass border-t border-border z-50 animate-slide-up">
-      <div className="h-full flex items-center px-6 gap-6">
-        {/* Track Info */}
-        <div className="flex items-center gap-4 w-72 min-w-0">
-          <div className="w-14 h-14 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">
-            {currentTrack.coverUrl ? (
-              <img 
-                src={currentTrack.coverUrl} 
-                alt={currentTrack.album}
-                className={cn(
-                  "w-full h-full object-cover",
-                  isPlaying && "animate-spin-slow"
-                )}
-                style={{ animationDuration: '8s' }}
-              />
-            ) : (
-              <Music className="w-6 h-6 text-muted-foreground" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
-            <p className="text-sm text-muted-foreground truncate">{currentTrack.artist}</p>
-          </div>
-        </div>
+  const handleSelectStream = (stream: StreamResult) => {
+    selectStream(stream);
+    setShowBugsModal(false);
+  };
 
-        {/* Controls */}
-        <div className="flex-1 flex flex-col items-center gap-2 max-w-2xl">
-          <div className="flex items-center gap-4">
-            <Button 
-              variant="playerSecondary" 
-              size="iconSm"
-              onClick={previous}
-            >
-              <SkipBack className="w-5 h-5" />
+  // Mobile expanded view
+  if (isExpanded) {
+    return (
+      <>
+        <div className="fixed inset-0 z-50 bg-background flex flex-col md:hidden animate-slide-up">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4">
+            <Button variant="ghost" size="iconSm" onClick={() => setIsExpanded(false)}>
+              <ChevronDown className="w-6 h-6" />
             </Button>
+            <span className="text-sm text-muted-foreground">Now Playing</span>
             <Button 
-              variant="player" 
-              size="player"
-              onClick={toggle}
+              variant="ghost" 
+              size="iconSm"
+              onClick={() => setShowBugsModal(true)}
+              className="text-muted-foreground hover:text-destructive"
             >
-              {isPlaying ? (
-                <Pause className="w-5 h-5" />
+              <Bug className="w-5 h-5" />
+            </Button>
+          </div>
+
+          {/* Cover */}
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl">
+              {currentTrack.coverUrl ? (
+                <img 
+                  src={currentTrack.coverUrl} 
+                  alt={currentTrack.album}
+                  className={cn(
+                    "w-full h-full object-cover",
+                    isPlaying && "animate-spin-slow"
+                  )}
+                  style={{ animationDuration: '20s' }}
+                />
               ) : (
-                <Play className="w-5 h-5 ml-0.5" />
+                <div className="w-full h-full flex items-center justify-center">
+                  <Music className="w-24 h-24 text-muted-foreground" />
+                </div>
               )}
-            </Button>
-            <Button 
-              variant="playerSecondary" 
-              size="iconSm"
-              onClick={next}
-            >
-              <SkipForward className="w-5 h-5" />
-            </Button>
+            </div>
           </div>
 
-          <div className="w-full flex items-center gap-3">
-            <span className="text-xs text-muted-foreground w-10 text-right">
-              {formatTime(progress)}
-            </span>
+          {/* Track Info */}
+          <div className="px-8 text-center">
+            <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
+            <p className="text-muted-foreground truncate">{currentTrack.artist}</p>
+          </div>
+
+          {/* Progress */}
+          <div className="px-8 py-4">
             <Slider
               value={[progress]}
               max={duration || 100}
               step={1}
               onValueChange={([value]) => seek(value)}
-              className="flex-1"
             />
-            <span className="text-xs text-muted-foreground w-10">
-              {formatTime(duration)}
-            </span>
+            <div className="flex justify-between mt-2">
+              <span className="text-xs text-muted-foreground">{formatTime(progress)}</span>
+              <span className="text-xs text-muted-foreground">{formatTime(duration)}</span>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center justify-center gap-8 p-8 pb-12">
+            <Button variant="playerSecondary" size="iconLg" onClick={previous}>
+              <SkipBack className="w-8 h-8" />
+            </Button>
+            <Button variant="player" className="h-16 w-16" onClick={toggle}>
+              {isPlaying ? (
+                <Pause className="w-8 h-8" />
+              ) : (
+                <Play className="w-8 h-8 ml-1" />
+              )}
+            </Button>
+            <Button variant="playerSecondary" size="iconLg" onClick={next}>
+              <SkipForward className="w-8 h-8" />
+            </Button>
           </div>
         </div>
+        
+        <BugsModal
+          isOpen={showBugsModal}
+          onClose={() => setShowBugsModal(false)}
+          alternatives={alternativeStreams}
+          onSelect={handleSelectStream}
+          currentStreamId={currentStreamId}
+        />
+      </>
+    );
+  }
 
-        {/* Volume */}
-        <div className="flex items-center gap-3 w-40">
+  return (
+    <>
+      {/* Mobile mini player */}
+      <div 
+        className="fixed bottom-14 left-0 right-0 h-16 glass border-t border-border z-40 md:hidden"
+        onClick={() => setIsExpanded(true)}
+      >
+        <div className="h-full flex items-center px-4 gap-3">
+          <div className="w-12 h-12 rounded-lg bg-secondary overflow-hidden flex-shrink-0">
+            {currentTrack.coverUrl ? (
+              <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Music className="w-5 h-5 text-muted-foreground" />
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-foreground truncate text-sm">{currentTrack.title}</p>
+            <p className="text-xs text-muted-foreground truncate">{currentTrack.artist}</p>
+          </div>
           <Button 
             variant="playerSecondary" 
             size="iconSm"
-            onClick={() => setVolume(volume === 0 ? 0.7 : 0)}
+            onClick={(e) => { e.stopPropagation(); toggle(); }}
           >
-            {volume === 0 ? (
-              <VolumeX className="w-5 h-5" />
-            ) : (
-              <Volume2 className="w-5 h-5" />
-            )}
+            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
           </Button>
-          <Slider
-            value={[volume * 100]}
-            max={100}
-            step={1}
-            onValueChange={([value]) => setVolume(value / 100)}
-            className="flex-1"
+          <ChevronUp className="w-5 h-5 text-muted-foreground" />
+        </div>
+        {/* Progress bar */}
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-secondary">
+          <div 
+            className="h-full bg-primary transition-all"
+            style={{ width: `${(progress / (duration || 1)) * 100}%` }}
           />
         </div>
       </div>
-    </div>
+
+      {/* Desktop player */}
+      <div className="fixed bottom-0 left-0 right-0 h-24 glass border-t border-border z-50 animate-slide-up hidden md:block">
+        <div className="h-full flex items-center px-6 gap-6">
+          {/* Track Info */}
+          <div className="flex items-center gap-4 w-72 min-w-0">
+            <div className="w-14 h-14 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">
+              {currentTrack.coverUrl ? (
+                <img 
+                  src={currentTrack.coverUrl} 
+                  alt={currentTrack.album}
+                  className={cn(
+                    "w-full h-full object-cover",
+                    isPlaying && "animate-spin-slow"
+                  )}
+                  style={{ animationDuration: '8s' }}
+                />
+              ) : (
+                <Music className="w-6 h-6 text-muted-foreground" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
+              <p className="text-sm text-muted-foreground truncate">{currentTrack.artist}</p>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex-1 flex flex-col items-center gap-2 max-w-2xl">
+            <div className="flex items-center gap-4">
+              <Button variant="playerSecondary" size="iconSm" onClick={previous}>
+                <SkipBack className="w-5 h-5" />
+              </Button>
+              <Button variant="player" size="player" onClick={toggle}>
+                {isPlaying ? (
+                  <Pause className="w-5 h-5" />
+                ) : (
+                  <Play className="w-5 h-5 ml-0.5" />
+                )}
+              </Button>
+              <Button variant="playerSecondary" size="iconSm" onClick={next}>
+                <SkipForward className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <div className="w-full flex items-center gap-3">
+              <span className="text-xs text-muted-foreground w-10 text-right">
+                {formatTime(progress)}
+              </span>
+              <Slider
+                value={[progress]}
+                max={duration || 100}
+                step={1}
+                onValueChange={([value]) => seek(value)}
+                className="flex-1"
+              />
+              <span className="text-xs text-muted-foreground w-10">
+                {formatTime(duration)}
+              </span>
+            </div>
+          </div>
+
+          {/* Volume & Bugs */}
+          <div className="flex items-center gap-3 w-48">
+            <Button 
+              variant="playerSecondary" 
+              size="iconSm"
+              onClick={() => setShowBugsModal(true)}
+              className="text-muted-foreground hover:text-destructive"
+              title={t('bugs')}
+            >
+              <Bug className="w-5 h-5" />
+            </Button>
+            <Button 
+              variant="playerSecondary" 
+              size="iconSm"
+              onClick={() => setVolume(volume === 0 ? 0.7 : 0)}
+            >
+              {volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </Button>
+            <Slider
+              value={[volume * 100]}
+              max={100}
+              step={1}
+              onValueChange={([value]) => setVolume(value / 100)}
+              className="flex-1"
+            />
+          </div>
+        </div>
+      </div>
+
+      <BugsModal
+        isOpen={showBugsModal}
+        onClose={() => setShowBugsModal(false)}
+        alternatives={alternativeStreams}
+        onSelect={handleSelectStream}
+        currentStreamId={currentStreamId}
+      />
+    </>
   );
 };
 

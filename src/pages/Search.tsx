@@ -1,11 +1,14 @@
-import React, { useState, useMemo } from 'react';
-import { Search as SearchIcon, X } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Search as SearchIcon, X, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
-import { mockTracks, mockAlbums, mockArtists } from '@/data/mockData';
+import { useSettings } from '@/contexts/SettingsContext';
+import { searchAll } from '@/lib/musicbrainz';
+import { Track, Album, Artist } from '@/types/music';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const genres = [
   { name: 'Pop', color: 'from-pink-500 to-rose-500' },
@@ -20,46 +23,59 @@ const genres = [
 
 const Search: React.FC = () => {
   const [query, setQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [results, setResults] = useState<{
+    artists: Artist[];
+    albums: Album[];
+    tracks: Track[];
+  } | null>(null);
+  const { t } = useSettings();
 
-  const results = useMemo(() => {
-    if (!query.trim()) return null;
+  const performSearch = useCallback(async (searchQuery: string) => {
+    if (!searchQuery.trim()) {
+      setResults(null);
+      return;
+    }
 
-    const q = query.toLowerCase();
-    return {
-      tracks: mockTracks.filter(t => 
-        t.title.toLowerCase().includes(q) || 
-        t.artist.toLowerCase().includes(q)
-      ),
-      albums: mockAlbums.filter(a => 
-        a.title.toLowerCase().includes(q) || 
-        a.artist.toLowerCase().includes(q)
-      ),
-      artists: mockArtists.filter(a => 
-        a.name.toLowerCase().includes(q)
-      ),
-    };
-  }, [query]);
+    setIsLoading(true);
+    try {
+      const data = await searchAll(searchQuery);
+      setResults(data);
+    } catch (error) {
+      console.error('Search error:', error);
+      setResults({ artists: [], albums: [], tracks: [] });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const debouncedSearch = useDebounce(performSearch, 500);
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    debouncedSearch(value);
+  };
 
   return (
-    <div className="p-8 pb-32 animate-fade-in">
+    <div className="p-4 md:p-8 pb-32 animate-fade-in">
       {/* Search Header */}
-      <div className="max-w-2xl mb-8">
-        <h1 className="text-4xl font-bold text-foreground mb-6">Cerca</h1>
+      <div className="max-w-2xl mb-6 md:mb-8">
+        <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-4 md:mb-6">{t('search')}</h1>
         <div className="relative">
           <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Cosa vuoi ascoltare?"
+            placeholder={t('searchPlaceholder')}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="pl-12 pr-12 h-14 text-lg rounded-full bg-secondary"
+            onChange={(e) => handleQueryChange(e.target.value)}
+            className="pl-12 pr-12 h-12 md:h-14 text-base md:text-lg rounded-full bg-secondary"
           />
           {query && (
             <Button
               variant="ghost"
               size="iconSm"
               className="absolute right-3 top-1/2 -translate-y-1/2"
-              onClick={() => setQuery('')}
+              onClick={() => handleQueryChange('')}
             >
               <X className="w-5 h-5" />
             </Button>
@@ -67,15 +83,22 @@ const Search: React.FC = () => {
         </div>
       </div>
 
-      {/* Results or Browse */}
-      {results ? (
-        <div className="space-y-10">
+      {/* Loading */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      )}
+
+      {/* Results */}
+      {!isLoading && results && (
+        <div className="space-y-8 md:space-y-10">
           {/* Artists */}
           {results.artists.length > 0 && (
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-4">Artisti</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-                {results.artists.map((artist) => (
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">{t('artists')}</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+                {results.artists.slice(0, 6).map((artist) => (
                   <ArtistCard key={artist.id} artist={artist} />
                 ))}
               </div>
@@ -85,9 +108,9 @@ const Search: React.FC = () => {
           {/* Albums */}
           {results.albums.length > 0 && (
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-4">Album</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-                {results.albums.map((album) => (
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">{t('albums')}</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+                {results.albums.slice(0, 6).map((album) => (
                   <AlbumCard key={album.id} album={album} />
                 ))}
               </div>
@@ -97,9 +120,9 @@ const Search: React.FC = () => {
           {/* Tracks */}
           {results.tracks.length > 0 && (
             <section>
-              <h2 className="text-xl font-bold text-foreground mb-4">Brani</h2>
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">{t('tracks')}</h2>
               <div className="space-y-1">
-                {results.tracks.map((track, index) => (
+                {results.tracks.slice(0, 10).map((track, index) => (
                   <TrackCard 
                     key={track.id} 
                     track={track} 
@@ -112,25 +135,28 @@ const Search: React.FC = () => {
           )}
 
           {/* No results */}
-          {results.tracks.length === 0 && results.albums.length === 0 && results.artists.length === 0 && (
+          {results.tracks.length === 0 && results.albums.length === 0 && results.artists.length === 0 && query && (
             <div className="text-center py-12">
-              <p className="text-muted-foreground text-lg">
-                Nessun risultato per "{query}"
+              <p className="text-muted-foreground text-base md:text-lg">
+                {t('noResults')} "{query}"
               </p>
             </div>
           )}
         </div>
-      ) : (
+      )}
+
+      {/* Browse Genres */}
+      {!isLoading && !results && (
         <div>
-          <h2 className="text-xl font-bold text-foreground mb-6">Esplora per genere</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <h2 className="text-lg md:text-xl font-bold text-foreground mb-4 md:mb-6">{t('exploreByGenre')}</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             {genres.map((genre) => (
               <div
                 key={genre.name}
-                onClick={() => setQuery(genre.name)}
-                className={`aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} p-4 flex items-end cursor-pointer hover:scale-[1.02] transition-transform`}
+                onClick={() => handleQueryChange(genre.name)}
+                className={`aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} p-3 md:p-4 flex items-end cursor-pointer hover:scale-[1.02] transition-transform`}
               >
-                <h3 className="text-xl font-bold text-white">{genre.name}</h3>
+                <h3 className="text-lg md:text-xl font-bold text-white">{genre.name}</h3>
               </div>
             ))}
           </div>

@@ -2,20 +2,22 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Home, Search, Library, Settings, Headphones } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useSettings } from '@/contexts/SettingsContext';
 import { cn } from '@/lib/utils';
-
-const navItems = [
-  { icon: Home, label: 'Home', path: '/' },
-  { icon: Search, label: 'Cerca', path: '/search' },
-  { icon: Library, label: 'Libreria', path: '/library' },
-  { icon: Settings, label: 'Impostazioni', path: '/settings' },
-];
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
+  const { t } = useSettings();
+
+  const navItems = [
+    { icon: Home, label: t('home'), path: '/' },
+    { icon: Search, label: t('search'), path: '/search' },
+    { icon: Library, label: t('library'), path: '/library' },
+    { icon: Settings, label: t('settings'), path: '/settings' },
+  ];
 
   return (
-    <aside className="w-64 h-full bg-sidebar flex flex-col border-r border-border">
+    <aside className="hidden md:flex w-64 h-full bg-sidebar flex-col border-r border-border">
       {/* Logo */}
       <div className="p-6">
         <div className="flex items-center gap-3">
@@ -35,10 +37,7 @@ const Sidebar: React.FC = () => {
               <Button
                 variant={isActive ? 'navActive' : 'nav'}
                 size="nav"
-                className={cn(
-                  'w-full',
-                  isActive && 'shadow-glow'
-                )}
+                className={cn('w-full', isActive && 'shadow-glow')}
               >
                 <item.icon className="w-5 h-5" />
                 {item.label}
