@@ -254,6 +254,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               [matchingFile.id]
             );
             
+            // Check for errors
+            if (selectResult.error || selectResult.status === 'error') {
+              addDebugLog('Errore selezione file', selectResult.error || 'Errore sconosciuto', 'error');
+              continue; // Try next torrent
+            }
+            
             if (selectResult.streams.length > 0) {
               setAlternativeStreams(selectResult.streams);
               setCurrentStreamId(selectResult.streams[0].id);
@@ -270,10 +276,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               addDebugLog('Riproduzione', 'Stream avviato e mappatura salvata', 'success');
               
               return true;
-            } else if (selectResult.status === 'downloading') {
+            } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
               setDownloadProgress(selectResult.progress);
-              setDownloadStatus('downloading');
+              setDownloadStatus(selectResult.status);
               addDebugLog('Download', `Torrent in download: ${selectResult.progress}%`, 'warning');
+              // Don't return yet, show the download progress
+            } else {
+              addDebugLog('Stato torrent', `Stato: ${selectResult.status}, nessuno stream pronto`, 'warning');
             }
           } else {
             addDebugLog('Nessun match', `Nessun file corrisponde a "${track.title}"`, 'warning');

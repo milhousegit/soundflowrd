@@ -90,7 +90,7 @@ export async function selectFilesAndPlay(
   apiKey: string,
   torrentId: string,
   fileIds: number[]
-): Promise<{ status: string; progress: number; streams: StreamResult[] }> {
+): Promise<{ status: string; progress: number; streams: StreamResult[]; error?: string }> {
   console.log('Selecting files:', torrentId, fileIds);
   
   const { data, error } = await supabase.functions.invoke('real-debrid', {
@@ -99,7 +99,13 @@ export async function selectFilesAndPlay(
 
   if (error) {
     console.error('Select files error:', error);
-    return { status: 'error', progress: 0, streams: [] };
+    return { status: 'error', progress: 0, streams: [], error: error.message };
+  }
+
+  // Check if response contains an error field
+  if (data?.error) {
+    console.error('Select files error from API:', data.error);
+    return { status: 'error', progress: 0, streams: [], error: data.error };
   }
 
   return {
