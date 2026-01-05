@@ -324,15 +324,36 @@ async function selectFilesAndDownload(apiKey: string, torrentId: string, fileIds
   const rdHeaders = { 'Authorization': `Bearer ${apiKey}` };
   
   try {
+    // First check if torrent exists
+    const checkRes = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
+      headers: rdHeaders,
+    });
+    
+    if (!checkRes.ok) {
+      console.log('Torrent not found:', torrentId, checkRes.status);
+      return null;
+    }
+    
+    const checkInfo = await checkRes.json();
+    console.log('Torrent exists, status:', checkInfo.status, 'files:', checkInfo.files?.length);
+    
     // Select files
     const selectForm = new FormData();
     selectForm.append('files', fileIds.join(','));
     
-    await fetchWithRetry(`${RD_API}/torrents/selectFiles/${torrentId}`, {
+    const selectRes = await fetchWithRetry(`${RD_API}/torrents/selectFiles/${torrentId}`, {
       method: 'POST',
       headers: rdHeaders,
       body: selectForm,
     });
+    
+    // selectFiles returns 204 No Content on success
+    if (!selectRes.ok && selectRes.status !== 204) {
+      console.log('Failed to select files:', selectRes.status, await selectRes.text());
+      return null;
+    }
+    
+    console.log('Files selected successfully');
     
     // Wait a bit for processing
     await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -342,7 +363,10 @@ async function selectFilesAndDownload(apiKey: string, torrentId: string, fileIds
       headers: rdHeaders,
     });
     
-    if (!infoRes.ok) return null;
+    if (!infoRes.ok) {
+      console.log('Failed to get torrent info after selection:', infoRes.status);
+      return null;
+    }
     
     const info = await infoRes.json();
     console.log('After selection - Status:', info.status, 'Links:', info.links?.length);
@@ -499,13 +523,34 @@ serve(async (req) => {
       case 'selectFiles': {
         // Select specific files from a torrent and start download
         if (!torrentId || !fileIds || !Array.isArray(fileIds)) {
-          throw new Error('torrentId and fileIds are required');
+          console.log('Missing required params:', { torrentId, fileIds });
+          return new Response(JSON.stringify({ 
+            error: 'torrentId and fileIds are required',
+            status: 'error',
+            progress: 0,
+            streams: []
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200, // Return 200 with error in body to avoid 500
+          });
         }
+        
+        console.log('Selecting files for torrent:', torrentId, 'fileIds:', fileIds);
         
         const selectResult = await selectFilesAndDownload(apiKey, torrentId, fileIds);
         
         if (!selectResult) {
-          throw new Error('Failed to select files');
+          console.log('selectFilesAndDownload returned null');
+          // Return a graceful error instead of throwing
+          return new Response(JSON.stringify({ 
+            error: 'Failed to select files - torrent may no longer exist',
+            status: 'error',
+            progress: 0,
+            streams: []
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200, // Return 200 with error in body to avoid 500
+          });
         }
         
         // If links are available, unrestrict them
@@ -522,6 +567,8 @@ serve(async (req) => {
             }
           }
         }
+        
+        console.log('Select result:', selectResult.status, 'streams:', streams.length);
         
         result = {
           status: selectResult.status,
