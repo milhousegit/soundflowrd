@@ -1120,6 +1120,8 @@ async function selectFilesAndDownload(apiKey: string, torrentId: string, fileIds
   status: string;
   progress: number;
   links: string[];
+  files: { id: number; path: string; filename: string; selected: boolean }[];
+  selectedFileIds: number[];
 } | null> {
   const rdHeaders = { 'Authorization': `Bearer ${apiKey}` };
   
@@ -1169,12 +1171,29 @@ async function selectFilesAndDownload(apiKey: string, torrentId: string, fileIds
     }
     
     const info = await infoRes.json();
-    console.log('After selection - Status:', info.status, 'Links:', info.links?.length);
+    console.log('After selection - Status:', info.status, 'Links:', info.links?.length, 'Files:', info.files?.length);
+    
+    // Build file info with selection status
+    const files: { id: number; path: string; filename: string; selected: boolean }[] = [];
+    if (info.files && Array.isArray(info.files)) {
+      for (const file of info.files) {
+        const filepath = file.path || '';
+        const filename = filepath.split('/').pop() || filepath;
+        files.push({
+          id: file.id,
+          path: filepath,
+          filename,
+          selected: file.selected === 1,
+        });
+      }
+    }
     
     return {
       status: info.status || 'unknown',
       progress: info.progress || 0,
       links: info.links || [],
+      files,
+      selectedFileIds: fileIds,
     };
   } catch (error) {
     console.error('Select files error:', error);
@@ -1353,22 +1372,52 @@ serve(async (req) => {
           });
         }
         
-        // If links are available, unrestrict them
+        // If links are available, unrestrict them but only return the ones matching requested files
         const streams: any[] = [];
         
         if (selectResult.links.length > 0 && selectResult.status === 'downloaded') {
+          // Get the requested file names from the files list
+          const requestedFiles = selectResult.files.filter(f => 
+            selectResult.selectedFileIds.includes(f.id)
+          );
+          const requestedFileNames = requestedFiles.map(f => f.filename.toLowerCase());
+          
+          console.log('Requested files:', requestedFileNames);
+          
           for (const rdLink of selectResult.links) {
             const stream = await unrestrictAndGetStream(apiKey, rdLink);
             if (stream) {
-              streams.push({
-                ...stream,
-                source: 'Real-Debrid',
-              });
+              // Check if this stream matches one of the requested files
+              const streamTitleLower = stream.title.toLowerCase();
+              const matchesRequested = requestedFileNames.some(fn => 
+                streamTitleLower === fn || 
+                streamTitleLower.includes(fn.replace(/\.[^.]+$/, '')) ||
+                fn.includes(streamTitleLower.replace(/\.[^.]+$/, ''))
+              );
+              
+              if (matchesRequested || requestedFileNames.length === 0) {
+                console.log('Stream matches requested file:', stream.title);
+                streams.push({
+                  ...stream,
+                  source: 'Real-Debrid',
+                });
+              } else {
+                console.log('Stream does NOT match requested files:', stream.title, 'vs', requestedFileNames);
+              }
+            }
+          }
+          
+          // If no streams matched (shouldn't happen but just in case), return all
+          if (streams.length === 0 && selectResult.links.length > 0) {
+            console.log('No streams matched, returning first link as fallback');
+            const fallbackStream = await unrestrictAndGetStream(apiKey, selectResult.links[0]);
+            if (fallbackStream) {
+              streams.push({ ...fallbackStream, source: 'Real-Debrid' });
             }
           }
         }
         
-        console.log('Select result:', selectResult.status, 'streams:', streams.length);
+        console.log('Select result:', selectResult.status, 'streams:', streams.length, 'of', selectResult.links.length, 'total links');
         
         result = {
           status: selectResult.status,
