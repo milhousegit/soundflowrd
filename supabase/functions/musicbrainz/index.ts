@@ -198,30 +198,40 @@ serve(async (req) => {
       }
 
       case 'get-artist': {
-        const url = `${MUSICBRAINZ_API}/artist/${id}?inc=releases+recordings+tags&fmt=json`;
+        const url = `${MUSICBRAINZ_API}/artist/${id}?inc=tags&fmt=json`;
         const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         
         // Get artist image
         const imageUrl = await getArtistImage(id);
         
-        // Get releases with covers
-        const releasesUrl = `${MUSICBRAINZ_API}/release?artist=${id}&limit=30&fmt=json`;
+        // Use release-group instead of release to avoid duplicates (different editions of same album)
+        // Filter to only albums and EPs (exclude singles, compilations, etc.)
+        const releasesUrl = `${MUSICBRAINZ_API}/release-group?artist=${id}&type=album|ep&limit=100&fmt=json`;
         const releasesRes = await fetchWithRetry(releasesUrl, { headers });
         const releasesData = await releasesRes.json();
         
-        // Sort by date and get unique albums
-        const sortedReleases = (releasesData.releases || [])
+        // Sort by date (most recent first) and deduplicate by title
+        const seenTitles = new Set<string>();
+        const sortedReleases = (releasesData['release-groups'] || [])
+          .filter((rg: any) => {
+            const normalizedTitle = rg.title?.toLowerCase().trim();
+            if (seenTitles.has(normalizedTitle)) return false;
+            seenTitles.add(normalizedTitle);
+            return true;
+          })
           .sort((a: any, b: any) => {
-            const dateA = a.date ? new Date(a.date).getTime() : 0;
-            const dateB = b.date ? new Date(b.date).getTime() : 0;
+            const dateA = a['first-release-date'] ? new Date(a['first-release-date']).getTime() : 0;
+            const dateB = b['first-release-date'] ? new Date(b['first-release-date']).getTime() : 0;
             return dateB - dateA;
           });
         
-        const releases = await Promise.all(sortedReleases.slice(0, 12).map(async (r: any) => {
+        // Get covers for top release groups
+        const releases = await Promise.all(sortedReleases.slice(0, 20).map(async (rg: any) => {
           let coverUrl;
           try {
-            const coverRes = await fetch(`${COVER_ART_API}/release/${r.id}`, { headers });
+            // Cover Art Archive supports release-group endpoint
+            const coverRes = await fetch(`${COVER_ART_API}/release-group/${rg.id}`, { headers });
             if (coverRes.ok) {
               const coverData = await coverRes.json();
               coverUrl = coverData.images?.[0]?.thumbnails?.small || coverData.images?.[0]?.image;
@@ -229,10 +239,10 @@ serve(async (req) => {
           } catch { /* no cover */ }
           
           return {
-            id: r.id,
-            title: r.title,
-            releaseDate: r.date,
-            trackCount: r['track-count'],
+            id: rg.id,
+            title: rg.title,
+            releaseDate: rg['first-release-date'],
+            type: rg['primary-type'],
             coverUrl,
           };
         }));
@@ -297,34 +307,73 @@ serve(async (req) => {
       }
 
       case 'get-release': {
-        const url = `${MUSICBRAINZ_API}/release/${id}?inc=recordings+artist-credits&fmt=json`;
-        const response = await fetchWithRetry(url, { headers });
-        const data = await response.json();
+        // First, try to fetch as a release. If it fails, try as release-group
+        let releaseId = id;
+        let isReleaseGroup = false;
+        
+        // Try fetching as release first
+        let response = await fetchWithRetry(`${MUSICBRAINZ_API}/release/${id}?inc=recordings+artist-credits&fmt=json`, { headers });
+        let data = await response.json();
+        
+        // If error (likely a release-group ID), fetch release-group and get first release
+        if (data.error || !data.id) {
+          isReleaseGroup = true;
+          const rgUrl = `${MUSICBRAINZ_API}/release-group/${id}?inc=releases&fmt=json`;
+          const rgResponse = await fetchWithRetry(rgUrl, { headers });
+          const rgData = await rgResponse.json();
+          
+          if (rgData.releases && rgData.releases.length > 0) {
+            // Get the first/official release
+            const officialRelease = rgData.releases.find((r: any) => r.status === 'Official') || rgData.releases[0];
+            releaseId = officialRelease.id;
+            
+            // Now fetch the actual release with tracks
+            response = await fetchWithRetry(`${MUSICBRAINZ_API}/release/${releaseId}?inc=recordings+artist-credits&fmt=json`, { headers });
+            data = await response.json();
+          }
+        }
         
         let coverUrl;
         try {
-          const coverRes = await fetch(`${COVER_ART_API}/release/${id}`, { headers });
-          if (coverRes.ok) {
-            const coverData = await coverRes.json();
-            coverUrl = coverData.images?.[0]?.thumbnails?.large || coverData.images?.[0]?.image;
+          // Try release-group cover first (usually better quality), fallback to release
+          if (isReleaseGroup) {
+            const coverRes = await fetch(`${COVER_ART_API}/release-group/${id}`, { headers });
+            if (coverRes.ok) {
+              const coverData = await coverRes.json();
+              coverUrl = coverData.images?.[0]?.thumbnails?.large || coverData.images?.[0]?.image;
+            }
+          }
+          if (!coverUrl) {
+            const coverRes = await fetch(`${COVER_ART_API}/release/${releaseId}`, { headers });
+            if (coverRes.ok) {
+              const coverData = await coverRes.json();
+              coverUrl = coverData.images?.[0]?.thumbnails?.large || coverData.images?.[0]?.image;
+            }
           }
         } catch { /* no cover */ }
 
-        const tracks = data.media?.[0]?.tracks?.map((t: any) => ({
-          id: t.recording?.id || t.id,
-          title: t.title,
-          duration: t.length ? Math.floor(t.length / 1000) : 0,
-          position: t.position,
-        })) || [];
+        // Collect all tracks from all media (CDs, etc.)
+        const allTracks: any[] = [];
+        (data.media || []).forEach((media: any) => {
+          (media.tracks || []).forEach((t: any) => {
+            allTracks.push({
+              id: t.recording?.id || t.id,
+              title: t.title,
+              duration: t.length ? Math.floor(t.length / 1000) : 0,
+              position: allTracks.length + 1,
+            });
+          });
+        });
 
         result = {
           id: data.id,
+          releaseGroupId: isReleaseGroup ? id : undefined,
           title: data.title,
           artist: data['artist-credit']?.[0]?.name || 'Unknown',
           artistId: data['artist-credit']?.[0]?.artist?.id,
           releaseDate: data.date,
           coverUrl,
-          tracks,
+          tracks: allTracks,
         };
         break;
       }
