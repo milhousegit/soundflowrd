@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { Track, PlayerState } from '@/types/music';
-import { StreamResult, searchStreams } from '@/lib/realdebrid';
+import { StreamResult, PendingDownload, searchStreams, checkTorrentStatus } from '@/lib/realdebrid';
 import { useAuth } from './AuthContext';
 
 interface PlayerContextType extends PlayerState {
@@ -15,10 +15,12 @@ interface PlayerContextType extends PlayerState {
   playTrack: (track: Track, queue?: Track[]) => void;
   clearQueue: () => void;
   alternativeStreams: StreamResult[];
+  pendingDownloads: PendingDownload[];
   selectStream: (stream: StreamResult) => void;
   currentStreamId?: string;
   isSearchingStreams: boolean;
   manualSearch: (query: string) => Promise<void>;
+  refreshPendingDownload: (torrentId: string) => Promise<void>;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -27,6 +29,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials } = useAuth();
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
+  const [pendingDownloads, setPendingDownloads] = useState<PendingDownload[]>([]);
   const [currentStreamId, setCurrentStreamId] = useState<string>();
   const [isSearchingStreams, setIsSearchingStreams] = useState(false);
   
@@ -76,19 +79,21 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     
     setIsSearchingStreams(true);
     setAlternativeStreams([]);
+    setPendingDownloads([]);
     
     try {
-      const streams = await searchStreams(
+      const result = await searchStreams(
         credentials.realDebridApiKey,
         query
       );
-      setAlternativeStreams(streams);
+      setAlternativeStreams(result.streams);
+      setPendingDownloads(result.pendingDownloads);
       
       // Auto-select first stream if available
-      if (streams.length > 0) {
-        setCurrentStreamId(streams[0].id);
-        if (audioRef.current && streams[0].streamUrl) {
-          audioRef.current.src = streams[0].streamUrl;
+      if (result.streams.length > 0) {
+        setCurrentStreamId(result.streams[0].id);
+        if (audioRef.current && result.streams[0].streamUrl) {
+          audioRef.current.src = result.streams[0].streamUrl;
           audioRef.current.play();
           setState(prev => ({ ...prev, isPlaying: true }));
         }
@@ -99,6 +104,40 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setIsSearchingStreams(false);
     }
   }, [credentials]);
+
+  const refreshPendingDownload = useCallback(async (torrentId: string) => {
+    if (!credentials?.realDebridApiKey) return;
+    
+    try {
+      const result = await checkTorrentStatus(credentials.realDebridApiKey, torrentId);
+      console.log('Torrent status check:', torrentId, result);
+      
+      if (result.status === 'ready' && result.streams.length > 0) {
+        // Remove from pending, add to streams
+        setPendingDownloads(prev => prev.filter(p => p.torrentId !== torrentId));
+        setAlternativeStreams(prev => [...prev, ...result.streams]);
+        
+        // Auto-play first new stream if nothing is playing
+        if (!currentStreamId && result.streams.length > 0) {
+          setCurrentStreamId(result.streams[0].id);
+          if (audioRef.current && result.streams[0].streamUrl) {
+            audioRef.current.src = result.streams[0].streamUrl;
+            audioRef.current.play();
+            setState(prev => ({ ...prev, isPlaying: true }));
+          }
+        }
+      } else {
+        // Update progress
+        setPendingDownloads(prev => prev.map(p => 
+          p.torrentId === torrentId 
+            ? { ...p, status: result.status, progress: result.progress }
+            : p
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to check torrent status:', error);
+    }
+  }, [credentials, currentStreamId]);
 
   const manualSearch = useCallback(async (query: string) => {
     await searchForStreams(query);
@@ -228,10 +267,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         playTrack,
         clearQueue,
         alternativeStreams,
+        pendingDownloads,
         selectStream,
         currentStreamId,
         isSearchingStreams,
         manualSearch,
+        refreshPendingDownload,
       }}
     >
       {children}

@@ -339,12 +339,13 @@ function findBestTrackMatch(files: {id: number, path: string, filename: string}[
   return scored.filter(f => f.score > 0).sort((a, b) => b.score - a.score);
 }
 
-// Get all audio files from a torrent
-async function getAlbumTracks(apiKey: string, magnet: string, source: string): Promise<{
+// Get all audio files from a torrent - returns immediately with status
+async function getAlbumTracks(apiKey: string, magnet: string, source: string, waitForLinks = false): Promise<{
   torrentId: string;
   files: {id: number, path: string, filename: string}[];
   links: string[];
-  status?: string;
+  status: string;
+  progress?: number;
 } | null> {
   const rdHeaders = { 'Authorization': `Bearer ${apiKey}` };
   
@@ -409,6 +410,25 @@ async function getAlbumTracks(apiKey: string, magnet: string, source: string): P
       body: selectForm,
     });
     
+    // If waitForLinks is false, just get current status and return
+    if (!waitForLinks) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const infoRes = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
+        headers: rdHeaders,
+      });
+      if (!infoRes.ok) return null;
+      const info = await infoRes.json();
+      console.log('Immediate status:', info.status, 'Links:', info.links?.length);
+      
+      return {
+        torrentId,
+        files: audioFiles,
+        links: info.links || [],
+        status: info.status || 'unknown',
+        progress: info.progress || 0,
+      };
+    }
+    
     // Wait/poll for processing and link generation
     let info2: any = null;
 
@@ -435,7 +455,8 @@ async function getAlbumTracks(apiKey: string, magnet: string, source: string): P
       torrentId,
       files: audioFiles,
       links: info2.links || [],
-      status: info2.status,
+      status: info2.status || 'unknown',
+      progress: info2.progress || 0,
     };
   } catch (error) {
     console.error('Get album tracks error:', error);
@@ -561,7 +582,8 @@ serve(async (req) => {
           artistName ? `${artistName} discography flac` : undefined,
         ].filter(Boolean) as string[];
 
-        const streams: {id: string, title: string, streamUrl: string, quality: string, size: string, source: string, matchedTrack?: string}[] = [];
+        const streams: {id: string, title: string, streamUrl: string, quality: string, size: string, source: string, matchedTrack?: string, status?: string}[] = [];
+        const pendingDownloads: {torrentId: string, title: string, status: string, progress: number, source: string, files: {id: number, path: string, filename: string}[]}[] = [];
         const processedMagnets = new Set<string>();
         
         for (const searchQuery of searchQueries) {
@@ -581,10 +603,28 @@ serve(async (req) => {
             
             try {
               console.log('Processing album/torrent:', torrent.title.slice(0, 50));
-              const albumData = await getAlbumTracks(apiKey, torrent.magnet, torrent.source);
+              // First check quickly without waiting for links
+              const albumData = await getAlbumTracks(apiKey, torrent.magnet, torrent.source, false);
               dbg(`RD process: ${torrent.source} | ${torrent.title.slice(0, 60)} | status=${albumData?.status ?? 'null'} links=${albumData?.links?.length ?? 0} audio=${albumData?.files?.length ?? 0}`);
 
-              if (albumData && albumData.files.length > 0 && albumData.links.length > 0) {
+              if (!albumData) continue;
+
+              // If downloading/queued but no links yet, add to pending
+              if (albumData.files.length > 0 && albumData.links.length === 0 && 
+                  (albumData.status === 'downloading' || albumData.status === 'queued' || albumData.status === 'magnet_conversion')) {
+                pendingDownloads.push({
+                  torrentId: albumData.torrentId,
+                  title: torrent.title,
+                  status: albumData.status,
+                  progress: albumData.progress || 0,
+                  source: torrent.source,
+                  files: albumData.files,
+                });
+                console.log(`Added pending download: ${torrent.title.slice(0, 40)} (${albumData.status})`);
+                continue;
+              }
+
+              if (albumData.files.length > 0 && albumData.links.length > 0) {
                 // Find best matching track(s) in the album
                 const matchedTracks = findBestTrackMatch(albumData.files, trackName, artistName);
                 
@@ -651,8 +691,12 @@ serve(async (req) => {
                  (qualityOrder[a.quality as keyof typeof qualityOrder] || 0);
         });
         
-        console.log(`Returning ${streams.length} streams`);
-        result = debug ? { streams, debug: debugLogs } : { streams };
+        console.log(`Returning ${streams.length} streams, ${pendingDownloads.length} pending`);
+        result = { 
+          streams, 
+          pendingDownloads,
+          ...(debug ? { debug: debugLogs } : {})
+        };
         break;
       }
 
@@ -671,6 +715,77 @@ serve(async (req) => {
         }
 
         result = await response.json();
+        break;
+      }
+
+      case 'checkTorrent': {
+        const { torrentId, trackName, artistName } = await req.json().catch(() => ({})) || {};
+        if (!torrentId) {
+          throw new Error('torrentId is required');
+        }
+        
+        const infoRes = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
+          headers: rdHeaders,
+        });
+        
+        if (!infoRes.ok) {
+          throw new Error('Failed to get torrent info');
+        }
+        
+        const info = await infoRes.json();
+        console.log(`Check torrent ${torrentId}: status=${info.status}, links=${info.links?.length}`);
+        
+        // If ready, unrestrict links and return streams
+        if (info.status === 'downloaded' && Array.isArray(info.links) && info.links.length > 0) {
+          const readyStreams: {id: string, title: string, streamUrl: string, quality: string, size: string}[] = [];
+          
+          for (let i = 0; i < Math.min(info.links.length, 10); i++) {
+            const rdLink = info.links[i];
+            const unrestrictForm = new FormData();
+            unrestrictForm.append('link', rdLink);
+            
+            const unrestrictRes = await fetchWithRetry(`${RD_API}/unrestrict/link`, {
+              method: 'POST',
+              headers: rdHeaders,
+              body: unrestrictForm,
+            });
+            
+            if (unrestrictRes.ok) {
+              const data = await unrestrictRes.json();
+              const filename = data.filename?.toLowerCase() || '';
+              
+              if (filename.endsWith('.mp3') || filename.endsWith('.flac') || 
+                  filename.endsWith('.m4a') || filename.endsWith('.wav') ||
+                  filename.endsWith('.aac') || filename.endsWith('.ogg') ||
+                  data.mimeType?.includes('audio')) {
+                
+                const quality = filename.includes('flac') ? 'FLAC' : 
+                               filename.includes('320') ? '320kbps' : 
+                               filename.includes('256') ? '256kbps' : 'MP3';
+                
+                readyStreams.push({
+                  id: `${torrentId}-${i}`,
+                  title: data.filename || 'Unknown',
+                  streamUrl: data.download,
+                  quality,
+                  size: data.filesize ? `${Math.round(data.filesize / 1024 / 1024)}MB` : 'Unknown',
+                });
+              }
+            }
+          }
+          
+          result = {
+            status: 'ready',
+            progress: 100,
+            streams: readyStreams,
+          };
+        } else {
+          result = {
+            status: info.status || 'unknown',
+            progress: info.progress || 0,
+            streams: [],
+          };
+        }
         break;
       }
 
