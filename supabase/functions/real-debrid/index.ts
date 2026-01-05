@@ -78,6 +78,183 @@ async function searchApibay(query: string): Promise<TorrentResult[]> {
   return results;
 }
 
+// Search 1337x.to
+async function search1337x(query: string): Promise<TorrentResult[]> {
+  const results: TorrentResult[] = [];
+  
+  try {
+    const domain = '1337x.to';
+    const searchUrl = `https://${domain}/search/${encodeURIComponent(query)}/1/`;
+    console.log('Searching 1337x:', query);
+    
+    const response = await fetch(searchUrl, {
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+    
+    if (!response.ok) {
+      console.log('1337x response not ok:', response.status);
+      return results;
+    }
+    
+    const html = await response.text();
+    
+    // Extract torrent links from search results
+    // Format: /torrent/123456/torrent-name/
+    const torrentLinkRegex = /href="(\/torrent\/\d+\/[^"]+)"/g;
+    const torrentLinks: string[] = [];
+    let match;
+    
+    while ((match = torrentLinkRegex.exec(html)) !== null) {
+      const url = `https://${domain}${match[1]}`;
+      if (!torrentLinks.includes(url)) {
+        torrentLinks.push(url);
+      }
+    }
+    
+    console.log(`Found ${torrentLinks.length} torrent links on 1337x`);
+    
+    // Extract seeders and size from search results table
+    const rowRegex = /<a\s+href="(\/torrent\/\d+\/[^"]+)"[^>]*>([^<]+)<\/a>[\s\S]*?<td\s+class="coll-2[^"]*"[^>]*>([^<]+)<\/td>[\s\S]*?<td\s+class="coll-4[^"]*"[^>]*>(\d+)<\/td>/g;
+    const torrentMetadata: Map<string, {title: string, seeders: number, size: string}> = new Map();
+    
+    let rowMatch;
+    while ((rowMatch = rowRegex.exec(html)) !== null) {
+      const url = `https://${domain}${rowMatch[1]}`;
+      const title = rowMatch[2].trim();
+      const size = rowMatch[3]?.trim() || 'Unknown';
+      const seeders = parseInt(rowMatch[4]) || 0;
+      torrentMetadata.set(url, { title, seeders, size });
+    }
+    
+    // Visit each torrent page to get magnet link (limit to first 5)
+    for (const torrentUrl of torrentLinks.slice(0, 5)) {
+      try {
+        const torrentRes = await fetch(torrentUrl, {
+          headers: { 
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html',
+          },
+        });
+        
+        if (!torrentRes.ok) continue;
+        
+        const torrentHtml = await torrentRes.text();
+        
+        // Extract magnet link
+        const magnetMatch = torrentHtml.match(/href="(magnet:\?xt=urn:btih:[^"]+)"/);
+        
+        if (magnetMatch) {
+          const magnet = magnetMatch[1].replace(/&amp;/g, '&');
+          const dnMatch = magnet.match(/dn=([^&]+)/);
+          const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
+          
+          const meta = torrentMetadata.get(torrentUrl);
+          
+          results.push({
+            title: meta?.title || title,
+            magnet,
+            size: meta?.size || 'Unknown',
+            seeders: meta?.seeders || 0,
+            source: '1337x',
+          });
+          
+          console.log('Added 1337x result:', (meta?.title || title).slice(0, 50));
+        }
+      } catch (pageError) {
+        console.log('Error fetching 1337x torrent page:', pageError);
+        continue;
+      }
+    }
+  } catch (error) {
+    console.error('1337x error:', error);
+  }
+  
+  return results;
+}
+
+// Search TorrentGalaxy
+async function searchTorrentGalaxy(query: string): Promise<TorrentResult[]> {
+  const results: TorrentResult[] = [];
+  
+  try {
+    const domain = 'torrentgalaxy.to';
+    const searchUrl = `https://${domain}/torrents.php?search=${encodeURIComponent(query)}`;
+    console.log('Searching TorrentGalaxy:', query);
+    
+    const response = await fetch(searchUrl, {
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+    
+    if (!response.ok) {
+      console.log('TorrentGalaxy response not ok:', response.status);
+      return results;
+    }
+    
+    const html = await response.text();
+    
+    // TorrentGalaxy has magnet links directly in search results
+    // Format: magnet:?xt=urn:btih:HASH...
+    const magnetRegex = /href="(magnet:\?xt=urn:btih:[^"]+)"/g;
+    const magnets: string[] = [];
+    let match;
+    
+    while ((match = magnetRegex.exec(html)) !== null) {
+      const magnet = match[1].replace(/&amp;/g, '&');
+      if (!magnets.includes(magnet)) {
+        magnets.push(magnet);
+      }
+    }
+    
+    console.log(`Found ${magnets.length} magnets on TorrentGalaxy`);
+    
+    // Extract metadata from the page
+    // Look for title, size, seeders near each magnet
+    for (const magnet of magnets.slice(0, 8)) {
+      const dnMatch = magnet.match(/dn=([^&]+)/);
+      const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
+      
+      // Try to extract seeders from nearby HTML (simplified)
+      const magnetIndex = html.indexOf(magnet.slice(0, 50));
+      let seeders = 0;
+      let size = 'Unknown';
+      
+      if (magnetIndex > 0) {
+        // Look for seeders in the row (green font-weight span)
+        const rowHtml = html.slice(Math.max(0, magnetIndex - 1000), magnetIndex + 500);
+        const seedersMatch = rowHtml.match(/<span[^>]*font-weight[^>]*>(\d+)<\/span>/);
+        if (seedersMatch) {
+          seeders = parseInt(seedersMatch[1]) || 0;
+        }
+        
+        // Look for size
+        const sizeMatch = rowHtml.match(/([\d.,]+)\s*(GB|MB|KB)/i);
+        if (sizeMatch) {
+          size = `${sizeMatch[1]}${sizeMatch[2]}`;
+        }
+      }
+      
+      results.push({
+        title,
+        magnet,
+        size,
+        seeders,
+        source: 'TGx',
+      });
+    }
+  } catch (error) {
+    console.error('TorrentGalaxy error:', error);
+  }
+  
+  return results;
+}
+
+
 // Search Il Corsaro Nero (Italian torrent site)
 async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
   const results: TorrentResult[] = [];
@@ -287,16 +464,26 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
   console.log('Query words:', queryWords);
   console.log('Query variants:', queryVariants);
   
-  // Search with multiple query variants in parallel
+  // Search with multiple query variants in parallel across all sources
   const searchPromises: Promise<TorrentResult[]>[] = [];
   
-  for (const variant of queryVariants.slice(0, 3)) { // Limit to 3 variants to avoid too many requests
+  // Use first 2 variants to avoid too many requests (4 sources x 2 variants = 8 searches)
+  for (const variant of queryVariants.slice(0, 2)) {
     searchPromises.push(searchApibay(variant).catch(() => []));
     searchPromises.push(searchCorsaroNero(variant).catch(() => []));
+    searchPromises.push(search1337x(variant).catch(() => []));
+    searchPromises.push(searchTorrentGalaxy(variant).catch(() => []));
   }
   
   const results = await Promise.all(searchPromises);
   let allResults = results.flat();
+  
+  // Log results per source
+  const sources = ['TPB', 'CNero', '1337x', 'TGx'];
+  for (const src of sources) {
+    const count = allResults.filter(r => r.source === src).length;
+    if (count > 0) console.log(`${src}: ${count} results`);
+  }
   
   // Dedupe by magnet hash
   allResults = dedupeResults(allResults);
@@ -316,8 +503,8 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
   // Sort by seeders (best first)
   allResults.sort((a, b) => b.seeders - a.seeders);
   
-  console.log(`Returning ${Math.min(allResults.length, 10)} torrents`);
-  return allResults.slice(0, 10);
+  console.log(`Returning ${Math.min(allResults.length, 15)} torrents`);
+  return allResults.slice(0, 15);
 }
 
 // Add magnet to Real-Debrid and get file list
