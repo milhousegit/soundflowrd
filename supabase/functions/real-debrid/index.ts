@@ -653,7 +653,7 @@ async function searchSolidTorrents(query: string): Promise<TorrentResult[]> {
   return results;
 }
 
-// Search Il Corsaro Nero (Italian torrent site) - updated parsing
+// Search Il Corsaro Nero (Italian torrent site) - visit detail pages to get magnets
 async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
   const results: TorrentResult[] = [];
   
@@ -662,13 +662,13 @@ async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
     const searchUrl = `https://${domain}/search?q=${encodeURIComponent(query)}`;
     console.log('Searching Corsaro Nero:', searchUrl);
     
-    const response = await fetch(searchUrl, {
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
-      },
-    });
+    const headers = { 
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
+    };
+    
+    const response = await fetch(searchUrl, { headers });
     
     console.log('Corsaro Nero response status:', response.status);
     
@@ -686,59 +686,133 @@ async function searchCorsaroNero(query: string): Promise<TorrentResult[]> {
       return results;
     }
     
-    // Try to find magnet links directly in the page (newer site versions)
+    // Try to find magnet links directly in the page first
     const magnetRegex = /href="(magnet:\?xt=urn:btih:[^"]+)"/gi;
     let match;
-    const magnets: string[] = [];
     
     while ((match = magnetRegex.exec(html)) !== null) {
       const magnet = match[1].replace(/&amp;/g, '&');
-      if (!magnets.includes(magnet)) {
-        magnets.push(magnet);
-      }
+      const dnMatch = magnet.match(/dn=([^&]+)/);
+      const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
+      
+      results.push({
+        title,
+        magnet,
+        size: 'Unknown',
+        seeders: 0,
+        source: 'CNero',
+      });
     }
     
-    if (magnets.length > 0) {
-      console.log(`Found ${magnets.length} direct magnets on Corsaro Nero`);
-      
-      for (const magnet of magnets.slice(0, 10)) {
-        const dnMatch = magnet.match(/dn=([^&]+)/);
-        const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
-        
-        results.push({
-          title,
-          magnet,
-          size: 'Unknown',
-          seeders: 0,
-          source: 'CNero',
-        });
-      }
+    if (results.length > 0) {
+      console.log(`Found ${results.length} direct magnets on Corsaro Nero`);
       return results;
     }
     
-    // Try to extract hash from the page (legacy method)
-    const hashRegex = /(?:btih:|hash[=:]\s*)([a-f0-9]{40})/gi;
-    const hashes: string[] = [];
+    // No direct magnets - extract torrent detail links and visit them
+    // Pattern: /torrent/1234567/title-here or /download/1234567
+    const linkPatterns = [
+      /href="(\/torrent\/\d+\/[^"]+)"/gi,
+      /href="(\/download\/\d+[^"]*)"/gi,
+      /href="([^"]*\/dettagli[^"]*)"/gi,
+    ];
     
-    while ((match = hashRegex.exec(html)) !== null) {
-      const hash = match[1].toUpperCase();
-      if (!hashes.includes(hash)) {
-        hashes.push(hash);
+    const detailLinks: {url: string, title: string}[] = [];
+    
+    for (const pattern of linkPatterns) {
+      while ((match = pattern.exec(html)) !== null) {
+        const path = match[1];
+        const url = path.startsWith('http') ? path : `https://${domain}${path}`;
+        
+        // Extract title from path
+        const pathParts = path.split('/');
+        const titlePart = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2] || '';
+        const title = decodeURIComponent(titlePart.replace(/-/g, ' ').replace(/_/g, ' ')).trim();
+        
+        if (!detailLinks.some(l => l.url === url)) {
+          detailLinks.push({ url, title });
+        }
       }
     }
     
-    if (hashes.length > 0) {
-      console.log(`Found ${hashes.length} hashes on Corsaro Nero`);
+    // Also try to find links in table rows
+    const rowLinkRegex = /<a[^>]*href="([^"]*)"[^>]*>([^<]+)<\/a>/gi;
+    while ((match = rowLinkRegex.exec(html)) !== null) {
+      const href = match[1];
+      const text = match[2].trim();
       
-      for (const hash of hashes.slice(0, 10)) {
-        const magnet = `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(query)}`;
-        results.push({
-          title: query,
-          magnet,
-          size: 'Unknown',
-          seeders: 0,
-          source: 'CNero',
-        });
+      // Skip navigation links, look for torrent titles
+      if (href.includes('/torrent/') || href.includes('/download/') || 
+          (text.length > 10 && !href.includes('page=') && !href.includes('search?'))) {
+        const url = href.startsWith('http') ? href : `https://${domain}${href}`;
+        
+        if (!detailLinks.some(l => l.url === url) && text.length > 5) {
+          detailLinks.push({ url, title: text });
+        }
+      }
+    }
+    
+    console.log(`Found ${detailLinks.length} detail links on Corsaro Nero`);
+    
+    // Visit each detail page to get the magnet (limit to first 5)
+    for (const link of detailLinks.slice(0, 5)) {
+      try {
+        console.log('Fetching Corsaro detail page:', link.url);
+        
+        const detailRes = await fetch(link.url, { headers });
+        
+        if (!detailRes.ok) continue;
+        
+        const detailHtml = await detailRes.text();
+        
+        // Find magnet link in detail page
+        const magnetMatch = detailHtml.match(/href="(magnet:\?xt=urn:btih:[^"]+)"/i);
+        
+        if (magnetMatch) {
+          const magnet = magnetMatch[1].replace(/&amp;/g, '&');
+          const dnMatch = magnet.match(/dn=([^&]+)/);
+          const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : link.title;
+          
+          // Try to extract size
+          const sizeMatch = detailHtml.match(/(?:dimensione|size)[:\s]*<[^>]*>([\d.,]+\s*[GMKT]B)/i) ||
+                           detailHtml.match(/([\d.,]+)\s*(GB|MB|TB)/i);
+          const size = sizeMatch ? `${sizeMatch[1]}${sizeMatch[2] || ''}` : 'Unknown';
+          
+          // Try to extract seeders
+          const seedersMatch = detailHtml.match(/(?:seed|seeder)[s]?[:\s]*(\d+)/i);
+          const seeders = seedersMatch ? parseInt(seedersMatch[1]) || 0 : 0;
+          
+          results.push({
+            title: title || link.title,
+            magnet,
+            size,
+            seeders,
+            source: 'CNero',
+          });
+          
+          console.log('Found Corsaro Nero magnet for:', (title || link.title).slice(0, 50));
+        } else {
+          // Try to find hash
+          const hashMatch = detailHtml.match(/(?:btih:|info_hash[=:]\s*|hash[=:]\s*)([a-f0-9]{40})/i);
+          
+          if (hashMatch) {
+            const hash = hashMatch[1].toUpperCase();
+            const magnet = `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(link.title)}`;
+            
+            results.push({
+              title: link.title,
+              magnet,
+              size: 'Unknown',
+              seeders: 0,
+              source: 'CNero',
+            });
+            
+            console.log('Found Corsaro Nero hash for:', link.title.slice(0, 50));
+          }
+        }
+      } catch (detailError) {
+        console.log('Error fetching Corsaro detail:', detailError);
+        continue;
       }
     }
     
