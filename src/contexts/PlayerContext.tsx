@@ -5,6 +5,13 @@ import { useAuth } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+export interface DebugLogEntry {
+  timestamp: Date;
+  step: string;
+  details?: string;
+  status: 'info' | 'success' | 'error' | 'warning';
+}
+
 interface PlayerContextType extends PlayerState {
   play: (track?: Track) => void;
   pause: () => void;
@@ -24,6 +31,10 @@ interface PlayerContextType extends PlayerState {
   currentStreamId?: string;
   isSearchingStreams: boolean;
   manualSearch: (query: string) => Promise<void>;
+  debugLogs: DebugLogEntry[];
+  clearDebugLogs: () => void;
+  downloadProgress: number | null;
+  downloadStatus: string | null;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -58,6 +69,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
   const [currentStreamId, setCurrentStreamId] = useState<string>();
   const [isSearchingStreams, setIsSearchingStreams] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+  const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
+
+  const addDebugLog = useCallback((step: string, details?: string, status: 'info' | 'success' | 'error' | 'warning' = 'info') => {
+    setDebugLogs(prev => [...prev, { timestamp: new Date(), step, details, status }]);
+    console.log(`[DEBUG] ${step}`, details || '');
+  }, []);
+
+  const clearDebugLogs = useCallback(() => {
+    setDebugLogs([]);
+  }, []);
   
   const [state, setState] = useState<PlayerState>({
     currentTrack: null,
@@ -198,7 +221,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const searchAlbumAndMatch = useCallback(async (track: Track): Promise<boolean> => {
     if (!credentials?.realDebridApiKey || !track.album) return false;
     
-    console.log('Searching for album:', `${track.album} ${track.artist}`);
+    addDebugLog('Ricerca album', `Cerco: "${track.album} ${track.artist}"`, 'info');
     
     try {
       const result = await searchStreams(
@@ -207,11 +230,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       );
       
       setAvailableTorrents(result.torrents);
+      addDebugLog('Risultati album', `Trovati ${result.torrents.length} torrent`, result.torrents.length > 0 ? 'success' : 'warning');
       
       // Look for a torrent with files that match the track title
       for (const torrent of result.torrents) {
         if (torrent.files && torrent.files.length > 0) {
           const normalizedTitle = normalizeForMatch(track.title);
+          addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
           
           // Find a file that contains the track title
           const matchingFile = torrent.files.find(file => {
@@ -220,7 +245,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           });
           
           if (matchingFile) {
-            console.log('Found matching file in album torrent:', matchingFile.filename);
+            addDebugLog('File trovato', `Match: "${matchingFile.filename}"`, 'success');
             
             // Select this file and play it
             const selectResult = await selectFilesAndPlay(
@@ -232,6 +257,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             if (selectResult.streams.length > 0) {
               setAlternativeStreams(selectResult.streams);
               setCurrentStreamId(selectResult.streams[0].id);
+              setDownloadProgress(null);
+              setDownloadStatus(null);
               
               if (audioRef.current && selectResult.streams[0].streamUrl) {
                 audioRef.current.src = selectResult.streams[0].streamUrl;
@@ -239,34 +266,48 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 setState(prev => ({ ...prev, isPlaying: true }));
               }
               
-              // Auto-save this mapping
               await saveStreamMapping(track, selectResult.streams[0]);
+              addDebugLog('Riproduzione', 'Stream avviato e mappatura salvata', 'success');
               
               return true;
+            } else if (selectResult.status === 'downloading') {
+              setDownloadProgress(selectResult.progress);
+              setDownloadStatus('downloading');
+              addDebugLog('Download', `Torrent in download: ${selectResult.progress}%`, 'warning');
             }
+          } else {
+            addDebugLog('Nessun match', `Nessun file corrisponde a "${track.title}"`, 'warning');
           }
         }
       }
       
       // If no file match found but we have torrents, at least show them
       if (result.torrents.length > 0) {
-        console.log('Album torrents found but no exact file match, showing options');
+        addDebugLog('Match manuale richiesto', 'Torrent trovati ma nessun file corrisponde automaticamente', 'warning');
         return false;
       }
       
       return false;
     } catch (error) {
-      console.error('Failed to search album:', error);
+      addDebugLog('Errore ricerca album', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
       return false;
     }
-  }, [credentials, saveStreamMapping]);
+  }, [credentials, saveStreamMapping, addDebugLog]);
 
   const searchForStreams = useCallback(async (query: string, showNoResultsToast = false, track?: Track) => {
-    if (!credentials?.realDebridApiKey) return;
+    if (!credentials?.realDebridApiKey) {
+      addDebugLog('Errore API', 'API Key Real-Debrid non configurata', 'error');
+      return;
+    }
     
+    clearDebugLogs();
     setIsSearchingStreams(true);
     setAlternativeStreams([]);
     setAvailableTorrents([]);
+    setDownloadProgress(null);
+    setDownloadStatus(null);
+    
+    addDebugLog('Inizio ricerca', `Query: "${query}"`, 'info');
     
     try {
       const result = await searchStreams(
@@ -275,10 +316,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       );
       
       setAvailableTorrents(result.torrents);
+      addDebugLog('Ricerca completata', `Stream pronti: ${result.streams?.length || 0}, Torrent: ${result.torrents.length}`, 
+        (result.streams?.length || 0) > 0 ? 'success' : 'info');
       
       // If any torrent has ready streams (cached), get them
       if (result.streams && result.streams.length > 0) {
         setAlternativeStreams(result.streams);
+        addDebugLog('Stream disponibili', `${result.streams.length} stream pronti per la riproduzione`, 'success');
         
         // Auto-select first stream if there's only 1 or few results
         if (result.streams.length >= 1) {
@@ -289,32 +333,39 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             audioRef.current.src = selectedStream.streamUrl;
             audioRef.current.play();
             setState(prev => ({ ...prev, isPlaying: true }));
+            addDebugLog('Riproduzione', `Avviato: "${selectedStream.title}"`, 'success');
           }
           
           // Auto-save the mapping if we have the track info
           if (track) {
             await saveStreamMapping(track, selectedStream);
+            addDebugLog('Mappatura salvata', 'Sorgente salvata per uso futuro', 'success');
           }
         }
-      } else if (result.streams.length === 0 && result.torrents.length === 0) {
+      } else if (result.streams?.length === 0 && result.torrents.length === 0) {
         // No results for track title, try searching for the album
+        addDebugLog('Nessun risultato diretto', 'Provo ricerca per album...', 'warning');
+        
         if (track && track.album) {
-          console.log('No results for track, trying album search...');
           const foundInAlbum = await searchAlbumAndMatch(track);
           
           if (!foundInAlbum && showNoResultsToast) {
+            addDebugLog('Nessun risultato', 'Nessuna sorgente trovata', 'error');
             toast.error('Nessun contenuto trovato', {
               description: 'Non è stato trovato nessun risultato per questa traccia.',
             });
           }
         } else if (showNoResultsToast) {
+          addDebugLog('Nessun risultato', 'Nessuna sorgente trovata e album non disponibile', 'error');
           toast.error('Nessun contenuto trovato', {
             description: 'Non è stato trovato nessun risultato per questa traccia.',
           });
         }
+      } else if (result.torrents.length > 0 && (!result.streams || result.streams.length === 0)) {
+        addDebugLog('Solo torrent', `${result.torrents.length} torrent disponibili, seleziona un file`, 'warning');
       }
     } catch (error) {
-      console.error('Failed to search streams:', error);
+      addDebugLog('Errore ricerca', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
       if (showNoResultsToast) {
         toast.error('Errore nella ricerca', {
           description: 'Si è verificato un errore durante la ricerca.',
@@ -323,27 +374,29 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     } finally {
       setIsSearchingStreams(false);
     }
-  }, [credentials, saveStreamMapping, searchAlbumAndMatch]);
+  }, [credentials, saveStreamMapping, searchAlbumAndMatch, addDebugLog, clearDebugLogs]);
 
   const selectTorrentFile = useCallback(async (torrentId: string, fileIds: number[]) => {
     if (!credentials?.realDebridApiKey) return;
     
-    console.log('Selecting files:', torrentId, fileIds);
+    addDebugLog('Selezione file', `Torrent: ${torrentId}, File IDs: ${fileIds.join(', ')}`, 'info');
     
     try {
       const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, fileIds);
-      console.log('Select result:', result);
       
       if (result.streams.length > 0) {
         // Add streams and auto-play first one
         setAlternativeStreams(prev => [...result.streams, ...prev]);
         setCurrentStreamId(result.streams[0].id);
+        setDownloadProgress(null);
+        setDownloadStatus(null);
         
         if (audioRef.current && result.streams[0].streamUrl) {
           audioRef.current.src = result.streams[0].streamUrl;
           audioRef.current.play();
           setState(prev => ({ ...prev, isPlaying: true }));
         }
+        addDebugLog('Riproduzione', `Stream pronto: ${result.streams[0].title}`, 'success');
       } else if (result.status === 'downloading' || result.status === 'queued' || result.status === 'magnet_conversion') {
         // Update torrent status in the list
         setAvailableTorrents(prev => prev.map(t => 
@@ -351,18 +404,20 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             ? { ...t, status: result.status, progress: result.progress }
             : t
         ));
+        setDownloadProgress(result.progress);
+        setDownloadStatus(result.status);
+        addDebugLog('Download avviato', `Stato: ${result.status}, Progresso: ${result.progress}%`, 'warning');
       }
     } catch (error) {
-      console.error('Failed to select files:', error);
+      addDebugLog('Errore selezione', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
     }
-  }, [credentials]);
+  }, [credentials, addDebugLog]);
 
   const refreshTorrent = useCallback(async (torrentId: string) => {
     if (!credentials?.realDebridApiKey) return;
     
     try {
       const result = await checkTorrentStatus(credentials.realDebridApiKey, torrentId);
-      console.log('Torrent status check:', torrentId, result);
       
       // Update torrent in list
       setAvailableTorrents(prev => prev.map(t => 
@@ -371,6 +426,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           : t
       ));
       
+      // Update global download progress
+      if (result.status === 'downloading' || result.status === 'queued') {
+        setDownloadProgress(result.progress);
+        setDownloadStatus(result.status);
+      }
+      
       if (result.streams.length > 0) {
         // Add new streams
         setAlternativeStreams(prev => {
@@ -378,6 +439,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           const newStreams = result.streams.filter(s => !existingIds.has(s.id));
           return [...prev, ...newStreams];
         });
+        
+        setDownloadProgress(null);
+        setDownloadStatus(null);
+        addDebugLog('Download completato', 'Stream pronti per la riproduzione', 'success');
         
         // Auto-play if nothing is playing
         if (!currentStreamId && result.streams.length > 0) {
@@ -390,9 +455,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       }
     } catch (error) {
-      console.error('Failed to check torrent status:', error);
+      addDebugLog('Errore refresh', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
     }
-  }, [credentials, currentStreamId]);
+  }, [credentials, currentStreamId, addDebugLog]);
 
   const manualSearch = useCallback(async (query: string) => {
     await searchForStreams(query, true);
@@ -661,6 +726,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         currentStreamId,
         isSearchingStreams,
         manualSearch,
+        debugLogs,
+        clearDebugLogs,
+        downloadProgress,
+        downloadStatus,
       }}
     >
       {children}

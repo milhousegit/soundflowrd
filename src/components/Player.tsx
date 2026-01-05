@@ -48,6 +48,9 @@ const Player: React.FC = () => {
     currentStreamId,
     isSearchingStreams,
     manualSearch,
+    debugLogs,
+    downloadProgress,
+    downloadStatus,
   } = usePlayer();
   const { t } = useSettings();
   
@@ -206,6 +209,9 @@ const Player: React.FC = () => {
           isLoading={isSearchingStreams}
           onManualSearch={handleManualSearch}
           currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
+          debugLogs={debugLogs}
+          downloadProgress={downloadProgress}
+          downloadStatus={downloadStatus}
         />
       </>
     );
@@ -231,6 +237,11 @@ const Player: React.FC = () => {
             {isSearchingStreams && (
               <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                 <Loader2 className="w-5 h-5 text-primary animate-spin" />
+              </div>
+            )}
+            {downloadProgress !== null && !isSearchingStreams && (
+              <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+                <span className="text-xs font-bold text-primary">{downloadProgress}%</span>
               </div>
             )}
           </div>
@@ -274,6 +285,11 @@ const Player: React.FC = () => {
               {isSearchingStreams && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                </div>
+              )}
+              {downloadProgress !== null && !isSearchingStreams && (
+                <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+                  <span className="text-xs font-bold text-primary">{downloadProgress}%</span>
                 </div>
               )}
             </div>
@@ -384,6 +400,9 @@ const Player: React.FC = () => {
         isLoading={isSearchingStreams}
         onManualSearch={handleManualSearch}
         currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
+        debugLogs={debugLogs}
+        downloadProgress={downloadProgress}
+        downloadStatus={downloadStatus}
       />
     </>
   );
