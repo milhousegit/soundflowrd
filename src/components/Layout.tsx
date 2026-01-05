@@ -11,7 +11,7 @@ const Layout: React.FC = () => {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar />
-      <main className={`flex-1 overflow-y-auto ${currentTrack ? 'pb-24 md:pb-24' : 'pb-16 md:pb-0'}`}>
+      <main className={`flex-1 overflow-y-auto ${currentTrack ? 'pb-28 md:pb-24' : 'pb-14 md:pb-0'}`}>
         <Outlet />
       </main>
       <Player />

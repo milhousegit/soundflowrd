@@ -133,7 +133,7 @@ const Player: React.FC = () => {
       <>
         <div 
           ref={containerRef}
-          className="fixed inset-0 z-50 bg-background flex flex-col md:hidden"
+          className="fixed inset-0 z-[60] bg-background flex flex-col md:hidden"
           style={expandedStyle}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -268,14 +268,14 @@ const Player: React.FC = () => {
     );
   }
 
-  // Calculate navbar height (48px content + safe area)
-  const navbarHeight = 48;
+  // Calculate navbar height (56px content + safe area)
+  const navbarHeight = 56;
 
   return (
     <>
       {/* Mobile mini player - positioned above navbar */}
       <div 
-        className="fixed left-0 right-0 h-14 glass border-t border-border z-40 md:hidden"
+        className="fixed left-0 right-0 h-14 glass border-t border-border z-50 md:hidden"
         style={{ bottom: `calc(${navbarHeight}px + env(safe-area-inset-bottom, 0px))` }}
         onClick={() => setIsExpanded(true)}
       >

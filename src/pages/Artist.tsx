@@ -84,7 +84,7 @@ const Artist: React.FC = () => {
   return (
     <div className="pb-32 animate-fade-in">
       {/* Hero Section */}
-      <div className="relative h-48 md:h-80 overflow-hidden">
+      <div className="relative h-72 md:h-80 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/20 to-background" />
         {artist.imageUrl && (
           <img 
