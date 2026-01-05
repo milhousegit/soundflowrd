@@ -175,141 +175,199 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
   return results;
 }
 
-// Search ext.to and mirrors (torrent aggregator)
+// Search ext.to using Firecrawl for anti-bot bypass
 async function searchExtTo(query: string): Promise<TorrentResult[]> {
   const results: TorrentResult[] = [];
   
-  // Full browser-like headers to avoid 403
+  const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
+  
+  if (!firecrawlApiKey) {
+    console.log('FIRECRAWL_API_KEY not configured, falling back to direct fetch');
+    return searchExtToDirectFetch(query);
+  }
+  
+  try {
+    const searchUrl = `https://ext.to/search/?q=${encodeURIComponent(query)}`;
+    console.log('Searching ext.to via Firecrawl:', searchUrl);
+    
+    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${firecrawlApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: searchUrl,
+        formats: ['html'],
+        waitFor: 2000, // Wait for dynamic content
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Firecrawl error:', response.status, errorText);
+      return searchExtToDirectFetch(query);
+    }
+    
+    const data = await response.json();
+    const html = data.data?.html || data.html || '';
+    
+    console.log('Firecrawl returned HTML length:', html.length);
+    
+    if (!html || html.length < 1000) {
+      console.log('Firecrawl returned insufficient HTML, trying direct fetch');
+      return searchExtToDirectFetch(query);
+    }
+    
+    // Extract magnet links from HTML
+    const magnetRegex = /href="(magnet:\?xt=urn:btih:[^"]+)"/gi;
+    let match;
+    const magnets: string[] = [];
+    
+    while ((match = magnetRegex.exec(html)) !== null) {
+      const magnet = match[1].replace(/&amp;/g, '&');
+      if (!magnets.includes(magnet)) {
+        magnets.push(magnet);
+      }
+    }
+    
+    // Also try to find info_hash patterns
+    const hashRegex = /btih[=:\/]([a-f0-9]{40})/gi;
+    while ((match = hashRegex.exec(html)) !== null) {
+      const hash = match[1].toUpperCase();
+      const magnet = `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(query)}`;
+      if (!magnets.some(m => m.toLowerCase().includes(hash.toLowerCase()))) {
+        magnets.push(magnet);
+      }
+    }
+    
+    console.log(`Found ${magnets.length} magnets via Firecrawl`);
+    
+    // Extract torrent info from page
+    for (const magnet of magnets.slice(0, 20)) {
+      const hashMatch = magnet.match(/btih:([a-f0-9]+)/i);
+      const dnMatch = magnet.match(/dn=([^&]+)/);
+      
+      let title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
+      let seeders = 0;
+      let size = 'Unknown';
+      
+      // Try to find context around magnet
+      let magnetIndex = html.indexOf(magnet.slice(0, 50).replace(/&/g, '&amp;'));
+      if (magnetIndex < 0) {
+        magnetIndex = html.indexOf(magnet.slice(0, 50));
+      }
+      if (magnetIndex > 0) {
+        const contextStart = Math.max(0, magnetIndex - 3000);
+        const contextHtml = html.slice(contextStart, magnetIndex + 500);
+        
+        // Look for title - various patterns
+        const titlePatterns = [
+          /<a[^>]*class="[^"]*torrent[^"]*"[^>]*>([^<]{10,})<\/a>/i,
+          /<a[^>]*href="\/torrent\/[^"]*"[^>]*title="([^"]+)"/i,
+          /<a[^>]*href="\/torrent\/[^"]*"[^>]*>([^<]{10,})<\/a>/i,
+          /<h\d[^>]*>([^<]{10,})<\/h\d>/i,
+          /class="[^"]*title[^"]*"[^>]*>([^<]{10,})</i,
+        ];
+        
+        for (const pattern of titlePatterns) {
+          const titleMatch = contextHtml.match(pattern);
+          if (titleMatch && titleMatch[1].trim().length > title.length) {
+            title = titleMatch[1].trim();
+            break;
+          }
+        }
+        
+        // Extract seeders
+        const seedersPatterns = [
+          /(?:seed|SE|seeder)[s]?[:\s]*(\d+)/i,
+          /<td[^>]*class="[^"]*seed[^"]*"[^>]*>(\d+)/i,
+          /class="[^"]*text-success[^"]*"[^>]*>(\d+)/i,
+          />(\d+)<\/td>\s*<td[^>]*>\d+<\/td>/i,
+        ];
+        
+        for (const pattern of seedersPatterns) {
+          const seedersMatch = contextHtml.match(pattern);
+          if (seedersMatch) {
+            seeders = parseInt(seedersMatch[1]) || 0;
+            break;
+          }
+        }
+        
+        // Extract size
+        const sizeMatch = contextHtml.match(/([\d.,]+)\s*(GB|MB|KB|TB)/i);
+        if (sizeMatch) {
+          size = `${sizeMatch[1]} ${sizeMatch[2]}`;
+        }
+      }
+      
+      results.push({
+        title,
+        magnet,
+        size,
+        seeders,
+        source: 'Ext',
+      });
+    }
+    
+    console.log(`ext.to via Firecrawl returned ${results.length} results`);
+    return results;
+    
+  } catch (error) {
+    console.error('Firecrawl ext.to error:', error);
+    return searchExtToDirectFetch(query);
+  }
+}
+
+// Fallback direct fetch for ext.to (when Firecrawl not available)
+async function searchExtToDirectFetch(query: string): Promise<TorrentResult[]> {
+  const results: TorrentResult[] = [];
+  
   const browserHeaders = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9,it;q=0.8',
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache',
-    'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
-    'Sec-Ch-Ua-Mobile': '?0',
-    'Sec-Ch-Ua-Platform': '"Windows"',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none',
-    'Sec-Fetch-User': '?1',
-    'Upgrade-Insecure-Requests': '1',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
   };
   
-  // Try multiple domains (mirrors)
   const domains = ['ext.to', 'extratorrent.st'];
   
   for (const domain of domains) {
     try {
       const searchUrl = `https://${domain}/search/?q=${encodeURIComponent(query)}`;
-      console.log(`Searching ${domain}:`, searchUrl);
+      console.log(`Direct fetch ${domain}:`, searchUrl);
       
       const response = await fetch(searchUrl, { headers: browserHeaders });
       
-      console.log(`${domain} response status:`, response.status);
-      
       if (!response.ok) {
-        console.log(`${domain} returned ${response.status}, trying next mirror...`);
+        console.log(`${domain} returned ${response.status}`);
         continue;
       }
       
       const html = await response.text();
-      console.log(`${domain} HTML length:`, html.length);
       
-      // Check for Cloudflare challenge
-      if (html.includes('challenge-platform') || html.includes('cf-browser-verification') || html.includes('Just a moment')) {
-        console.log(`${domain} has Cloudflare challenge, trying next mirror...`);
+      if (html.includes('challenge-platform') || html.includes('Just a moment')) {
+        console.log(`${domain} has Cloudflare challenge`);
         continue;
       }
       
-      // Extract magnet links from HTML
       const magnetRegex = /href="(magnet:\?xt=urn:btih:[^"]+)"/gi;
       let match;
-      const magnets: string[] = [];
       
       while ((match = magnetRegex.exec(html)) !== null) {
         const magnet = match[1].replace(/&amp;/g, '&');
-        if (!magnets.includes(magnet)) {
-          magnets.push(magnet);
-        }
-      }
-      
-      // Also try to find info_hash patterns and construct magnets
-      const hashRegex = /(?:info_hash|btih)[=:\/]([a-f0-9]{40})/gi;
-      while ((match = hashRegex.exec(html)) !== null) {
-        const hash = match[1].toUpperCase();
-        const magnet = `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(query)}`;
-        if (!magnets.some(m => m.toLowerCase().includes(hash.toLowerCase()))) {
-          magnets.push(magnet);
-        }
-      }
-      
-      console.log(`Found ${magnets.length} magnets on ${domain}`);
-      
-      if (magnets.length === 0) {
-        continue;
-      }
-      
-      // Extract title from torrent links - look for title text near magnet links
-      const torrentData: Map<string, { title: string; size: string; seeders: number }> = new Map();
-      
-      // Pattern: title in link before magnet
-      const titleRegex = /<a[^>]*href="\/torrent\/[^"]*"[^>]*title="([^"]+)"|<a[^>]*href="\/torrent\/[^"]*"[^>]*>([^<]+)</gi;
-      const titles: string[] = [];
-      while ((match = titleRegex.exec(html)) !== null) {
-        const title = (match[1] || match[2] || '').trim();
-        if (title && title.length > 3) {
-          titles.push(title);
-        }
-      }
-      
-      for (const magnet of magnets.slice(0, 15)) {
-        const hashMatch = magnet.match(/btih:([a-f0-9]+)/i);
         const dnMatch = magnet.match(/dn=([^&]+)/);
-        
-        // Get title from dn parameter or from extracted titles
-        let title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
-        
-        // Try to find better title from page
-        const magnetIndex = html.indexOf(magnet.slice(0, 60));
-        if (magnetIndex > 0) {
-          const contextHtml = html.slice(Math.max(0, magnetIndex - 2000), magnetIndex);
-          // Look for title in the context
-          const contextTitleMatch = contextHtml.match(/<a[^>]*title="([^"]{10,})"[^>]*>|<a[^>]*>([^<]{10,})<\/a>\s*(?:<[^>]*>\s*)*<a[^>]*href="magnet/i);
-          if (contextTitleMatch) {
-            const extractedTitle = (contextTitleMatch[1] || contextTitleMatch[2] || '').trim();
-            if (extractedTitle.length > title.length) {
-              title = extractedTitle;
-            }
-          }
-          
-          // Extract seeders
-          const seedersMatch = contextHtml.match(/(?:seed|SE)[:\s]*(\d+)/i) ||
-                               contextHtml.match(/>(\d+)<\/td>\s*<td[^>]*>\d+<\/td>/i);
-          const seeders = seedersMatch ? parseInt(seedersMatch[1]) || 0 : 0;
-          
-          // Extract size
-          const sizeMatch = contextHtml.match(/([\d.,]+)\s*(GB|MB|KB|TB)/i);
-          const size = sizeMatch ? `${sizeMatch[1]} ${sizeMatch[2]}` : 'Unknown';
-          
-          if (hashMatch) {
-            torrentData.set(hashMatch[1].toLowerCase(), { title, size, seeders });
-          }
-        }
-        
-        const data = hashMatch ? torrentData.get(hashMatch[1].toLowerCase()) : undefined;
+        const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
         
         results.push({
-          title: data?.title || title,
+          title,
           magnet,
-          size: data?.size || 'Unknown',
-          seeders: data?.seeders || 0,
+          size: 'Unknown',
+          seeders: 0,
           source: 'Ext',
         });
       }
       
       if (results.length > 0) {
-        console.log(`${domain} returned ${results.length} results, success!`);
         return results;
       }
     } catch (error) {
@@ -317,7 +375,6 @@ async function searchExtTo(query: string): Promise<TorrentResult[]> {
     }
   }
   
-  console.log(`All ext.to mirrors failed, returning ${results.length} results`);
   return results;
 }
 
