@@ -213,9 +213,10 @@ const Player: React.FC = () => {
 
   return (
     <>
-      {/* Mobile mini player */}
+      {/* Mobile mini player - positioned above navbar with safe area */}
       <div 
-        className="fixed bottom-14 left-0 right-0 h-16 glass border-t border-border z-40 md:hidden"
+        className="fixed left-0 right-0 h-16 glass border-t border-border z-40 md:hidden"
+        style={{ bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))' }}
         onClick={() => setIsExpanded(true)}
       >
         <div className="h-full flex items-center px-4 gap-3">

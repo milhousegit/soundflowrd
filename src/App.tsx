@@ -8,6 +8,7 @@ import { PlayerProvider } from "@/contexts/PlayerContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import Login from "@/components/Login";
 import Layout from "@/components/Layout";
+import InstallPrompt from "@/components/InstallPrompt";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Library from "@/pages/Library";
@@ -59,7 +60,8 @@ const App = () => (
         <PlayerProvider>
           <TooltipProvider>
             <Toaster />
-            <Sonner />
+            <Sonner position="top-center" />
+            <InstallPrompt />
             <BrowserRouter>
               <AppRoutes />
             </BrowserRouter>

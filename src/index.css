@@ -70,8 +70,24 @@
     @apply border-border;
   }
 
+  html, body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
   body {
     @apply bg-background text-foreground font-outfit antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Safe area for iOS notch and home indicator */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 
   ::-webkit-scrollbar {
