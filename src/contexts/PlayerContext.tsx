@@ -4,6 +4,7 @@ import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay
 import { useAuth } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { addSyncingTrack, removeSyncingTrack, addSyncedTrack } from '@/hooks/useSyncedTracks';
 
 export interface DebugLogEntry {
   timestamp: Date;
@@ -211,9 +212,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           });
         
         console.log('Auto-saved stream mapping for track:', track.title);
+        // Mark track as synced
+        addSyncedTrack(track.id);
       }
     } catch (error) {
       console.error('Failed to auto-save stream mapping:', error);
+      removeSyncingTrack(track.id);
     }
   }, []);
 
@@ -448,6 +452,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             
             if (!foundInAlbum && showNoResultsToast) {
               addDebugLog('Nessun risultato album', 'Nessuna sorgente trovata neanche per album', 'error');
+              removeSyncingTrack(track.id);
               toast.error('Nessun contenuto trovato', {
                 description: 'Non è stato trovato nessun risultato per questa traccia.',
               });
@@ -457,6 +462,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
     } catch (error) {
       addDebugLog('Errore ricerca', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
+      if (track) {
+        removeSyncingTrack(track.id);
+      }
       if (showNoResultsToast) {
         toast.error('Errore nella ricerca', {
           description: 'Si è verificato un errore durante la ricerca.',
@@ -622,6 +630,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     // No saved mapping, search for streams via Real-Debrid with artist + title
     // Pass true to show toast when no results found, and pass track for auto-save
+    // Mark track as syncing (first time playback)
+    addSyncingTrack(track.id);
     searchForStreams(`${track.artist} ${track.title}`, true, track);
 
     // If track has a stream URL, play it
