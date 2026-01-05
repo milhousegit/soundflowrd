@@ -7,93 +7,54 @@ const corsHeaders = {
 
 const RD_API = 'https://api.real-debrid.com/rest/1.0';
 
-// Parse HTML to extract magnet links from torrent sites
-function extractMagnets(html: string): string[] {
-  const magnetRegex = /magnet:\?xt=urn:btih:[a-zA-Z0-9]+[^"'\s<>]*/gi;
-  const matches = html.match(magnetRegex) || [];
-  return [...new Set(matches)];
-}
-
-// Search for audio files using a public torrent indexer
-async function searchTorrents(query: string): Promise<{title: string, magnet: string, size: string}[]> {
-  const results: {title: string, magnet: string, size: string}[] = [];
+// Search using apibay.org (Pirate Bay API - usually accessible)
+async function searchTorrents(query: string): Promise<{title: string, magnet: string, size: string, seeders: number}[]> {
+  const results: {title: string, magnet: string, size: string, seeders: number}[] = [];
   
   try {
-    // Use btdig.com as a torrent search engine (public DHT search)
-    const searchUrl = `https://btdig.com/search?q=${encodeURIComponent(query)}`;
+    // Use apibay.org API
+    const searchUrl = `https://apibay.org/q.php?q=${encodeURIComponent(query)}&cat=101`; // 101 = Music
+    console.log('Searching apibay:', searchUrl);
     
     const response = await fetch(searchUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
       },
     });
     
     if (response.ok) {
-      const html = await response.text();
+      const data = await response.json();
+      console.log('Apibay results:', data?.length || 0);
       
-      // Extract torrent info from btdig results
-      const itemRegex = /<div class="one_result">([\s\S]*?)<\/div>\s*<\/div>/g;
-      const nameRegex = /<div class="torrent_name"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/;
-      const magnetRegex = /magnet:\?xt=urn:btih:[a-zA-Z0-9]+[^"'\s<>]*/i;
-      const sizeRegex = /<span class="torrent_size"[^>]*>([^<]+)<\/span>/;
-      
-      let match;
-      while ((match = itemRegex.exec(html)) !== null) {
-        const item = match[1];
-        const nameMatch = item.match(nameRegex);
-        const magnetMatch = item.match(magnetRegex);
-        const sizeMatch = item.match(sizeRegex);
-        
-        if (nameMatch && magnetMatch) {
+      if (Array.isArray(data) && data.length > 0 && data[0].id !== '0') {
+        for (const item of data.slice(0, 10)) {
+          if (item.id === '0') continue; // Skip "no results" placeholder
+          
+          const magnet = `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name)}`;
+          const sizeNum = parseInt(item.size) || 0;
+          const sizeMB = sizeNum > 0 ? `${Math.round(sizeNum / 1024 / 1024)}MB` : 'Unknown';
+          
           results.push({
-            title: nameMatch[1].trim(),
-            magnet: magnetMatch[0],
-            size: sizeMatch ? sizeMatch[1].trim() : 'Unknown',
+            title: item.name,
+            magnet,
+            size: sizeMB,
+            seeders: parseInt(item.seeders) || 0,
           });
         }
       }
     }
   } catch (error) {
-    console.error('Torrent search error:', error);
+    console.error('Apibay search error:', error);
   }
   
-  // Also try solidtorrents
-  try {
-    const solidUrl = `https://solidtorrents.to/search?q=${encodeURIComponent(query)}`;
-    
-    const response = await fetch(solidUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-    });
-    
-    if (response.ok) {
-      const html = await response.text();
-      const magnets = extractMagnets(html);
-      
-      // Simple extraction - in real implementation, parse properly
-      magnets.slice(0, 5).forEach((magnet, index) => {
-        const dnMatch = magnet.match(/dn=([^&]+)/);
-        const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : `Result ${index + 1}`;
-        
-        if (!results.find(r => r.magnet === magnet)) {
-          results.push({
-            title,
-            magnet,
-            size: 'Unknown',
-          });
-        }
-      });
-    }
-  } catch (error) {
-    console.error('SolidTorrents search error:', error);
-  }
+  // Sort by seeders (more seeders = faster/more available)
+  results.sort((a, b) => b.seeders - a.seeders);
   
-  return results.slice(0, 10);
+  return results;
 }
 
-// Add magnet to Real-Debrid and wait for it to be ready
-async function addAndProcessMagnet(apiKey: string, magnet: string): Promise<{id: string, links: string[]} | null> {
+// Add magnet to Real-Debrid and get download links
+async function processMagnet(apiKey: string, magnet: string): Promise<{id: string, links: string[], files: any[]} | null> {
   const rdHeaders = { 'Authorization': `Bearer ${apiKey}` };
   
   try {
@@ -101,6 +62,7 @@ async function addAndProcessMagnet(apiKey: string, magnet: string): Promise<{id:
     const formData = new FormData();
     formData.append('magnet', magnet);
     
+    console.log('Adding magnet to RD...');
     const addRes = await fetch(`${RD_API}/torrents/addMagnet`, {
       method: 'POST',
       headers: rdHeaders,
@@ -108,16 +70,47 @@ async function addAndProcessMagnet(apiKey: string, magnet: string): Promise<{id:
     });
     
     if (!addRes.ok) {
-      console.log('Failed to add magnet:', await addRes.text());
+      const errorText = await addRes.text();
+      console.log('Failed to add magnet:', errorText);
       return null;
     }
     
     const addData = await addRes.json();
     const torrentId = addData.id;
+    console.log('Torrent added with ID:', torrentId);
     
-    // Select all files
+    // Get torrent info to see files
+    const infoRes1 = await fetch(`${RD_API}/torrents/info/${torrentId}`, {
+      headers: rdHeaders,
+    });
+    
+    if (!infoRes1.ok) {
+      return null;
+    }
+    
+    const info1 = await infoRes1.json();
+    console.log('Torrent status:', info1.status, 'Files:', info1.files?.length);
+    
+    // Select audio files only
+    const audioFileIds: string[] = [];
+    if (info1.files && Array.isArray(info1.files)) {
+      for (const file of info1.files) {
+        const filename = file.path?.toLowerCase() || '';
+        if (filename.endsWith('.mp3') || filename.endsWith('.flac') || 
+            filename.endsWith('.m4a') || filename.endsWith('.wav') ||
+            filename.endsWith('.aac') || filename.endsWith('.ogg')) {
+          audioFileIds.push(file.id.toString());
+        }
+      }
+    }
+    
+    // If no audio files found, select all
+    const filesToSelect = audioFileIds.length > 0 ? audioFileIds.join(',') : 'all';
+    console.log('Selecting files:', filesToSelect);
+    
+    // Select files
     const selectForm = new FormData();
-    selectForm.append('files', 'all');
+    selectForm.append('files', filesToSelect);
     
     await fetch(`${RD_API}/torrents/selectFiles/${torrentId}`, {
       method: 'POST',
@@ -125,31 +118,26 @@ async function addAndProcessMagnet(apiKey: string, magnet: string): Promise<{id:
       body: selectForm,
     });
     
-    // Wait a moment for processing
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait for processing
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
-    // Get torrent info
-    const infoRes = await fetch(`${RD_API}/torrents/info/${torrentId}`, {
+    // Get updated torrent info
+    const infoRes2 = await fetch(`${RD_API}/torrents/info/${torrentId}`, {
       headers: rdHeaders,
     });
     
-    if (!infoRes.ok) {
+    if (!infoRes2.ok) {
       return null;
     }
     
-    const info = await infoRes.json();
+    const info2 = await infoRes2.json();
+    console.log('Final status:', info2.status, 'Links:', info2.links?.length);
     
-    // Return links if available
-    if (info.links && info.links.length > 0) {
-      return { id: torrentId, links: info.links };
-    }
-    
-    // If status is downloading/queued, we need to wait or skip
-    if (info.status === 'downloaded') {
-      return { id: torrentId, links: info.links || [] };
-    }
-    
-    return null;
+    return { 
+      id: torrentId, 
+      links: info2.links || [],
+      files: info2.files || []
+    };
   } catch (error) {
     console.error('Process magnet error:', error);
     return null;
@@ -183,23 +171,25 @@ serve(async (req) => {
           throw new Error('Invalid Real-Debrid API key');
         }
 
-        // Search for torrents
-        const searchQuery = `${query} mp3`;
-        console.log('Searching for:', searchQuery);
+        // Search with simpler query (artist + song)
+        console.log('Searching for:', query);
         
-        const torrents = await searchTorrents(searchQuery);
+        const torrents = await searchTorrents(query);
         console.log(`Found ${torrents.length} torrents`);
         
         const streams: {id: string, title: string, streamUrl: string, quality: string, size: string}[] = [];
         
-        // Process first few magnets to get streaming links
-        for (const torrent of torrents.slice(0, 3)) {
+        // Process first few magnets
+        for (const torrent of torrents.slice(0, 5)) {
+          if (streams.length >= 5) break; // Limit results
+          
           try {
-            const processed = await addAndProcessMagnet(apiKey, torrent.magnet);
+            console.log('Processing:', torrent.title.slice(0, 50));
+            const processed = await processMagnet(apiKey, torrent.magnet);
             
             if (processed && processed.links.length > 0) {
-              // Unrestrict the first audio link
-              for (const rdLink of processed.links.slice(0, 2)) {
+              // Unrestrict each link
+              for (const rdLink of processed.links.slice(0, 3)) {
                 const unrestrictForm = new FormData();
                 unrestrictForm.append('link', rdLink);
                 
@@ -211,22 +201,27 @@ serve(async (req) => {
                 
                 if (unrestrictRes.ok) {
                   const unrestrictData = await unrestrictRes.json();
-                  
-                  // Check if it's an audio file
                   const filename = unrestrictData.filename?.toLowerCase() || '';
+                  
+                  // Only include audio files
                   if (filename.endsWith('.mp3') || filename.endsWith('.flac') || 
                       filename.endsWith('.m4a') || filename.endsWith('.wav') ||
+                      filename.endsWith('.aac') || filename.endsWith('.ogg') ||
                       unrestrictData.mimeType?.includes('audio')) {
+                    
                     streams.push({
                       id: `${processed.id}-${streams.length}`,
                       title: unrestrictData.filename || torrent.title,
                       streamUrl: unrestrictData.download,
                       quality: filename.includes('flac') ? 'FLAC' : 
-                               filename.includes('320') ? '320kbps' : 'MP3',
+                               filename.includes('320') ? '320kbps' : 
+                               filename.includes('256') ? '256kbps' : 'MP3',
                       size: unrestrictData.filesize ? 
                             `${Math.round(unrestrictData.filesize / 1024 / 1024)}MB` : 
                             torrent.size,
                     });
+                    
+                    console.log('Added stream:', unrestrictData.filename?.slice(0, 50));
                   }
                 }
               }
@@ -236,6 +231,7 @@ serve(async (req) => {
           }
         }
         
+        console.log(`Returning ${streams.length} streams`);
         result = { streams };
         break;
       }
