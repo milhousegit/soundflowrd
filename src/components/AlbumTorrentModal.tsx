@@ -382,8 +382,8 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Bug className="w-5 h-5" />
-            Configura Torrent - {albumTitle}
+            <Cloud className="w-5 h-5" />
+            Sincronizza Album - {albumTitle}
           </DialogTitle>
         </DialogHeader>
 
@@ -395,7 +395,7 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
                 <span className="text-muted-foreground">Mapping esistente:</span>{' '}
                 <span className="font-medium">{existingMapping.torrent_title}</span>
                 <span className="text-muted-foreground ml-2">
-                  ({existingMapping.track_file_mappings?.length || 0} tracce)
+                  ({existingMapping.track_file_mappings?.length || 0} tracce sincronizzate)
                 </span>
               </div>
               <Button 
@@ -411,21 +411,25 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
           {/* Search section */}
           {!existingMapping && !selectedTorrent && (
             <>
+              <div className="text-sm text-muted-foreground">
+                Cerca una cartella torrent contenente l'album completo. Il software abbinerà automaticamente le tracce ai file.
+              </div>
               <div className="flex gap-2">
                 <Button 
                   onClick={handleSearch} 
                   disabled={isSearching}
                   className="flex-1"
+                  size="lg"
                 >
                   {isSearching ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Ricerca torrent...
+                      Ricerca torrent album...
                     </>
                   ) : (
                     <>
                       <FolderOpen className="w-4 h-4 mr-2" />
-                      Cerca "{artistName} {albumTitle}"
+                      Cerca cartella album
                     </>
                   )}
                 </Button>
@@ -434,6 +438,9 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
               {/* Torrent list */}
               {torrents.length > 0 && (
                 <ScrollArea className="flex-1">
+                  <div className="text-sm text-muted-foreground mb-2">
+                    Seleziona la cartella torrent da sincronizzare:
+                  </div>
                   <div className="space-y-2">
                     {torrents.map((torrent) => (
                       <div 
@@ -465,7 +472,7 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
                         {expandedTorrent === torrent.torrentId && (
                           <div className="border-t bg-muted/30 p-3">
                             <div className="text-xs text-muted-foreground mb-2">
-                              File nel torrent:
+                              File nel torrent ({torrent.files.length}):
                             </div>
                             <div className="space-y-1 max-h-40 overflow-y-auto mb-3">
                               {torrent.files.map((file) => (
@@ -481,20 +488,23 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
                             <div className="flex gap-2">
                               <Button 
                                 size="sm" 
-                                onClick={() => handleSelectTorrent(torrent)}
-                                variant="outline"
+                                onClick={() => handleSelectAllFiles(torrent)}
                                 className="flex-1"
+                                disabled={isSaving}
                               >
-                                <Check className="w-4 h-4 mr-2" />
-                                Configura manualmente
+                                {isSaving ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Cloud className="w-4 h-4 mr-2" />
+                                )}
+                                Sincronizza automaticamente
                               </Button>
                               <Button 
                                 size="sm" 
-                                onClick={() => handleSelectAllFiles(torrent)}
-                                className="flex-1"
+                                onClick={() => handleSelectTorrent(torrent)}
+                                variant="outline"
                               >
-                                <FolderOpen className="w-4 h-4 mr-2" />
-                                Scarica tutto e abbina
+                                Manuale
                               </Button>
                             </div>
                           </div>
