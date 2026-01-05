@@ -254,21 +254,54 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
       // Clean the search query - remove - and . that break searches
       const cleanArtist = cleanSearchQuery(artistName);
       const cleanAlbum = cleanSearchQuery(albumTitle);
-      const searchQuery = `${cleanArtist} ${cleanAlbum}`;
-      setLastSearchQuery(searchQuery);
-      setManualQuery(searchQuery);
       
-      console.log('Auto-searching for:', searchQuery);
-      const result = await searchStreams(apiKey, searchQuery);
+      // STEP 1: Try searching by album (artist + album)
+      const albumQuery = `${cleanArtist} ${cleanAlbum}`;
+      setLastSearchQuery(albumQuery);
+      setManualQuery(albumQuery);
       
-      const withAudio = result.torrents.filter(t => t.files.length > 0);
-      setTorrents(withAudio);
+      console.log('Auto-searching for album:', albumQuery);
+      let result = await searchStreams(apiKey, albumQuery);
+      let withAudio = result.torrents.filter(t => t.files.length > 0);
       
-      if (withAudio.length === 0) {
-        setSearchError(`Nessun risultato per "${searchQuery}"`);
-      } else if (withAudio.length === 1) {
-        // If only one result, auto-select it
-        handleSelectAllFiles(withAudio[0]);
+      // If found by album, auto-match immediately
+      if (withAudio.length > 0) {
+        console.log(`Found ${withAudio.length} results for album search`);
+        setTorrents(withAudio);
+        
+        // If single result or best match, auto-select and match files
+        if (withAudio.length === 1) {
+          handleSelectAllFiles(withAudio[0]);
+        } else {
+          // Find best match by checking if torrent title contains album name
+          const normalizedAlbum = normalizeForMatch(albumTitle);
+          const bestMatch = withAudio.find(t => 
+            normalizeForMatch(t.title).includes(normalizedAlbum)
+          );
+          
+          if (bestMatch) {
+            console.log('Found best album match:', bestMatch.title);
+            handleSelectAllFiles(bestMatch);
+          }
+          // Otherwise let user choose from the list
+        }
+        return;
+      }
+      
+      // STEP 2: Fallback - search by artist only
+      console.log('Album search returned 0 results, trying artist only:', cleanArtist);
+      setLastSearchQuery(cleanArtist);
+      
+      result = await searchStreams(apiKey, cleanArtist);
+      withAudio = result.torrents.filter(t => t.files.length > 0);
+      
+      if (withAudio.length > 0) {
+        console.log(`Found ${withAudio.length} results for artist search`);
+        setTorrents(withAudio);
+        setSearchError(`Nessun risultato per album "${cleanAlbum}", mostro risultati per artista`);
+        // Don't auto-select since these are artist-level results, user should choose
+      } else {
+        setSearchError(`Nessun risultato per "${albumQuery}" né per "${cleanArtist}"`);
       }
     } catch (error) {
       console.error('Auto-search error:', error);
