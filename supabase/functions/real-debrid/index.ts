@@ -7,40 +7,64 @@ const corsHeaders = {
 
 const RD_API = 'https://api.real-debrid.com/rest/1.0';
 
-// Search using apibay.org (Pirate Bay API - usually accessible)
+// Fetch with retry logic
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      return response;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.log(`Fetch attempt ${i + 1} failed:`, errorMessage);
+      if (i === retries - 1) throw err;
+      await new Promise(resolve => setTimeout(resolve, 500 * (i + 1)));
+    }
+  }
+  throw new Error('All fetch attempts failed');
+}
+
+// Search using apibay.org (Pirate Bay API)
 async function searchTorrents(query: string): Promise<{title: string, magnet: string, size: string, seeders: number}[]> {
   const results: {title: string, magnet: string, size: string, seeders: number}[] = [];
   
   try {
-    // Use apibay.org API
-    const searchUrl = `https://apibay.org/q.php?q=${encodeURIComponent(query)}&cat=101`; // 101 = Music
+    // Search without category filter to get more results
+    const searchUrl = `https://apibay.org/q.php?q=${encodeURIComponent(query)}`;
     console.log('Searching apibay:', searchUrl);
     
     const response = await fetch(searchUrl, {
-      headers: {
-        'Accept': 'application/json',
-      },
+      headers: { 'Accept': 'application/json' },
     });
     
     if (response.ok) {
-      const data = await response.json();
-      console.log('Apibay results:', data?.length || 0);
+      const text = await response.text();
+      console.log('Apibay raw response length:', text.length);
       
-      if (Array.isArray(data) && data.length > 0 && data[0].id !== '0') {
-        for (const item of data.slice(0, 10)) {
-          if (item.id === '0') continue; // Skip "no results" placeholder
-          
-          const magnet = `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name)}`;
-          const sizeNum = parseInt(item.size) || 0;
-          const sizeMB = sizeNum > 0 ? `${Math.round(sizeNum / 1024 / 1024)}MB` : 'Unknown';
-          
-          results.push({
-            title: item.name,
-            magnet,
-            size: sizeMB,
-            seeders: parseInt(item.seeders) || 0,
-          });
+      try {
+        const data = JSON.parse(text);
+        
+        if (Array.isArray(data) && data.length > 0) {
+          for (const item of data) {
+            // Skip "no results" placeholder (id = "0" or id = 0)
+            if (item.id === '0' || item.id === 0) {
+              console.log('Skipping no-results placeholder');
+              continue;
+            }
+            
+            const magnet = `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name)}`;
+            const sizeNum = parseInt(item.size) || 0;
+            const sizeMB = sizeNum > 0 ? `${Math.round(sizeNum / 1024 / 1024)}MB` : 'Unknown';
+            
+            results.push({
+              title: item.name,
+              magnet,
+              size: sizeMB,
+              seeders: parseInt(item.seeders) || 0,
+            });
+          }
         }
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
       }
     }
   } catch (error) {
@@ -50,7 +74,8 @@ async function searchTorrents(query: string): Promise<{title: string, magnet: st
   // Sort by seeders (more seeders = faster/more available)
   results.sort((a, b) => b.seeders - a.seeders);
   
-  return results;
+  console.log(`Found ${results.length} valid torrents`);
+  return results.slice(0, 10);
 }
 
 // Add magnet to Real-Debrid and get download links
@@ -63,7 +88,7 @@ async function processMagnet(apiKey: string, magnet: string): Promise<{id: strin
     formData.append('magnet', magnet);
     
     console.log('Adding magnet to RD...');
-    const addRes = await fetch(`${RD_API}/torrents/addMagnet`, {
+    const addRes = await fetchWithRetry(`${RD_API}/torrents/addMagnet`, {
       method: 'POST',
       headers: rdHeaders,
       body: formData,
@@ -80,7 +105,7 @@ async function processMagnet(apiKey: string, magnet: string): Promise<{id: strin
     console.log('Torrent added with ID:', torrentId);
     
     // Get torrent info to see files
-    const infoRes1 = await fetch(`${RD_API}/torrents/info/${torrentId}`, {
+    const infoRes1 = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
       headers: rdHeaders,
     });
     
@@ -112,7 +137,7 @@ async function processMagnet(apiKey: string, magnet: string): Promise<{id: strin
     const selectForm = new FormData();
     selectForm.append('files', filesToSelect);
     
-    await fetch(`${RD_API}/torrents/selectFiles/${torrentId}`, {
+    await fetchWithRetry(`${RD_API}/torrents/selectFiles/${torrentId}`, {
       method: 'POST',
       headers: rdHeaders,
       body: selectForm,
@@ -122,7 +147,7 @@ async function processMagnet(apiKey: string, magnet: string): Promise<{id: strin
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     // Get updated torrent info
-    const infoRes2 = await fetch(`${RD_API}/torrents/info/${torrentId}`, {
+    const infoRes2 = await fetchWithRetry(`${RD_API}/torrents/info/${torrentId}`, {
       headers: rdHeaders,
     });
     
@@ -165,35 +190,33 @@ serve(async (req) => {
 
     switch (action) {
       case 'search': {
-        // Verify API key first
-        const userRes = await fetch(`${RD_API}/user`, { headers: rdHeaders });
+        // Verify API key first with retry
+        const userRes = await fetchWithRetry(`${RD_API}/user`, { headers: rdHeaders });
         if (!userRes.ok) {
           throw new Error('Invalid Real-Debrid API key');
         }
 
-        // Search with simpler query (artist + song)
         console.log('Searching for:', query);
         
         const torrents = await searchTorrents(query);
-        console.log(`Found ${torrents.length} torrents`);
+        console.log(`Processing ${torrents.length} torrents`);
         
         const streams: {id: string, title: string, streamUrl: string, quality: string, size: string}[] = [];
         
-        // Process first few magnets
+        // Process magnets
         for (const torrent of torrents.slice(0, 5)) {
-          if (streams.length >= 5) break; // Limit results
+          if (streams.length >= 5) break;
           
           try {
             console.log('Processing:', torrent.title.slice(0, 50));
             const processed = await processMagnet(apiKey, torrent.magnet);
             
             if (processed && processed.links.length > 0) {
-              // Unrestrict each link
               for (const rdLink of processed.links.slice(0, 3)) {
                 const unrestrictForm = new FormData();
                 unrestrictForm.append('link', rdLink);
                 
-                const unrestrictRes = await fetch(`${RD_API}/unrestrict/link`, {
+                const unrestrictRes = await fetchWithRetry(`${RD_API}/unrestrict/link`, {
                   method: 'POST',
                   headers: rdHeaders,
                   body: unrestrictForm,
@@ -240,7 +263,7 @@ serve(async (req) => {
         const formData = new FormData();
         formData.append('link', link);
 
-        const response = await fetch(`${RD_API}/unrestrict/link`, {
+        const response = await fetchWithRetry(`${RD_API}/unrestrict/link`, {
           method: 'POST',
           headers: rdHeaders,
           body: formData,
@@ -257,7 +280,7 @@ serve(async (req) => {
       }
 
       case 'verify': {
-        const response = await fetch(`${RD_API}/user`, { headers: rdHeaders });
+        const response = await fetchWithRetry(`${RD_API}/user`, { headers: rdHeaders });
         if (!response.ok) {
           throw new Error('Invalid API key');
         }
