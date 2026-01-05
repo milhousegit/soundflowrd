@@ -12,11 +12,51 @@ const FANART_API = 'https://webservice.fanart.tv/v3';
 // You can get a free API key from https://fanart.tv/get-an-api-key/
 const FANART_API_KEY = Deno.env.get('FANART_API_KEY') || '';
 
+// Retry fetch with exponential backoff
+async function fetchWithRetry(url: string, options: RequestInit = {}, maxRetries = 3): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Add delay between retries (exponential backoff)
+      if (attempt > 0) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      const response = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      });
+      
+      // If rate limited, wait and retry
+      if (response.status === 503 || response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 2000;
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.log(`Fetch attempt ${attempt + 1} failed for ${url}: ${lastError.message}`);
+      
+      // Don't retry on abort/timeout for last attempt
+      if (attempt === maxRetries - 1) {
+        break;
+      }
+    }
+  }
+  
+  throw lastError || new Error('Fetch failed after retries');
+}
+
 async function getArtistImage(mbid: string): Promise<string | undefined> {
   // Try fanart.tv first if we have an API key
   if (FANART_API_KEY) {
     try {
-      const response = await fetch(`${FANART_API}/music/${mbid}?api_key=${FANART_API_KEY}`);
+      const response = await fetchWithRetry(`${FANART_API}/music/${mbid}?api_key=${FANART_API_KEY}`, {}, 2);
       if (response.ok) {
         const data = await response.json();
         // Get artistthumb or artistbackground
@@ -35,9 +75,9 @@ async function getArtistImage(mbid: string): Promise<string | undefined> {
   // Fallback: try to get from Wikipedia/Wikidata via MusicBrainz relations
   try {
     const url = `${MUSICBRAINZ_API}/artist/${mbid}?inc=url-rels&fmt=json`;
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(url, {
       headers: { 'User-Agent': 'SoundFlow/1.0.0 (https://soundflow.app)' }
-    });
+    }, 2);
     if (response.ok) {
       const data = await response.json();
       // Find Wikidata relation
@@ -46,7 +86,7 @@ async function getArtistImage(mbid: string): Promise<string | undefined> {
         const wikidataId = wikidataRel.url?.resource?.split('/').pop();
         if (wikidataId) {
           // Get image from Wikidata
-          const wdResponse = await fetch(`https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`);
+          const wdResponse = await fetchWithRetry(`https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`, {}, 2);
           if (wdResponse.ok) {
             const wdData = await wdResponse.json();
             const imageFile = wdData.entities?.[wikidataId]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
@@ -85,7 +125,7 @@ serve(async (req) => {
     switch (action) {
       case 'search-artists': {
         const url = `${MUSICBRAINZ_API}/artist?query=${encodeURIComponent(query)}&limit=${limit}&fmt=json`;
-        const response = await fetch(url, { headers });
+        const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         
         // Get images for top artists
@@ -116,7 +156,7 @@ serve(async (req) => {
 
       case 'search-releases': {
         const url = `${MUSICBRAINZ_API}/release?query=${encodeURIComponent(query)}&limit=${limit}&fmt=json`;
-        const response = await fetch(url, { headers });
+        const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         result = await Promise.all((data.releases || []).map(async (r: any) => {
           let coverUrl;
@@ -143,7 +183,7 @@ serve(async (req) => {
 
       case 'search-recordings': {
         const url = `${MUSICBRAINZ_API}/recording?query=${encodeURIComponent(query)}&limit=${limit}&fmt=json`;
-        const response = await fetch(url, { headers });
+        const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         result = data.recordings?.map((r: any) => ({
           id: r.id,
@@ -159,7 +199,7 @@ serve(async (req) => {
 
       case 'get-artist': {
         const url = `${MUSICBRAINZ_API}/artist/${id}?inc=releases+recordings+tags&fmt=json`;
-        const response = await fetch(url, { headers });
+        const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         
         // Get artist image
@@ -167,7 +207,7 @@ serve(async (req) => {
         
         // Get releases with covers
         const releasesUrl = `${MUSICBRAINZ_API}/release?artist=${id}&limit=30&fmt=json`;
-        const releasesRes = await fetch(releasesUrl, { headers });
+        const releasesRes = await fetchWithRetry(releasesUrl, { headers });
         const releasesData = await releasesRes.json();
         
         // Sort by date and get unique albums
@@ -212,7 +252,7 @@ serve(async (req) => {
       case 'get-artist-recordings': {
         // Get popular recordings by this artist
         const url = `${MUSICBRAINZ_API}/recording?artist=${id}&limit=${limit}&fmt=json`;
-        const response = await fetch(url, { headers });
+        const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         
         // Get album covers for the recordings
@@ -247,7 +287,7 @@ serve(async (req) => {
 
       case 'get-release': {
         const url = `${MUSICBRAINZ_API}/release/${id}?inc=recordings+artist-credits&fmt=json`;
-        const response = await fetch(url, { headers });
+        const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         
         let coverUrl;
@@ -290,7 +330,7 @@ serve(async (req) => {
         }
         
         const url = `${MUSICBRAINZ_API}/release?query=${encodeURIComponent(queryStr)}&limit=${limit}&fmt=json`;
-        const response = await fetch(url, { headers });
+        const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         
         result = await Promise.all((data.releases || []).slice(0, limit).map(async (r: any) => {
@@ -324,7 +364,7 @@ serve(async (req) => {
         }
         
         const url = `${MUSICBRAINZ_API}/artist?query=${encodeURIComponent(queryStr)}&limit=${limit}&fmt=json`;
-        const response = await fetch(url, { headers });
+        const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         
         // Get images for artists
@@ -345,7 +385,7 @@ serve(async (req) => {
       case 'get-charts': {
         // Get popular releases (simulated with recent releases)
         const url = `${MUSICBRAINZ_API}/release?query=*&limit=20&fmt=json`;
-        const response = await fetch(url, { headers });
+        const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         result = data.releases || [];
         break;
