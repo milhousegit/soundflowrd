@@ -251,8 +251,8 @@ serve(async (req) => {
 
       case 'get-artist-recordings': {
         // Get popular recordings by this artist, sorted by rating (popularity)
-        // MusicBrainz allows inc=ratings to get popularity data
-        const url = `${MUSICBRAINZ_API}/recording?artist=${id}&inc=ratings&limit=50&fmt=json`;
+        // MusicBrainz allows inc=ratings+releases to get popularity data AND album info for covers
+        const url = `${MUSICBRAINZ_API}/recording?artist=${id}&inc=ratings+releases&limit=50&fmt=json`;
         const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         
