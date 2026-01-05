@@ -175,6 +175,140 @@ async function search1337x(query: string): Promise<TorrentResult[]> {
   return results;
 }
 
+// Search ext.to (torrent aggregator with simple API)
+async function searchExtTo(query: string): Promise<TorrentResult[]> {
+  const results: TorrentResult[] = [];
+  
+  try {
+    // ext.to has a JSON API endpoint
+    const searchUrl = `https://ext.to/api/v2/search/?q=${encodeURIComponent(query)}&category=music`;
+    console.log('Searching ext.to:', searchUrl);
+    
+    const response = await fetch(searchUrl, {
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      console.log('ext.to response not ok:', response.status);
+      
+      // Fallback to HTML scraping if API doesn't work
+      const htmlUrl = `https://ext.to/search/?q=${encodeURIComponent(query)}&c=music`;
+      console.log('Trying ext.to HTML fallback:', htmlUrl);
+      
+      const htmlResponse = await fetch(htmlUrl, {
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html',
+        },
+      });
+      
+      if (!htmlResponse.ok) {
+        console.log('ext.to HTML fallback also failed:', htmlResponse.status);
+        return results;
+      }
+      
+      const html = await htmlResponse.text();
+      console.log('ext.to HTML length:', html.length);
+      
+      // Extract magnet links from HTML
+      const magnetRegex = /href="(magnet:\?xt=urn:btih:[^"]+)"/gi;
+      let match;
+      const magnets: string[] = [];
+      
+      while ((match = magnetRegex.exec(html)) !== null) {
+        const magnet = match[1].replace(/&amp;/g, '&');
+        if (!magnets.includes(magnet)) {
+          magnets.push(magnet);
+        }
+      }
+      
+      console.log(`Found ${magnets.length} magnets on ext.to (HTML)`);
+      
+      for (const magnet of magnets.slice(0, 15)) {
+        const dnMatch = magnet.match(/dn=([^&]+)/);
+        const title = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : 'Unknown';
+        
+        // Try to extract size and seeders from nearby HTML
+        const magnetIndex = html.indexOf(magnet.slice(0, 60));
+        let seeders = 0;
+        let size = 'Unknown';
+        
+        if (magnetIndex > 0) {
+          const contextHtml = html.slice(Math.max(0, magnetIndex - 1500), magnetIndex + 500);
+          
+          const seedersMatch = contextHtml.match(/(?:seed|SE)[:\s]*(\d+)/i) ||
+                               contextHtml.match(/>(\d+)<\/td>\s*<td[^>]*>\d+<\/td>\s*<td/i);
+          if (seedersMatch) {
+            seeders = parseInt(seedersMatch[1]) || 0;
+          }
+          
+          const sizeMatch = contextHtml.match(/([\d.,]+)\s*(GB|MB|KB|TB)/i);
+          if (sizeMatch) {
+            size = `${sizeMatch[1]} ${sizeMatch[2]}`;
+          }
+        }
+        
+        results.push({
+          title,
+          magnet,
+          size,
+          seeders,
+          source: 'Ext',
+        });
+      }
+      
+      return results;
+    }
+    
+    // Parse JSON API response
+    const data = await response.json();
+    console.log('ext.to API response type:', typeof data);
+    
+    if (Array.isArray(data)) {
+      console.log(`ext.to API returned ${data.length} results`);
+      
+      for (const item of data.slice(0, 15)) {
+        if (item.magnet || item.info_hash) {
+          const magnet = item.magnet || `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name || item.title || query)}`;
+          
+          results.push({
+            title: item.name || item.title || 'Unknown',
+            magnet,
+            size: item.size || item.filesize || 'Unknown',
+            seeders: parseInt(item.seeders || item.seed || 0),
+            source: 'Ext',
+          });
+        }
+      }
+    } else if (data.results && Array.isArray(data.results)) {
+      console.log(`ext.to API returned ${data.results.length} results (nested)`);
+      
+      for (const item of data.results.slice(0, 15)) {
+        if (item.magnet || item.info_hash) {
+          const magnet = item.magnet || `magnet:?xt=urn:btih:${item.info_hash}&dn=${encodeURIComponent(item.name || item.title || query)}`;
+          
+          results.push({
+            title: item.name || item.title || 'Unknown',
+            magnet,
+            size: item.size || item.filesize || 'Unknown',
+            seeders: parseInt(item.seeders || item.seed || 0),
+            source: 'Ext',
+          });
+        }
+      }
+    }
+    
+    console.log(`Returning ${results.length} results from ext.to`);
+  } catch (error) {
+    console.error('ext.to error:', error);
+  }
+  
+  return results;
+}
+
 // Search TorrentGalaxy
 async function searchTorrentGalaxy(query: string): Promise<TorrentResult[]> {
   const results: TorrentResult[] = [];
@@ -576,10 +710,11 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
   const searchPromises: Promise<TorrentResult[]>[] = [];
   
   // Use first 2 variants to avoid too many requests
-  // Priority sources: Bitsearch, SolidTorrents, apibay (more reliable)
+  // Priority sources: ext.to, Bitsearch, SolidTorrents, apibay (more reliable)
   // Secondary: Corsaro Nero, 1337x, TorrentGalaxy (often blocked)
   for (const variant of queryVariants.slice(0, 2)) {
     // Primary reliable sources
+    searchPromises.push(searchExtTo(variant).catch(() => []));
     searchPromises.push(searchBitsearch(variant).catch(() => []));
     searchPromises.push(searchSolidTorrents(variant).catch(() => []));
     searchPromises.push(searchApibay(variant).catch(() => []));
@@ -593,7 +728,7 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
   let allResults = results.flat();
   
   // Log results per source
-  const sources = ['Bit', 'Solid', 'TPB', 'CNero', '1337x', 'TGx'];
+  const sources = ['Ext', 'Bit', 'Solid', 'TPB', 'CNero', '1337x', 'TGx'];
   for (const src of sources) {
     const count = allResults.filter(r => r.source === src).length;
     if (count > 0) console.log(`${src}: ${count} results`);
