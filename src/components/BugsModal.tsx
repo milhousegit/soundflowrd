@@ -1,7 +1,8 @@
 import React, { forwardRef, useState, useEffect } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { StreamResult, TorrentInfo, AudioFile } from '@/lib/realdebrid';
-import { X, Music, Check, Search, Loader2, Download, RefreshCw, ChevronDown, ChevronRight, Folder, FileAudio } from 'lucide-react';
+import { DebugLogEntry } from '@/contexts/PlayerContext';
+import { X, Music, Check, Search, Loader2, Download, RefreshCw, ChevronDown, ChevronRight, Folder, FileAudio, AlertCircle, Info, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -19,15 +20,19 @@ interface BugsModalProps {
   isLoading?: boolean;
   onManualSearch?: (query: string) => void;
   currentTrackInfo?: { title: string; artist: string };
+  debugLogs?: DebugLogEntry[];
+  downloadProgress?: number | null;
+  downloadStatus?: string | null;
 }
 
 const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
-  ({ isOpen, onClose, alternatives, torrents = [], onSelect, onSelectFile, onRefreshTorrent, currentStreamId, isLoading, onManualSearch, currentTrackInfo }, ref) => {
+  ({ isOpen, onClose, alternatives, torrents = [], onSelect, onSelectFile, onRefreshTorrent, currentStreamId, isLoading, onManualSearch, currentTrackInfo, debugLogs = [], downloadProgress, downloadStatus }, ref) => {
     const { t } = useSettings();
     const [manualQuery, setManualQuery] = useState('');
     const [expandedTorrents, setExpandedTorrents] = useState<Set<string>>(new Set());
     const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
     const [selectingFiles, setSelectingFiles] = useState<Set<string>>(new Set());
+    const [showDebugLogs, setShowDebugLogs] = useState(false);
 
     // Auto-refresh downloading torrents every 15 seconds
     useEffect(() => {
@@ -124,6 +129,17 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
       }
     };
 
+    const getLogIcon = (status: DebugLogEntry['status']) => {
+      switch (status) {
+        case 'success': return <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />;
+        case 'error': return <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />;
+        case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-500 flex-shrink-0" />;
+        default: return <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />;
+      }
+    };
+
+    const hasErrors = debugLogs.some(log => log.status === 'error');
+
     return (
       <div ref={ref} className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
         {/* Backdrop */}
@@ -144,10 +160,62 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                 </p>
               )}
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="w-5 h-5" />
-            </Button>
+            <div className="flex items-center gap-2">
+              {(hasErrors || debugLogs.length > 0) && (
+                <Button 
+                  variant={showDebugLogs ? "secondary" : "ghost"} 
+                  size="sm"
+                  onClick={() => setShowDebugLogs(!showDebugLogs)}
+                  className={cn(hasErrors && "text-destructive")}
+                >
+                  <Info className="w-4 h-4 mr-1" />
+                  {t('language') === 'it' ? 'Dettagli' : 'Details'}
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
+
+          {/* Download Progress Bar */}
+          {downloadProgress !== null && downloadStatus && (
+            <div className="px-4 py-2 border-b border-border bg-secondary/30">
+              <div className="flex items-center gap-2 mb-1">
+                <Download className="w-4 h-4 text-primary animate-pulse" />
+                <span className="text-sm font-medium text-foreground">
+                  {t('language') === 'it' ? 'Download in corso...' : 'Downloading...'}
+                </span>
+                <span className="text-sm text-muted-foreground ml-auto">{downloadProgress}%</span>
+              </div>
+              <Progress value={downloadProgress} className="h-2" />
+            </div>
+          )}
+
+          {/* Debug Logs Panel */}
+          {showDebugLogs && debugLogs.length > 0 && (
+            <div className="max-h-48 overflow-y-auto border-b border-border bg-secondary/20">
+              <div className="p-3 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase mb-2">
+                  {t('language') === 'it' ? 'Report passaggi' : 'Step report'}
+                </p>
+                {debugLogs.map((log, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-sm">
+                    {getLogIcon(log.status)}
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium text-foreground">{log.step}</span>
+                      {log.details && (
+                        <p className="text-xs text-muted-foreground truncate">{log.details}</p>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                      {log.timestamp.toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Manual Search */}
           <div className="p-4 border-b border-border">
