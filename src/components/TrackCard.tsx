@@ -1,11 +1,20 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useState } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { Play, Pause, Music, Cloud } from 'lucide-react';
+import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudOff, CloudUpload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
-import { useSyncedTracks } from '@/hooks/useSyncedTracks';
+import { useSyncedTracks, removeSyncedTrack } from '@/hooks/useSyncedTracks';
 import { useTap } from '@/hooks/useTap';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 
 interface TrackCardProps {
   track: Track;
@@ -21,8 +30,9 @@ interface TrackCardProps {
 
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
   ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading }, ref) => {
-    const { currentTrack, isPlaying, playTrack, toggle } = usePlayer();
+    const { currentTrack, isPlaying, playTrack, toggle, addToQueue } = usePlayer();
     const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
     
     const isCurrentTrack = currentTrack?.id === track.id;
     const isSynced = propIsSynced !== undefined ? propIsSynced : hookIsSynced(track.id);
@@ -34,11 +44,43 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const isBlinking = isSyncing || isDownloading;
 
     const handleClick = () => {
+      if (isMenuOpen) return; // Don't trigger play when menu is open
       if (isCurrentTrack) {
         toggle();
       } else {
         playTrack(track, queue);
       }
+    };
+
+    const handleRemoveSync = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      try {
+        const { error } = await supabase
+          .from('track_file_mappings')
+          .delete()
+          .eq('track_id', track.id);
+        
+        if (error) throw error;
+        
+        removeSyncedTrack(track.id);
+        toast.success('Sincronizzazione rimossa');
+      } catch (error) {
+        console.error('Failed to remove sync:', error);
+        toast.error('Errore nella rimozione');
+      }
+    };
+
+    const handleSync = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      // Play the track to trigger sync search
+      playTrack(track, queue);
+      toast.info('Avvio sincronizzazione...');
+    };
+
+    const handleAddToQueue = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      addToQueue([track]);
+      toast.success('Aggiunto alla coda');
     };
 
     const formatDuration = (seconds: number) => {
@@ -130,6 +172,36 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
         <span className="text-xs md:text-sm text-muted-foreground flex-shrink-0">
           {formatDuration(track.duration)}
         </span>
+
+        {/* More menu */}
+        <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 bg-popover z-[100]">
+            <DropdownMenuItem onClick={handleAddToQueue} className="cursor-pointer">
+              <ListPlus className="w-4 h-4 mr-2" />
+              Aggiungi alla coda
+            </DropdownMenuItem>
+            {isSynced ? (
+              <DropdownMenuItem onClick={handleRemoveSync} className="cursor-pointer text-destructive focus:text-destructive">
+                <CloudOff className="w-4 h-4 mr-2" />
+                Rimuovi sincronizzazione
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={handleSync} className="cursor-pointer">
+                <CloudUpload className="w-4 h-4 mr-2" />
+                Sincronizza
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     );
   }
