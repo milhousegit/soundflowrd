@@ -698,6 +698,7 @@ function dedupeResults(results: TorrentResult[]): TorrentResult[] {
 }
 
 // Combined search from multiple sources with fuzzy matching
+// ext.to is the primary engine (best fuzzy matching), others are fallbacks
 async function searchTorrents(query: string): Promise<TorrentResult[]> {
   console.log('Searching all sources for:', query);
   
@@ -706,26 +707,50 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
   console.log('Query words:', queryWords);
   console.log('Query variants:', queryVariants);
   
-  // Search with multiple query variants in parallel across all sources
-  const searchPromises: Promise<TorrentResult[]>[] = [];
+  // PHASE 1: Try ext.to first (best fuzzy matching)
+  console.log('Phase 1: Searching ext.to (primary engine)...');
+  let allResults: TorrentResult[] = [];
   
-  // Use first 2 variants to avoid too many requests
-  // Priority sources: ext.to, Bitsearch, SolidTorrents, apibay (more reliable)
-  // Secondary: Corsaro Nero, 1337x, TorrentGalaxy (often blocked)
-  for (const variant of queryVariants.slice(0, 2)) {
-    // Primary reliable sources
-    searchPromises.push(searchExtTo(variant).catch(() => []));
-    searchPromises.push(searchBitsearch(variant).catch(() => []));
-    searchPromises.push(searchSolidTorrents(variant).catch(() => []));
-    searchPromises.push(searchApibay(variant).catch(() => []));
-    // Secondary sources (may be blocked)
-    searchPromises.push(searchCorsaroNero(variant).catch(() => []));
-    searchPromises.push(search1337x(variant).catch(() => []));
-    searchPromises.push(searchTorrentGalaxy(variant).catch(() => []));
+  try {
+    // Search ext.to with original query first
+    const extResults = await searchExtTo(query);
+    console.log(`ext.to returned ${extResults.length} results for original query`);
+    
+    // If not enough results, try variants
+    if (extResults.length < 3) {
+      for (const variant of queryVariants.slice(1, 3)) {
+        const variantResults = await searchExtTo(variant);
+        console.log(`ext.to returned ${variantResults.length} results for variant: ${variant}`);
+        extResults.push(...variantResults);
+      }
+    }
+    
+    allResults = extResults;
+  } catch (error) {
+    console.error('ext.to primary search failed:', error);
   }
   
-  const results = await Promise.all(searchPromises);
-  let allResults = results.flat();
+  // PHASE 2: If ext.to found good results, use them; otherwise use fallback sources
+  if (allResults.length >= 3) {
+    console.log(`ext.to found ${allResults.length} results, skipping fallback sources`);
+  } else {
+    console.log('Phase 2: ext.to insufficient results, trying fallback sources...');
+    
+    // Fallback to other sources in parallel
+    const fallbackPromises: Promise<TorrentResult[]>[] = [];
+    
+    for (const variant of queryVariants.slice(0, 2)) {
+      fallbackPromises.push(searchBitsearch(variant).catch(() => []));
+      fallbackPromises.push(searchSolidTorrents(variant).catch(() => []));
+      fallbackPromises.push(searchApibay(variant).catch(() => []));
+      fallbackPromises.push(searchCorsaroNero(variant).catch(() => []));
+      fallbackPromises.push(search1337x(variant).catch(() => []));
+      fallbackPromises.push(searchTorrentGalaxy(variant).catch(() => []));
+    }
+    
+    const fallbackResults = await Promise.all(fallbackPromises);
+    allResults.push(...fallbackResults.flat());
+  }
   
   // Log results per source
   const sources = ['Ext', 'Bit', 'Solid', 'TPB', 'CNero', '1337x', 'TGx'];
@@ -738,22 +763,32 @@ async function searchTorrents(query: string): Promise<TorrentResult[]> {
   allResults = dedupeResults(allResults);
   console.log(`Total unique results after dedupe: ${allResults.length}`);
   
-  // Filter results to only include those that contain ALL query words
-  if (queryWords.length > 1) {
-    const filteredResults = allResults.filter(r => matchesAllWords(r.title, queryWords));
-    console.log(`Filtered from ${allResults.length} to ${filteredResults.length} results matching all words`);
-    
-    // If we have good filtered results, use them; otherwise fall back to all results
-    if (filteredResults.length > 0) {
-      allResults = filteredResults;
+  // For ext.to results, skip strict word matching (it already does fuzzy matching)
+  // For other sources, apply word filtering
+  const extResults = allResults.filter(r => r.source === 'Ext');
+  const otherResults = allResults.filter(r => r.source !== 'Ext');
+  
+  let filteredOtherResults = otherResults;
+  if (queryWords.length > 1 && otherResults.length > 0) {
+    const filtered = otherResults.filter(r => matchesAllWords(r.title, queryWords));
+    if (filtered.length > 0) {
+      filteredOtherResults = filtered;
     }
   }
   
-  // Sort by seeders (best first)
-  allResults.sort((a, b) => b.seeders - a.seeders);
+  // Combine: ext.to results first (they're already fuzzy matched), then filtered others
+  allResults = [...extResults, ...filteredOtherResults];
   
-  console.log(`Returning ${Math.min(allResults.length, 15)} torrents`);
-  return allResults.slice(0, 15);
+  // Sort by seeders (best first), but keep ext.to results prioritized
+  allResults.sort((a, b) => {
+    // Prioritize ext.to results slightly
+    if (a.source === 'Ext' && b.source !== 'Ext') return -1;
+    if (a.source !== 'Ext' && b.source === 'Ext') return 1;
+    return b.seeders - a.seeders;
+  });
+  
+  console.log(`Returning ${Math.min(allResults.length, 20)} torrents`);
+  return allResults.slice(0, 20);
 }
 
 // Add magnet to Real-Debrid and get file list
