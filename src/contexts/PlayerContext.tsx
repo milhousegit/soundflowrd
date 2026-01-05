@@ -1060,6 +1060,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const nextTrack = state.queue[nextIndex];
       if (!nextTrack?.albumId) return;
       
+      // IMPORTANT: avoid interfering with current playback when the next track is in the same album/torrent.
+      // Selecting files at provider level changes RD selection state and can swap the currently playing file.
+      if (nextTrack.albumId === state.currentTrack.albumId) return;
+      
       // Check if next track already has a mapping
       const { data: existingMapping } = await supabase
         .from('track_file_mappings')
