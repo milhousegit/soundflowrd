@@ -169,6 +169,27 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       .trim();
   };
 
+  // Helper to check if file name contains track title words (flexible matching)
+  // e.g. "16 - TITOLI DI CODA.flac" should match "TITOLI DI CODA"
+  const flexibleMatch = (fileName: string, trackTitle: string): boolean => {
+    const normalizedFile = normalizeForMatch(fileName);
+    const normalizedTitle = normalizeForMatch(trackTitle);
+    
+    // First try exact substring match
+    if (normalizedFile.includes(normalizedTitle)) {
+      return true;
+    }
+    
+    // Split track title into words and check if all words are present in the filename
+    const titleWords = normalizedTitle.split(/\s+/).filter(w => w.length > 1);
+    if (titleWords.length === 0) return false;
+    
+    // All significant words from the track title must be present in the filename
+    const allWordsPresent = titleWords.every(word => normalizedFile.includes(word));
+    
+    return allWordsPresent;
+  };
+
   // Helper to save a **file** mapping (torrent + specific file id) to database
   const saveFileMapping = useCallback(async (params: {
     track: Track;
@@ -275,16 +296,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
         
         if (torrent.files && torrent.files.length > 0) {
-          const normalizedTitle = normalizeForMatch(track.title);
           addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
           
           // Find a file that contains the track title (check both filename and path)
           const matchingFile = torrent.files.find(file => {
-            const normalizedFileName = normalizeForMatch(file.filename || '');
-            const normalizedPath = normalizeForMatch(file.path || '');
-            const matches = normalizedFileName.includes(normalizedTitle) || normalizedPath.includes(normalizedTitle);
+            const matchesFileName = flexibleMatch(file.filename || '', track.title);
+            const matchesPath = flexibleMatch(file.path || '', track.title);
+            const matches = matchesFileName || matchesPath;
             if (matches) {
-              addDebugLog('Match trovato', `"${file.filename}" contiene "${track.title}"`, 'success');
+              addDebugLog('Match trovato', `"${file.filename}" contiene parole di "${track.title}"`, 'success');
             }
             return matches;
           });
@@ -343,14 +363,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               addDebugLog('Stato torrent', `Stato: ${selectResult.status}, nessuno stream pronto`, 'warning');
             }
           } else {
-            addDebugLog('Nessun match', `Nessun file corrisponde a "${track.title}"`, 'warning');
+            // Log all file names for debugging
+            const fileNames = torrent.files.map(f => f.filename).join(', ');
+            addDebugLog('Nessun match', `Cercavo "${track.title}" in: ${fileNames.substring(0, 200)}...`, 'warning');
           }
         }
       }
       
       // If no file match found but we have torrents, at least show them
       if (result.torrents.length > 0) {
-        addDebugLog('Match manuale richiesto', 'Torrent trovati ma nessun file corrisponde automaticamente', 'warning');
+        addDebugLog('Match manuale richiesto', `Nessun file corrisponde a "${track.title}" (query usata: "${track.album} ${track.artist}")`, 'warning');
         return false;
       }
       
@@ -454,8 +476,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         
         // Try to auto-select if there's a torrent with a matching file
         if (track) {
-          const normalizedTitle = normalizeForMatch(track.title);
-          
           for (const torrent of result.torrents) {
             // Check if search is still valid before processing each torrent
             if (searchTrackId && currentSearchTrackIdRef.current !== searchTrackId) {
@@ -466,13 +486,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             if (torrent.files && torrent.files.length > 0) {
               addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
               
-              // Find a file that matches the track title (check both filename and path)
+              // Find a file that matches the track title using flexible matching
               const matchingFile = torrent.files.find(file => {
-                const normalizedFileName = normalizeForMatch(file.filename || '');
-                const normalizedPath = normalizeForMatch(file.path || '');
-                const matches = normalizedFileName.includes(normalizedTitle) || normalizedPath.includes(normalizedTitle);
+                const matchesFileName = flexibleMatch(file.filename || '', track.title);
+                const matchesPath = flexibleMatch(file.path || '', track.title);
+                const matches = matchesFileName || matchesPath;
                 if (matches) {
-                  addDebugLog('Match trovato', `"${file.filename}" contiene "${track.title}"`, 'success');
+                  addDebugLog('Match trovato', `"${file.filename}" contiene parole di "${track.title}"`, 'success');
                 }
                 return matches;
               });
