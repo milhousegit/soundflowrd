@@ -1,26 +1,45 @@
-import React, { forwardRef, useState } from 'react';
+import React, { forwardRef, useState, useEffect } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
-import { StreamResult } from '@/lib/realdebrid';
-import { X, Music, Check, Search, Loader2 } from 'lucide-react';
+import { StreamResult, PendingDownload } from '@/lib/realdebrid';
+import { X, Music, Check, Search, Loader2, Download, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
 interface BugsModalProps {
   isOpen: boolean;
   onClose: () => void;
   alternatives: StreamResult[];
+  pendingDownloads?: PendingDownload[];
   onSelect: (stream: StreamResult) => void;
   currentStreamId?: string;
   isLoading?: boolean;
   onManualSearch?: (query: string) => void;
+  onRefreshPending?: (torrentId: string) => void;
   currentTrackInfo?: { title: string; artist: string };
 }
 
 const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
-  ({ isOpen, onClose, alternatives, onSelect, currentStreamId, isLoading, onManualSearch, currentTrackInfo }, ref) => {
+  ({ isOpen, onClose, alternatives, pendingDownloads = [], onSelect, currentStreamId, isLoading, onManualSearch, onRefreshPending, currentTrackInfo }, ref) => {
     const { t } = useSettings();
     const [manualQuery, setManualQuery] = useState('');
+    const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
+
+    // Auto-refresh pending downloads every 10 seconds
+    useEffect(() => {
+      if (!isOpen || pendingDownloads.length === 0 || !onRefreshPending) return;
+      
+      const interval = setInterval(() => {
+        pendingDownloads.forEach(p => {
+          if (!refreshingIds.has(p.torrentId)) {
+            onRefreshPending(p.torrentId);
+          }
+        });
+      }, 10000);
+      
+      return () => clearInterval(interval);
+    }, [isOpen, pendingDownloads, onRefreshPending, refreshingIds]);
 
     if (!isOpen) return null;
 
@@ -33,6 +52,27 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
     const handleKeyPress = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
         handleManualSearch();
+      }
+    };
+
+    const handleRefreshPending = async (torrentId: string) => {
+      if (!onRefreshPending || refreshingIds.has(torrentId)) return;
+      
+      setRefreshingIds(prev => new Set(prev).add(torrentId));
+      await onRefreshPending(torrentId);
+      setRefreshingIds(prev => {
+        const next = new Set(prev);
+        next.delete(torrentId);
+        return next;
+      });
+    };
+
+    const getStatusText = (status: string) => {
+      switch (status) {
+        case 'downloading': return t('language') === 'it' ? 'In download...' : 'Downloading...';
+        case 'queued': return t('language') === 'it' ? 'In coda...' : 'Queued...';
+        case 'magnet_conversion': return t('language') === 'it' ? 'Conversione...' : 'Converting...';
+        default: return status;
       }
     };
 
@@ -102,7 +142,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                   {t('language') === 'it' ? "Potrebbe richiedere alcuni secondi" : "This may take a few seconds"}
                 </p>
               </div>
-            ) : alternatives.length === 0 ? (
+            ) : alternatives.length === 0 && pendingDownloads.length === 0 ? (
               <div className="text-center py-8">
                 <Music className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                 <p className="text-muted-foreground">{t('noAlternatives')}</p>
@@ -114,6 +154,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
               </div>
             ) : (
               <div className="space-y-2">
+                {/* Ready streams */}
                 {alternatives.map((alt) => (
                   <button
                     key={alt.id}
@@ -137,6 +178,54 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                     )}
                   </button>
                 ))}
+                
+                {/* Pending downloads */}
+                {pendingDownloads.length > 0 && (
+                  <>
+                    {alternatives.length > 0 && (
+                      <div className="flex items-center gap-2 py-2">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-xs text-muted-foreground">
+                          {t('language') === 'it' ? 'In download' : 'Downloading'}
+                        </span>
+                        <div className="flex-1 h-px bg-border" />
+                      </div>
+                    )}
+                    
+                    {pendingDownloads.map((pending) => (
+                      <div
+                        key={pending.torrentId}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-dashed border-border"
+                      >
+                        <Download className="w-5 h-5 text-muted-foreground animate-pulse" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate">{pending.title}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Progress value={pending.progress} className="flex-1 h-1.5" />
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {pending.progress > 0 ? `${pending.progress}%` : getStatusText(pending.status)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {pending.source} • {t('language') === 'it' ? 'Sarà pronto a breve' : 'Will be ready soon'}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRefreshPending(pending.torrentId)}
+                          disabled={refreshingIds.has(pending.torrentId)}
+                          className="flex-shrink-0"
+                        >
+                          <RefreshCw className={cn(
+                            "w-4 h-4",
+                            refreshingIds.has(pending.torrentId) && "animate-spin"
+                          )} />
+                        </Button>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>

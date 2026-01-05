@@ -5,8 +5,22 @@ export interface StreamResult {
   title: string;
   streamUrl: string;
   quality: string;
-  size?: number;
+  size?: number | string;
   source?: string;
+  status?: 'ready' | 'downloading' | 'queued' | 'pending';
+}
+
+export interface PendingDownload {
+  torrentId: string;
+  title: string;
+  status: string;
+  progress: number;
+  source: string;
+}
+
+export interface SearchResult {
+  streams: StreamResult[];
+  pendingDownloads: PendingDownload[];
 }
 
 export async function verifyApiKey(apiKey: string): Promise<{ valid: boolean; username?: string; premium?: boolean }> {
@@ -21,7 +35,7 @@ export async function verifyApiKey(apiKey: string): Promise<{ valid: boolean; us
 export async function searchStreams(
   apiKey: string, 
   query: string
-): Promise<StreamResult[]> {
+): Promise<SearchResult> {
   console.log('Searching streams for:', query);
   
   const { data, error } = await supabase.functions.invoke('real-debrid', {
@@ -30,7 +44,7 @@ export async function searchStreams(
 
   if (error) {
     console.error('Stream search error:', error);
-    return [];
+    return { streams: [], pendingDownloads: [] };
   }
 
   console.log('Stream search result:', data);
@@ -39,18 +53,67 @@ export async function searchStreams(
     for (const line of data.debug) console.log(line);
     console.groupEnd();
   }
+
+  const streams: StreamResult[] = [];
+  const pendingDownloads: PendingDownload[] = [];
+  
+  // Process ready streams
   if (data?.streams && Array.isArray(data.streams)) {
-    return data.streams.map((s: any) => ({
+    for (const s of data.streams) {
+      streams.push({
+        id: s.id,
+        title: s.title,
+        streamUrl: s.streamUrl,
+        quality: s.quality || 'MP3',
+        size: s.size,
+        source: s.source || 'Real-Debrid',
+        status: 'ready',
+      });
+    }
+  }
+  
+  // Process pending downloads
+  if (data?.pendingDownloads && Array.isArray(data.pendingDownloads)) {
+    for (const p of data.pendingDownloads) {
+      pendingDownloads.push({
+        torrentId: p.torrentId,
+        title: p.title,
+        status: p.status,
+        progress: p.progress || 0,
+        source: p.source || 'Real-Debrid',
+      });
+    }
+  }
+  
+  return { streams, pendingDownloads };
+}
+
+export async function checkTorrentStatus(
+  apiKey: string,
+  torrentId: string
+): Promise<{ status: string; progress: number; streams: StreamResult[] }> {
+  const { data, error } = await supabase.functions.invoke('real-debrid', {
+    body: { action: 'checkTorrent', apiKey, torrentId },
+  });
+
+  if (error) {
+    console.error('Check torrent error:', error);
+    return { status: 'error', progress: 0, streams: [] };
+  }
+
+  return {
+    status: data?.status || 'unknown',
+    progress: data?.progress || 0,
+    streams: (data?.streams || []).map((s: any) => ({
       id: s.id,
       title: s.title,
       streamUrl: s.streamUrl,
       quality: s.quality || 'MP3',
       size: s.size,
-      source: s.source || 'Real-Debrid',
-    }));
-  }
-  
-  return [];
+      source: 'Real-Debrid',
+      status: 'ready' as const,
+    })),
+  };
 }
 
 export async function unrestrictLink(apiKey: string, link: string): Promise<string | null> {

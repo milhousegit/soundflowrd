@@ -39,10 +39,12 @@ const Player: React.FC = () => {
     seek,
     setVolume,
     alternativeStreams,
+    pendingDownloads,
     selectStream,
     currentStreamId,
     isSearchingStreams,
     manualSearch,
+    refreshPendingDownload,
   } = usePlayer();
   const { t } = useSettings();
   
@@ -159,10 +161,12 @@ const Player: React.FC = () => {
           isOpen={showBugsModal}
           onClose={() => setShowBugsModal(false)}
           alternatives={alternativeStreams}
+          pendingDownloads={pendingDownloads}
           onSelect={handleSelectStream}
           currentStreamId={currentStreamId}
           isLoading={isSearchingStreams}
           onManualSearch={handleManualSearch}
+          onRefreshPending={refreshPendingDownload}
           currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
         />
       </>
@@ -319,10 +323,12 @@ const Player: React.FC = () => {
         isOpen={showBugsModal}
         onClose={() => setShowBugsModal(false)}
         alternatives={alternativeStreams}
+        pendingDownloads={pendingDownloads}
         onSelect={handleSelectStream}
         currentStreamId={currentStreamId}
         isLoading={isSearchingStreams}
         onManualSearch={handleManualSearch}
+        onRefreshPending={refreshPendingDownload}
         currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
       />
     </>
