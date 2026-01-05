@@ -371,7 +371,62 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           });
         }
       } else if (result.torrents.length > 0 && (!result.streams || result.streams.length === 0)) {
-        addDebugLog('Solo torrent', `${result.torrents.length} torrent disponibili, seleziona un file`, 'warning');
+        addDebugLog('Solo torrent', `${result.torrents.length} torrent disponibili`, 'info');
+        
+        // Try to auto-select if there's a torrent with a matching file
+        if (track) {
+          const normalizedTitle = normalizeForMatch(track.title);
+          
+          for (const torrent of result.torrents) {
+            if (torrent.files && torrent.files.length > 0) {
+              addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
+              
+              // Find a file that matches the track title
+              const matchingFile = torrent.files.find(file => {
+                const normalizedFileName = normalizeForMatch(file.filename);
+                return normalizedFileName.includes(normalizedTitle);
+              });
+              
+              // Or if there's only one file, use it
+              const fileToUse = matchingFile || (torrent.files.length === 1 ? torrent.files[0] : null);
+              
+              if (fileToUse) {
+                addDebugLog('File selezionato', `"${fileToUse.filename}" (ID: ${fileToUse.id})`, 'success');
+                
+                const selectResult = await selectFilesAndPlay(
+                  credentials!.realDebridApiKey,
+                  torrent.torrentId,
+                  [fileToUse.id]
+                );
+                
+                if (selectResult.error || selectResult.status === 'error') {
+                  addDebugLog('Errore selezione', selectResult.error || 'Errore sconosciuto', 'error');
+                  continue;
+                }
+                
+                if (selectResult.streams.length > 0) {
+                  setAlternativeStreams(selectResult.streams);
+                  setCurrentStreamId(selectResult.streams[0].id);
+                  
+                  if (audioRef.current && selectResult.streams[0].streamUrl) {
+                    audioRef.current.src = selectResult.streams[0].streamUrl;
+                    audioRef.current.play();
+                    setState(prev => ({ ...prev, isPlaying: true }));
+                  }
+                  
+                  await saveStreamMapping(track, selectResult.streams[0]);
+                  addDebugLog('Riproduzione', 'Stream avviato e mappatura salvata', 'success');
+                  break;
+                } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
+                  setDownloadProgress(selectResult.progress);
+                  setDownloadStatus(selectResult.status);
+                  addDebugLog('Download', `In corso: ${selectResult.progress}%`, 'warning');
+                  break;
+                }
+              }
+            }
+          }
+        }
       }
     } catch (error) {
       addDebugLog('Errore ricerca', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
