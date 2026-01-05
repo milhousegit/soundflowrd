@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ const formatTime = (seconds: number) => {
 };
 
 const Player: React.FC = () => {
+  const navigate = useNavigate();
   const { 
     currentTrack, 
     isPlaying, 
@@ -53,6 +55,22 @@ const Player: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!currentTrack) return null;
+
+  const handleNavigateToArtist = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (currentTrack.artistId) {
+      navigate(`/artist/${currentTrack.artistId}`);
+      setIsExpanded(false);
+    }
+  };
+
+  const handleNavigateToAlbum = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (currentTrack.albumId) {
+      navigate(`/album/${currentTrack.albumId}`);
+      setIsExpanded(false);
+    }
+  };
 
   const handleSelectStream = (stream: StreamResult) => {
     selectStream(stream);
@@ -100,11 +118,7 @@ const Player: React.FC = () => {
                 <img 
                   src={currentTrack.coverUrl} 
                   alt={currentTrack.album}
-                  className={cn(
-                    "w-full h-full object-cover",
-                    isPlaying && "animate-spin-slow"
-                  )}
-                  style={{ animationDuration: '20s' }}
+                  className="w-full h-full object-cover"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
@@ -127,7 +141,25 @@ const Player: React.FC = () => {
           {/* Track Info */}
           <div className="px-8 text-center">
             <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
-            <p className="text-muted-foreground truncate">{currentTrack.artist}</p>
+            <div className="flex items-center justify-center gap-2 text-muted-foreground">
+              <button 
+                onClick={handleNavigateToArtist}
+                className="hover:text-primary hover:underline transition-colors truncate"
+              >
+                {currentTrack.artist}
+              </button>
+              {currentTrack.album && (
+                <>
+                  <span>•</span>
+                  <button 
+                    onClick={handleNavigateToAlbum}
+                    className="hover:text-primary hover:underline transition-colors truncate"
+                  >
+                    {currentTrack.album}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Progress */}
@@ -233,11 +265,7 @@ const Player: React.FC = () => {
                 <img 
                   src={currentTrack.coverUrl} 
                   alt={currentTrack.album}
-                  className={cn(
-                    "w-full h-full object-cover",
-                    isPlaying && "animate-spin-slow"
-                  )}
-                  style={{ animationDuration: '8s' }}
+                  className="w-full h-full object-cover"
                 />
               ) : (
                 <Music className="w-6 h-6 text-muted-foreground" />
@@ -250,7 +278,25 @@ const Player: React.FC = () => {
             </div>
             <div className="min-w-0">
               <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
-              <p className="text-sm text-muted-foreground truncate">{currentTrack.artist}</p>
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <button 
+                  onClick={handleNavigateToArtist}
+                  className="hover:text-primary hover:underline transition-colors truncate"
+                >
+                  {currentTrack.artist}
+                </button>
+                {currentTrack.album && (
+                  <>
+                    <span>•</span>
+                    <button 
+                      onClick={handleNavigateToAlbum}
+                      className="hover:text-primary hover:underline transition-colors truncate"
+                    >
+                      {currentTrack.album}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 

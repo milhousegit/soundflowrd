@@ -234,6 +234,66 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
     setTrackMatches(matches);
   };
 
+  const handleSelectAllFiles = async (torrent: TorrentInfo) => {
+    // Auto-match all tracks and save immediately
+    const matches = matchTracksToFiles(tracks, torrent.files);
+    
+    setIsSaving(true);
+    try {
+      // Delete existing mapping if present
+      if (existingMapping) {
+        await supabase
+          .from('album_torrent_mappings')
+          .delete()
+          .eq('album_id', albumId);
+      }
+
+      // Create album mapping
+      const { data: albumMapping, error: albumError } = await supabase
+        .from('album_torrent_mappings')
+        .insert({
+          album_id: albumId,
+          album_title: albumTitle,
+          artist_name: artistName,
+          torrent_id: torrent.torrentId,
+          torrent_title: torrent.title,
+        })
+        .select()
+        .single();
+
+      if (albumError) throw albumError;
+
+      // Create track mappings for all matched tracks
+      const matchedTracks = matches.filter(m => m.fileId !== null);
+      
+      if (matchedTracks.length > 0) {
+        const { error: tracksError } = await supabase
+          .from('track_file_mappings')
+          .insert(
+            matchedTracks.map(m => ({
+              album_mapping_id: albumMapping.id,
+              track_id: m.trackId,
+              track_title: m.trackTitle,
+              track_position: m.trackPosition,
+              file_id: m.fileId!,
+              file_path: m.filePath!,
+              file_name: m.fileName!,
+            }))
+          );
+
+        if (tracksError) throw tracksError;
+      }
+
+      toast.success(`Album configurato: ${matchedTracks.length}/${tracks.length} tracce abbinate automaticamente`);
+      onClose();
+    } catch (error) {
+      console.error('Save error:', error);
+      toast.error('Errore nel salvataggio');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleChangeFileMatch = (trackId: string, file: AudioFile | null) => {
     setTrackMatches(prev => prev.map(m => 
       m.trackId === trackId 
@@ -410,14 +470,25 @@ const AlbumTorrentModal: React.FC<AlbumTorrentModalProps> = ({
                                 </div>
                               ))}
                             </div>
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleSelectTorrent(torrent)}
-                              className="w-full"
-                            >
-                              <Check className="w-4 h-4 mr-2" />
-                              Seleziona questo torrent
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleSelectTorrent(torrent)}
+                                variant="outline"
+                                className="flex-1"
+                              >
+                                <Check className="w-4 h-4 mr-2" />
+                                Configura manualmente
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleSelectAllFiles(torrent)}
+                                className="flex-1"
+                              >
+                                <FolderOpen className="w-4 h-4 mr-2" />
+                                Scarica tutto e abbina
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </div>
