@@ -1,10 +1,11 @@
 import React, { forwardRef, useState } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudUpload, Loader2, Bug, ListMusic } from 'lucide-react';
+import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudUpload, Loader2, Bug, ListMusic, Youtube } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
+import { useHasYouTubeMapping } from '@/hooks/useYouTubeMappings';
 import { useTap } from '@/hooks/useTap';
 import { toast } from 'sonner';
 import {
@@ -32,14 +33,18 @@ interface TrackCardProps {
 
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
   ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading }, ref) => {
-    const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase } = usePlayer();
+    const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase, isPlayingYouTube } = usePlayer();
     const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
+    const hasYouTubeMapping = useHasYouTubeMapping(track.id);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     
     const isCurrentTrack = currentTrack?.id === track.id;
     const isSynced = propIsSynced !== undefined ? propIsSynced : hookIsSynced(track.id);
     const isSyncing = propIsSyncing !== undefined ? propIsSyncing : hookIsSyncing(track.id);
     const isDownloading = propIsDownloading !== undefined ? propIsDownloading : hookIsDownloading(track.id);
+    
+    // Check if current track is playing from YouTube
+    const isCurrentTrackYouTube = isCurrentTrack && isPlayingYouTube;
 
     // Current track is loading if loadingPhase is not idle
     const isCurrentTrackLoading = isCurrentTrack && loadingPhase !== 'idle';
@@ -106,6 +111,12 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     // Render status icon
     const renderStatusIcon = () => {
       if (!showSyncStatus) return null;
+      
+      // YouTube mapping - show YouTube icon (red)
+      // For current track playing YouTube OR track with saved YouTube mapping
+      if (isCurrentTrackYouTube || (hasYouTubeMapping && !isSynced)) {
+        return <Youtube className="w-3.5 h-3.5 flex-shrink-0 text-red-500" />;
+      }
       
       // Loading states for current track
       if (showSearchingLoader) {
