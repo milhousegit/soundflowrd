@@ -48,6 +48,9 @@ interface PlayerContextType extends PlayerState {
   // YouTube fallback
   youtubeResults: YouTubeVideo[];
   playYouTubeVideo: (video: YouTubeVideo) => Promise<void>;
+  // Search query tracking
+  lastSearchQuery: string | null;
+  searchYouTubeManually: () => Promise<void>;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -89,6 +92,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [currentMappedFileId, setCurrentMappedFileId] = useState<number | undefined>();
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   const [youtubeResults, setYoutubeResults] = useState<YouTubeVideo[]>([]);
+  const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
   
   // Track ID currently being searched - used to cancel stale searches
   const currentSearchTrackIdRef = useRef<string | null>(null);
@@ -658,6 +662,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setAvailableTorrents([]);
     setDownloadProgress(null);
     setDownloadStatus(null);
+    setYoutubeResults([]);
+    setLastSearchQuery(query);
     
     addDebugLog('🔎 Ricerca torrent', `Query: "${query}"`, 'info');
     addDebugLog('⏳ Connessione', 'Contatto fonti torrent (TPB, 1337x, etc.)...', 'info');
@@ -853,19 +859,37 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 });
               } else {
                 // No torrent found - try YouTube fallback
-                addDebugLog('🔍 Fallback YouTube', 'Nessun torrent trovato, cerco su YouTube...', 'info');
-                
                 const youtubeQuery = track ? `${track.artist} ${track.title}` : query;
+                setLastSearchQuery(youtubeQuery);
+                addDebugLog('🔍 Fallback YouTube', `Cerco: ${youtubeQuery}`, 'info');
+                
                 const videos = await searchYouTube(youtubeQuery);
                 
                 if (videos.length > 0) {
                   setYoutubeResults(videos);
                   addDebugLog('📺 YouTube trovato', `${videos.length} video disponibili`, 'success');
+                  
+                  // Auto-play first YouTube result
+                  addDebugLog('▶️ Auto-play YouTube', videos[0].title, 'info');
+                  const audio = await getYouTubeAudio(videos[0].id);
+                  
+                  if (audio) {
+                    addDebugLog('⚡ Riproduzione YouTube', audio.url.substring(0, 60) + '...', 'success');
+                    if (audioRef.current) {
+                      audioRef.current.src = audio.url;
+                      audioRef.current.play();
+                      setState(prev => ({ ...prev, isPlaying: true }));
+                    }
+                    setLoadingPhase('idle');
+                  } else {
+                    addDebugLog('⚠️ Audio non disponibile', 'Seleziona manualmente un altro video', 'warning');
+                    toast.info('YouTube disponibile', {
+                      description: 'Seleziona manualmente un video dal pannello sorgenti.',
+                      duration: 5000,
+                    });
+                  }
+                  
                   removeSyncingTrack(track.id);
-                  toast.info('Torrent non trovato', {
-                    description: 'Sono disponibili alternative da YouTube nel pannello sorgenti.',
-                    duration: 5000,
-                  });
                 } else {
                   setYoutubeResults([]);
                   addDebugLog('Nessun risultato', 'Nessuna sorgente trovata (torrent e YouTube)', 'error');
@@ -1097,6 +1121,30 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       });
     }
   }, [addDebugLog]);
+
+  // Search YouTube manually with current query
+  const searchYouTubeManually = useCallback(async () => {
+    if (!lastSearchQuery) {
+      toast.error('Nessuna ricerca attiva');
+      return;
+    }
+    
+    addDebugLog('🔍 Ricerca YouTube manuale', lastSearchQuery, 'info');
+    
+    try {
+      const videos = await searchYouTube(lastSearchQuery);
+      
+      if (videos.length > 0) {
+        setYoutubeResults(videos);
+        addDebugLog('📺 YouTube trovato', `${videos.length} video disponibili`, 'success');
+      } else {
+        addDebugLog('❌ Nessun risultato YouTube', 'Nessun video trovato', 'warning');
+        toast.warning('Nessun risultato YouTube');
+      }
+    } catch (error) {
+      addDebugLog('❌ Errore YouTube', error instanceof Error ? error.message : 'Errore', 'error');
+    }
+  }, [lastSearchQuery, addDebugLog]);
 
   // Load saved mapping to show in BugsModal for editing
   const loadSavedMapping = useCallback(async () => {
@@ -1784,6 +1832,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         loadingPhase,
         youtubeResults,
         playYouTubeVideo,
+        lastSearchQuery,
+        searchYouTubeManually,
       }}
     >
       {children}
