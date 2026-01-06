@@ -162,165 +162,209 @@ const Settings: React.FC = () => {
           </div>
         </section>
 
-        {/* Real-Debrid Section */}
+        {/* Audio Source Section - Combined with Real-Debrid */}
         <section className="space-y-3 md:space-y-4">
           <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-            <Key className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-            <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('realDebrid')}</h2>
+            <Music className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+            <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('audioSource')}</h2>
           </div>
           
-          <div className="p-3 md:p-4 rounded-xl bg-card space-y-3 md:space-y-4">
-            <div>
-              <label className="text-xs md:text-sm text-muted-foreground block mb-2">{t('apiKey')}</label>
+          <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
+            {/* YouTube Only Option */}
+            <button
+              onClick={() => updateSettings({ audioSourceMode: 'youtube_only' })}
+              className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
+                settings.audioSourceMode === 'youtube_only' 
+                  ? 'bg-red-500/20 border border-red-500/50' 
+                  : 'bg-secondary hover:bg-secondary/80'
+              }`}
+            >
+              <Youtube className={`w-5 h-5 mt-0.5 ${settings.audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-muted-foreground'}`} />
+              <div className="flex-1">
+                <p className={`font-medium ${settings.audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-foreground'}`}>
+                  {t('youtubeOnly')}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('youtubeOnlyDesc')}</p>
+              </div>
+              {settings.audioSourceMode === 'youtube_only' && <Check className="w-5 h-5 text-red-500" />}
+            </button>
+            
+            {/* Real-Debrid Priority Option */}
+            <button
+              onClick={() => updateSettings({ audioSourceMode: 'rd_priority' })}
+              className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
+                settings.audioSourceMode === 'rd_priority' 
+                  ? 'bg-primary/20 border border-primary/50' 
+                  : 'bg-secondary hover:bg-secondary/80'
+              }`}
+            >
+              <Cloud className={`w-5 h-5 mt-0.5 ${settings.audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <div className="flex-1">
+                <p className={`font-medium ${settings.audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-foreground'}`}>
+                  {t('rdPriority')}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('rdPriorityDesc')}</p>
+              </div>
+              {settings.audioSourceMode === 'rd_priority' && <Check className="w-5 h-5 text-primary" />}
+            </button>
 
-              {!isEditingApiKey ? (
-                <div className="flex gap-2">
-                  <Input
-                    value={profile?.real_debrid_api_key ? maskApiKey(profile.real_debrid_api_key) : ''}
-                    disabled
-                    className="bg-secondary font-mono text-sm"
-                    placeholder="—"
-                  />
+            {/* Real-Debrid API Key - shown below when rd_priority is selected or has key */}
+            {(settings.audioSourceMode === 'rd_priority' || hasRdApiKey) && (
+              <div className="pt-3 border-t border-border">
+                <label className="text-xs md:text-sm text-muted-foreground block mb-2">
+                  <Key className="w-3 h-3 inline mr-1" />
+                  {t('apiKey')} Real-Debrid
+                </label>
 
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setIsEditingApiKey(true)}
-                    title={settings.language === 'it' ? 'Modifica API Key' : 'Edit API Key'}
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </Button>
+                {!isEditingApiKey ? (
+                  <div className="flex gap-2">
+                    <Input
+                      value={profile?.real_debrid_api_key ? maskApiKey(profile.real_debrid_api_key) : ''}
+                      disabled
+                      className="bg-secondary font-mono text-sm"
+                      placeholder="—"
+                    />
 
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => window.open('https://real-debrid.com/apitoken', '_blank')}
-                    title={settings.language === 'it' ? 'Apri Real-Debrid' : 'Open Real-Debrid'}
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Input
-                    value={apiKeyDraft}
-                    onChange={(e) => setApiKeyDraft(e.target.value)}
-                    type="password"
-                    className="bg-secondary font-mono text-sm"
-                    placeholder="Real-Debrid API Key"
-                  />
-
-                  <Button
-                    variant="default"
-                    size="icon"
-                    disabled={isSavingApiKey}
-                    onClick={async () => {
-                      setIsSavingApiKey(true);
-                      try {
-                        const trimmed = apiKeyDraft.trim();
-                        if (!trimmed) {
-                          toast({
-                            title: settings.language === 'it' ? 'API Key mancante' : 'Missing API Key',
-                            description: settings.language === 'it' ? 'Inserisci una API Key valida.' : 'Please enter a valid API key.',
-                            variant: 'destructive',
-                          });
-                          return;
-                        }
-
-                        const verification = await verifyApiKey(trimmed);
-                        if (!verification.valid) {
-                          toast({
-                            title: settings.language === 'it' ? 'API Key non valida' : 'Invalid API Key',
-                            description: settings.language === 'it' ? 'Controlla la key e riprova.' : 'Check your key and try again.',
-                            variant: 'destructive',
-                          });
-                          return;
-                        }
-
-                        const { error } = await updateApiKey(trimmed);
-                        if (error) {
-                          toast({
-                            title: settings.language === 'it' ? 'Errore salvataggio' : 'Save error',
-                            description: error.message,
-                            variant: 'destructive',
-                          });
-                          return;
-                        }
-
-                        setIsEditingApiKey(false);
-                        toast({
-                          title: settings.language === 'it' ? 'Salvata' : 'Saved',
-                          description: settings.language === 'it' ? 'API Key aggiornata con successo.' : 'API key updated successfully.',
-                        });
-                      } finally {
-                        setIsSavingApiKey(false);
-                      }
-                    }}
-                    title={settings.language === 'it' ? 'Salva' : 'Save'}
-                  >
-                    {isSavingApiKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setIsEditingApiKey(false)}
-                    disabled={isSavingApiKey}
-                    title={settings.language === 'it' ? 'Annulla' : 'Cancel'}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {hasRdApiKey && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs md:text-sm">
-                  <Check className="w-4 h-4 text-primary" />
-                  <span className="text-muted-foreground">{t('connected')} a Real-Debrid</span>
-                </div>
-                
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="sm">
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setIsEditingApiKey(true)}
+                      title={settings.language === 'it' ? 'Modifica API Key' : 'Edit API Key'}
+                    >
+                      <Pencil className="w-4 h-4" />
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        {settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {settings.language === 'it' 
-                          ? 'La tua API Key verrà eliminata. Potrai sempre ricollegarti in futuro.'
-                          : 'Your API Key will be deleted. You can reconnect anytime.'}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>
-                        {settings.language === 'it' ? 'Annulla' : 'Cancel'}
-                      </AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={async () => {
-                          const { error } = await updateApiKey('');
-                          if (!error) {
+
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => window.open('https://real-debrid.com/apitoken', '_blank')}
+                      title={settings.language === 'it' ? 'Apri Real-Debrid' : 'Open Real-Debrid'}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      value={apiKeyDraft}
+                      onChange={(e) => setApiKeyDraft(e.target.value)}
+                      type="password"
+                      className="bg-secondary font-mono text-sm"
+                      placeholder="Real-Debrid API Key"
+                    />
+
+                    <Button
+                      variant="default"
+                      size="icon"
+                      disabled={isSavingApiKey}
+                      onClick={async () => {
+                        setIsSavingApiKey(true);
+                        try {
+                          const trimmed = apiKeyDraft.trim();
+                          if (!trimmed) {
                             toast({
-                              title: settings.language === 'it' ? 'Disconnesso' : 'Disconnected',
-                              description: settings.language === 'it' 
-                                ? 'Real-Debrid rimosso. Ora usi il torrenting diretto.'
-                                : 'Real-Debrid removed. Now using direct torrenting.',
+                              title: settings.language === 'it' ? 'API Key mancante' : 'Missing API Key',
+                              description: settings.language === 'it' ? 'Inserisci una API Key valida.' : 'Please enter a valid API key.',
+                              variant: 'destructive',
                             });
+                            return;
                           }
-                        }}
-                      >
-                        {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+
+                          const verification = await verifyApiKey(trimmed);
+                          if (!verification.valid) {
+                            toast({
+                              title: settings.language === 'it' ? 'API Key non valida' : 'Invalid API Key',
+                              description: settings.language === 'it' ? 'Controlla la key e riprova.' : 'Check your key and try again.',
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+
+                          const { error } = await updateApiKey(trimmed);
+                          if (error) {
+                            toast({
+                              title: settings.language === 'it' ? 'Errore salvataggio' : 'Save error',
+                              description: error.message,
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+
+                          setIsEditingApiKey(false);
+                          toast({
+                            title: settings.language === 'it' ? 'Salvata' : 'Saved',
+                            description: settings.language === 'it' ? 'API Key aggiornata con successo.' : 'API key updated successfully.',
+                          });
+                        } finally {
+                          setIsSavingApiKey(false);
+                        }
+                      }}
+                      title={settings.language === 'it' ? 'Salva' : 'Save'}
+                    >
+                      {isSavingApiKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setIsEditingApiKey(false)}
+                      disabled={isSavingApiKey}
+                      title={settings.language === 'it' ? 'Annulla' : 'Cancel'}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {hasRdApiKey && (
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center gap-2 text-xs md:text-sm">
+                      <Check className="w-4 h-4 text-primary" />
+                      <span className="text-muted-foreground">{t('connected')} a Real-Debrid</span>
+                    </div>
+                    
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm">
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            {settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {settings.language === 'it' 
+                              ? 'La tua API Key verrà eliminata. Potrai sempre ricollegarti in futuro.'
+                              : 'Your API Key will be deleted. You can reconnect anytime.'}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>
+                            {settings.language === 'it' ? 'Annulla' : 'Cancel'}
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={async () => {
+                              const { error } = await updateApiKey('');
+                              if (!error) {
+                                toast({
+                                  title: settings.language === 'it' ? 'Disconnesso' : 'Disconnected',
+                                  description: settings.language === 'it' 
+                                    ? 'Real-Debrid rimosso.'
+                                    : 'Real-Debrid removed.',
+                                });
+                              }
+                            }}
+                          >
+                            {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -458,51 +502,6 @@ const Settings: React.FC = () => {
           </div>
         </section>
 
-        {/* Audio Source Section */}
-        <section className="space-y-3 md:space-y-4">
-          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-            <Music className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-            <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('audioSource')}</h2>
-          </div>
-          
-          <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
-            <button
-              onClick={() => updateSettings({ audioSourceMode: 'rd_priority' })}
-              className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
-                settings.audioSourceMode === 'rd_priority' 
-                  ? 'bg-primary/20 border border-primary/50' 
-                  : 'bg-secondary hover:bg-secondary/80'
-              }`}
-            >
-              <Cloud className={`w-5 h-5 mt-0.5 ${settings.audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-muted-foreground'}`} />
-              <div className="flex-1">
-                <p className={`font-medium ${settings.audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-foreground'}`}>
-                  {t('rdPriority')}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{t('rdPriorityDesc')}</p>
-              </div>
-              {settings.audioSourceMode === 'rd_priority' && <Check className="w-5 h-5 text-primary" />}
-            </button>
-            
-            <button
-              onClick={() => updateSettings({ audioSourceMode: 'youtube_only' })}
-              className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
-                settings.audioSourceMode === 'youtube_only' 
-                  ? 'bg-red-500/20 border border-red-500/50' 
-                  : 'bg-secondary hover:bg-secondary/80'
-              }`}
-            >
-              <Youtube className={`w-5 h-5 mt-0.5 ${settings.audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-muted-foreground'}`} />
-              <div className="flex-1">
-                <p className={`font-medium ${settings.audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-foreground'}`}>
-                  {t('youtubeOnly')}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{t('youtubeOnlyDesc')}</p>
-              </div>
-              {settings.audioSourceMode === 'youtube_only' && <Check className="w-5 h-5 text-red-500" />}
-            </button>
-          </div>
-        </section>
 
         {/* Playback Section */}
         <section className="space-y-3 md:space-y-4">
