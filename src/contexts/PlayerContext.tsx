@@ -105,10 +105,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [isPlayingYouTube, setIsPlayingYouTube] = useState(false);
   const youtubePlayerRefState = useRef<any>(null);
   
-  // YouTube progress/duration update callback
+  // YouTube progress/duration update callback - only update if we're actually playing YouTube
   const setYouTubeProgress = useCallback((progress: number, duration: number) => {
+    // Guard: only update progress if we're in YouTube mode
+    if (!isPlayingYouTube) return;
     setState(prev => ({ ...prev, progress, duration }));
-  }, []);
+  }, [isPlayingYouTube]);
   
   // YouTube ready callback
   const setYouTubeReady = useCallback(() => {
@@ -1336,6 +1338,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setCurrentYouTubeVideoId(null);
     setIsPlayingYouTube(false);
 
+    // Check if YouTube-only mode is enabled
+    const isYouTubeOnlyMode = settings.audioSourceMode === 'youtube_only';
+
     // FIRST: Check if we have a saved YouTube mapping for this track
     try {
       const { data: youtubeMapping } = await supabase
@@ -1362,6 +1367,64 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setCurrentYouTubeVideoId(youtubeMapping.video_id);
         setIsPlayingYouTube(true);
         setState(prev => ({ ...prev, isPlaying: true }));
+        
+        // Save to recently played
+        const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
+        const filtered = recent.filter((t: Track) => t.id !== track.id);
+        const updated = [track, ...filtered].slice(0, 20);
+        localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+        return;
+      }
+      
+      // If YouTube-only mode, search YouTube directly
+      if (isYouTubeOnlyMode) {
+        const youtubeQuery = `${track.artist} ${track.title}`;
+        addDebugLog('🔍 Ricerca YouTube', `Modalità solo YouTube - Query: ${youtubeQuery}`, 'info');
+        setLoadingPhase('searching');
+        setLastSearchQuery(youtubeQuery);
+        
+        const videos = await searchYouTube(youtubeQuery);
+        
+        if (currentSearchTrackIdRef.current !== track.id) {
+          console.log('Track changed during YouTube search, aborting');
+          return;
+        }
+        
+        if (videos.length > 0) {
+          setYoutubeResults(videos);
+          const selectedVideo = videos[0];
+          addDebugLog('▶️ Auto-play YouTube', selectedVideo.title, 'success');
+          
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.src = '';
+          }
+          
+          setCurrentYouTubeVideoId(selectedVideo.id);
+          setIsPlayingYouTube(true);
+          setState(prev => ({ ...prev, isPlaying: true }));
+          setLoadingPhase('idle');
+          
+          // Save the YouTube mapping
+          try {
+            await supabase
+              .from('youtube_track_mappings')
+              .upsert({
+                track_id: track.id,
+                video_id: selectedVideo.id,
+                video_title: selectedVideo.title,
+                video_duration: selectedVideo.duration,
+                uploader_name: selectedVideo.uploaderName,
+              }, { onConflict: 'track_id' });
+            invalidateYouTubeMappingCache(track.id);
+          } catch (saveError) {
+            console.error('Failed to save YouTube mapping:', saveError);
+          }
+        } else {
+          addDebugLog('❌ Nessun risultato', 'Nessun video YouTube trovato', 'error');
+          setLoadingPhase('idle');
+          toast.error('Nessun contenuto trovato');
+        }
         
         // Save to recently played
         const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');

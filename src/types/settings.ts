@@ -1,3 +1,5 @@
+export type AudioSourceMode = 'rd_priority' | 'youtube_only';
+
 export interface AppSettings {
   language: 'en' | 'it';
   homeDisplayOptions: {
@@ -10,6 +12,7 @@ export interface AppSettings {
   audioQuality: 'high' | 'medium' | 'low';
   crossfade: number; // seconds, 0 = off
   realDebridApiKey?: string;
+  audioSourceMode: AudioSourceMode; // 'rd_priority' = RD + YouTube fallback, 'youtube_only' = YouTube only
 }
 
 export const defaultSettings: AppSettings = {
@@ -24,6 +27,7 @@ export const defaultSettings: AppSettings = {
   audioQuality: 'high',
   crossfade: 0,
   realDebridApiKey: undefined,
+  audioSourceMode: 'rd_priority',
 };
 
 export const translations = {
@@ -82,6 +86,11 @@ export const translations = {
     noCloudFiles: 'No files saved on Real-Debrid yet',
     loadingCloudFiles: 'Loading cloud files...',
     playFromCloud: 'Play from cloud',
+    audioSource: 'Audio Source',
+    rdPriority: 'Real-Debrid + YouTube',
+    rdPriorityDesc: 'High quality (FLAC/320kbps), YouTube fallback',
+    youtubeOnly: 'YouTube Only',
+    youtubeOnlyDesc: 'Instant playback, no Real-Debrid needed',
   },
   it: {
     home: 'Home',
@@ -138,6 +147,11 @@ export const translations = {
     noCloudFiles: 'Nessun file salvato su Real-Debrid',
     loadingCloudFiles: 'Caricamento file cloud...',
     playFromCloud: 'Riproduci da cloud',
+    audioSource: 'Sorgente Audio',
+    rdPriority: 'Real-Debrid + YouTube',
+    rdPriorityDesc: 'Alta qualità (FLAC/320kbps), fallback YouTube',
+    youtubeOnly: 'Solo YouTube',
+    youtubeOnlyDesc: 'Riproduzione istantanea, senza Real-Debrid',
   },
 };
 
