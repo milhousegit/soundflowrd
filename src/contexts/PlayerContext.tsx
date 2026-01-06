@@ -13,6 +13,9 @@ export interface DebugLogEntry {
   status: 'info' | 'success' | 'error' | 'warning';
 }
 
+// Loading phases for visual feedback
+export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading';
+
 interface PlayerContextType extends PlayerState {
   play: (track?: Track) => void;
   pause: () => void;
@@ -39,6 +42,7 @@ interface PlayerContextType extends PlayerState {
   downloadStatus: string | null;
   loadSavedMapping: () => Promise<void>;
   currentMappedFileId?: number;
+  loadingPhase: LoadingPhase;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -77,6 +81,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
   const [currentMappedFileId, setCurrentMappedFileId] = useState<number | undefined>();
+  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   
   // Track ID currently being searched - used to cancel stale searches
   const currentSearchTrackIdRef = useRef<string | null>(null);
@@ -251,8 +256,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     fileId: number;
     fileName?: string;
     filePath?: string;
+    directLink?: string;
   }) => {
-    const { track, torrentId, torrentTitle, fileId, fileName, filePath } = params;
+    const { track, torrentId, torrentTitle, fileId, fileName, filePath, directLink } = params;
 
     if (!track.albumId) return;
 
@@ -286,6 +292,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
 
       if (albumMappingId) {
+        // Calculate expiry: RD links typically expire after 24h, but we use 20h for safety
+        const expiresAt = directLink ? new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString() : null;
+        
         await supabase
           .from('track_file_mappings')
           .upsert(
@@ -297,6 +306,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               file_id: fileId,
               file_path: filePath || '',
               file_name: fileName || track.title,
+              direct_link: directLink || null,
+              direct_link_expires_at: expiresAt,
             },
             {
               onConflict: 'track_id',
@@ -304,7 +315,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           );
 
         setCurrentMappedFileId(fileId);
-        console.log('Saved file mapping for track:', track.title, { torrentId, fileId });
+        console.log('Saved file mapping for track:', track.title, { torrentId, fileId, hasDirectLink: !!directLink });
         addSyncedTrack(track.id);
       }
     } catch (error) {
@@ -354,20 +365,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             continue;
           }
           
-          await saveFileMapping({
-            track,
-            torrentId: torrent.torrentId,
-            torrentTitle: torrent.title,
-            fileId: matchingFile.id,
-            fileName: matchingFile.filename,
-            filePath: matchingFile.path,
-          });
-          
           if (selectResult.streams.length > 0) {
             setAlternativeStreams(selectResult.streams);
             setCurrentStreamId(selectResult.streams[0].id);
             setDownloadProgress(null);
             setDownloadStatus(null);
+            setLoadingPhase('idle');
             
             if (audioRef.current && selectResult.streams[0].streamUrl) {
               audioRef.current.src = selectResult.streams[0].streamUrl;
@@ -375,13 +378,36 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setState((prev) => ({ ...prev, isPlaying: true }));
             }
             
+            // Save with direct link
+            await saveFileMapping({
+              track,
+              torrentId: torrent.torrentId,
+              torrentTitle: torrent.title,
+              fileId: matchingFile.id,
+              fileName: matchingFile.filename,
+              filePath: matchingFile.path,
+              directLink: selectResult.streams[0].streamUrl,
+            });
+            
             addDebugLog('Riproduzione', 'Stream avviato da cache', 'success');
             return true;
           }
           
           if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
+            setLoadingPhase('downloading');
             setDownloadProgress(selectResult.progress);
             setDownloadStatus(selectResult.status);
+            
+            // Save mapping without direct link
+            await saveFileMapping({
+              track,
+              torrentId: torrent.torrentId,
+              torrentTitle: torrent.title,
+              fileId: matchingFile.id,
+              fileName: matchingFile.filename,
+              filePath: matchingFile.path,
+            });
+            
             addDebugLog('Salvataggio', 'File in download (da cache)', 'success');
             return true;
           }
@@ -491,20 +517,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
             // IMPORTANT: save mapping as soon as we successfully selected a specific file
             // Even if the torrent is still downloading/queued, we want the mapping to be shared across devices.
-            await saveFileMapping({
-              track,
-              torrentId: torrent.torrentId,
-              torrentTitle: torrent.title,
-              fileId: matchingFile.id,
-              fileName: matchingFile.filename,
-              filePath: matchingFile.path,
-            });
 
             if (selectResult.streams.length > 0) {
               setAlternativeStreams(selectResult.streams);
               setCurrentStreamId(selectResult.streams[0].id);
               setDownloadProgress(null);
               setDownloadStatus(null);
+              setLoadingPhase('idle');
 
               if (audioRef.current && selectResult.streams[0].streamUrl) {
                 audioRef.current.src = selectResult.streams[0].streamUrl;
@@ -512,13 +531,36 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 setState((prev) => ({ ...prev, isPlaying: true }));
               }
 
+              // Save with direct link for instant playback next time
+              await saveFileMapping({
+                track,
+                torrentId: torrent.torrentId,
+                torrentTitle: torrent.title,
+                fileId: matchingFile.id,
+                fileName: matchingFile.filename,
+                filePath: matchingFile.path,
+                directLink: selectResult.streams[0].streamUrl,
+              });
+
               addDebugLog('Riproduzione', 'Stream avviato e mappatura salvata', 'success');
               return true;
             }
 
             if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
+              setLoadingPhase('downloading');
               setDownloadProgress(selectResult.progress);
               setDownloadStatus(selectResult.status);
+              
+              // Save mapping without direct link (will be updated when download completes)
+              await saveFileMapping({
+                track,
+                torrentId: torrent.torrentId,
+                torrentTitle: torrent.title,
+                fileId: matchingFile.id,
+                fileName: matchingFile.filename,
+                filePath: matchingFile.path,
+              });
+              
               addDebugLog('Salvataggio', 'Salvataggio in cloud (mappatura salvata)', 'success');
 
               // We found the correct file and started caching: DO NOT show "Match manuale richiesto".
@@ -579,6 +621,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       clearDebugLogs();
     }
     setIsSearchingStreams(true);
+    setLoadingPhase('searching');
     setAlternativeStreams([]);
     setAvailableTorrents([]);
     setDownloadProgress(null);
@@ -724,11 +767,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     fileId: fileToUse.id,
                     fileName: fileToUse.filename,
                     filePath: fileToUse.path,
+                    directLink: selectResult.streams[0].streamUrl,
                   });
                   addDebugLog('Riproduzione', 'Stream avviato e mappatura salvata', 'success');
+                  setLoadingPhase('idle');
                   playbackStarted = true;
                   break;
                 } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
+                  setLoadingPhase('downloading');
                   setDownloadProgress(selectResult.progress);
                   setDownloadStatus(selectResult.status);
                   addDebugLog('Salvataggio', 'Salvataggio in cloud', 'success');
@@ -780,6 +826,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Only update searching state if this is still the current search
       if (!searchTrackId || currentSearchTrackIdRef.current === searchTrackId) {
         setIsSearchingStreams(false);
+        setLoadingPhase('idle');
       }
     }
   }, [credentials, saveFileMapping, searchAlbumAndMatch, addDebugLog, clearDebugLogs]);
@@ -820,6 +867,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setCurrentStreamId(result.streams[0].id);
         setDownloadProgress(null);
         setDownloadStatus(null);
+        setLoadingPhase('idle');
 
         if (audioRef.current && result.streams[0].streamUrl) {
           audioRef.current.src = result.streams[0].streamUrl;
@@ -827,7 +875,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setState(prev => ({ ...prev, isPlaying: true }));
         }
 
-        // Persist mapping using the **fileId** (not stream.id)
+        // Persist mapping using the **fileId** (not stream.id) - include direct link
         const currentTrack = state.currentTrack;
         const torrent = availableTorrents.find(t => t.torrentId === torrentId);
         const file = torrent?.files?.find(f => f.id === fileId);
@@ -840,12 +888,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             fileId,
             fileName: file?.filename,
             filePath: file?.path,
+            directLink: result.streams[0].streamUrl,
           });
         }
 
         addDebugLog('Riproduzione', `Stream pronto: ${result.streams[0].title}`, 'success');
       } else if (result.status === 'downloading' || result.status === 'queued' || result.status === 'magnet_conversion') {
         // Update torrent status in the list
+        setLoadingPhase('downloading');
         setAvailableTorrents(prev => prev.map(t =>
           t.torrentId === torrentId
             ? { ...t, status: result.status, progress: result.progress }
@@ -999,8 +1049,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setCurrentStreamId(undefined);
     setDownloadProgress(null);
     setDownloadStatus(null);
+    setLoadingPhase('idle');
 
-    // First check if we have a saved mapping for this track
+    // First check if we have a saved mapping with direct link for this track
     if (credentials?.realDebridApiKey && track.albumId) {
       try {
         const { data: trackMapping } = await supabase
@@ -1018,17 +1069,46 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (trackMapping) {
           console.log('Found saved mapping for track:', track.title, trackMapping);
 
-          // Use the saved torrent and file mapping
           const torrentId = trackMapping.album_torrent_mappings.torrent_id;
           const fileId = trackMapping.file_id;
+          const directLink = trackMapping.direct_link;
+          const expiresAt = trackMapping.direct_link_expires_at;
 
-          // Guard: old buggy mappings could have non-sensical file ids (e.g. parsed from stream id)
+          // Guard: old buggy mappings could have non-sensical file ids
           if (!Number.isFinite(fileId) || fileId <= 0) {
             console.log('Ignoring invalid saved mapping fileId:', fileId);
           } else {
             setCurrentMappedFileId(fileId);
 
-            // Select and play this specific file
+            // Check if we have a valid direct link (not expired)
+            const isDirectLinkValid = directLink && expiresAt && new Date(expiresAt) > new Date();
+            
+            if (isDirectLinkValid) {
+              // INSTANT PLAY: Use cached direct link - no RD fetch needed
+              console.log('Using cached direct link for instant playback');
+              setLoadingPhase('loading');
+              addDebugLog('Riproduzione rapida', 'Uso link diretto salvato', 'success');
+              
+              if (audioRef.current) {
+                audioRef.current.src = directLink;
+                audioRef.current.play();
+                setState(prev => ({ ...prev, isPlaying: true }));
+              }
+              
+              setLoadingPhase('idle');
+              
+              // Save to recently played
+              const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
+              const filtered = recent.filter((t: Track) => t.id !== track.id);
+              const updated = [track, ...filtered].slice(0, 20);
+              localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+              return;
+            }
+
+            // Direct link expired or missing - fetch from RD
+            setLoadingPhase('loading');
+            addDebugLog('Caricamento', 'Link scaduto, recupero da RD...', 'info');
+            
             const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
 
             // Verify track is still current
@@ -1045,7 +1125,20 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 audioRef.current.src = result.streams[0].streamUrl;
                 audioRef.current.play();
                 setState(prev => ({ ...prev, isPlaying: true }));
+                
+                // Update direct link in database for next time
+                await saveFileMapping({
+                  track,
+                  torrentId,
+                  torrentTitle: trackMapping.album_torrent_mappings.torrent_title,
+                  fileId,
+                  fileName: trackMapping.file_name,
+                  filePath: trackMapping.file_path,
+                  directLink: result.streams[0].streamUrl,
+                });
               }
+              
+              setLoadingPhase('idle');
 
               // Save to recently played
               const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
@@ -1055,6 +1148,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               return;
             } else if (result.status === 'downloading' || result.status === 'queued') {
               // Torrent is downloading, show progress
+              setLoadingPhase('downloading');
+              setDownloadProgress(result.progress);
+              setDownloadStatus(result.status);
               setAvailableTorrents([
                 {
                   torrentId,
@@ -1068,6 +1164,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   hasLinks: false,
                 },
               ]);
+              return;
             }
           }
         }
@@ -1082,7 +1179,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return;
     }
 
-    // No saved mapping - try cache first, then album search, then track search
+    // No saved mapping - start searching
+    setLoadingPhase('searching');
     clearDebugLogs();
     addSyncingTrack(track.id);
     
@@ -1099,6 +1197,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // Found in cache, done!
         removeSyncingTrack(track.id);
         addSyncedTrack(track.id);
+        setLoadingPhase('idle');
         return;
       }
       
@@ -1117,6 +1216,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const trackQuery = `${track.artist} ${track.title}`;
         addDebugLog('Fallback', `Album non trovato: provo traccia (query: "${trackQuery}")`, 'warning');
         searchForStreams(trackQuery, true, track, false);
+      } else {
+        setLoadingPhase('idle');
       }
     } else {
       // No album info, search directly for track
@@ -1136,7 +1237,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const filtered = recent.filter((t: Track) => t.id !== track.id);
     const updated = [track, ...filtered].slice(0, 20);
     localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
-  }, [searchForStreams, credentials]);
+  }, [searchForStreams, credentials, saveFileMapping]);
 
   const selectStream = useCallback(async (stream: StreamResult) => {
     // Switch stream for current playback immediately - no download needed since stream is already ready
@@ -1305,7 +1406,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 );
                 
                 if (!result.error && result.status !== 'error') {
-                  // Save the mapping
+                  // Save the mapping with direct link if available
+                  const directLink = result.streams.length > 0 ? result.streams[0].streamUrl : undefined;
                   await saveFileMapping({
                     track: nextTrack,
                     torrentId: torrent.torrentId,
@@ -1313,6 +1415,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     fileId: matchingFile.id,
                     fileName: matchingFile.filename,
                     filePath: matchingFile.path,
+                    directLink,
                   });
                   
                   console.log('Pre-synced next track from cache:', nextTrack.title);
@@ -1359,6 +1462,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   );
                   
                   if (!selectResult.error && selectResult.status !== 'error') {
+                    const directLink = selectResult.streams.length > 0 ? selectResult.streams[0].streamUrl : undefined;
                     await saveFileMapping({
                       track: nextTrack,
                       torrentId: torrent.torrentId,
@@ -1366,6 +1470,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                       fileId: matchingFile.id,
                       fileName: matchingFile.filename,
                       filePath: matchingFile.path,
+                      directLink,
                     });
                     
                     console.log('Pre-synced next track:', nextTrack.title);
@@ -1422,6 +1527,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         downloadStatus,
         loadSavedMapping,
         currentMappedFileId,
+        loadingPhase,
       }}
     >
       {children}
