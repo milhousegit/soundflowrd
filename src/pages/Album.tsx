@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, CloudDownload, Loader2 } from 'lucide-react';
+import { Play, Clock, Music, Cloud, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
 import BackButton from '@/components/BackButton';
@@ -150,7 +150,7 @@ const Album: React.FC = () => {
       </div>
 
       {/* Actions */}
-      <div className="px-4 md:px-8 py-4 md:py-6 flex items-center gap-4">
+      <div className="px-4 md:px-8 py-4 md:py-6 flex items-center gap-3">
         <Button variant="player" size="player" onClick={handlePlayAll}>
           <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
         </Button>
@@ -162,32 +162,22 @@ const Album: React.FC = () => {
           size="lg"
         />
 
-        {/* Sync album button - only show if RD key is configured */}
+        {/* Sync album button - small like favorite, with animation */}
         {credentials?.realDebridApiKey && (
           <Button
-            variant={allTracksSynced ? "outline" : "secondary"}
-            size="lg"
+            variant="ghost"
+            size="icon"
             onClick={handleSyncAlbum}
             disabled={isSyncingAlbum || allTracksSynced}
-            className="gap-2"
+            className="w-12 h-12"
+            title={allTracksSynced ? 'Album sincronizzato' : 'Sincronizza Album su Real-Debrid'}
           >
             {isSyncingAlbum ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="hidden sm:inline">
-                  {syncProgress.synced}/{syncProgress.total}
-                </span>
-              </>
+              <Loader2 className="w-6 h-6 text-primary animate-spin" />
             ) : allTracksSynced ? (
-              <>
-                <CloudDownload className="w-4 h-4 text-green-500" />
-                <span className="hidden sm:inline">Sincronizzato</span>
-              </>
+              <Cloud className="w-6 h-6 text-green-500" />
             ) : (
-              <>
-                <CloudDownload className="w-4 h-4" />
-                <span className="hidden sm:inline">Sincronizza Album</span>
-              </>
+              <Cloud className="w-6 h-6 text-muted-foreground hover:text-primary transition-colors" />
             )}
           </Button>
         )}

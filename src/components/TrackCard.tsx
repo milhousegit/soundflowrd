@@ -115,16 +115,17 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       if (showLoadingCloud) {
         return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-primary animate-pulse" />;
       }
+      // Downloading - blue pulsing cloud (not solid!)
       if (showDownloadingCloud) {
         return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-blue-500 animate-pulse" />;
       }
-      // Synced - solid green cloud
+      // Synced with direct_link - solid green cloud
       if (showSyncedCloud) {
         return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />;
       }
-      // Syncing (not current track) - show pulsing
+      // Syncing (not current track) - show spinning loader
       if (isSyncing && !isCurrentTrack) {
-        return <Loader2 className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground animate-spin" />;
+        return <Loader2 className="w-3.5 h-3.5 flex-shrink-0 text-primary animate-spin" />;
       }
       
       return null;

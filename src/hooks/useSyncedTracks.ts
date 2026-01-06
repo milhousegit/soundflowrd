@@ -75,32 +75,34 @@ export const useSyncedTracks = (trackIds?: string[]) => {
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'track_file_mappings'
         },
         (payload) => {
-          const trackId = payload.new.track_id;
-          if (trackId) {
-            syncedTracksCache.add(trackId);
-            syncingTracksCache.delete(trackId);
-            downloadingTracksCache.delete(trackId);
-            notifyListeners();
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'track_file_mappings'
-        },
-        (payload) => {
-          const trackId = payload.old.track_id;
-          if (trackId) {
-            syncedTracksCache.delete(trackId);
-            notifyListeners();
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const trackId = payload.new.track_id;
+            const directLink = payload.new.direct_link;
+            if (trackId) {
+              if (directLink) {
+                // Has direct_link = fully synced
+                syncedTracksCache.add(trackId);
+                syncingTracksCache.delete(trackId);
+                downloadingTracksCache.delete(trackId);
+              } else {
+                // No direct_link = downloading
+                downloadingTracksCache.add(trackId);
+                syncingTracksCache.delete(trackId);
+              }
+              notifyListeners();
+            }
+          } else if (payload.eventType === 'DELETE') {
+            const trackId = payload.old.track_id;
+            if (trackId) {
+              syncedTracksCache.delete(trackId);
+              downloadingTracksCache.delete(trackId);
+              notifyListeners();
+            }
           }
         }
       )
@@ -111,7 +113,7 @@ export const useSyncedTracks = (trackIds?: string[]) => {
     };
   }, []);
 
-  // Fetch synced tracks from database
+  // Fetch synced tracks from database - only count as synced if direct_link exists
   const fetchSyncedTracks = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
     
@@ -119,12 +121,19 @@ export const useSyncedTracks = (trackIds?: string[]) => {
     try {
       const { data, error } = await supabase
         .from('track_file_mappings')
-        .select('track_id')
+        .select('track_id, direct_link')
         .in('track_id', ids);
 
       if (!error && data) {
         data.forEach(item => {
-          syncedTracksCache.add(item.track_id);
+          if (item.direct_link) {
+            // Has direct_link = fully synced
+            syncedTracksCache.add(item.track_id);
+            downloadingTracksCache.delete(item.track_id);
+          } else {
+            // No direct_link = still downloading
+            downloadingTracksCache.add(item.track_id);
+          }
         });
         notifyListeners();
       }

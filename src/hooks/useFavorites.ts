@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Track, Album, Artist } from '@/types/music';
 import { toast } from 'sonner';
+import { syncTrackInBackground } from '@/hooks/useSyncTrack';
 
 interface Favorite {
   id: string;
@@ -17,7 +18,7 @@ interface Favorite {
 }
 
 export function useFavorites() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, credentials } = useAuth();
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -83,13 +84,19 @@ export function useFavorites() {
       
       await fetchFavorites();
       toast.success('Aggiunto ai preferiti');
+
+      // Auto-sync track to Real-Debrid in background when favoriting
+      if (itemType === 'track' && credentials?.realDebridApiKey) {
+        syncTrackInBackground(item as Track, credentials.realDebridApiKey);
+      }
+
       return true;
     } catch (error) {
       console.error('Error adding favorite:', error);
       toast.error('Errore durante l\'aggiunta ai preferiti');
       return false;
     }
-  }, [user, fetchFavorites]);
+  }, [user, fetchFavorites, credentials]);
 
   const removeFavorite = useCallback(async (itemType: 'track' | 'album' | 'artist', itemId: string) => {
     if (!user) return false;

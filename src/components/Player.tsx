@@ -20,7 +20,6 @@ import {
   Loader2,
   Cloud,
   ListMusic,
-  ArrowDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
@@ -207,6 +206,7 @@ const Player: React.FC = () => {
                   <Music className="w-24 h-24 text-muted-foreground" />
                 </div>
               )}
+              {/* Status overlay - always visible when not idle */}
               {loadingPhase === 'searching' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
@@ -220,7 +220,7 @@ const Player: React.FC = () => {
               {loadingPhase === 'downloading' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
-                    <ArrowDown className="w-8 h-8 text-primary animate-bounce mb-2" />
+                    <Cloud className="w-8 h-8 text-blue-500 animate-pulse mb-2" />
                     <span className="text-sm text-foreground">
                       {t('language') === 'it' 
                         ? `Scaricando... ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}` 
@@ -355,7 +355,7 @@ const Player: React.FC = () => {
             )}
             {loadingPhase === 'downloading' && (
               <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                <ArrowDown className="w-4 h-4 text-primary animate-bounce" />
+                <Cloud className="w-4 h-4 text-blue-500 animate-pulse" />
               </div>
             )}
             {loadingPhase === 'loading' && (
@@ -409,7 +409,7 @@ const Player: React.FC = () => {
               )}
               {loadingPhase === 'downloading' && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                  <ArrowDown className="w-5 h-5 text-primary animate-bounce" />
+                  <Cloud className="w-5 h-5 text-blue-500 animate-pulse" />
                 </div>
               )}
               {loadingPhase === 'loading' && (
