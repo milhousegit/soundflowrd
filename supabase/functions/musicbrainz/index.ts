@@ -12,6 +12,19 @@ const FANART_API = 'https://webservice.fanart.tv/v3';
 // You can get a free API key from https://fanart.tv/get-an-api-key/
 const FANART_API_KEY = Deno.env.get('FANART_API_KEY') || '';
 
+// Rate limit: MusicBrainz allows 1 request per second
+let lastRequestTime = 0;
+
+async function rateLimitedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  if (timeSinceLastRequest < 1100) {
+    await new Promise(resolve => setTimeout(resolve, 1100 - timeSinceLastRequest));
+  }
+  lastRequestTime = Date.now();
+  return fetch(url, options);
+}
+
 // Retry fetch with exponential backoff
 async function fetchWithRetry(url: string, options: RequestInit = {}, maxRetries = 3): Promise<Response> {
   let lastError: Error | null = null;
@@ -20,19 +33,21 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, maxRetries
     try {
       // Add delay between retries (exponential backoff)
       if (attempt > 0) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+        const delay = Math.min(2000 * Math.pow(2, attempt), 10000);
+        console.log(`Retry attempt ${attempt + 1} after ${delay}ms delay for ${url}`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
       
-      const response = await fetch(url, {
+      const response = await rateLimitedFetch(url, {
         ...options,
-        signal: AbortSignal.timeout(10000), // 10 second timeout
+        signal: AbortSignal.timeout(15000), // 15 second timeout
       });
       
       // If rate limited, wait and retry
       if (response.status === 503 || response.status === 429) {
         const retryAfter = response.headers.get('Retry-After');
-        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 2000;
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 3000;
+        console.log(`Rate limited, waiting ${waitTime}ms`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
         continue;
       }
