@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { verifyApiKey } from '@/lib/realdebrid';
+import { StreamingMode } from '@/types/settings';
 import {
   User,
   Key,
@@ -18,23 +19,57 @@ import {
   X,
   Loader2,
   Save,
+  Wifi,
+  Cloud,
+  Zap,
+  AlertCircle,
+  Play,
+  RefreshCw,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+
+interface CloudFile {
+  id: string;
+  filename: string;
+  filesize: number;
+  host: string;
+  link: string;
+  generated: string;
+}
 
 const Settings: React.FC = () => {
-  const { profile, updateApiKey, signOut } = useAuth();
+  const { profile, updateApiKey, signOut, credentials } = useAuth();
   const { settings, updateSettings, t } = useSettings();
   const { toast } = useToast();
 
   const [isEditingApiKey, setIsEditingApiKey] = useState(false);
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+  
+  // Cloud files state
+  const [cloudFiles, setCloudFiles] = useState<CloudFile[]>([]);
+  const [isLoadingCloud, setIsLoadingCloud] = useState(false);
+  const [showCloudSection, setShowCloudSection] = useState(false);
+
+  const hasRdApiKey = !!credentials?.realDebridApiKey;
 
   useEffect(() => {
     if (isEditingApiKey) {
       setApiKeyDraft(profile?.real_debrid_api_key ?? '');
     }
   }, [isEditingApiKey, profile?.real_debrid_api_key]);
+
+  // Auto-set streaming mode when RD key is added/removed
+  useEffect(() => {
+    if (hasRdApiKey && settings.streamingMode === 'direct') {
+      // User has RD, suggest hybrid mode
+      updateSettings({ streamingMode: 'hybrid' });
+    } else if (!hasRdApiKey && settings.streamingMode !== 'direct') {
+      // No RD key, force direct mode
+      updateSettings({ streamingMode: 'direct' });
+    }
+  }, [hasRdApiKey]);
 
   const handleLogout = async () => {
     await signOut();
@@ -55,6 +90,65 @@ const Settings: React.FC = () => {
         ...settings.homeDisplayOptions,
         [key]: !settings.homeDisplayOptions[key],
       },
+    });
+  };
+
+  const handleStreamingModeChange = (mode: StreamingMode) => {
+    if (mode !== 'direct' && !hasRdApiKey) {
+      toast({
+        title: settings.language === 'it' ? 'API Key richiesta' : 'API Key required',
+        description: settings.language === 'it' 
+          ? 'Configura la API Key di Real-Debrid per usare questa modalità.' 
+          : 'Configure your Real-Debrid API Key to use this mode.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    updateSettings({ streamingMode: mode });
+  };
+
+  const loadCloudFiles = async () => {
+    if (!credentials?.realDebridApiKey) return;
+    
+    setIsLoadingCloud(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('real-debrid', {
+        body: { 
+          action: 'getDownloads',
+          apiKey: credentials.realDebridApiKey,
+        },
+      });
+
+      if (error) throw error;
+      
+      setCloudFiles(data?.downloads || []);
+    } catch (error) {
+      console.error('Failed to load cloud files:', error);
+      toast({
+        title: settings.language === 'it' ? 'Errore' : 'Error',
+        description: settings.language === 'it' 
+          ? 'Impossibile caricare i file cloud.' 
+          : 'Failed to load cloud files.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingCloud(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${Math.round(bytes / 1024 / 1024)} MB`;
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  };
+
+  const formatDate = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(settings.language === 'it' ? 'it-IT' : 'en-US', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -79,6 +173,99 @@ const Settings: React.FC = () => {
                 className="bg-secondary text-sm md:text-base"
               />
             </div>
+          </div>
+        </section>
+
+        {/* Streaming Mode Section */}
+        <section className="space-y-3 md:space-y-4">
+          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+            <Wifi className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+            <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('streamingMode')}</h2>
+          </div>
+          
+          <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
+            {/* Direct Mode */}
+            <button
+              onClick={() => handleStreamingModeChange('direct')}
+              className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
+                settings.streamingMode === 'direct' 
+                  ? 'border-primary bg-primary/10' 
+                  : 'border-border hover:border-muted-foreground/50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Zap className={`w-5 h-5 ${settings.streamingMode === 'direct' ? 'text-primary' : 'text-muted-foreground'}`} />
+                <div className="flex-1">
+                  <p className="font-medium text-foreground">{t('streamingDirect')}</p>
+                  <p className="text-xs text-muted-foreground">{t('streamingDirectDesc')}</p>
+                </div>
+                {settings.streamingMode === 'direct' && <Check className="w-5 h-5 text-primary" />}
+              </div>
+            </button>
+
+            {/* Hybrid Mode */}
+            <button
+              onClick={() => handleStreamingModeChange('hybrid')}
+              disabled={!hasRdApiKey}
+              className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
+                settings.streamingMode === 'hybrid' 
+                  ? 'border-primary bg-primary/10' 
+                  : !hasRdApiKey 
+                    ? 'border-border opacity-50 cursor-not-allowed'
+                    : 'border-border hover:border-muted-foreground/50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Cloud className={`w-5 h-5 ${settings.streamingMode === 'hybrid' ? 'text-primary' : 'text-muted-foreground'}`} />
+                <div className="flex-1">
+                  <p className="font-medium text-foreground">{t('streamingHybrid')}</p>
+                  <p className="text-xs text-muted-foreground">{t('streamingHybridDesc')}</p>
+                </div>
+                {settings.streamingMode === 'hybrid' && <Check className="w-5 h-5 text-primary" />}
+              </div>
+            </button>
+
+            {/* Debrid Only Mode */}
+            <button
+              onClick={() => handleStreamingModeChange('debrid_only')}
+              disabled={!hasRdApiKey}
+              className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
+                settings.streamingMode === 'debrid_only' 
+                  ? 'border-primary bg-primary/10' 
+                  : !hasRdApiKey 
+                    ? 'border-border opacity-50 cursor-not-allowed'
+                    : 'border-border hover:border-muted-foreground/50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Key className={`w-5 h-5 ${settings.streamingMode === 'debrid_only' ? 'text-primary' : 'text-muted-foreground'}`} />
+                <div className="flex-1">
+                  <p className="font-medium text-foreground">{t('streamingDebridOnly')}</p>
+                  <p className="text-xs text-muted-foreground">{t('streamingDebridOnlyDesc')}</p>
+                </div>
+                {settings.streamingMode === 'debrid_only' && <Check className="w-5 h-5 text-primary" />}
+              </div>
+            </button>
+
+            {/* Warning for Debrid Only */}
+            {settings.streamingMode === 'debrid_only' && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                <AlertCircle className="w-4 h-4 text-yellow-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-yellow-200">
+                  {settings.language === 'it' 
+                    ? 'I tempi di caricamento possono variare dai 4 ai 20 secondi per ogni canzone.'
+                    : 'Load times can vary from 4 to 20 seconds per song.'}
+                </p>
+              </div>
+            )}
+
+            {!hasRdApiKey && (
+              <p className="text-xs text-muted-foreground mt-2">
+                {settings.language === 'it' 
+                  ? 'Configura la API Key di Real-Debrid per sbloccare le modalità Ibrido e Solo RD.'
+                  : 'Configure your Real-Debrid API Key to unlock Hybrid and RD Only modes.'}
+              </p>
+            )}
           </div>
         </section>
 
@@ -194,12 +381,100 @@ const Settings: React.FC = () => {
               )}
             </div>
 
-            <div className="flex items-center gap-2 text-xs md:text-sm">
-              <Check className="w-4 h-4 text-primary" />
-              <span className="text-muted-foreground">{t('connected')} a Real-Debrid</span>
-            </div>
+            {hasRdApiKey && (
+              <div className="flex items-center gap-2 text-xs md:text-sm">
+                <Check className="w-4 h-4 text-primary" />
+                <span className="text-muted-foreground">{t('connected')} a Real-Debrid</span>
+              </div>
+            )}
           </div>
         </section>
+
+        {/* Cloud Files Section */}
+        {hasRdApiKey && (
+          <section className="space-y-3 md:space-y-4">
+            <div className="flex items-center justify-between mb-3 md:mb-4">
+              <div className="flex items-center gap-2 md:gap-3">
+                <Cloud className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+                <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('cloudFiles')}</h2>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowCloudSection(!showCloudSection);
+                  if (!showCloudSection && cloudFiles.length === 0) {
+                    loadCloudFiles();
+                  }
+                }}
+              >
+                {showCloudSection ? (
+                  <X className="w-4 h-4 mr-2" />
+                ) : (
+                  <Cloud className="w-4 h-4 mr-2" />
+                )}
+                {showCloudSection ? (settings.language === 'it' ? 'Chiudi' : 'Close') : (settings.language === 'it' ? 'Mostra' : 'Show')}
+              </Button>
+            </div>
+
+            {showCloudSection && (
+              <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-muted-foreground">
+                    {settings.language === 'it' 
+                      ? 'File salvati su Real-Debrid (ultimi 30 giorni)'
+                      : 'Files saved on Real-Debrid (last 30 days)'}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={loadCloudFiles}
+                    disabled={isLoadingCloud}
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoadingCloud ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+
+                {isLoadingCloud ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    <span className="ml-2 text-sm text-muted-foreground">{t('loadingCloudFiles')}</span>
+                  </div>
+                ) : cloudFiles.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Cloud className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">{t('noCloudFiles')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {cloudFiles.map((file) => (
+                      <div
+                        key={file.id}
+                        className="flex items-center gap-3 p-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
+                      >
+                        <Play className="w-4 h-4 text-primary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{file.filename}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(file.filesize)} • {formatDate(file.generated)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(file.link, '_blank')}
+                          title={t('playFromCloud')}
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Home Display Section */}
         <section className="space-y-3 md:space-y-4">
