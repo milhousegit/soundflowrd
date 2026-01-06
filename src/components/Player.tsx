@@ -106,16 +106,20 @@ const Player: React.FC = () => {
   }, [setYouTubeProgress]);
   
   const handleYouTubeEnded = useCallback(() => {
+    console.log('YouTube video ended, calling next()');
     next();
   }, [next]);
   
-  // Handle seeking for YouTube
+  // Handle seeking - ONLY for YouTube when playing YouTube, ONLY for audio when not
   const handleSeek = useCallback((time: number) => {
     if (isPlayingYouTube && youtubePlayerRef.current) {
       youtubePlayerRef.current.seekTo(time);
+      // Only update progress state, don't touch audio player
+      setYouTubeProgress(time, duration);
+    } else {
+      seek(time);
     }
-    seek(time);
-  }, [isPlayingYouTube, seek]);
+  }, [isPlayingYouTube, seek, setYouTubeProgress, duration]);
   
   // Handle toggle for both audio and YouTube
   const handleToggle = useCallback(() => {

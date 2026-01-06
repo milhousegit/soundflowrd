@@ -22,6 +22,8 @@ import {
   Play,
   RefreshCw,
   Trash2,
+  Youtube,
+  Music,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -453,6 +455,52 @@ const Settings: React.FC = () => {
                 onCheckedChange={() => toggleHomeOption('showTopCharts')}
               />
             </div>
+          </div>
+        </section>
+
+        {/* Audio Source Section */}
+        <section className="space-y-3 md:space-y-4">
+          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+            <Music className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+            <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('audioSource')}</h2>
+          </div>
+          
+          <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
+            <button
+              onClick={() => updateSettings({ audioSourceMode: 'rd_priority' })}
+              className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
+                settings.audioSourceMode === 'rd_priority' 
+                  ? 'bg-primary/20 border border-primary/50' 
+                  : 'bg-secondary hover:bg-secondary/80'
+              }`}
+            >
+              <Cloud className={`w-5 h-5 mt-0.5 ${settings.audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <div className="flex-1">
+                <p className={`font-medium ${settings.audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-foreground'}`}>
+                  {t('rdPriority')}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('rdPriorityDesc')}</p>
+              </div>
+              {settings.audioSourceMode === 'rd_priority' && <Check className="w-5 h-5 text-primary" />}
+            </button>
+            
+            <button
+              onClick={() => updateSettings({ audioSourceMode: 'youtube_only' })}
+              className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
+                settings.audioSourceMode === 'youtube_only' 
+                  ? 'bg-red-500/20 border border-red-500/50' 
+                  : 'bg-secondary hover:bg-secondary/80'
+              }`}
+            >
+              <Youtube className={`w-5 h-5 mt-0.5 ${settings.audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-muted-foreground'}`} />
+              <div className="flex-1">
+                <p className={`font-medium ${settings.audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-foreground'}`}>
+                  {t('youtubeOnly')}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('youtubeOnlyDesc')}</p>
+              </div>
+              {settings.audioSourceMode === 'youtube_only' && <Check className="w-5 h-5 text-red-500" />}
+            </button>
           </div>
         </section>
 
