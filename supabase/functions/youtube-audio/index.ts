@@ -5,12 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface PipedInstance {
-  name: string;
-  api_url: string;
-  uptime_24h: number;
-}
-
 interface VideoResult {
   id: string;
   title: string;
@@ -26,64 +20,26 @@ interface AudioStream {
   bitrate: number;
 }
 
-// Cache for working instances
-let cachedInstances: string[] = [];
-let instancesCachedAt = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+// Invidious instances - more reliable for audio extraction
+const INVIDIOUS_INSTANCES = [
+  "https://invidious.io.lol",
+  "https://vid.puffyan.us",
+  "https://invidious.privacyredirect.com",
+  "https://yewtu.be",
+  "https://invidious.lunar.icu",
+  "https://inv.tux.pizza",
+  "https://invidious.protokolla.fi",
+];
 
-// Known reliable instances as fallback
-const FALLBACK_INSTANCES = [
+// Piped instances for search (better search results)
+const PIPED_INSTANCES = [
   "https://pipedapi.kavin.rocks",
   "https://api.piped.private.coffee",
   "https://pipedapi.r4fo.com",
-  "https://piped-api.garuber.dev",
-  "https://api.piped.yt",
 ];
 
-async function getWorkingInstances(): Promise<string[]> {
-  // Return cached if still valid
-  if (cachedInstances.length > 0 && Date.now() - instancesCachedAt < CACHE_DURATION) {
-    console.log('Using cached instances:', cachedInstances);
-    return cachedInstances;
-  }
-
+async function tryFetch(url: string, timeout = 10000): Promise<Response | null> {
   try {
-    console.log('Fetching fresh Piped instances...');
-    const response = await fetch('https://piped-instances.kavin.rocks/', {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(5000),
-    });
-    
-    if (response.ok) {
-      const instances: PipedInstance[] = await response.json();
-      console.log(`Got ${instances.length} instances from API`);
-      
-      // Sort by uptime and take top 8 with >85% uptime
-      const working = instances
-        .filter(i => i.uptime_24h > 85 && i.api_url)
-        .sort((a, b) => b.uptime_24h - a.uptime_24h)
-        .slice(0, 8)
-        .map(i => i.api_url);
-      
-      if (working.length >= 3) {
-        cachedInstances = working;
-        instancesCachedAt = Date.now();
-        console.log(`Cached ${working.length} instances`);
-        return working;
-      }
-    }
-  } catch (e) {
-    console.error('Failed to fetch instances:', e instanceof Error ? e.message : e);
-  }
-
-  // Use fallback instances
-  console.log('Using fallback instances');
-  return FALLBACK_INSTANCES;
-}
-
-async function tryFetch(url: string, timeout = 12000): Promise<Response | null> {
-  try {
-    console.log(`Fetching: ${url}`);
     const response = await fetch(url, { 
       signal: AbortSignal.timeout(timeout),
       headers: {
@@ -91,122 +47,174 @@ async function tryFetch(url: string, timeout = 12000): Promise<Response | null> 
         'Accept': 'application/json',
       }
     });
-    console.log(`Response status: ${response.status}`);
     return response;
   } catch (e) {
-    console.error(`Fetch error: ${e instanceof Error ? e.message : e}`);
+    console.error(`Fetch error for ${url}: ${e instanceof Error ? e.message : e}`);
     return null;
   }
 }
 
 async function searchVideos(query: string): Promise<VideoResult[]> {
-  const instances = await getWorkingInstances();
   const encodedQuery = encodeURIComponent(query);
   
-  // Try each instance
-  for (const instance of instances) {
-    // Try different search modes
-    const searchUrls = [
-      `${instance}/search?q=${encodedQuery}&filter=videos`,
-      `${instance}/search?q=${encodedQuery}`,
-    ];
-    
-    for (const url of searchUrls) {
-      try {
-        const response = await tryFetch(url);
-        
-        if (!response || !response.ok) continue;
-        
-        const text = await response.text();
-        console.log(`Response preview: ${text.substring(0, 100)}`);
-        
-        // Check if it's valid JSON
-        if (!text.startsWith('{') && !text.startsWith('[')) {
-          console.log('Invalid JSON response');
-          continue;
-        }
-        
-        const data = JSON.parse(text);
-        
-        if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-          console.log(`Found ${data.items.length} items`);
-          
-          const results = data.items
-            .filter((item: any) => {
-              const isStream = item.type === 'stream';
-              const hasDuration = item.duration > 0;
-              const notTooLong = item.duration < 900; // max 15 min
-              return isStream && hasDuration && notTooLong;
-            })
-            .slice(0, 5)
-            .map((item: any) => ({
-              id: item.url?.replace('/watch?v=', '') || '',
-              title: item.title || 'Unknown',
-              duration: item.duration || 0,
-              uploaderName: item.uploaderName || 'Unknown',
-              thumbnail: item.thumbnail || '',
-            }));
-          
-          if (results.length > 0) {
-            console.log(`Returning ${results.length} valid results`);
-            return results;
-          }
-        }
-      } catch (error) {
-        console.error(`Search error: ${error instanceof Error ? error.message : error}`);
-        continue;
-      }
-    }
-  }
-  
-  console.log('No results found from any instance');
-  return [];
-}
-
-async function getAudioStream(videoId: string): Promise<AudioStream | null> {
-  const instances = await getWorkingInstances();
-  
-  // Clean videoId - remove any prefix like /watch?v=
-  const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
-  console.log(`Clean video ID: ${cleanVideoId}`);
-  
-  for (const instance of instances) {
+  // Try Piped first for search
+  for (const instance of PIPED_INSTANCES) {
     try {
-      const url = `${instance}/streams/${cleanVideoId}`;
-      console.log(`Trying stream URL: ${url}`);
+      const url = `${instance}/search?q=${encodedQuery}&filter=videos`;
+      console.log(`Searching: ${url}`);
       const response = await tryFetch(url);
       
-      if (!response) {
-        console.log('No response from instance');
-        continue;
-      }
-      
-      if (!response.ok) {
-        console.log(`Response not ok: ${response.status}`);
+      if (!response || !response.ok) {
+        console.log(`${instance} failed: ${response?.status}`);
         continue;
       }
       
       const text = await response.text();
-      console.log(`Stream response preview: ${text.substring(0, 200)}`);
-      
-      if (!text.startsWith('{')) {
-        console.log('Invalid JSON response for stream');
-        continue;
-      }
+      if (!text.startsWith('{') && !text.startsWith('[')) continue;
       
       const data = JSON.parse(text);
       
-      // Check for audioStreams
-      if (data.audioStreams && Array.isArray(data.audioStreams) && data.audioStreams.length > 0) {
-        console.log(`Found ${data.audioStreams.length} audio streams`);
+      if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+        const results = data.items
+          .filter((item: any) => item.type === 'stream' && item.duration > 0 && item.duration < 900)
+          .slice(0, 5)
+          .map((item: any) => ({
+            id: item.url?.replace('/watch?v=', '') || '',
+            title: item.title || 'Unknown',
+            duration: item.duration || 0,
+            uploaderName: item.uploaderName || 'Unknown',
+            thumbnail: item.thumbnail || '',
+          }));
         
+        if (results.length > 0) {
+          console.log(`Found ${results.length} results from Piped`);
+          return results;
+        }
+      }
+    } catch (error) {
+      console.error(`Piped search error: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  
+  // Fallback to Invidious search
+  for (const instance of INVIDIOUS_INSTANCES) {
+    try {
+      const url = `${instance}/api/v1/search?q=${encodedQuery}&type=video`;
+      console.log(`Invidious search: ${url}`);
+      const response = await tryFetch(url);
+      
+      if (!response || !response.ok) continue;
+      
+      const data = await response.json();
+      
+      if (Array.isArray(data) && data.length > 0) {
+        const results = data
+          .filter((item: any) => item.type === 'video' && item.lengthSeconds > 0 && item.lengthSeconds < 900)
+          .slice(0, 5)
+          .map((item: any) => ({
+            id: item.videoId || '',
+            title: item.title || 'Unknown',
+            duration: item.lengthSeconds || 0,
+            uploaderName: item.author || 'Unknown',
+            thumbnail: item.videoThumbnails?.[0]?.url || '',
+          }));
+        
+        if (results.length > 0) {
+          console.log(`Found ${results.length} results from Invidious`);
+          return results;
+        }
+      }
+    } catch (error) {
+      console.error(`Invidious search error: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  
+  return [];
+}
+
+async function getAudioStream(videoId: string): Promise<AudioStream | null> {
+  const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
+  console.log(`Getting audio for video: ${cleanVideoId}`);
+  
+  // Try Invidious first - more reliable for audio extraction
+  for (const instance of INVIDIOUS_INSTANCES) {
+    try {
+      const url = `${instance}/api/v1/videos/${cleanVideoId}`;
+      console.log(`Trying Invidious: ${url}`);
+      const response = await tryFetch(url, 15000);
+      
+      if (!response) {
+        console.log(`No response from ${instance}`);
+        continue;
+      }
+      
+      if (!response.ok) {
+        console.log(`${instance} returned ${response.status}`);
+        continue;
+      }
+      
+      const data = await response.json();
+      
+      // Invidious provides adaptiveFormats with audio-only streams
+      if (data.adaptiveFormats && Array.isArray(data.adaptiveFormats)) {
+        const audioFormats = data.adaptiveFormats
+          .filter((f: any) => f.type?.startsWith('audio/') && f.url)
+          .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+        
+        if (audioFormats.length > 0) {
+          const best = audioFormats[0];
+          console.log(`Found audio from Invidious: ${best.type}, bitrate: ${best.bitrate}`);
+          return {
+            url: best.url,
+            quality: best.audioQuality || `${Math.round((best.bitrate || 128000) / 1000)}kbps`,
+            mimeType: best.type || 'audio/webm',
+            bitrate: best.bitrate || 128000,
+          };
+        }
+      }
+      
+      // Some Invidious instances use formatStreams
+      if (data.formatStreams && Array.isArray(data.formatStreams)) {
+        // Get the lowest quality video (which still has audio) as fallback
+        const withAudio = data.formatStreams.filter((f: any) => f.url);
+        if (withAudio.length > 0) {
+          const format = withAudio[0];
+          console.log(`Using formatStream as fallback: ${format.type}`);
+          return {
+            url: format.url,
+            quality: format.qualityLabel || 'audio',
+            mimeType: format.type || 'video/mp4',
+            bitrate: 128000,
+          };
+        }
+      }
+    } catch (error) {
+      console.error(`Invidious error for ${instance}: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  
+  // Fallback to Piped
+  for (const instance of PIPED_INSTANCES) {
+    try {
+      const url = `${instance}/streams/${cleanVideoId}`;
+      console.log(`Trying Piped: ${url}`);
+      const response = await tryFetch(url);
+      
+      if (!response || !response.ok) continue;
+      
+      const text = await response.text();
+      if (!text.startsWith('{')) continue;
+      
+      const data = JSON.parse(text);
+      
+      if (data.audioStreams && Array.isArray(data.audioStreams) && data.audioStreams.length > 0) {
         const audioStreams = data.audioStreams
-          .filter((s: any) => s.url && (s.bitrate || s.quality))
+          .filter((s: any) => s.url)
           .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
         
         if (audioStreams.length > 0) {
           const best = audioStreams[0];
-          console.log(`Best audio: bitrate=${best.bitrate}, quality=${best.quality}, mimeType=${best.mimeType}`);
+          console.log(`Found audio from Piped: ${best.quality}`);
           return {
             url: best.url,
             quality: best.quality || `${Math.round((best.bitrate || 128000) / 1000)}kbps`,
@@ -214,12 +222,9 @@ async function getAudioStream(videoId: string): Promise<AudioStream | null> {
             bitrate: best.bitrate || 128000,
           };
         }
-      } else {
-        console.log('No audioStreams in response. Keys:', Object.keys(data).join(', '));
       }
     } catch (error) {
-      console.error(`Stream error: ${error instanceof Error ? error.message : error}`);
-      continue;
+      console.error(`Piped stream error: ${error instanceof Error ? error.message : error}`);
     }
   }
   
@@ -246,8 +251,7 @@ serve(async (req) => {
       console.log('========== YouTube Search ==========');
       console.log('Query:', query);
       const results = await searchVideos(query);
-      console.log('Final results:', results.length);
-      console.log('====================================');
+      console.log('Results:', results.length);
 
       return new Response(
         JSON.stringify({ videos: results }),
@@ -267,7 +271,6 @@ serve(async (req) => {
       console.log('Video ID:', videoId);
       const audio = await getAudioStream(videoId);
       console.log('Audio found:', !!audio);
-      console.log('===============================');
 
       if (!audio) {
         return new Response(
