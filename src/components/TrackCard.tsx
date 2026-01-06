@@ -42,13 +42,19 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     // Current track is loading if loadingPhase is not idle
     const isCurrentTrackLoading = isCurrentTrack && loadingPhase !== 'idle';
     
-    // Show cloud icon only when synced (solid green)
-    // Show loader when current track is loading
-    // Show pulsing cloud when downloading
-    const showSyncedCloud = isSynced && !isCurrentTrackLoading;
-    const showDownloadingCloud = (isDownloading || (isCurrentTrack && loadingPhase === 'downloading')) && !isSynced;
+    // For the current track: use loadingPhase to determine state
+    // For other tracks: use hook values
     const showSearchingLoader = isCurrentTrack && loadingPhase === 'searching';
     const showLoadingCloud = isCurrentTrack && loadingPhase === 'loading';
+    const showDownloadingCloud = isCurrentTrack 
+      ? loadingPhase === 'downloading'
+      : (isDownloading && !isSynced);
+    
+    // Show synced cloud only if:
+    // - Track is synced AND
+    // - Not currently loading (if current track) AND
+    // - Not downloading
+    const showSyncedCloud = isSynced && !isCurrentTrackLoading && !showDownloadingCloud;
 
     const handleClick = () => {
       if (isMenuOpen) return; // Don't trigger play when menu is open
