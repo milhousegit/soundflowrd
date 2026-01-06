@@ -295,9 +295,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
 
       if (albumMappingId) {
-        // Calculate expiry: RD keeps files for 30 days, we use 29 days for safety
-        const expiresAt = directLink ? new Date(Date.now() + 29 * 24 * 60 * 60 * 1000).toISOString() : null;
-        
         await supabase
           .from('track_file_mappings')
           .upsert(
@@ -310,7 +307,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               file_path: filePath || '',
               file_name: fileName || track.title,
               direct_link: directLink || null,
-              direct_link_expires_at: expiresAt,
             },
             {
               onConflict: 'track_id',
@@ -1130,7 +1126,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           const torrentId = trackMapping.album_torrent_mappings.torrent_id;
           const fileId = trackMapping.file_id;
           const directLink = trackMapping.direct_link;
-          const expiresAt = trackMapping.direct_link_expires_at;
 
           // Guard: old buggy mappings could have non-sensical file ids
           if (!Number.isFinite(fileId) || fileId <= 0) {
@@ -1138,15 +1133,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           } else {
             setCurrentMappedFileId(fileId);
 
-            // Check if we have a valid direct link (not expired)
-            const isDirectLinkValid = directLink && expiresAt && new Date(expiresAt) > new Date();
-            
-            if (isDirectLinkValid) {
-              // INSTANT PLAY: Use cached direct link - no RD fetch needed
+            // If we have a direct link saved, try to use it directly
+            if (directLink) {
               console.log('Using cached direct link for instant playback');
               setLoadingPhase('loading');
-              addDebugLog('🎯 Mappatura trovata', `File ID: ${fileId}, link valido fino a ${new Date(expiresAt).toLocaleDateString('it-IT')}`, 'success');
-              addDebugLog('⚡ Riproduzione istantanea', 'Link diretto disponibile - nessuna ricerca necessaria', 'success');
+              addDebugLog('🎯 Mappatura trovata', `File ID: ${fileId}`, 'success');
+              addDebugLog('⚡ Riproduzione istantanea', 'Link diretto disponibile', 'success');
               
               if (audioRef.current) {
                 audioRef.current.src = directLink;
@@ -1164,11 +1156,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               return;
             }
 
-            // Direct link expired or missing - fetch from RD
+            // No direct link - fetch from RD
             setLoadingPhase('loading');
             addDebugLog('🎯 Mappatura trovata', `File ID: ${fileId}, torrent: ${torrentId.substring(0, 8)}...`, 'success');
-            addDebugLog('🔄 Link scaduto/mancante', `Scadenza: ${expiresAt ? new Date(expiresAt).toLocaleDateString('it-IT') : 'mai salvato'}`, 'warning');
-            addDebugLog('☁️ Recupero da Real-Debrid', 'Richiesta link fresco...', 'info');
+            addDebugLog('☁️ Recupero da Real-Debrid', 'Richiesta link...', 'info');
             
             const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
 
