@@ -29,7 +29,16 @@ interface AudioStream {
 // Cache for working instances
 let cachedInstances: string[] = [];
 let instancesCachedAt = 0;
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Known reliable instances as fallback
+const FALLBACK_INSTANCES = [
+  "https://pipedapi.kavin.rocks",
+  "https://api.piped.private.coffee",
+  "https://pipedapi.r4fo.com",
+  "https://piped-api.garuber.dev",
+  "https://api.piped.yt",
+];
 
 async function getWorkingInstances(): Promise<string[]> {
   // Return cached if still valid
@@ -39,40 +48,37 @@ async function getWorkingInstances(): Promise<string[]> {
   }
 
   try {
-    console.log('Fetching fresh Piped instances from https://piped-instances.kavin.rocks/...');
+    console.log('Fetching fresh Piped instances...');
     const response = await fetch('https://piped-instances.kavin.rocks/', {
       headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(5000),
     });
     
     if (response.ok) {
       const instances: PipedInstance[] = await response.json();
       console.log(`Got ${instances.length} instances from API`);
       
-      // Sort by uptime and take top 5 with >90% uptime
+      // Sort by uptime and take top 8 with >85% uptime
       const working = instances
-        .filter(i => i.uptime_24h > 90 && i.api_url)
+        .filter(i => i.uptime_24h > 85 && i.api_url)
         .sort((a, b) => b.uptime_24h - a.uptime_24h)
-        .slice(0, 5)
+        .slice(0, 8)
         .map(i => i.api_url);
       
-      if (working.length > 0) {
+      if (working.length >= 3) {
         cachedInstances = working;
         instancesCachedAt = Date.now();
-        console.log(`Using ${working.length} instances:`, working);
+        console.log(`Cached ${working.length} instances`);
         return working;
       }
-    } else {
-      console.log(`Instances API failed with status: ${response.status}`);
     }
   } catch (e) {
-    console.error('Failed to fetch instances list:', e instanceof Error ? e.message : e);
+    console.error('Failed to fetch instances:', e instanceof Error ? e.message : e);
   }
 
-  // Fallback - use the known working instance from the API
-  const fallback = ["https://api.piped.private.coffee"];
-  console.log('Using fallback instances:', fallback);
-  return fallback;
+  // Use fallback instances
+  console.log('Using fallback instances');
+  return FALLBACK_INSTANCES;
 }
 
 async function tryFetch(url: string, timeout = 12000): Promise<Response | null> {
