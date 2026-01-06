@@ -14,7 +14,7 @@ export interface DebugLogEntry {
 }
 
 // Loading phases for visual feedback
-export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading';
+export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading' | 'unavailable';
 
 interface PlayerContextType extends PlayerState {
   play: (track?: Track) => void;
