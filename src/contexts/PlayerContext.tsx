@@ -744,25 +744,74 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         addDebugLog('⚠️ Nessun torrent trovato', 'La ricerca non ha prodotto risultati', 'warning');
         addDebugLog('🔄 Tentativo alternativo', 'Provo ricerca per nome album...', 'info');
         
+        let foundInAlbum = false;
         if (track && track.album) {
-          const foundInAlbum = await searchAlbumAndMatch(track);
+          foundInAlbum = await searchAlbumAndMatch(track);
           
           // Check if search is still valid
           if (searchTrackId && currentSearchTrackIdRef.current !== searchTrackId) {
             console.log('Search cancelled after album search - track changed');
             return;
           }
+        }
+        
+        // If album search also failed, try YouTube fallback
+        if (!foundInAlbum && track) {
+          const youtubeQuery = `${track.artist} ${track.title}`;
+          setLastSearchQuery(youtubeQuery);
+          addDebugLog('🔍 Fallback YouTube', `Cerco: ${youtubeQuery}`, 'info');
           
-          if (!foundInAlbum && showNoResultsToast) {
-            addDebugLog('Nessun risultato', 'Nessuna sorgente trovata', 'error');
-            if (track) removeSyncingTrack(track.id);
-            toast.error('Nessun contenuto trovato', {
-              description: 'Non è stato trovato nessun risultato per questa traccia.',
-            });
+          const videos = await searchYouTube(youtubeQuery);
+          
+          if (videos.length > 0) {
+            setYoutubeResults(videos);
+            addDebugLog('📺 YouTube trovato', `${videos.length} video disponibili`, 'success');
+            
+            // Auto-play first YouTube result
+            const selectedVideo = videos[0];
+            addDebugLog('▶️ Auto-play YouTube', selectedVideo.title, 'info');
+            
+            // Stop any existing audio
+            if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current.src = '';
+            }
+            
+            // Set YouTube video ID for hidden player
+            setCurrentYouTubeVideoId(selectedVideo.id);
+            setIsPlayingYouTube(true);
+            setState(prev => ({ ...prev, isPlaying: true }));
+            setLoadingPhase('idle');
+            
+            // Save the YouTube mapping for future use
+            try {
+              await supabase
+                .from('youtube_track_mappings')
+                .upsert({
+                  track_id: track.id,
+                  video_id: selectedVideo.id,
+                  video_title: selectedVideo.title,
+                  video_duration: selectedVideo.duration,
+                  uploader_name: selectedVideo.uploaderName,
+                }, { onConflict: 'track_id' });
+              invalidateYouTubeMappingCache(track.id);
+              addDebugLog('💾 Salvato', 'Sorgente YouTube salvata per riutilizzo futuro', 'success');
+            } catch (saveError) {
+              console.error('Failed to save YouTube mapping:', saveError);
+            }
+            
+            removeSyncingTrack(track.id);
+          } else {
+            setYoutubeResults([]);
+            addDebugLog('Nessun risultato', 'Nessuna sorgente trovata (torrent e YouTube)', 'error');
+            removeSyncingTrack(track.id);
+            if (showNoResultsToast) {
+              toast.error('Nessun contenuto trovato', {
+                description: 'Non è stato trovato nessun risultato per questa traccia.',
+              });
+            }
           }
-        } else if (showNoResultsToast) {
-          addDebugLog('Nessun risultato', 'Nessuna sorgente trovata e album non disponibile', 'error');
-          if (track) removeSyncingTrack(track.id);
+        } else if (!track && showNoResultsToast) {
           toast.error('Nessun contenuto trovato', {
             description: 'Non è stato trovato nessun risultato per questa traccia.',
           });
@@ -922,6 +971,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                         video_duration: selectedVideo.duration,
                         uploader_name: selectedVideo.uploaderName,
                       }, { onConflict: 'track_id' });
+                    invalidateYouTubeMappingCache(track.id);
                     addDebugLog('💾 Salvato', 'Sorgente YouTube salvata per riutilizzo futuro', 'success');
                   } catch (saveError) {
                     console.error('Failed to save YouTube mapping:', saveError);
