@@ -19,7 +19,8 @@ import {
   ChevronDown,
   Loader2,
   Cloud,
-  ListMusic
+  ListMusic,
+  ArrowDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
@@ -60,6 +61,7 @@ const Player: React.FC = () => {
     currentMappedFileId,
     playQueueIndex,
     clearQueue,
+    loadingPhase,
   } = usePlayer();
   const { t } = useSettings();
   
@@ -205,7 +207,7 @@ const Player: React.FC = () => {
                   <Music className="w-24 h-24 text-muted-foreground" />
                 </div>
               )}
-              {isSearchingStreams && (
+              {loadingPhase === 'searching' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
@@ -215,12 +217,24 @@ const Player: React.FC = () => {
                   </div>
                 </div>
               )}
-              {downloadProgress !== null && !isSearchingStreams && (
+              {loadingPhase === 'downloading' && (
+                <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+                  <div className="bg-card rounded-xl p-4 flex flex-col items-center">
+                    <ArrowDown className="w-8 h-8 text-primary animate-bounce mb-2" />
+                    <span className="text-sm text-foreground">
+                      {t('language') === 'it' 
+                        ? `Scaricando... ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}` 
+                        : `Downloading... ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}`}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {loadingPhase === 'loading' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Cloud className="w-8 h-8 text-primary animate-pulse mb-2" />
                     <span className="text-sm text-foreground">
-                      {t('language') === 'it' ? "Salvataggio in cloud..." : "Saving to cloud..."}
+                      {t('language') === 'it' ? "Caricamento..." : "Loading..."}
                     </span>
                   </div>
                 </div>
@@ -334,12 +348,17 @@ const Player: React.FC = () => {
                 <Music className="w-4 h-4 text-muted-foreground" />
               </div>
             )}
-            {isSearchingStreams && (
+            {loadingPhase === 'searching' && (
               <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
               </div>
             )}
-            {downloadProgress !== null && !isSearchingStreams && (
+            {loadingPhase === 'downloading' && (
+              <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+                <ArrowDown className="w-4 h-4 text-primary animate-bounce" />
+              </div>
+            )}
+            {loadingPhase === 'loading' && (
               <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                 <Cloud className="w-4 h-4 text-primary animate-pulse" />
               </div>
@@ -383,12 +402,17 @@ const Player: React.FC = () => {
               ) : (
                 <Music className="w-6 h-6 text-muted-foreground" />
               )}
-              {isSearchingStreams && (
+              {loadingPhase === 'searching' && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Loader2 className="w-5 h-5 text-primary animate-spin" />
                 </div>
               )}
-              {downloadProgress !== null && !isSearchingStreams && (
+              {loadingPhase === 'downloading' && (
+                <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+                  <ArrowDown className="w-5 h-5 text-primary animate-bounce" />
+                </div>
+              )}
+              {loadingPhase === 'loading' && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Cloud className="w-5 h-5 text-primary animate-pulse" />
                 </div>

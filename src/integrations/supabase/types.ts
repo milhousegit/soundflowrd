@@ -114,6 +114,8 @@ export type Database = {
         Row: {
           album_mapping_id: string
           created_at: string
+          direct_link: string | null
+          direct_link_expires_at: string | null
           file_id: number
           file_name: string
           file_path: string
@@ -125,6 +127,8 @@ export type Database = {
         Insert: {
           album_mapping_id: string
           created_at?: string
+          direct_link?: string | null
+          direct_link_expires_at?: string | null
           file_id: number
           file_name: string
           file_path: string
@@ -136,6 +140,8 @@ export type Database = {
         Update: {
           album_mapping_id?: string
           created_at?: string
+          direct_link?: string | null
+          direct_link_expires_at?: string | null
           file_id?: number
           file_name?: string
           file_path?: string
