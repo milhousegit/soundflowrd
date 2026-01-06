@@ -63,6 +63,8 @@ const Player: React.FC = () => {
     loadingPhase,
     youtubeResults,
     playYouTubeVideo,
+    lastSearchQuery,
+    searchYouTubeManually,
   } = usePlayer();
   const { t } = useSettings();
   
@@ -318,6 +320,8 @@ const Player: React.FC = () => {
           currentMappedFileId={currentMappedFileId}
           youtubeResults={youtubeResults}
           onPlayYouTube={playYouTubeVideo}
+          lastSearchQuery={lastSearchQuery}
+          onSearchYouTube={searchYouTubeManually}
         />
         
         <QueueModal
@@ -544,6 +548,8 @@ const Player: React.FC = () => {
         currentMappedFileId={currentMappedFileId}
         youtubeResults={youtubeResults}
         onPlayYouTube={playYouTubeVideo}
+        lastSearchQuery={lastSearchQuery}
+        onSearchYouTube={searchYouTubeManually}
       />
       
       <QueueModal
