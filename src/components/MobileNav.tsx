@@ -20,20 +20,20 @@ const MobileNav: React.FC = () => {
       className="fixed bottom-0 left-0 right-0 z-40 glass border-t border-border md:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      {/* Taller navbar with icons aligned towards top, more space at bottom */}
-      <div className="h-20 flex items-start justify-around px-4 pt-3">
+      {/* Icons aligned towards top with small padding */}
+      <div className="h-20 flex items-start justify-around px-4 pt-[5px]">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <NavLink
               key={item.path}
               to={item.path}
-              className={cn(
-                "flex items-center justify-center w-14 h-14 rounded-xl transition-colors",
-                isActive ? "text-primary bg-primary/10" : "text-muted-foreground active:bg-secondary"
-              )}
+              className="flex items-center justify-center w-14 h-14 transition-colors"
             >
-              <item.icon className={cn("w-6 h-6", isActive && "text-primary")} />
+              <item.icon className={cn(
+                "w-6 h-6 transition-colors",
+                isActive ? "text-primary" : "text-muted-foreground"
+              )} />
             </NavLink>
           );
         })}
