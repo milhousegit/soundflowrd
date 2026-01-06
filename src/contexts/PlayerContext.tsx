@@ -1472,9 +1472,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setDownloadProgress(result.progress);
             addDebugLog('📥 Download', `Progresso: ${result.progress}%`, 'info');
             
-            // Check if stuck at 0% for more than 5 seconds
+            // Check if stuck at 0% for more than 10 seconds
             const elapsedSeconds = (Date.now() - startTime) / 1000;
-            if (result.progress === 0 && elapsedSeconds >= 5) {
+            if (result.progress === 0 && elapsedSeconds >= 10) {
               addDebugLog('⏱️ Timeout', `Download fermo a 0% per ${Math.round(elapsedSeconds)}s - file non disponibile`, 'error');
               setLoadingPhase('unavailable');
               setDownloadProgress(null);
