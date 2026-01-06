@@ -1548,6 +1548,25 @@ serve(async (req) => {
         break;
       }
 
+      case 'getDownloads': {
+        // Fetch user's download history from Real-Debrid
+        const response = await fetchWithRetry(`${RD_API}/downloads?limit=100`, { headers: rdHeaders });
+        if (!response.ok) {
+          throw new Error('Failed to fetch downloads');
+        }
+        const downloads = await response.json();
+        
+        // Filter for audio files only
+        const audioExtensions = ['.mp3', '.flac', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.opus'];
+        const audioDownloads = downloads.filter((d: { filename: string }) => 
+          audioExtensions.some(ext => d.filename.toLowerCase().endsWith(ext))
+        );
+        
+        console.log(`Found ${audioDownloads.length} audio files in downloads`);
+        result = { downloads: audioDownloads };
+        break;
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
