@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -21,6 +21,7 @@ import {
   Loader2,
   Cloud,
   ListMusic,
+  Youtube,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
@@ -66,6 +67,9 @@ const Player: React.FC = () => {
     playYouTubeVideo,
     currentYouTubeVideoId,
     isPlayingYouTube,
+    setYouTubeProgress,
+    setYouTubeReady,
+    setYoutubePlayerRef,
     lastSearchQuery,
     searchYouTubeManually,
   } = usePlayer();
@@ -84,18 +88,46 @@ const Player: React.FC = () => {
   const startY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   
+  // Register YouTube player ref with context
+  useEffect(() => {
+    if (youtubePlayerRef.current) {
+      setYoutubePlayerRef(youtubePlayerRef);
+    }
+  }, [setYoutubePlayerRef, currentYouTubeVideoId]);
+  
   // YouTube player callbacks
   const handleYouTubeReady = useCallback(() => {
     console.log('YouTube player ready');
-  }, []);
+    setYouTubeReady();
+  }, [setYouTubeReady]);
   
   const handleYouTubeTimeUpdate = useCallback((currentTime: number, ytDuration: number) => {
-    // Update progress from YouTube player - handled by context
-  }, []);
+    setYouTubeProgress(currentTime, ytDuration);
+  }, [setYouTubeProgress]);
   
   const handleYouTubeEnded = useCallback(() => {
     next();
   }, [next]);
+  
+  // Handle seeking for YouTube
+  const handleSeek = useCallback((time: number) => {
+    if (isPlayingYouTube && youtubePlayerRef.current) {
+      youtubePlayerRef.current.seekTo(time);
+    }
+    seek(time);
+  }, [isPlayingYouTube, seek]);
+  
+  // Handle toggle for both audio and YouTube
+  const handleToggle = useCallback(() => {
+    if (isPlayingYouTube && youtubePlayerRef.current) {
+      if (isPlaying) {
+        youtubePlayerRef.current.pause();
+      } else {
+        youtubePlayerRef.current.play();
+      }
+    }
+    toggle();
+  }, [isPlayingYouTube, isPlaying, toggle]);
 
   if (!currentTrack) return null;
 
@@ -229,8 +261,8 @@ const Player: React.FC = () => {
                   <Music className="w-24 h-24 text-muted-foreground" />
                 </div>
               )}
-              {/* Status overlay - always visible when not idle */}
-              {loadingPhase === 'searching' && (
+              {/* Status overlay - only show when not YouTube (YouTube has its own loading) */}
+              {!isPlayingYouTube && loadingPhase === 'searching' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
@@ -240,7 +272,7 @@ const Player: React.FC = () => {
                   </div>
                 </div>
               )}
-              {loadingPhase === 'downloading' && (
+              {!isPlayingYouTube && loadingPhase === 'downloading' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Cloud className="w-8 h-8 text-blue-500 animate-pulse mb-2" />
@@ -252,14 +284,11 @@ const Player: React.FC = () => {
                   </div>
                 </div>
               )}
-              {loadingPhase === 'loading' && (
-                <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
-                  <div className="bg-card rounded-xl p-4 flex flex-col items-center">
-                    <Cloud className="w-8 h-8 text-primary animate-pulse mb-2" />
-                    <span className="text-sm text-foreground">
-                      {t('language') === 'it' ? "Caricamento..." : "Loading..."}
-                    </span>
-                  </div>
+              {/* YouTube indicator on cover */}
+              {isPlayingYouTube && (
+                <div className="absolute bottom-2 right-2 bg-background/80 rounded-lg px-2 py-1 flex items-center gap-1">
+                  <Youtube className="w-4 h-4 text-red-500" />
+                  <span className="text-xs text-foreground">YouTube</span>
                 </div>
               )}
             </div>
@@ -267,7 +296,12 @@ const Player: React.FC = () => {
 
           {/* Track Info */}
           <div className="px-8 text-center">
-            <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
+            <div className="flex items-center justify-center gap-2">
+              <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
+              {isPlayingYouTube && (
+                <Youtube className="w-5 h-5 text-red-500 flex-shrink-0" />
+              )}
+            </div>
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <button 
                 onClick={handleNavigateToArtist}
@@ -295,7 +329,7 @@ const Player: React.FC = () => {
               value={[progress]}
               max={duration || 100}
               step={1}
-              onValueChange={([value]) => seek(value)}
+              onValueChange={([value]) => handleSeek(value)}
             />
             <div className="flex justify-between mt-2">
               <span className="text-xs text-muted-foreground">{formatTime(progress)}</span>
@@ -308,7 +342,7 @@ const Player: React.FC = () => {
             <Button variant="playerSecondary" size="icon" onClick={previous}>
               <SkipBack className="w-8 h-8" />
             </Button>
-            <Button variant="player" className="h-16 w-16" onClick={toggle}>
+            <Button variant="player" className="h-16 w-16" onClick={handleToggle}>
               {isPlaying ? (
                 <Pause className="w-8 h-8" />
               ) : (
@@ -375,31 +409,36 @@ const Player: React.FC = () => {
                 <Music className="w-4 h-4 text-muted-foreground" />
               </div>
             )}
-            {loadingPhase === 'searching' && (
+            {!isPlayingYouTube && loadingPhase === 'searching' && (
               <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
               </div>
             )}
-            {loadingPhase === 'downloading' && (
+            {!isPlayingYouTube && loadingPhase === 'downloading' && (
               <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                 <Cloud className="w-4 h-4 text-blue-500 animate-pulse" />
               </div>
             )}
-            {loadingPhase === 'loading' && (
+            {isPlayingYouTube && (
               <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                <Cloud className="w-4 h-4 text-primary animate-pulse" />
+                <Youtube className="w-4 h-4 text-red-500" />
               </div>
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-foreground truncate text-sm">{currentTrack.title}</p>
+            <div className="flex items-center gap-1">
+              <p className="font-medium text-foreground truncate text-sm">{currentTrack.title}</p>
+              {isPlayingYouTube && (
+                <Youtube className="w-3 h-3 text-red-500 flex-shrink-0" />
+              )}
+            </div>
             <p className="text-xs text-muted-foreground truncate">{currentTrack.artist}</p>
           </div>
           <Button 
             variant="playerSecondary" 
             size="icon"
             className="h-9 w-9"
-            onClick={(e) => { e.stopPropagation(); toggle(); }}
+            onClick={(e) => { e.stopPropagation(); handleToggle(); }}
           >
             {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
           </Button>
@@ -429,24 +468,29 @@ const Player: React.FC = () => {
               ) : (
                 <Music className="w-6 h-6 text-muted-foreground" />
               )}
-              {loadingPhase === 'searching' && (
+              {!isPlayingYouTube && loadingPhase === 'searching' && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Loader2 className="w-5 h-5 text-primary animate-spin" />
                 </div>
               )}
-              {loadingPhase === 'downloading' && (
+              {!isPlayingYouTube && loadingPhase === 'downloading' && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Cloud className="w-5 h-5 text-blue-500 animate-pulse" />
                 </div>
               )}
-              {loadingPhase === 'loading' && (
+              {isPlayingYouTube && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                  <Cloud className="w-5 h-5 text-primary animate-pulse" />
+                  <Youtube className="w-5 h-5 text-red-500" />
                 </div>
               )}
             </div>
             <div className="min-w-0">
-              <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
+              <div className="flex items-center gap-1">
+                <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
+                {isPlayingYouTube && (
+                  <Youtube className="w-4 h-4 text-red-500 flex-shrink-0" />
+                )}
+              </div>
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <button 
                   onClick={handleNavigateToArtist}
@@ -475,7 +519,7 @@ const Player: React.FC = () => {
               <Button variant="playerSecondary" size="icon" onClick={previous}>
                 <SkipBack className="w-5 h-5" />
               </Button>
-              <Button variant="player" size="icon" onClick={toggle}>
+              <Button variant="player" size="icon" onClick={handleToggle}>
                 {isPlaying ? (
                   <Pause className="w-5 h-5" />
                 ) : (
@@ -495,7 +539,7 @@ const Player: React.FC = () => {
                 value={[progress]}
                 max={duration || 100}
                 step={1}
-                onValueChange={([value]) => seek(value)}
+                onValueChange={([value]) => handleSeek(value)}
                 className="flex-1"
               />
               <span className="text-xs text-muted-foreground w-10">

@@ -50,6 +50,11 @@ interface PlayerContextType extends PlayerState {
   playYouTubeVideo: (video: YouTubeVideo) => void;
   currentYouTubeVideoId: string | null;
   isPlayingYouTube: boolean;
+  // YouTube player control callbacks (set by Player component)
+  setYouTubeProgress: (progress: number, duration: number) => void;
+  setYouTubeReady: () => void;
+  youtubePlayerRef: React.MutableRefObject<any> | null;
+  setYoutubePlayerRef: (ref: React.MutableRefObject<any>) => void;
   // Search query tracking
   lastSearchQuery: string | null;
   searchYouTubeManually: () => Promise<void>;
@@ -97,6 +102,22 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
   const [currentYouTubeVideoId, setCurrentYouTubeVideoId] = useState<string | null>(null);
   const [isPlayingYouTube, setIsPlayingYouTube] = useState(false);
+  const youtubePlayerRefState = useRef<any>(null);
+  
+  // YouTube progress/duration update callback
+  const setYouTubeProgress = useCallback((progress: number, duration: number) => {
+    setState(prev => ({ ...prev, progress, duration }));
+  }, []);
+  
+  // YouTube ready callback
+  const setYouTubeReady = useCallback(() => {
+    setLoadingPhase('idle');
+  }, []);
+  
+  // Set YouTube player ref from Player component
+  const setYoutubePlayerRef = useCallback((ref: React.MutableRefObject<any>) => {
+    youtubePlayerRefState.current = ref.current;
+  }, []);
   
   // Track ID currently being searched - used to cancel stale searches
   const currentSearchTrackIdRef = useRef<string | null>(null);
@@ -1819,6 +1840,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         playYouTubeVideo,
         currentYouTubeVideoId,
         isPlayingYouTube,
+        setYouTubeProgress,
+        setYouTubeReady,
+        youtubePlayerRef: youtubePlayerRefState,
+        setYoutubePlayerRef,
         lastSearchQuery,
         searchYouTubeManually,
       }}
