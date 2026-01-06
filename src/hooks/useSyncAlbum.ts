@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { Track } from '@/types/music';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { searchStreams, selectFilesAndPlay, TorrentInfo, AudioFile } from '@/lib/realdebrid';
+import { searchStreams, selectFilesAndPlay, checkTorrentStatus, TorrentInfo, AudioFile } from '@/lib/realdebrid';
 import { 
   addSyncingTrack, 
   removeSyncingTrack, 
@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 // Track sync status for album sync operation
 interface TrackSyncStatus {
   trackId: string;
-  status: 'pending' | 'syncing' | 'downloading' | 'synced' | 'failed';
+  status: 'pending' | 'syncing' | 'downloading' | 'synced' | 'failed' | 'youtube';
   progress?: number;
 }
 
@@ -68,10 +68,107 @@ const flexibleMatch = (fileName: string, trackTitle: string): boolean => {
   return false;
 };
 
+// Search YouTube for a track
+const searchYouTubeForTrack = async (track: Track): Promise<{ videoId: string; title: string; duration: number; uploader: string } | null> => {
+  try {
+    const query = `${track.artist} ${track.title}`;
+    const response = await supabase.functions.invoke('youtube-audio', {
+      body: { action: 'search', query }
+    });
+
+    if (response.error) {
+      console.error('YouTube search error:', response.error);
+      return null;
+    }
+
+    const results = response.data?.results || [];
+    if (results.length > 0) {
+      const video = results[0];
+      return {
+        videoId: video.videoId,
+        title: video.title,
+        duration: video.duration || 0,
+        uploader: video.uploader || ''
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('YouTube search failed:', error);
+    return null;
+  }
+};
+
+// Save YouTube mapping to database
+const saveYouTubeMapping = async (trackId: string, videoId: string, title: string, duration: number, uploader: string) => {
+  try {
+    await supabase
+      .from('youtube_track_mappings')
+      .upsert({
+        track_id: trackId,
+        video_id: videoId,
+        video_title: title,
+        video_duration: duration,
+        uploader_name: uploader,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'track_id' });
+    return true;
+  } catch (error) {
+    console.error('Failed to save YouTube mapping:', error);
+    return false;
+  }
+};
+
+// Poll for a single track download completion
+const pollTrackDownload = async (
+  apiKey: string,
+  torrentId: string,
+  fileId: number,
+  trackId: string,
+  albumMappingId: string | null,
+  maxWaitMs: number = 30000
+): Promise<{ success: boolean; directLink?: string }> => {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < maxWaitMs) {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    try {
+      const selectResult = await selectFilesAndPlay(apiKey, torrentId, [fileId]);
+      
+      if (selectResult.streams.length > 0) {
+        // Download complete - update mapping with direct link
+        if (albumMappingId) {
+          await supabase
+            .from('track_file_mappings')
+            .update({ direct_link: selectResult.streams[0].streamUrl })
+            .eq('track_id', trackId);
+        }
+        return { success: true, directLink: selectResult.streams[0].streamUrl };
+      }
+      
+      if (selectResult.status === 'error' || selectResult.status === 'dead' || selectResult.status === 'not_found') {
+        return { success: false };
+      }
+      
+      // Check if stuck at 0% for too long (10 seconds)
+      if (selectResult.progress === 0 && Date.now() - startTime > 10000) {
+        console.log('Track download stuck at 0% for 10s, aborting');
+        return { success: false };
+      }
+      
+    } catch (error) {
+      console.error('Poll error:', error);
+    }
+  }
+  
+  console.log('Track download timeout after', maxWaitMs, 'ms');
+  return { success: false };
+};
+
 export const useSyncAlbum = () => {
   const { credentials } = useAuth();
   const [isSyncingAlbum, setIsSyncingAlbum] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<{ synced: number; total: number }>({ synced: 0, total: 0 });
+  const [syncProgress, setSyncProgress] = useState<{ synced: number; youtube: number; total: number }>({ synced: 0, youtube: 0, total: 0 });
 
   const syncAlbum = useCallback(async (tracks: Track[], albumTitle: string, artistName: string) => {
     if (!credentials?.realDebridApiKey || tracks.length === 0) {
@@ -80,31 +177,52 @@ export const useSyncAlbum = () => {
     }
 
     setIsSyncingAlbum(true);
-    setSyncProgress({ synced: 0, total: tracks.length });
+    setSyncProgress({ synced: 0, youtube: 0, total: tracks.length });
 
     // Mark all tracks as syncing
     tracks.forEach(track => addSyncingTrack(track.id));
 
-    try {
-      // First, check which tracks already have mappings
-      const trackIds = tracks.map(t => t.id);
-      const { data: existingMappings } = await supabase
-        .from('track_file_mappings')
-        .select('track_id, direct_link')
-        .in('track_id', trackIds);
+    let syncedCount = 0;
+    let youtubeCount = 0;
+    let failedCount = 0;
 
-      const alreadySynced = new Set(existingMappings?.filter(m => m.direct_link).map(m => m.track_id) || []);
+    try {
+      // First, check which tracks already have RD or YouTube mappings
+      const trackIds = tracks.map(t => t.id);
+      
+      const [rdMappingsResult, ytMappingsResult] = await Promise.all([
+        supabase
+          .from('track_file_mappings')
+          .select('track_id, direct_link')
+          .in('track_id', trackIds),
+        supabase
+          .from('youtube_track_mappings')
+          .select('track_id')
+          .in('track_id', trackIds)
+      ]);
+
+      const alreadySyncedRD = new Set(rdMappingsResult.data?.filter(m => m.direct_link).map(m => m.track_id) || []);
+      const alreadySyncedYT = new Set(ytMappingsResult.data?.map(m => m.track_id) || []);
       
       // Mark already synced tracks
-      let syncedCount = 0;
-      alreadySynced.forEach(trackId => {
+      alreadySyncedRD.forEach(trackId => {
         removeSyncingTrack(trackId);
         addSyncedTrack(trackId);
         syncedCount++;
       });
-      setSyncProgress({ synced: syncedCount, total: tracks.length });
+      
+      // Also count YouTube mappings for tracks not in RD
+      alreadySyncedYT.forEach(trackId => {
+        if (!alreadySyncedRD.has(trackId)) {
+          removeSyncingTrack(trackId);
+          addSyncedTrack(trackId);
+          youtubeCount++;
+        }
+      });
+      
+      setSyncProgress({ synced: syncedCount, youtube: youtubeCount, total: tracks.length });
 
-      if (alreadySynced.size === tracks.length) {
+      if (alreadySyncedRD.size + alreadySyncedYT.size >= tracks.length) {
         toast.success('Album già sincronizzato');
         setIsSyncingAlbum(false);
         return;
@@ -116,47 +234,25 @@ export const useSyncAlbum = () => {
 
       const result = await searchStreams(credentials.realDebridApiKey, searchQuery);
 
-      if (result.torrents.length === 0) {
-        toast.error('Nessun torrent trovato per questo album');
-        tracks.forEach(track => {
-          if (!alreadySynced.has(track.id)) {
-            removeSyncingTrack(track.id);
-          }
-        });
-        setIsSyncingAlbum(false);
-        return;
-      }
-
-      // Find best torrent with files
+      // Find best torrent with files (if any)
       let bestTorrent: TorrentInfo | null = null;
-      for (const torrent of result.torrents) {
-        if (torrent.files && torrent.files.length >= tracks.length * 0.5) {
-          bestTorrent = torrent;
-          break;
-        }
-        if (torrent.files && torrent.files.length > 0 && !bestTorrent) {
-          bestTorrent = torrent;
-        }
-      }
-
-      if (!bestTorrent || !bestTorrent.files) {
-        toast.error('Nessun torrent con file audio trovato');
-        tracks.forEach(track => {
-          if (!alreadySynced.has(track.id)) {
-            removeSyncingTrack(track.id);
+      if (result.torrents.length > 0) {
+        for (const torrent of result.torrents) {
+          if (torrent.files && torrent.files.length >= tracks.length * 0.5) {
+            bestTorrent = torrent;
+            break;
           }
-        });
-        setIsSyncingAlbum(false);
-        return;
+          if (torrent.files && torrent.files.length > 0 && !bestTorrent) {
+            bestTorrent = torrent;
+          }
+        }
       }
 
-      console.log('Selected torrent:', bestTorrent.title, 'with', bestTorrent.files.length, 'files');
-
-      // Create or get album mapping
+      // Create or get album mapping (if we have a torrent)
       let albumMappingId: string | null = null;
       const albumId = tracks[0].albumId;
 
-      if (albumId) {
+      if (bestTorrent && albumId) {
         const { data: existingMapping } = await supabase
           .from('album_torrent_mappings')
           .select('id')
@@ -184,12 +280,11 @@ export const useSyncAlbum = () => {
         }
       }
 
-      // Match and sync each track - ONE AT A TIME to avoid RD rate limiting
-      const tracksToSync = tracks.filter(t => !alreadySynced.has(t.id));
-      const failedTracks: string[] = [];
-      const downloadingTracks: Map<string, { track: Track; fileId: number; torrentId: string }> = new Map();
+      console.log('Best torrent:', bestTorrent?.title || 'NONE', 'with', bestTorrent?.files?.length || 0, 'files');
 
-      // Process tracks sequentially with delay
+      // Process each track SEQUENTIALLY with fallback to YouTube
+      const tracksToSync = tracks.filter(t => !alreadySyncedRD.has(t.id) && !alreadySyncedYT.has(t.id));
+
       for (let i = 0; i < tracksToSync.length; i++) {
         const track = tracksToSync[i];
         
@@ -198,169 +293,151 @@ export const useSyncAlbum = () => {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
-        // Find matching file
-        const matchingFile = bestTorrent.files!.find(file => {
-          const matchesFileName = flexibleMatch(file.filename || '', track.title);
-          const matchesPath = flexibleMatch(file.path || '', track.title);
-          return matchesFileName || matchesPath;
-        });
+        let trackSynced = false;
 
-        if (!matchingFile) {
-          console.log('No match for track:', track.title);
-          failedTracks.push(track.title);
-          removeSyncingTrack(track.id);
-          continue;
-        }
+        // Try RD torrent first (if we have one)
+        if (bestTorrent?.files) {
+          const matchingFile = bestTorrent.files.find(file => {
+            const matchesFileName = flexibleMatch(file.filename || '', track.title);
+            const matchesPath = flexibleMatch(file.path || '', track.title);
+            return matchesFileName || matchesPath;
+          });
 
-        console.log('Match found:', track.title, '->', matchingFile.filename);
+          if (matchingFile) {
+            console.log('Match found:', track.title, '->', matchingFile.filename);
 
-        try {
-          // Select file and get stream
-          const selectResult = await selectFilesAndPlay(
-            credentials.realDebridApiKey,
-            bestTorrent.torrentId,
-            [matchingFile.id]
-          );
+            try {
+              const selectResult = await selectFilesAndPlay(
+                credentials.realDebridApiKey,
+                bestTorrent.torrentId,
+                [matchingFile.id]
+              );
 
-          if (selectResult.error || selectResult.status === 'error' || selectResult.status === 'dead') {
-            console.log('Select error for track:', track.title, selectResult.error || selectResult.status);
-            failedTracks.push(track.title);
-            removeSyncingTrack(track.id);
-            continue;
-          }
-
-          if (selectResult.streams.length > 0) {
-            // Immediate sync - save with direct link
-            if (albumMappingId) {
-              await supabase
-                .from('track_file_mappings')
-                .upsert(
-                  {
-                    album_mapping_id: albumMappingId,
-                    track_id: track.id,
-                    track_title: track.title,
-                    file_id: matchingFile.id,
-                    file_path: matchingFile.path || '',
-                    file_name: matchingFile.filename || track.title,
-                    direct_link: selectResult.streams[0].streamUrl,
-                  },
-                  { onConflict: 'track_id' }
-                );
-            }
-
-            removeSyncingTrack(track.id);
-            addSyncedTrack(track.id);
-            syncedCount++;
-            setSyncProgress({ synced: syncedCount, total: tracks.length });
-          } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
-            // Track is downloading - save mapping without link, will poll for completion
-            removeSyncingTrack(track.id);
-            addDownloadingTrack(track.id);
-            
-            if (albumMappingId) {
-              await supabase
-                .from('track_file_mappings')
-                .upsert(
-                  {
-                    album_mapping_id: albumMappingId,
-                    track_id: track.id,
-                    track_title: track.title,
-                    file_id: matchingFile.id,
-                    file_path: matchingFile.path || '',
-                    file_name: matchingFile.filename || track.title,
-                    direct_link: null,
-                  },
-                  { onConflict: 'track_id' }
-                );
-            }
-            
-            downloadingTracks.set(track.id, {
-              track,
-              fileId: matchingFile.id,
-              torrentId: bestTorrent.torrentId,
-            });
-          }
-        } catch (error) {
-          console.error('Error syncing track:', track.title, error);
-          failedTracks.push(track.title);
-          removeSyncingTrack(track.id);
-        }
-      }
-
-      // Poll for downloading tracks (10 second timeout at 0%)
-      if (downloadingTracks.size > 0) {
-        console.log('Polling for', downloadingTracks.size, 'downloading tracks');
-        
-        const startTimes = new Map<string, number>();
-        downloadingTracks.forEach((_, trackId) => {
-          startTimes.set(trackId, Date.now());
-        });
-
-        const pollDownloads = async () => {
-          const remaining = new Map(downloadingTracks);
-          
-          while (remaining.size > 0) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            for (const [trackId, info] of remaining) {
-              try {
-                const selectResult = await selectFilesAndPlay(
-                  credentials.realDebridApiKey,
-                  info.torrentId,
-                  [info.fileId]
-                );
-
-                if (selectResult.streams.length > 0) {
-                  // Download complete
-                  if (albumMappingId) {
-                    await supabase
-                      .from('track_file_mappings')
-                      .update({ direct_link: selectResult.streams[0].streamUrl })
-                      .eq('track_id', trackId);
-                  }
-
-                  removeDownloadingTrack(trackId);
-                  addSyncedTrack(trackId);
-                  remaining.delete(trackId);
-                  syncedCount++;
-                  setSyncProgress({ synced: syncedCount, total: tracks.length });
-                } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
-                  // Check 10 second timeout at 0%
-                  const elapsed = (Date.now() - (startTimes.get(trackId) || Date.now())) / 1000;
-                  if (selectResult.progress === 0 && elapsed >= 10) {
-                    console.log('Track stuck at 0% for 10s:', info.track.title);
-                    removeDownloadingTrack(trackId);
-                    remaining.delete(trackId);
-                    failedTracks.push(info.track.title);
-                  }
-                } else if (selectResult.status === 'error' || selectResult.status === 'dead') {
-                  removeDownloadingTrack(trackId);
-                  remaining.delete(trackId);
-                  failedTracks.push(info.track.title);
+              if (selectResult.streams.length > 0) {
+                // Immediate sync - save with direct link
+                if (albumMappingId) {
+                  await supabase
+                    .from('track_file_mappings')
+                    .upsert(
+                      {
+                        album_mapping_id: albumMappingId,
+                        track_id: track.id,
+                        track_title: track.title,
+                        file_id: matchingFile.id,
+                        file_path: matchingFile.path || '',
+                        file_name: matchingFile.filename || track.title,
+                        direct_link: selectResult.streams[0].streamUrl,
+                      },
+                      { onConflict: 'track_id' }
+                    );
                 }
-              } catch (error) {
-                console.error('Poll error for track:', info.track.title, error);
+
+                removeSyncingTrack(track.id);
+                addSyncedTrack(track.id);
+                syncedCount++;
+                trackSynced = true;
+                console.log('Track synced via RD:', track.title);
+              } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
+                // Start downloading - save mapping and poll
+                removeSyncingTrack(track.id);
+                addDownloadingTrack(track.id);
+                
+                if (albumMappingId) {
+                  await supabase
+                    .from('track_file_mappings')
+                    .upsert(
+                      {
+                        album_mapping_id: albumMappingId,
+                        track_id: track.id,
+                        track_title: track.title,
+                        file_id: matchingFile.id,
+                        file_path: matchingFile.path || '',
+                        file_name: matchingFile.filename || track.title,
+                        direct_link: null,
+                      },
+                      { onConflict: 'track_id' }
+                    );
+                }
+
+                // Poll and wait for this track to complete (max 30s)
+                const pollResult = await pollTrackDownload(
+                  credentials.realDebridApiKey,
+                  bestTorrent.torrentId,
+                  matchingFile.id,
+                  track.id,
+                  albumMappingId,
+                  30000
+                );
+
+                removeDownloadingTrack(track.id);
+
+                if (pollResult.success) {
+                  addSyncedTrack(track.id);
+                  syncedCount++;
+                  trackSynced = true;
+                  console.log('Track synced via RD (after download):', track.title);
+                }
               }
+            } catch (error) {
+              console.error('Error syncing track via RD:', track.title, error);
+            }
+          } else {
+            console.log('No RD file match for track:', track.title);
+          }
+        }
+
+        // Fallback to YouTube if RD sync failed
+        if (!trackSynced) {
+          console.log('Falling back to YouTube for track:', track.title);
+          removeSyncingTrack(track.id);
+          
+          const ytResult = await searchYouTubeForTrack(track);
+          
+          if (ytResult) {
+            const saved = await saveYouTubeMapping(
+              track.id,
+              ytResult.videoId,
+              ytResult.title,
+              ytResult.duration,
+              ytResult.uploader
+            );
+            
+            if (saved) {
+              addSyncedTrack(track.id);
+              youtubeCount++;
+              trackSynced = true;
+              console.log('Track synced via YouTube:', track.title, '->', ytResult.title);
             }
           }
-        };
+        }
 
-        // Don't await - let it run in background
-        pollDownloads();
+        if (!trackSynced) {
+          failedCount++;
+          console.log('Track sync completely failed:', track.title);
+        }
+
+        setSyncProgress({ synced: syncedCount, youtube: youtubeCount, total: tracks.length });
       }
 
       // Show results
-      if (failedTracks.length === 0) {
-        toast.success(`Album sincronizzato`, {
-          description: `${syncedCount} tracce pronte per la riproduzione istantanea`,
-        });
-      } else if (syncedCount > 0) {
+      const totalSynced = syncedCount + youtubeCount;
+      if (failedCount === 0) {
+        if (youtubeCount > 0) {
+          toast.success(`Album sincronizzato`, {
+            description: `${syncedCount} via Real-Debrid, ${youtubeCount} via YouTube`,
+          });
+        } else {
+          toast.success(`Album sincronizzato`, {
+            description: `${syncedCount} tracce pronte per la riproduzione`,
+          });
+        }
+      } else if (totalSynced > 0) {
         toast.warning(`Sincronizzazione parziale`, {
-          description: `${syncedCount} tracce sincronizzate, ${failedTracks.length} non trovate`,
+          description: `${syncedCount} RD, ${youtubeCount} YT, ${failedCount} non trovate`,
         });
       } else {
         toast.error(`Sincronizzazione fallita`, {
-          description: `Nessuna traccia trovata nel torrent`,
+          description: `Nessuna traccia sincronizzata`,
         });
       }
 

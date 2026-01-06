@@ -165,22 +165,29 @@ const Album: React.FC = () => {
 
         {/* Sync album button - small like favorite, with animation */}
         {credentials?.realDebridApiKey && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleSyncAlbum}
-            disabled={isSyncingAlbum || allTracksSynced}
-            className="w-12 h-12"
-            title={allTracksSynced ? 'Album sincronizzato' : 'Sincronizza Album su Real-Debrid'}
-          >
-            {isSyncingAlbum ? (
-              <Loader2 className="w-6 h-6 text-primary animate-spin" />
-            ) : allTracksSynced ? (
-              <Cloud className="w-6 h-6 text-green-500" />
-            ) : (
-              <Cloud className="w-6 h-6 text-muted-foreground hover:text-primary transition-colors" />
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSyncAlbum}
+              disabled={isSyncingAlbum || allTracksSynced}
+              className="w-12 h-12"
+              title={allTracksSynced ? 'Album sincronizzato' : 'Sincronizza Album (RD + YouTube fallback)'}
+            >
+              {isSyncingAlbum ? (
+                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+              ) : allTracksSynced ? (
+                <Cloud className="w-6 h-6 text-green-500" />
+              ) : (
+                <Cloud className="w-6 h-6 text-muted-foreground hover:text-primary transition-colors" />
+              )}
+            </Button>
+            {isSyncingAlbum && syncProgress.total > 0 && (
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] text-primary font-medium whitespace-nowrap">
+                {syncProgress.synced + syncProgress.youtube}/{syncProgress.total}
+              </span>
             )}
-          </Button>
+          </div>
         )}
       </div>
 
