@@ -25,7 +25,19 @@ import {
   AlertCircle,
   Play,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -382,9 +394,53 @@ const Settings: React.FC = () => {
             </div>
 
             {hasRdApiKey && (
-              <div className="flex items-center gap-2 text-xs md:text-sm">
-                <Check className="w-4 h-4 text-primary" />
-                <span className="text-muted-foreground">{t('connected')} a Real-Debrid</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs md:text-sm">
+                  <Check className="w-4 h-4 text-primary" />
+                  <span className="text-muted-foreground">{t('connected')} a Real-Debrid</span>
+                </div>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {settings.language === 'it' 
+                          ? 'La tua API Key verrà eliminata e passerai al torrenting diretto. Potrai sempre ricollegarti in futuro.'
+                          : 'Your API Key will be deleted and you\'ll switch to direct torrenting. You can reconnect anytime.'}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>
+                        {settings.language === 'it' ? 'Annulla' : 'Cancel'}
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={async () => {
+                          const { error } = await updateApiKey('');
+                          if (!error) {
+                            updateSettings({ streamingMode: 'direct' });
+                            toast({
+                              title: settings.language === 'it' ? 'Disconnesso' : 'Disconnected',
+                              description: settings.language === 'it' 
+                                ? 'Real-Debrid rimosso. Ora usi il torrenting diretto.'
+                                : 'Real-Debrid removed. Now using direct torrenting.',
+                            });
+                          }
+                        }}
+                      >
+                        {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </div>
