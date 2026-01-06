@@ -94,8 +94,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   } | null>(null);
 
   const addDebugLog = useCallback((step: string, details?: string, status: 'info' | 'success' | 'error' | 'warning' = 'info') => {
-    setDebugLogs(prev => [...prev, { timestamp: new Date(), step, details, status }]);
-    console.log(`[DEBUG] ${step}`, details || '');
+    const timestamp = new Date();
+    const timeStr = timestamp.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const ms = timestamp.getMilliseconds().toString().padStart(3, '0');
+    setDebugLogs(prev => [...prev, { timestamp, step, details, status }]);
+    console.log(`[DEBUG ${timeStr}.${ms}] ${step}`, details || '');
   }, []);
 
   const clearDebugLogs = useCallback(() => {
@@ -627,7 +630,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setDownloadProgress(null);
     setDownloadStatus(null);
     
-    addDebugLog('Inizio ricerca', `Query: "${query}"`, 'info');
+    addDebugLog('🔎 Ricerca torrent', `Query: "${query}"`, 'info');
+    addDebugLog('⏳ Connessione', 'Contatto fonti torrent (TPB, 1337x, etc.)...', 'info');
     
     try {
       const result = await searchStreams(
@@ -642,13 +646,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
       
       setAvailableTorrents(result.torrents);
-      addDebugLog('Ricerca completata', `Stream pronti: ${result.streams?.length || 0}, Torrent: ${result.torrents.length}`, 
-        (result.streams?.length || 0) > 0 ? 'success' : 'info');
+      const streamCount = result.streams?.length || 0;
+      const torrentCount = result.torrents.length;
+      addDebugLog('📊 Risultati ricerca', `Stream pronti: ${streamCount}, Torrent trovati: ${torrentCount}`, 
+        streamCount > 0 ? 'success' : (torrentCount > 0 ? 'info' : 'warning'));
       
       // If any torrent has ready streams (cached), get them
       if (result.streams && result.streams.length > 0) {
         setAlternativeStreams(result.streams);
-        addDebugLog('Stream disponibili', `${result.streams.length} stream pronti per la riproduzione`, 'success');
+        addDebugLog('✅ Stream già in cache RD', `${result.streams.length} stream pronti (già scaricati in precedenza)`, 'success');
         
         // Auto-select first stream if there's only 1 or few results
         if (result.streams.length >= 1) {
@@ -665,7 +671,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             audioRef.current.src = selectedStream.streamUrl;
             audioRef.current.play();
             setState(prev => ({ ...prev, isPlaying: true }));
-            addDebugLog('Riproduzione', `Avviato: "${selectedStream.title}"`, 'success');
+            addDebugLog('🔊 Riproduzione da cache', `"${selectedStream.title}"`, 'success');
           }
           
           // Non auto-salvare qui: gli stream "cached" non includono fileId affidabile.
@@ -674,7 +680,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       } else if ((!result.streams || result.streams.length === 0) && result.torrents.length === 0) {
         // No results for track title, try searching for the album
-        addDebugLog('Nessun risultato diretto', 'Provo ricerca per album...', 'warning');
+        addDebugLog('⚠️ Nessun torrent trovato', 'La ricerca non ha prodotto risultati', 'warning');
+        addDebugLog('🔄 Tentativo alternativo', 'Provo ricerca per nome album...', 'info');
         
         if (track && track.album) {
           const foundInAlbum = await searchAlbumAndMatch(track);
@@ -700,7 +707,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           });
         }
       } else if (result.torrents.length > 0 && (!result.streams || result.streams.length === 0)) {
-        addDebugLog('Solo torrent', `${result.torrents.length} torrent disponibili`, 'info');
+        addDebugLog('📦 Torrent trovati', `${result.torrents.length} torrent da analizzare (non ancora in cache RD)`, 'info');
         
         let playbackStarted = false;
         
@@ -714,7 +721,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             }
             
             if (torrent.files && torrent.files.length > 0) {
-              addDebugLog('Analisi torrent', `"${torrent.title}" - ${torrent.files.length} file audio`, 'info');
+              addDebugLog('📂 Analisi torrent', `"${torrent.title.substring(0, 50)}..." - ${torrent.files.length} file audio`, 'info');
               
               // Find a file that matches the track title using flexible matching
               const matchingFile = torrent.files.find(file => {
@@ -722,7 +729,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 const matchesPath = flexibleMatch(file.path || '', track.title);
                 const matches = matchesFileName || matchesPath;
                 if (matches) {
-                  addDebugLog('Match trovato', `"${file.filename}" contiene parole di "${track.title}"`, 'success');
+                  addDebugLog('🎯 Match automatico', `"${file.filename}" ≈ "${track.title}"`, 'success');
                 }
                 return matches;
               });
@@ -731,7 +738,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               const fileToUse = matchingFile || (torrent.files.length === 1 ? torrent.files[0] : null);
               
               if (fileToUse) {
-                addDebugLog('File selezionato', `"${fileToUse.filename}" (ID: ${fileToUse.id})`, 'success');
+                addDebugLog('📄 File selezionato', `"${fileToUse.filename}" (ID: ${fileToUse.id})`, 'success');
+                addDebugLog('☁️ Invio a Real-Debrid', 'Richiesta download/streaming...', 'info');
                 
                 const selectResult = await selectFilesAndPlay(
                   credentials!.realDebridApiKey,
@@ -751,6 +759,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 }
                 
                 if (selectResult.streams.length > 0) {
+                  addDebugLog('✅ RD: Stream pronto', `File già in cache Real-Debrid!`, 'success');
                   setAlternativeStreams(selectResult.streams);
                   setCurrentStreamId(selectResult.streams[0].id);
                   
@@ -758,8 +767,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     audioRef.current.src = selectResult.streams[0].streamUrl;
                     audioRef.current.play();
                     setState(prev => ({ ...prev, isPlaying: true }));
+                    addDebugLog('🔊 Riproduzione avviata', 'Streaming da Real-Debrid', 'success');
                   }
                   
+                  addDebugLog('💾 Salvataggio mappatura', 'Memorizzo associazione traccia-file per prossimi ascolti', 'info');
                   await saveFileMapping({
                     track,
                     torrentId: torrent.torrentId,
@@ -769,15 +780,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     filePath: fileToUse.path,
                     directLink: selectResult.streams[0].streamUrl,
                   });
-                  addDebugLog('Riproduzione', 'Stream avviato e mappatura salvata', 'success');
+                  addDebugLog('✅ Completato', 'Stream avviato, mappatura salvata (link valido 29 giorni)', 'success');
                   setLoadingPhase('idle');
                   playbackStarted = true;
                   break;
                 } else if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
+                  addDebugLog('📥 RD: Download iniziato', `Il file non era in cache - Real-Debrid sta scaricando (${selectResult.progress}%)`, 'info');
+                  addDebugLog('⏳ Tempo stimato', 'Il download può richiedere 4-20 secondi...', 'warning');
                   setLoadingPhase('downloading');
                   setDownloadProgress(selectResult.progress);
                   setDownloadStatus(selectResult.status);
-                  addDebugLog('Salvataggio', 'Salvataggio in cloud', 'success');
                   playbackStarted = true; // Consider download as "started"
                   break;
                 }
@@ -1087,7 +1099,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               // INSTANT PLAY: Use cached direct link - no RD fetch needed
               console.log('Using cached direct link for instant playback');
               setLoadingPhase('loading');
-              addDebugLog('Riproduzione rapida', 'Uso link diretto salvato', 'success');
+              addDebugLog('🎯 Mappatura trovata', `File ID: ${fileId}, link valido fino a ${new Date(expiresAt).toLocaleDateString('it-IT')}`, 'success');
+              addDebugLog('⚡ Riproduzione istantanea', 'Link diretto disponibile - nessuna ricerca necessaria', 'success');
               
               if (audioRef.current) {
                 audioRef.current.src = directLink;
@@ -1107,7 +1120,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
             // Direct link expired or missing - fetch from RD
             setLoadingPhase('loading');
-            addDebugLog('Caricamento', 'Link scaduto, recupero da RD...', 'info');
+            addDebugLog('🎯 Mappatura trovata', `File ID: ${fileId}, torrent: ${torrentId.substring(0, 8)}...`, 'success');
+            addDebugLog('🔄 Link scaduto/mancante', `Scadenza: ${expiresAt ? new Date(expiresAt).toLocaleDateString('it-IT') : 'mai salvato'}`, 'warning');
+            addDebugLog('☁️ Recupero da Real-Debrid', 'Richiesta link fresco...', 'info');
             
             const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
 
@@ -1118,6 +1133,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             }
 
             if (result.streams.length > 0) {
+              addDebugLog('✅ Stream pronto', `Link ottenuto da RD (${result.streams[0].quality || 'qualità sconosciuta'})`, 'success');
               setAlternativeStreams(result.streams);
               setCurrentStreamId(result.streams[0].id);
 
@@ -1125,6 +1141,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 audioRef.current.src = result.streams[0].streamUrl;
                 audioRef.current.play();
                 setState(prev => ({ ...prev, isPlaying: true }));
+                
+                addDebugLog('🔊 Riproduzione avviata', 'Audio in streaming da Real-Debrid', 'success');
+                addDebugLog('💾 Aggiornamento cache', 'Salvo link diretto per prossimi ascolti (29 giorni)', 'info');
                 
                 // Update direct link in database for next time
                 await saveFileMapping({
@@ -1148,6 +1167,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               return;
             } else if (result.status === 'downloading' || result.status === 'queued') {
               // Torrent is downloading, show progress
+              addDebugLog('📥 Download su RD in corso', `Stato: ${result.status}, progresso: ${result.progress}%`, 'info');
               setLoadingPhase('downloading');
               setDownloadProgress(result.progress);
               setDownloadStatus(result.status);
@@ -1182,6 +1202,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // No saved mapping - start searching
     setLoadingPhase('searching');
     clearDebugLogs();
+    addDebugLog('🔍 Inizio ricerca', `Traccia: "${track.title}" di ${track.artist}`, 'info');
+    addDebugLog('📁 Album', track.album || 'Non specificato', 'info');
     addSyncingTrack(track.id);
     
     if (track.album?.trim() && track.artist?.trim()) {
