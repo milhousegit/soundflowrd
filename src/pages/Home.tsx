@@ -3,14 +3,18 @@ import { Track, Album, Artist } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useFavorites } from '@/hooks/useFavorites';
+import { usePlaylists } from '@/hooks/usePlaylists';
 import { getNewReleases, getPopularArtists } from '@/lib/musicbrainz';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
+import PlaylistCard from '@/components/PlaylistCard';
+import CreatePlaylistModal from '@/components/CreatePlaylistModal';
 import TapArea from '@/components/TapArea';
 import AlbumCardSkeleton from '@/components/skeletons/AlbumCardSkeleton';
 import ArtistCardSkeleton from '@/components/skeletons/ArtistCardSkeleton';
-import { Clock, TrendingUp, ListMusic, Music } from 'lucide-react';
+import { Clock, TrendingUp, ListMusic, Music, Plus } from 'lucide-react';
 import { Play, Pause } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const Home: React.FC = () => {
   const [recentlyPlayed, setRecentlyPlayed] = useState<Track[]>([]);
@@ -18,10 +22,12 @@ const Home: React.FC = () => {
   const [popularArtists, setPopularArtists] = useState<Artist[]>([]);
   const [isLoadingReleases, setIsLoadingReleases] = useState(true);
   const [isLoadingArtists, setIsLoadingArtists] = useState(true);
+  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   
   const { settings, t } = useSettings();
   const { currentTrack, isPlaying, playTrack, toggle } = usePlayer();
   const { favorites, getFavoritesByType } = useFavorites();
+  const { playlists, isLoading: isLoadingPlaylists } = usePlaylists();
 
   // Get country code from language
   const getCountryFromLanguage = (lang: string): string => {
@@ -185,20 +191,62 @@ const Home: React.FC = () => {
       {/* Playlists - Horizontal scroll on mobile */}
       {homeDisplayOptions.showPlaylists && (
         <section>
-          <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
-            <ListMusic className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-            <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('yourPlaylists')}</h2>
+          <div className="flex items-center justify-between mb-4 md:mb-6">
+            <div className="flex items-center gap-2 md:gap-3">
+              <ListMusic className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+              <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('yourPlaylists')}</h2>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setShowCreatePlaylist(true)}
+              className="text-primary"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Crea
+            </Button>
           </div>
-          <div className="text-center py-8 bg-secondary/30 rounded-xl">
-            <ListMusic className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">
-              {t('language') === 'it' 
-                ? "Non hai creato nessuna playlist" 
-                : "You haven't created any playlists"}
-            </p>
-          </div>
+          
+          {isLoadingPlaylists ? (
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex-shrink-0 w-32">
+                  <AlbumCardSkeleton />
+                </div>
+              ))}
+            </div>
+          ) : playlists.length === 0 ? (
+            <div 
+              className="text-center py-8 bg-secondary/30 rounded-xl cursor-pointer hover:bg-secondary/50 transition-colors"
+              onClick={() => setShowCreatePlaylist(true)}
+            >
+              <ListMusic className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground">
+                {t('language') === 'it' 
+                  ? "Crea la tua prima playlist" 
+                  : "Create your first playlist"}
+              </p>
+              <Button variant="outline" size="sm" className="mt-3">
+                <Plus className="w-4 h-4 mr-1" />
+                Nuova Playlist
+              </Button>
+            </div>
+          ) : (
+            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
+              {playlists.map((playlist) => (
+                <div key={playlist.id} className="flex-shrink-0 w-32 md:w-auto">
+                  <PlaylistCard playlist={playlist} />
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
+
+      <CreatePlaylistModal 
+        open={showCreatePlaylist} 
+        onOpenChange={setShowCreatePlaylist}
+      />
 
       {/* New Releases - ordered by popularity in selected language */}
       {homeDisplayOptions.showNewReleases && (
