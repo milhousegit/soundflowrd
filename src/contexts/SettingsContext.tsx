@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AppSettings, defaultSettings, translations, TranslationKey } from '@/types/settings';
+import { AppSettings, defaultSettings, translations, TranslationKey, StreamingMode } from '@/types/settings';
 
 interface SettingsContextType {
   settings: AppSettings;
   updateSettings: (updates: Partial<AppSettings>) => void;
   t: (key: TranslationKey) => string;
+  getEffectiveStreamingMode: () => StreamingMode;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -16,7 +17,12 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     const stored = localStorage.getItem('appSettings');
     if (stored) {
       try {
-        setSettings({ ...defaultSettings, ...JSON.parse(stored) });
+        const parsed = JSON.parse(stored);
+        // Migrate old settings without streamingMode
+        if (!parsed.streamingMode) {
+          parsed.streamingMode = 'direct';
+        }
+        setSettings({ ...defaultSettings, ...parsed });
       } catch {
         // Use defaults
       }
@@ -35,8 +41,15 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     return translations[settings.language][key] || key;
   };
 
+  // Get effective streaming mode - if no RD key, always use 'direct'
+  const getEffectiveStreamingMode = (): StreamingMode => {
+    // Check if RD API key is configured in profile (from AuthContext)
+    // For now, just return the setting - the PlayerContext will handle the logic
+    return settings.streamingMode;
+  };
+
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings, t }}>
+    <SettingsContext.Provider value={{ settings, updateSettings, t, getEffectiveStreamingMode }}>
       {children}
     </SettingsContext.Provider>
   );

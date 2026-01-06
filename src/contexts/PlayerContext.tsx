@@ -292,8 +292,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
 
       if (albumMappingId) {
-        // Calculate expiry: RD links typically expire after 24h, but we use 20h for safety
-        const expiresAt = directLink ? new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString() : null;
+        // Calculate expiry: RD keeps files for 30 days, we use 29 days for safety
+        const expiresAt = directLink ? new Date(Date.now() + 29 * 24 * 60 * 60 * 1000).toISOString() : null;
         
         await supabase
           .from('track_file_mappings')
