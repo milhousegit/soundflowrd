@@ -783,15 +783,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 }
                 
                 if (selectResult.streams.length > 0) {
-                  addDebugLog('⚡ Riproduzione istantanea', `File già in cache Real-Debrid!`, 'success');
+                  const streamUrl = selectResult.streams[0].streamUrl;
+                  addDebugLog('⚡ Riproduzione istantanea', streamUrl.substring(0, 80) + '...', 'success');
                   setAlternativeStreams(selectResult.streams);
                   setCurrentStreamId(selectResult.streams[0].id);
                   
-                  if (audioRef.current && selectResult.streams[0].streamUrl) {
-                    audioRef.current.src = selectResult.streams[0].streamUrl;
+                  if (audioRef.current && streamUrl) {
+                    audioRef.current.src = streamUrl;
                     audioRef.current.play();
                     setState(prev => ({ ...prev, isPlaying: true }));
-                    addDebugLog('🔊 Riproduzione avviata', 'Link diretto RD disponibile', 'success');
                   }
                   
                   addDebugLog('💾 Salvataggio mappatura', 'Memorizzo associazione traccia-file per prossimi ascolti', 'info');
@@ -1012,17 +1012,19 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setDownloadProgress(null);
         setDownloadStatus(null);
         setLoadingPhase('idle');
-        addDebugLog('✅ Download completato', 'Stream pronti per la riproduzione', 'success');
         
         // Auto-play if nothing is playing
         if (!currentStreamId && result.streams.length > 0) {
+          const streamUrl = result.streams[0].streamUrl;
           setCurrentStreamId(result.streams[0].id);
-          if (audioRef.current && result.streams[0].streamUrl) {
-            audioRef.current.src = result.streams[0].streamUrl;
+          if (audioRef.current && streamUrl) {
+            audioRef.current.src = streamUrl;
             audioRef.current.play();
             setState(prev => ({ ...prev, isPlaying: true }));
-            addDebugLog('🔊 Riproduzione avviata', 'Link diretto RD disponibile', 'success');
+            addDebugLog('⚡ Riproduzione istantanea', streamUrl.substring(0, 80) + '...', 'success');
           }
+        } else {
+          addDebugLog('✅ Download completato', 'Stream pronti per la riproduzione', 'success');
         }
       }
     } catch (error) {
@@ -1195,17 +1197,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 .eq('track_id', track.id);
               // Fallthrough to new search below
             } else if (result.streams.length > 0) {
-              addDebugLog('✅ Stream pronto', `Link ottenuto da RD (${result.streams[0].quality || 'qualità sconosciuta'})`, 'success');
-              addDebugLog('🔗 Link RD', result.streams[0].streamUrl.substring(0, 80) + '...', 'info');
+              const streamUrl = result.streams[0].streamUrl;
+              addDebugLog('⚡ Riproduzione istantanea', streamUrl.substring(0, 80) + '...', 'success');
               setAlternativeStreams(result.streams);
               setCurrentStreamId(result.streams[0].id);
 
-              if (audioRef.current && result.streams[0].streamUrl) {
-                audioRef.current.src = result.streams[0].streamUrl;
+              if (audioRef.current && streamUrl) {
+                audioRef.current.src = streamUrl;
                 audioRef.current.play();
                 setState(prev => ({ ...prev, isPlaying: true }));
                 
-                addDebugLog('🔊 Riproduzione avviata', 'Link diretto RD disponibile', 'success');
                 addDebugLog('💾 Aggiornamento cache', 'Salvo link diretto per prossimi ascolti (29 giorni)', 'info');
                 
                 // Update direct link in database for next time
@@ -1498,19 +1499,19 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           if (result.streams.length > 0) {
             console.log('Download complete, streams available:', result.streams.length);
             
+            const streamUrl = result.streams[0].streamUrl;
             setAlternativeStreams(result.streams);
             setCurrentStreamId(result.streams[0].id);
             setDownloadProgress(null);
             setDownloadStatus(null);
             setLoadingPhase('idle');
             
-            addDebugLog('🔗 Link RD', result.streams[0].streamUrl.substring(0, 80) + '...', 'info');
+            addDebugLog('⚡ Riproduzione istantanea', streamUrl.substring(0, 80) + '...', 'success');
             
-            if (audioRef.current && result.streams[0].streamUrl) {
-              audioRef.current.src = result.streams[0].streamUrl;
+            if (audioRef.current && streamUrl) {
+              audioRef.current.src = streamUrl;
               audioRef.current.play();
               setState(prev => ({ ...prev, isPlaying: true }));
-              addDebugLog('🔊 Riproduzione avviata', 'Link diretto RD disponibile', 'success');
               
               // Update direct link in database and mark as synced
               const currentTrack = state.currentTrack;
