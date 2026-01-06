@@ -165,11 +165,15 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
       ['downloading', 'queued', 'magnet_conversion'].includes(t.status)
     );
 
-    const handlePlayYouTube = async (video: YouTubeVideo) => {
+    const handlePlayYouTube = (video: YouTubeVideo) => {
       if (!onPlayYouTube || playingYouTubeId) return;
       setPlayingYouTubeId(video.id);
-      await onPlayYouTube(video);
-      setPlayingYouTubeId(null);
+      onPlayYouTube(video);
+      // Close modal after selection
+      setTimeout(() => {
+        setPlayingYouTubeId(null);
+        onClose();
+      }, 300);
     };
 
     const handleSearchYouTube = async () => {
