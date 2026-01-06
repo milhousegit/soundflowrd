@@ -160,6 +160,7 @@ const Album: React.FC = () => {
           itemType="album"
           item={album}
           size="lg"
+          variant="ghost"
         />
 
         {/* Sync album button - small like favorite, with animation */}

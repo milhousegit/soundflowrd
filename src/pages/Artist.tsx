@@ -126,11 +126,10 @@ const Artist: React.FC = () => {
         <Button variant="player" size="player" onClick={handlePlayAll} disabled={topTracks.length === 0}>
           <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
         </Button>
-        <Button variant="outline" className="gap-2" size="sm" onClick={handleShuffle} disabled={topTracks.length === 0}>
-          <Shuffle className="w-4 h-4" />
-          Shuffle
+        <Button variant="ghost" size="icon" className="w-10 h-10 md:w-12 md:h-12" onClick={handleShuffle} disabled={topTracks.length === 0}>
+          <Shuffle className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
-        <FavoriteButton itemType="artist" item={artist} size="md" variant="outline" />
+        <FavoriteButton itemType="artist" item={artist} size="md" variant="ghost" />
       </div>
 
       {/* Popular Tracks */}
