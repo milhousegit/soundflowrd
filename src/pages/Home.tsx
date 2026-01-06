@@ -139,41 +139,41 @@ const Home: React.FC = () => {
         <p className="text-sm md:text-base text-muted-foreground">{t('whatToListen')}</p>
       </div>
 
-      {/* Recently Played Grid */}
+      {/* Recently Played Grid - 2 columns on mobile */}
       {homeDisplayOptions.showRecentlyPlayed && displayRecent.length > 0 && (
         <section>
           <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
             <Clock className="w-5 h-5 md:w-6 md:h-6 text-primary" />
             <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('recentlyPlayed')}</h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {displayRecent.map((track) => {
               const isCurrentTrack = currentTrack?.id === track.id;
               return (
                 <TapArea
                   key={track.id}
                   onTap={() => (isCurrentTrack ? toggle() : playTrack(track, displayRecent))}
-                  className="group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-all cursor-pointer touch-manipulation"
+                  className="group flex items-center gap-2 md:gap-4 p-2 md:p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-all cursor-pointer touch-manipulation"
                 >
-                  <div className="w-12 h-12 md:w-16 md:h-16 rounded overflow-hidden flex-shrink-0 bg-muted relative">
+                  <div className="w-10 h-10 md:w-16 md:h-16 rounded overflow-hidden flex-shrink-0 bg-muted relative">
                     {track.coverUrl ? (
                       <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Music className="w-5 h-5 text-muted-foreground" />
+                        <Music className="w-4 h-4 text-muted-foreground" />
                       </div>
                     )}
                     <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                       {isCurrentTrack && isPlaying ? (
-                        <Pause className="w-6 h-6 text-primary" />
+                        <Pause className="w-4 h-4 md:w-6 md:h-6 text-primary" />
                       ) : (
-                        <Play className="w-6 h-6 text-foreground ml-0.5" />
+                        <Play className="w-4 h-4 md:w-6 md:h-6 text-foreground ml-0.5" />
                       )}
                     </div>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm md:text-base text-foreground truncate">{track.title}</p>
-                    <p className="text-xs md:text-sm text-muted-foreground truncate">{track.artist}</p>
+                    <p className="font-semibold text-xs md:text-base text-foreground truncate">{track.title}</p>
+                    <p className="text-[10px] md:text-sm text-muted-foreground truncate">{track.artist}</p>
                   </div>
                 </TapArea>
               );
@@ -182,7 +182,7 @@ const Home: React.FC = () => {
         </section>
       )}
 
-      {/* Playlists */}
+      {/* Playlists - Horizontal scroll on mobile */}
       {homeDisplayOptions.showPlaylists && (
         <section>
           <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
@@ -225,20 +225,24 @@ const Home: React.FC = () => {
         </section>
       )}
 
-      {/* Popular Artists - from selected language/country */}
+      {/* Popular Artists - Horizontal scroll on mobile */}
       {homeDisplayOptions.showPopularArtists && (
         <section>
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-4 md:mb-6">{t('popularArtists')}</h2>
           {isLoadingArtists ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
               {Array.from({ length: 6 }).map((_, i) => (
-                <ArtistCardSkeleton key={i} />
+                <div key={i} className="flex-shrink-0 w-32 md:w-auto">
+                  <ArtistCardSkeleton />
+                </div>
               ))}
             </div>
           ) : popularArtists.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
               {popularArtists.map((artist) => (
-                <ArtistCard key={artist.id} artist={artist} />
+                <div key={artist.id} className="flex-shrink-0 w-32 md:w-auto">
+                  <ArtistCard artist={artist} />
+                </div>
               ))}
             </div>
           ) : (
