@@ -21,6 +21,9 @@ const Artist: React.FC = () => {
   const [topTracks, setTopTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Use artist image or fallback to latest album cover
+  const artistImage = artist?.imageUrl || (releases.length > 0 ? releases[0]?.coverUrl : undefined);
+
   useEffect(() => {
     const fetchArtist = async () => {
       if (!id) return;
@@ -88,17 +91,17 @@ const Artist: React.FC = () => {
       {/* Hero Section */}
       <div className="relative h-72 md:h-80 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/20 to-background" />
-        {artist.imageUrl && (
+        {artistImage && (
           <img 
-            src={artist.imageUrl} 
+            src={artistImage} 
             alt={artist.name}
             className="absolute inset-0 w-full h-full object-cover opacity-30 blur-xl"
           />
         )}
         <div className="absolute bottom-0 left-0 right-0 p-4 md:p-8 flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-6">
           <div className="w-32 h-32 md:w-48 md:h-48 rounded-full overflow-hidden bg-muted shadow-2xl flex-shrink-0">
-            {artist.imageUrl ? (
-              <img src={artist.imageUrl} alt={artist.name} className="w-full h-full object-cover" />
+            {artistImage ? (
+              <img src={artistImage} alt={artist.name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <User className="w-16 md:w-24 h-16 md:h-24 text-muted-foreground" />

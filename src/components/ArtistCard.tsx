@@ -10,9 +10,10 @@ import { useTap } from '@/hooks/useTap';
 interface ArtistCardProps {
   artist: Artist;
   showFavorite?: boolean;
+  fallbackImage?: string;
 }
 
-const ArtistCard: React.FC<ArtistCardProps> = ({ artist, showFavorite = false }) => {
+const ArtistCard: React.FC<ArtistCardProps> = ({ artist, showFavorite = false, fallbackImage }) => {
   const navigate = useNavigate();
   const { t } = useSettings();
 
@@ -29,9 +30,9 @@ const ArtistCard: React.FC<ArtistCardProps> = ({ artist, showFavorite = false })
     >
       {/* Image */}
       <div className="relative aspect-square rounded-full overflow-hidden mb-3 md:mb-4 bg-muted">
-        {artist.imageUrl ? (
+        {(artist.imageUrl || fallbackImage) ? (
           <img 
-            src={artist.imageUrl} 
+            src={artist.imageUrl || fallbackImage} 
             alt={artist.name} 
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
