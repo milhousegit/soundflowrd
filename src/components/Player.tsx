@@ -381,12 +381,12 @@ const Player: React.FC = () => {
     );
   }
 
-  // Calculate navbar height: h-16 (64px) + pt-2 (8px) + extra bottom padding (8px) + safe area
-  const navbarHeight = 80; // 64 + 8 + 8
+  // Navbar height: h-20 (80px) + safe area - player sits directly on top
+  const navbarHeight = 80;
 
   return (
     <>
-      {/* Mobile mini player - positioned above navbar */}
+      {/* Mobile mini player - positioned directly above navbar (no gap) */}
       <div 
         className="fixed left-0 right-0 h-14 glass border-t border-border z-50 md:hidden"
         style={{ bottom: `calc(${navbarHeight}px + env(safe-area-inset-bottom, 0px))` }}
