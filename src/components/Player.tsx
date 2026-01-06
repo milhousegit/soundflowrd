@@ -381,8 +381,8 @@ const Player: React.FC = () => {
     );
   }
 
-  // Calculate navbar height (56px content + safe area)
-  const navbarHeight = 56;
+  // Calculate navbar height: h-16 (64px) + pt-2 (8px) + extra bottom padding (8px) + safe area
+  const navbarHeight = 80; // 64 + 8 + 8
 
   return (
     <>
