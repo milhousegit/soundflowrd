@@ -1,5 +1,3 @@
-export type StreamingMode = 'direct' | 'hybrid' | 'debrid_only';
-
 export interface AppSettings {
   language: 'en' | 'it';
   homeDisplayOptions: {
@@ -12,7 +10,6 @@ export interface AppSettings {
   audioQuality: 'high' | 'medium' | 'low';
   crossfade: number; // seconds, 0 = off
   realDebridApiKey?: string;
-  streamingMode: StreamingMode; // 'direct' = WebTorrent only, 'hybrid' = WebTorrent + RD background, 'debrid_only' = RD only
 }
 
 export const defaultSettings: AppSettings = {
@@ -27,7 +24,6 @@ export const defaultSettings: AppSettings = {
   audioQuality: 'high',
   crossfade: 0,
   realDebridApiKey: undefined,
-  streamingMode: 'direct', // Default to direct streaming without RD
 };
 
 export const translations = {
@@ -82,13 +78,6 @@ export const translations = {
     playlist: 'Playlist',
     artist: 'Artist',
     album: 'Album',
-    streamingMode: 'Streaming Mode',
-    streamingDirect: 'Direct (P2P)',
-    streamingHybrid: 'Hybrid',
-    streamingDebridOnly: 'Real-Debrid Only',
-    streamingDirectDesc: 'Stream directly via WebTorrent - fastest start',
-    streamingHybridDesc: 'Stream directly + save to RD for next time',
-    streamingDebridOnlyDesc: 'Use only Real-Debrid (4-20s load time)',
     cloudFiles: 'Cloud Files',
     noCloudFiles: 'No files saved on Real-Debrid yet',
     loadingCloudFiles: 'Loading cloud files...',
@@ -145,13 +134,6 @@ export const translations = {
     playlist: 'Playlist',
     artist: 'Artista',
     album: 'Album',
-    streamingMode: 'Modalità Streaming',
-    streamingDirect: 'Diretto (P2P)',
-    streamingHybrid: 'Ibrido',
-    streamingDebridOnly: 'Solo Real-Debrid',
-    streamingDirectDesc: 'Streaming diretto via WebTorrent - partenza immediata',
-    streamingHybridDesc: 'Streaming diretto + salvataggio su RD per la prossima volta',
-    streamingDebridOnlyDesc: 'Usa solo Real-Debrid (4-20s tempo di caricamento)',
     cloudFiles: 'File Cloud',
     noCloudFiles: 'Nessun file salvato su Real-Debrid',
     loadingCloudFiles: 'Caricamento file cloud...',
