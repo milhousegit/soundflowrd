@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { Track, PlayerState } from '@/types/music';
 import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
-import { YouTubeVideo, searchYouTube, getYouTubeAudio } from '@/lib/youtube';
+import { YouTubeVideo, searchYouTube } from '@/lib/youtube';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,7 +47,9 @@ interface PlayerContextType extends PlayerState {
   loadingPhase: LoadingPhase;
   // YouTube fallback
   youtubeResults: YouTubeVideo[];
-  playYouTubeVideo: (video: YouTubeVideo) => Promise<void>;
+  playYouTubeVideo: (video: YouTubeVideo) => void;
+  currentYouTubeVideoId: string | null;
+  isPlayingYouTube: boolean;
   // Search query tracking
   lastSearchQuery: string | null;
   searchYouTubeManually: () => Promise<void>;
@@ -93,6 +95,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   const [youtubeResults, setYoutubeResults] = useState<YouTubeVideo[]>([]);
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
+  const [currentYouTubeVideoId, setCurrentYouTubeVideoId] = useState<string | null>(null);
+  const [isPlayingYouTube, setIsPlayingYouTube] = useState(false);
   
   // Track ID currently being searched - used to cancel stale searches
   const currentSearchTrackIdRef = useRef<string | null>(null);
@@ -869,25 +873,20 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   setYoutubeResults(videos);
                   addDebugLog('📺 YouTube trovato', `${videos.length} video disponibili`, 'success');
                   
-                  // Auto-play first YouTube result
+                  // Auto-play first YouTube result using hidden player
                   addDebugLog('▶️ Auto-play YouTube', videos[0].title, 'info');
-                  const audio = await getYouTubeAudio(videos[0].id);
                   
-                  if (audio) {
-                    addDebugLog('⚡ Riproduzione YouTube', audio.url.substring(0, 60) + '...', 'success');
-                    if (audioRef.current) {
-                      audioRef.current.src = audio.url;
-                      audioRef.current.play();
-                      setState(prev => ({ ...prev, isPlaying: true }));
-                    }
-                    setLoadingPhase('idle');
-                  } else {
-                    addDebugLog('⚠️ Audio non disponibile', 'Seleziona manualmente un altro video', 'warning');
-                    toast.info('YouTube disponibile', {
-                      description: 'Seleziona manualmente un video dal pannello sorgenti.',
-                      duration: 5000,
-                    });
+                  // Stop any existing audio
+                  if (audioRef.current) {
+                    audioRef.current.pause();
+                    audioRef.current.src = '';
                   }
+                  
+                  // Set YouTube video ID for hidden player
+                  setCurrentYouTubeVideoId(videos[0].id);
+                  setIsPlayingYouTube(true);
+                  setState(prev => ({ ...prev, isPlaying: true }));
+                  setLoadingPhase('idle');
                   
                   removeSyncingTrack(track.id);
                 } else {
@@ -1083,43 +1082,26 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     await searchForStreams(query, true, undefined, true);
   }, [searchForStreams]);
 
-  // Play audio from YouTube video
-  const playYouTubeVideo = useCallback(async (video: YouTubeVideo) => {
+  // Play audio from YouTube video using hidden player
+  const playYouTubeVideo = useCallback((video: YouTubeVideo) => {
     addDebugLog('🎬 YouTube selezionato', video.title, 'info');
+    
+    // Stop any existing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+    
+    // Set YouTube video ID - the YouTubePlayer component will handle playback
+    setCurrentYouTubeVideoId(video.id);
+    setIsPlayingYouTube(true);
+    setState(prev => ({ ...prev, isPlaying: true }));
     setLoadingPhase('loading');
     
-    try {
-      const audio = await getYouTubeAudio(video.id);
-      
-      if (!audio) {
-        addDebugLog('❌ Errore YouTube', 'Impossibile ottenere audio', 'error');
-        setLoadingPhase('unavailable');
-        toast.error('Errore YouTube', {
-          description: 'Non è stato possibile estrarre l\'audio da questo video.',
-        });
-        return;
-      }
-      
-      addDebugLog('⚡ Riproduzione YouTube', audio.url.substring(0, 80) + '...', 'success');
-      
-      if (audioRef.current) {
-        audioRef.current.src = audio.url;
-        audioRef.current.play();
-        setState(prev => ({ ...prev, isPlaying: true }));
-      }
-      
-      setLoadingPhase('idle');
-      
-      // Clear YouTube results after successful playback
-      setYoutubeResults([]);
-      
-    } catch (error) {
-      addDebugLog('❌ Errore YouTube', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
-      setLoadingPhase('unavailable');
-      toast.error('Errore YouTube', {
-        description: 'Si è verificato un errore durante la riproduzione.',
-      });
-    }
+    addDebugLog('▶️ Avvio player YouTube', `Video ID: ${video.id}`, 'success');
+    
+    // Clear YouTube results after selection
+    setYoutubeResults([]);
   }, [addDebugLog]);
 
   // Search YouTube manually with current query
@@ -1231,6 +1213,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setDownloadProgress(null);
     setDownloadStatus(null);
     setLoadingPhase('idle');
+    // Stop any YouTube playback
+    setCurrentYouTubeVideoId(null);
+    setIsPlayingYouTube(false);
 
     // First check if we have a saved mapping with direct link for this track
     if (credentials?.realDebridApiKey && track.albumId) {
@@ -1832,6 +1817,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         loadingPhase,
         youtubeResults,
         playYouTubeVideo,
+        currentYouTubeVideoId,
+        isPlayingYouTube,
         lastSearchQuery,
         searchYouTubeManually,
       }}

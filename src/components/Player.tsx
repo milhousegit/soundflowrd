@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import BugsModal from './BugsModal';
 import QueueModal from './QueueModal';
+import { YouTubePlayer, YouTubePlayerRef } from './YouTubePlayer';
 import { 
   Play, 
   Pause, 
@@ -63,6 +64,8 @@ const Player: React.FC = () => {
     loadingPhase,
     youtubeResults,
     playYouTubeVideo,
+    currentYouTubeVideoId,
+    isPlayingYouTube,
     lastSearchQuery,
     searchYouTubeManually,
   } = usePlayer();
@@ -72,11 +75,27 @@ const Player: React.FC = () => {
   const [showQueueModal, setShowQueueModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   
+  // YouTube player ref
+  const youtubePlayerRef = useRef<YouTubePlayerRef>(null);
+  
   // Swipe to close state
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // YouTube player callbacks
+  const handleYouTubeReady = useCallback(() => {
+    console.log('YouTube player ready');
+  }, []);
+  
+  const handleYouTubeTimeUpdate = useCallback((currentTime: number, ytDuration: number) => {
+    // Update progress from YouTube player - handled by context
+  }, []);
+  
+  const handleYouTubeEnded = useCallback(() => {
+    next();
+  }, [next]);
 
   if (!currentTrack) return null;
 
@@ -560,6 +579,19 @@ const Player: React.FC = () => {
         onPlayTrack={playQueueIndex}
         onClearQueue={clearQueue}
       />
+      
+      {/* Hidden YouTube Player */}
+      {currentYouTubeVideoId && (
+        <YouTubePlayer
+          ref={youtubePlayerRef}
+          videoId={currentYouTubeVideoId}
+          volume={volume * 100}
+          autoplay={true}
+          onReady={handleYouTubeReady}
+          onTimeUpdate={handleYouTubeTimeUpdate}
+          onEnded={handleYouTubeEnded}
+        />
+      )}
     </>
   );
 };
