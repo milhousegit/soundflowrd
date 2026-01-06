@@ -1,17 +1,19 @@
 import React, { forwardRef, useState } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudOff, CloudUpload, Loader2, AlertCircle } from 'lucide-react';
+import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudUpload, Loader2, Bug, ListMusic } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
-import { useSyncedTracks, removeSyncedTrack } from '@/hooks/useSyncedTracks';
+import { useSyncedTracks } from '@/hooks/useSyncedTracks';
 import { useTap } from '@/hooks/useTap';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
@@ -65,23 +67,6 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       }
     };
 
-    const handleRemoveSync = async (e: React.MouseEvent) => {
-      e.stopPropagation();
-      try {
-        const { error } = await supabase
-          .from('track_file_mappings')
-          .delete()
-          .eq('track_id', track.id);
-        
-        if (error) throw error;
-        
-        removeSyncedTrack(track.id);
-        toast.success('Sincronizzazione rimossa');
-      } catch (error) {
-        console.error('Failed to remove sync:', error);
-        toast.error('Errore nella rimozione');
-      }
-    };
 
     const handleSync = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -94,6 +79,20 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       e.stopPropagation();
       addToQueue([track]);
       toast.success('Aggiunto alla coda');
+    };
+
+    const handleOpenDebug = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      // Play the track first to load it, then user can open debug from player
+      if (!isCurrentTrack) {
+        playTrack(track, queue);
+      }
+      toast.info('Apri il pannello debug dal player');
+    };
+
+    const handleAddToPlaylist = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      toast.info('Funzionalità playlist in arrivo!');
     };
 
     const formatDuration = (seconds: number) => {
@@ -196,50 +195,68 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
           )}
         </div>
 
-        {/* Favorite button */}
-        {showFavorite && (
-          <FavoriteButton
-            itemType="track"
-            item={track}
-            size="sm"
-            className="opacity-0 group-hover:opacity-100 transition-opacity"
-          />
-        )}
-
         {/* Duration */}
         <span className="text-xs md:text-sm text-muted-foreground flex-shrink-0">
           {formatDuration(track.duration)}
         </span>
 
-        {/* More menu */}
-        <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 bg-popover z-[100]">
-            <DropdownMenuItem onClick={handleAddToQueue} className="cursor-pointer">
-              <ListPlus className="w-4 h-4 mr-2" />
-              Aggiungi alla coda
-            </DropdownMenuItem>
-            {isSynced ? (
-              <DropdownMenuItem onClick={handleRemoveSync} className="cursor-pointer text-destructive focus:text-destructive">
-                <CloudOff className="w-4 h-4 mr-2" />
-                Rimuovi sincronizzazione
+        {/* Actions container - same spacing */}
+        <div className="flex items-center gap-1">
+          {/* Favorite button */}
+          {showFavorite && (
+            <FavoriteButton
+              itemType="track"
+              item={track}
+              size="sm"
+              className="md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+              variant="ghost"
+            />
+          )}
+
+          {/* More menu */}
+          <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 bg-popover z-[100]">
+              <DropdownMenuItem onClick={handleAddToQueue} className="cursor-pointer">
+                <ListPlus className="w-4 h-4 mr-2" />
+                Aggiungi alla coda
               </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem onClick={handleSync} className="cursor-pointer">
-                <CloudUpload className="w-4 h-4 mr-2" />
-                Sincronizza
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer">
+                  <ListMusic className="w-4 h-4 mr-2" />
+                  Aggiungi a playlist
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="bg-popover">
+                  <DropdownMenuItem onClick={handleAddToPlaylist} className="cursor-pointer">
+                    + Crea nuova playlist
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              {/* Show sync/remove only if not synced AND not downloading */}
+              {!isSynced && !isDownloading && (
+                <DropdownMenuItem onClick={handleSync} className="cursor-pointer">
+                  <CloudUpload className="w-4 h-4 mr-2" />
+                  Sincronizza
+                </DropdownMenuItem>
+              )}
+              {/* Show debug if synced or downloading */}
+              {(isSynced || isDownloading) && (
+                <DropdownMenuItem onClick={handleOpenDebug} className="cursor-pointer">
+                  <Bug className="w-4 h-4 mr-2" />
+                  Debug
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     );
   }
