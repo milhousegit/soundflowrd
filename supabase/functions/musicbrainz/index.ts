@@ -143,8 +143,11 @@ serve(async (req) => {
         const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
         
+        // Sort by score first (most relevant/popular first)
+        const sortedArtists = (data.artists || []).sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+        
         // Get images for top artists
-        const artists = await Promise.all((data.artists || []).slice(0, 10).map(async (a: any) => {
+        const artists = await Promise.all(sortedArtists.slice(0, 10).map(async (a: any) => {
           const imageUrl = await getArtistImage(a.id);
           return {
             id: a.id,
@@ -153,16 +156,18 @@ serve(async (req) => {
             genres: a.tags?.slice(0, 3).map((t: any) => t.name) || [],
             country: a.country,
             type: a.type,
+            score: a.score || 0,
           };
         }));
         
         // Add remaining artists without images
-        const remaining = (data.artists || []).slice(10).map((a: any) => ({
+        const remaining = sortedArtists.slice(10).map((a: any) => ({
           id: a.id,
           name: a.name,
           genres: a.tags?.slice(0, 3).map((t: any) => t.name) || [],
           country: a.country,
           type: a.type,
+          score: a.score || 0,
         }));
         
         result = [...artists, ...remaining];
@@ -173,7 +178,11 @@ serve(async (req) => {
         const url = `${MUSICBRAINZ_API}/release?query=${encodeURIComponent(query)}&limit=${limit}&fmt=json`;
         const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
-        result = await Promise.all((data.releases || []).map(async (r: any) => {
+        
+        // Sort by score first (most relevant/popular first)
+        const sortedReleases = (data.releases || []).sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+        
+        result = await Promise.all(sortedReleases.map(async (r: any) => {
           let coverUrl;
           try {
             const coverRes = await fetch(`${COVER_ART_API}/release/${r.id}`, { headers });
@@ -191,6 +200,7 @@ serve(async (req) => {
             releaseDate: r.date,
             trackCount: r['track-count'],
             coverUrl,
+            score: r.score || 0,
           };
         }));
         break;
@@ -200,7 +210,9 @@ serve(async (req) => {
         const url = `${MUSICBRAINZ_API}/recording?query=${encodeURIComponent(query)}&limit=${limit}&fmt=json`;
         const response = await fetchWithRetry(url, { headers });
         const data = await response.json();
-        result = data.recordings?.map((r: any) => ({
+        
+        // Map recordings and include MusicBrainz score for popularity sorting
+        const recordings = data.recordings?.map((r: any) => ({
           id: r.id,
           title: r.title,
           artist: r['artist-credit']?.[0]?.name || 'Unknown',
@@ -208,7 +220,11 @@ serve(async (req) => {
           duration: r.length ? Math.floor(r.length / 1000) : 0,
           album: r.releases?.[0]?.title,
           albumId: r.releases?.[0]?.id,
+          score: r.score || 0, // MusicBrainz relevance score (0-100)
         })) || [];
+        
+        // Sort by score (highest first) for popularity-based results
+        result = recordings.sort((a: any, b: any) => b.score - a.score);
         break;
       }
 
