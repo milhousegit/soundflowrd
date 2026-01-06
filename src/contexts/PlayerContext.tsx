@@ -673,8 +673,68 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     track?: Track,
     clearLogs: boolean = true
   ) => {
+    // If no Real-Debrid API key, go straight to YouTube fallback
     if (!credentials?.realDebridApiKey) {
-      addDebugLog('Errore API', 'API Key Real-Debrid non configurata', 'error');
+      addDebugLog('⚠️ Real-Debrid non configurato', 'Uso YouTube come sorgente', 'warning');
+      
+      if (track) {
+        const youtubeQuery = `${track.artist} ${track.title}`;
+        setLastSearchQuery(youtubeQuery);
+        setLoadingPhase('searching');
+        addDebugLog('🔍 Ricerca YouTube', youtubeQuery, 'info');
+        
+        try {
+          const videos = await searchYouTube(youtubeQuery);
+          
+          if (videos.length > 0) {
+            setYoutubeResults(videos);
+            const selectedVideo = videos[0];
+            addDebugLog('▶️ Auto-play YouTube', selectedVideo.title, 'success');
+            
+            // Stop any existing audio
+            if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current.src = '';
+            }
+            
+            // Set YouTube video ID for hidden player
+            setCurrentYouTubeVideoId(selectedVideo.id);
+            setIsPlayingYouTube(true);
+            setState(prev => ({ ...prev, isPlaying: true }));
+            setLoadingPhase('idle');
+            setIsSearchingStreams(false);
+            
+            // Save the YouTube mapping for future use
+            try {
+              await supabase
+                .from('youtube_track_mappings')
+                .upsert({
+                  track_id: track.id,
+                  video_id: selectedVideo.id,
+                  video_title: selectedVideo.title,
+                  video_duration: selectedVideo.duration,
+                  uploader_name: selectedVideo.uploaderName,
+                }, { onConflict: 'track_id' });
+              invalidateYouTubeMappingCache(track.id);
+              addDebugLog('💾 Salvato', 'Sorgente YouTube salvata', 'success');
+            } catch (saveError) {
+              console.error('Failed to save YouTube mapping:', saveError);
+            }
+          } else {
+            setYoutubeResults([]);
+            addDebugLog('❌ Nessun risultato', 'Nessun video YouTube trovato', 'error');
+            setLoadingPhase('idle');
+            setIsSearchingStreams(false);
+            if (showNoResultsToast) {
+              toast.error('Nessun contenuto trovato');
+            }
+          }
+        } catch (error) {
+          addDebugLog('❌ Errore YouTube', error instanceof Error ? error.message : 'Errore', 'error');
+          setLoadingPhase('idle');
+          setIsSearchingStreams(false);
+        }
+      }
       return;
     }
     
