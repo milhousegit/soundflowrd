@@ -27,6 +27,7 @@ export interface TorrentInfo {
   progress: number;
   files: AudioFile[];
   hasLinks: boolean;
+  magnet?: string; // Magnet link for WebTorrent hybrid streaming
 }
 
 export interface SearchResult {
@@ -79,6 +80,7 @@ export async function searchStreams(
         progress: t.progress || 0,
         files: t.files || [],
         hasLinks: t.hasLinks || false,
+        magnet: t.magnet, // Include magnet for WebTorrent
       });
     }
   }
