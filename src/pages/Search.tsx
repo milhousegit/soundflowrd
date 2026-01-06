@@ -61,6 +61,7 @@ const Search: React.FC = () => {
       const data = await searchAll(searchQuery);
       
       // Filter results to only show items that contain the search query in their metadata
+      // Keep the original order (sorted by popularity/score from API)
       const filteredArtists = data.artists.filter(artist => 
         matchesQuery(artist.name, searchQuery)
       );
@@ -76,6 +77,7 @@ const Search: React.FC = () => {
         matchesQuery(track.album, searchQuery)
       );
       
+      // Results are already sorted by popularity/score from MusicBrainz API
       setResults({
         artists: filteredArtists,
         albums: filteredAlbums,
