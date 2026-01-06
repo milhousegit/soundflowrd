@@ -2,9 +2,11 @@ import React, { createContext, useContext, useState, useRef, useCallback, ReactN
 import { Track, PlayerState } from '@/types/music';
 import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
 import { useAuth } from './AuthContext';
+import { useSettings } from './SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { addSyncingTrack, removeSyncingTrack, addSyncedTrack } from '@/hooks/useSyncedTracks';
+import { useWebTorrent } from '@/hooks/useWebTorrent';
 
 export interface DebugLogEntry {
   timestamp: Date;
@@ -73,6 +75,8 @@ const updateMediaSessionMetadata = (track: Track | null, isPlaying: boolean) => 
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials } = useAuth();
+  const { settings } = useSettings();
+  const webTorrent = useWebTorrent();
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
   const [currentStreamId, setCurrentStreamId] = useState<string>();
@@ -82,6 +86,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
   const [currentMappedFileId, setCurrentMappedFileId] = useState<number | undefined>();
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
+  
+  // Track if we're streaming via WebTorrent (for hybrid mode)
+  const webTorrentStreamingRef = useRef<boolean>(false);
   
   // Track ID currently being searched - used to cancel stale searches
   const currentSearchTrackIdRef = useRef<string | null>(null);
@@ -250,6 +257,46 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     
     return false;
   };
+
+  // Helper to start WebTorrent streaming for hybrid mode
+  const startWebTorrentStream = useCallback(async (
+    magnet: string,
+    trackTitle: string,
+    onStreamReady: (blobUrl: string) => void
+  ) => {
+    if (!magnet) {
+      addDebugLog('⚠️ WebTorrent', 'Magnet link non disponibile', 'warning');
+      return;
+    }
+    
+    addDebugLog('🌐 WebTorrent', 'Avvio streaming P2P diretto...', 'info');
+    webTorrentStreamingRef.current = true;
+    
+    try {
+      const audioFiles = await webTorrent.streamMagnet(magnet, (files) => {
+        addDebugLog('📁 WebTorrent', `Trovati ${files.length} file audio nel torrent`, 'info');
+      });
+      
+      if (audioFiles.length === 0) {
+        addDebugLog('⚠️ WebTorrent', 'Nessun file audio trovato', 'warning');
+        return;
+      }
+      
+      // Find matching file
+      const matchingFile = audioFiles.find(f => flexibleMatch(f.name, trackTitle));
+      const fileToStream = matchingFile || audioFiles[0];
+      
+      addDebugLog('🎵 WebTorrent', `Streaming: ${fileToStream.name}`, 'success');
+      
+      const blobUrl = await fileToStream.getBlobURL();
+      onStreamReady(blobUrl);
+      
+      addDebugLog('✅ WebTorrent', 'Stream P2P avviato - RD scarica in background', 'success');
+    } catch (error) {
+      addDebugLog('❌ WebTorrent', error instanceof Error ? error.message : 'Errore', 'error');
+      webTorrentStreamingRef.current = false;
+    }
+  }, [webTorrent, addDebugLog]);
 
   // Helper to save a **file** mapping (torrent + specific file id) to database
   const saveFileMapping = useCallback(async (params: {
@@ -582,7 +629,39 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 filePath: matchingFile.path,
               });
               
-              addDebugLog('Salvataggio', 'Salvataggio in cloud (mappatura salvata)', 'success');
+              addDebugLog('☁️ RD Download', `Progresso: ${selectResult.progress}% - RD sta scaricando...`, 'info');
+              
+              // HYBRID MODE: Start WebTorrent streaming immediately while RD downloads in background
+              if (settings.streamingMode === 'hybrid' && torrent.magnet) {
+                addDebugLog('🔀 Modalità ibrida', 'Avvio WebTorrent per riproduzione immediata...', 'info');
+                
+                // Start WebTorrent streaming in parallel
+                startWebTorrentStream(torrent.magnet, track.title, (blobUrl) => {
+                  // Only use WebTorrent stream if we haven't already started from RD
+                  if (webTorrentStreamingRef.current && audioRef.current && !audioRef.current.src) {
+                    audioRef.current.src = blobUrl;
+                    audioRef.current.play();
+                    setState(prev => ({ ...prev, isPlaying: true }));
+                    setLoadingPhase('loading');
+                    addDebugLog('🎵 WebTorrent attivo', 'Riproduzione P2P mentre RD scarica', 'success');
+                  }
+                });
+                
+                // Set up torrent for polling (RD will complete in background)
+                setAvailableTorrents([{
+                  ...torrent,
+                  status: selectResult.status,
+                  progress: selectResult.progress,
+                }]);
+              } else {
+                // Debrid-only mode: wait for RD to complete
+                setAvailableTorrents([{
+                  ...torrent,
+                  status: selectResult.status,
+                  progress: selectResult.progress,
+                }]);
+                addDebugLog('⏳ Solo RD', 'Attendo completamento download Real-Debrid...', 'info');
+              }
 
               // We found the correct file and started caching: DO NOT show "Match manuale richiesto".
               // Returning true stops the loop and avoids misleading UI.
@@ -622,7 +701,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       addDebugLog('Errore ricerca album', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
       return false;
     }
-  }, [credentials, saveFileMapping, addDebugLog]);
+  }, [credentials, saveFileMapping, addDebugLog, settings.streamingMode, startWebTorrentStream]);
 
   const searchForStreams = useCallback(async (
     query: string,
@@ -1138,7 +1217,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               console.log('Using cached direct link for instant playback');
               setLoadingPhase('loading');
               addDebugLog('🎯 Mappatura trovata', `File ID: ${fileId}`, 'success');
-              addDebugLog('⚡ Riproduzione istantanea', 'Link diretto disponibile', 'success');
+              addDebugLog('⚡ Riproduzione istantanea', 'Link diretto RD disponibile', 'success');
+              addDebugLog('🔗 Link RD', directLink.substring(0, 80) + '...', 'info');
+              
+              // Cancel any WebTorrent streaming
+              webTorrentStreamingRef.current = false;
+              webTorrent.cancel();
               
               if (audioRef.current) {
                 audioRef.current.src = directLink;
@@ -1180,8 +1264,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               // Fallthrough to new search below
             } else if (result.streams.length > 0) {
               addDebugLog('✅ Stream pronto', `Link ottenuto da RD (${result.streams[0].quality || 'qualità sconosciuta'})`, 'success');
+              addDebugLog('🔗 Link RD', result.streams[0].streamUrl.substring(0, 80) + '...', 'info');
               setAlternativeStreams(result.streams);
               setCurrentStreamId(result.streams[0].id);
+
+              // Stop WebTorrent if it was running
+              webTorrentStreamingRef.current = false;
+              webTorrent.cancel();
 
               if (audioRef.current && result.streams[0].streamUrl) {
                 audioRef.current.src = result.streams[0].streamUrl;
@@ -1480,17 +1569,27 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           // If we have streams, play immediately!
           if (result.streams.length > 0) {
             console.log('Download complete, streams available:', result.streams.length);
+            
+            // Stop WebTorrent streaming - RD is ready!
+            if (webTorrentStreamingRef.current) {
+              addDebugLog('🔄 Switch a RD', 'Download RD completato, passo da WebTorrent a RD', 'success');
+              webTorrentStreamingRef.current = false;
+              webTorrent.cancel();
+            }
+            
             setAlternativeStreams(result.streams);
             setCurrentStreamId(result.streams[0].id);
             setDownloadProgress(null);
             setDownloadStatus(null);
             setLoadingPhase('idle');
             
+            addDebugLog('🔗 Link RD', result.streams[0].streamUrl.substring(0, 80) + '...', 'info');
+            
             if (audioRef.current && result.streams[0].streamUrl) {
               audioRef.current.src = result.streams[0].streamUrl;
               audioRef.current.play();
               setState(prev => ({ ...prev, isPlaying: true }));
-              addDebugLog('🔊 Riproduzione avviata', 'Download completato, streaming avviato', 'success');
+              addDebugLog('🔊 Riproduzione avviata', 'Download completato, streaming da RD', 'success');
               
               // Update direct link in database and mark as synced
               const currentTrack = state.currentTrack;

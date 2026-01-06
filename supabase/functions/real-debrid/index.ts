@@ -1308,6 +1308,7 @@ serve(async (req) => {
           progress: number;
           files: AudioFile[];
           hasLinks: boolean;
+          magnet: string; // Include magnet for WebTorrent hybrid streaming
         }[] = [];
         
         const processedMagnets = new Set<string>();
@@ -1336,6 +1337,7 @@ serve(async (req) => {
               progress: torrentData.progress || 0,
               files: torrentData.files,
               hasLinks: (torrentData.links?.length || 0) > 0,
+              magnet: torrent.magnet, // Pass magnet for WebTorrent
             });
             
           } catch (e) {
