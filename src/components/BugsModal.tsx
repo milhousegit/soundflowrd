@@ -1,8 +1,9 @@
 import React, { forwardRef, useState, useEffect } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { StreamResult, TorrentInfo, AudioFile } from '@/lib/realdebrid';
+import { YouTubeVideo, formatDuration } from '@/lib/youtube';
 import { DebugLogEntry } from '@/contexts/PlayerContext';
-import { X, Music, Check, Search, Loader2, Download, RefreshCw, ChevronDown, ChevronRight, Folder, FileAudio, AlertCircle, Info, CheckCircle, AlertTriangle, Cloud } from 'lucide-react';
+import { X, Music, Check, Search, Loader2, Download, RefreshCw, ChevronDown, ChevronRight, Folder, FileAudio, AlertCircle, Info, CheckCircle, AlertTriangle, Cloud, Youtube, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TapArea from '@/components/TapArea';
 import { Input } from '@/components/ui/input';
@@ -25,16 +26,20 @@ interface BugsModalProps {
   downloadProgress?: number | null;
   downloadStatus?: string | null;
   currentMappedFileId?: number;
+  // YouTube fallback
+  youtubeResults?: YouTubeVideo[];
+  onPlayYouTube?: (video: YouTubeVideo) => void;
 }
 
 const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
-  ({ isOpen, onClose, alternatives, torrents = [], onSelect, onSelectFile, onRefreshTorrent, currentStreamId, isLoading, onManualSearch, currentTrackInfo, debugLogs = [], downloadProgress, downloadStatus, currentMappedFileId }, ref) => {
+  ({ isOpen, onClose, alternatives, torrents = [], onSelect, onSelectFile, onRefreshTorrent, currentStreamId, isLoading, onManualSearch, currentTrackInfo, debugLogs = [], downloadProgress, downloadStatus, currentMappedFileId, youtubeResults = [], onPlayYouTube }, ref) => {
     const { t } = useSettings();
     const [manualQuery, setManualQuery] = useState('');
     const [expandedTorrents, setExpandedTorrents] = useState<Set<string>>(new Set());
     const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
     const [selectingFiles, setSelectingFiles] = useState<Set<string>>(new Set());
     const [showDebugLogs, setShowDebugLogs] = useState(false);
+    const [playingYouTubeId, setPlayingYouTubeId] = useState<string | null>(null);
 
     // Auto-expand torrent with saved mapping when modal opens
     useEffect(() => {
@@ -159,7 +164,14 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
     const isDownloading = isLoading || downloadProgress !== null || torrents.some(t => 
       ['downloading', 'queued', 'magnet_conversion'].includes(t.status)
     );
-    const hasFoundSources = alternatives.length > 0 || torrents.length > 0;
+    const hasFoundSources = alternatives.length > 0 || torrents.length > 0 || youtubeResults.length > 0;
+
+    const handlePlayYouTube = async (video: YouTubeVideo) => {
+      if (!onPlayYouTube || playingYouTubeId) return;
+      setPlayingYouTubeId(video.id);
+      await onPlayYouTube(video);
+      setPlayingYouTubeId(null);
+    };
 
     return (
       <div ref={ref} className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
@@ -487,6 +499,51 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                             </div>
                           )}
                         </div>
+                      );
+                    })}
+                  </>
+                )}
+
+                {/* YouTube fallback results */}
+                {youtubeResults.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 py-2 mt-4">
+                      <Youtube className="w-4 h-4 text-red-500" />
+                      <span className="text-sm font-medium text-foreground">
+                        {t('language') === 'it' ? 'Alternative da YouTube' : 'YouTube alternatives'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {t('language') === 'it' 
+                        ? 'Nessun torrent trovato. Puoi riprodurre l\'audio da YouTube:' 
+                        : 'No torrents found. You can play audio from YouTube:'}
+                    </p>
+                    {youtubeResults.map((video) => {
+                      const isPlaying = playingYouTubeId === video.id;
+                      
+                      return (
+                        <TapArea
+                          as="button"
+                          key={video.id}
+                          onTap={() => handlePlayYouTube(video)}
+                          disabled={isPlaying}
+                          className={cn(
+                            "w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left touch-manipulation",
+                            "bg-secondary hover:bg-secondary/80"
+                          )}
+                        >
+                          {isPlaying ? (
+                            <Loader2 className="w-5 h-5 text-red-500 animate-spin flex-shrink-0" />
+                          ) : (
+                            <Play className="w-5 h-5 text-red-500 flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-foreground truncate">{video.title}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {video.uploaderName} • {formatDuration(video.duration)}
+                            </p>
+                          </div>
+                        </TapArea>
                       );
                     })}
                   </>

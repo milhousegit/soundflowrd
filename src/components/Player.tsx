@@ -61,6 +61,8 @@ const Player: React.FC = () => {
     playQueueIndex,
     clearQueue,
     loadingPhase,
+    youtubeResults,
+    playYouTubeVideo,
   } = usePlayer();
   const { t } = useSettings();
   
@@ -314,6 +316,8 @@ const Player: React.FC = () => {
           downloadProgress={downloadProgress}
           downloadStatus={downloadStatus}
           currentMappedFileId={currentMappedFileId}
+          youtubeResults={youtubeResults}
+          onPlayYouTube={playYouTubeVideo}
         />
         
         <QueueModal
@@ -538,6 +542,8 @@ const Player: React.FC = () => {
         downloadProgress={downloadProgress}
         downloadStatus={downloadStatus}
         currentMappedFileId={currentMappedFileId}
+        youtubeResults={youtubeResults}
+        onPlayYouTube={playYouTubeVideo}
       />
       
       <QueueModal

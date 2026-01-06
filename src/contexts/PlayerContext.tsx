@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { Track, PlayerState } from '@/types/music';
 import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
+import { YouTubeVideo, searchYouTube, getYouTubeAudio } from '@/lib/youtube';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,6 +45,9 @@ interface PlayerContextType extends PlayerState {
   loadSavedMapping: () => Promise<void>;
   currentMappedFileId?: number;
   loadingPhase: LoadingPhase;
+  // YouTube fallback
+  youtubeResults: YouTubeVideo[];
+  playYouTubeVideo: (video: YouTubeVideo) => Promise<void>;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -84,6 +88,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
   const [currentMappedFileId, setCurrentMappedFileId] = useState<number | undefined>();
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
+  const [youtubeResults, setYoutubeResults] = useState<YouTubeVideo[]>([]);
   
   // Track ID currently being searched - used to cancel stale searches
   const currentSearchTrackIdRef = useRef<string | null>(null);
@@ -847,11 +852,28 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   duration: 5000,
                 });
               } else {
-                addDebugLog('Nessun risultato album', 'Nessuna sorgente trovata neanche per album', 'error');
-                removeSyncingTrack(track.id);
-                toast.error('Nessun contenuto trovato', {
-                  description: 'Non è stato trovato nessun risultato per questa traccia.',
-                });
+                // No torrent found - try YouTube fallback
+                addDebugLog('🔍 Fallback YouTube', 'Nessun torrent trovato, cerco su YouTube...', 'info');
+                
+                const youtubeQuery = track ? `${track.artist} ${track.title}` : query;
+                const videos = await searchYouTube(youtubeQuery);
+                
+                if (videos.length > 0) {
+                  setYoutubeResults(videos);
+                  addDebugLog('📺 YouTube trovato', `${videos.length} video disponibili`, 'success');
+                  removeSyncingTrack(track.id);
+                  toast.info('Torrent non trovato', {
+                    description: 'Sono disponibili alternative da YouTube nel pannello sorgenti.',
+                    duration: 5000,
+                  });
+                } else {
+                  setYoutubeResults([]);
+                  addDebugLog('Nessun risultato', 'Nessuna sorgente trovata (torrent e YouTube)', 'error');
+                  removeSyncingTrack(track.id);
+                  toast.error('Nessun contenuto trovato', {
+                    description: 'Non è stato trovato nessun risultato per questa traccia.',
+                  });
+                }
               }
             }
           }
@@ -1033,8 +1055,48 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [credentials, currentStreamId, addDebugLog, downloadStatus, availableTorrents]);
 
   const manualSearch = useCallback(async (query: string) => {
+    setYoutubeResults([]); // Clear YouTube results on new search
     await searchForStreams(query, true, undefined, true);
   }, [searchForStreams]);
+
+  // Play audio from YouTube video
+  const playYouTubeVideo = useCallback(async (video: YouTubeVideo) => {
+    addDebugLog('🎬 YouTube selezionato', video.title, 'info');
+    setLoadingPhase('loading');
+    
+    try {
+      const audio = await getYouTubeAudio(video.id);
+      
+      if (!audio) {
+        addDebugLog('❌ Errore YouTube', 'Impossibile ottenere audio', 'error');
+        setLoadingPhase('unavailable');
+        toast.error('Errore YouTube', {
+          description: 'Non è stato possibile estrarre l\'audio da questo video.',
+        });
+        return;
+      }
+      
+      addDebugLog('⚡ Riproduzione YouTube', audio.url.substring(0, 80) + '...', 'success');
+      
+      if (audioRef.current) {
+        audioRef.current.src = audio.url;
+        audioRef.current.play();
+        setState(prev => ({ ...prev, isPlaying: true }));
+      }
+      
+      setLoadingPhase('idle');
+      
+      // Clear YouTube results after successful playback
+      setYoutubeResults([]);
+      
+    } catch (error) {
+      addDebugLog('❌ Errore YouTube', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
+      setLoadingPhase('unavailable');
+      toast.error('Errore YouTube', {
+        description: 'Si è verificato un errore durante la riproduzione.',
+      });
+    }
+  }, [addDebugLog]);
 
   // Load saved mapping to show in BugsModal for editing
   const loadSavedMapping = useCallback(async () => {
@@ -1720,6 +1782,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         loadSavedMapping,
         currentMappedFileId,
         loadingPhase,
+        youtubeResults,
+        playYouTubeVideo,
       }}
     >
       {children}
