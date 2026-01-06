@@ -783,7 +783,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 }
                 
                 if (selectResult.streams.length > 0) {
-                  addDebugLog('✅ RD: Stream pronto', `File già in cache Real-Debrid!`, 'success');
+                  addDebugLog('⚡ Riproduzione istantanea', `File già in cache Real-Debrid!`, 'success');
                   setAlternativeStreams(selectResult.streams);
                   setCurrentStreamId(selectResult.streams[0].id);
                   
@@ -791,7 +791,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     audioRef.current.src = selectResult.streams[0].streamUrl;
                     audioRef.current.play();
                     setState(prev => ({ ...prev, isPlaying: true }));
-                    addDebugLog('🔊 Riproduzione avviata', 'Streaming da Real-Debrid', 'success');
+                    addDebugLog('🔊 Riproduzione avviata', 'Link diretto RD disponibile', 'success');
                   }
                   
                   addDebugLog('💾 Salvataggio mappatura', 'Memorizzo associazione traccia-file per prossimi ascolti', 'info');
@@ -1021,7 +1021,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             audioRef.current.src = result.streams[0].streamUrl;
             audioRef.current.play();
             setState(prev => ({ ...prev, isPlaying: true }));
-            addDebugLog('🔊 Riproduzione avviata', 'Streaming da Real-Debrid', 'success');
+            addDebugLog('🔊 Riproduzione avviata', 'Link diretto RD disponibile', 'success');
           }
         }
       }
@@ -1205,7 +1205,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 audioRef.current.play();
                 setState(prev => ({ ...prev, isPlaying: true }));
                 
-                addDebugLog('🔊 Riproduzione avviata', 'Audio in streaming da Real-Debrid', 'success');
+                addDebugLog('🔊 Riproduzione avviata', 'Link diretto RD disponibile', 'success');
                 addDebugLog('💾 Aggiornamento cache', 'Salvo link diretto per prossimi ascolti (29 giorni)', 'info');
                 
                 // Update direct link in database for next time
@@ -1510,7 +1510,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               audioRef.current.src = result.streams[0].streamUrl;
               audioRef.current.play();
               setState(prev => ({ ...prev, isPlaying: true }));
-              addDebugLog('🔊 Riproduzione avviata', 'Download completato, streaming da RD', 'success');
+              addDebugLog('🔊 Riproduzione avviata', 'Link diretto RD disponibile', 'success');
               
               // Update direct link in database and mark as synced
               const currentTrack = state.currentTrack;
