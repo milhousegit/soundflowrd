@@ -160,6 +160,39 @@ export type Database = {
           },
         ]
       }
+      youtube_track_mappings: {
+        Row: {
+          created_at: string
+          id: string
+          track_id: string
+          updated_at: string
+          uploader_name: string | null
+          video_duration: number | null
+          video_id: string
+          video_title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          track_id: string
+          updated_at?: string
+          uploader_name?: string | null
+          video_duration?: number | null
+          video_id: string
+          video_title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          track_id?: string
+          updated_at?: string
+          uploader_name?: string | null
+          video_duration?: number | null
+          video_id?: string
+          video_title?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

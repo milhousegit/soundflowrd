@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useRef, useCallback, ReactN
 import { Track, PlayerState } from '@/types/music';
 import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
 import { YouTubeVideo, searchYouTube } from '@/lib/youtube';
+import { invalidateYouTubeMappingCache } from '@/hooks/useYouTubeMappings';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -895,7 +896,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   addDebugLog('📺 YouTube trovato', `${videos.length} video disponibili`, 'success');
                   
                   // Auto-play first YouTube result using hidden player
-                  addDebugLog('▶️ Auto-play YouTube', videos[0].title, 'info');
+                  const selectedVideo = videos[0];
+                  addDebugLog('▶️ Auto-play YouTube', selectedVideo.title, 'info');
                   
                   // Stop any existing audio
                   if (audioRef.current) {
@@ -904,10 +906,26 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   }
                   
                   // Set YouTube video ID for hidden player
-                  setCurrentYouTubeVideoId(videos[0].id);
+                  setCurrentYouTubeVideoId(selectedVideo.id);
                   setIsPlayingYouTube(true);
                   setState(prev => ({ ...prev, isPlaying: true }));
                   setLoadingPhase('idle');
+                  
+                  // Save the YouTube mapping for future use
+                  try {
+                    await supabase
+                      .from('youtube_track_mappings')
+                      .upsert({
+                        track_id: track.id,
+                        video_id: selectedVideo.id,
+                        video_title: selectedVideo.title,
+                        video_duration: selectedVideo.duration,
+                        uploader_name: selectedVideo.uploaderName,
+                      }, { onConflict: 'track_id' });
+                    addDebugLog('💾 Salvato', 'Sorgente YouTube salvata per riutilizzo futuro', 'success');
+                  } catch (saveError) {
+                    console.error('Failed to save YouTube mapping:', saveError);
+                  }
                   
                   removeSyncingTrack(track.id);
                 } else {
@@ -1103,8 +1121,32 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     await searchForStreams(query, true, undefined, true);
   }, [searchForStreams]);
 
+  // Save YouTube mapping to database
+  const saveYouTubeMapping = useCallback(async (trackId: string, video: YouTubeVideo) => {
+    try {
+      await supabase
+        .from('youtube_track_mappings')
+        .upsert({
+          track_id: trackId,
+          video_id: video.id,
+          video_title: video.title,
+          video_duration: video.duration,
+          uploader_name: video.uploaderName,
+        }, { onConflict: 'track_id' });
+      
+      // Invalidate cache so UI updates
+      invalidateYouTubeMappingCache(trackId);
+      
+      console.log('Saved YouTube mapping:', trackId, video.id);
+    } catch (error) {
+      console.error('Failed to save YouTube mapping:', error);
+    }
+  }, []);
+
   // Play audio from YouTube video using hidden player
   const playYouTubeVideo = useCallback((video: YouTubeVideo) => {
+    const track = state.currentTrack;
+    
     addDebugLog('🎬 YouTube selezionato', video.title, 'info');
     
     // Stop any existing audio
@@ -1121,9 +1163,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     
     addDebugLog('▶️ Avvio player YouTube', `Video ID: ${video.id}`, 'success');
     
+    // Save the YouTube mapping for this track
+    if (track) {
+      saveYouTubeMapping(track.id, video);
+      addDebugLog('💾 Salvato', 'Sorgente YouTube salvata per riutilizzo futuro', 'success');
+    }
+    
     // Clear YouTube results after selection
     setYoutubeResults([]);
-  }, [addDebugLog]);
+  }, [addDebugLog, state.currentTrack, saveYouTubeMapping]);
 
   // Search YouTube manually with current query
   const searchYouTubeManually = useCallback(async () => {
@@ -1238,7 +1286,45 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setCurrentYouTubeVideoId(null);
     setIsPlayingYouTube(false);
 
-    // First check if we have a saved mapping with direct link for this track
+    // FIRST: Check if we have a saved YouTube mapping for this track
+    try {
+      const { data: youtubeMapping } = await supabase
+        .from('youtube_track_mappings')
+        .select('*')
+        .eq('track_id', track.id)
+        .maybeSingle();
+
+      if (currentSearchTrackIdRef.current !== track.id) {
+        console.log('Track changed during YouTube mapping lookup, aborting');
+        return;
+      }
+
+      if (youtubeMapping) {
+        console.log('Found saved YouTube mapping for track:', track.title, youtubeMapping.video_id);
+        addDebugLog('🎬 YouTube salvato', youtubeMapping.video_title, 'success');
+        
+        // Play the saved YouTube video
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.src = '';
+        }
+        
+        setCurrentYouTubeVideoId(youtubeMapping.video_id);
+        setIsPlayingYouTube(true);
+        setState(prev => ({ ...prev, isPlaying: true }));
+        
+        // Save to recently played
+        const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
+        const filtered = recent.filter((t: Track) => t.id !== track.id);
+        const updated = [track, ...filtered].slice(0, 20);
+        localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to check YouTube mapping:', error);
+    }
+
+    // Then check for torrent mapping if we have Real-Debrid credentials
     if (credentials?.realDebridApiKey && track.albumId) {
       try {
         const { data: trackMapping } = await supabase

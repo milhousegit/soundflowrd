@@ -284,24 +284,12 @@ const Player: React.FC = () => {
                   </div>
                 </div>
               )}
-              {/* YouTube indicator on cover */}
-              {isPlayingYouTube && (
-                <div className="absolute bottom-2 right-2 bg-background/80 rounded-lg px-2 py-1 flex items-center gap-1">
-                  <Youtube className="w-4 h-4 text-red-500" />
-                  <span className="text-xs text-foreground">YouTube</span>
-                </div>
-              )}
             </div>
           </div>
 
           {/* Track Info */}
           <div className="px-8 text-center">
-            <div className="flex items-center justify-center gap-2">
-              <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
-              {isPlayingYouTube && (
-                <Youtube className="w-5 h-5 text-red-500 flex-shrink-0" />
-              )}
-            </div>
+            <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <button 
                 onClick={handleNavigateToArtist}
@@ -419,19 +407,9 @@ const Player: React.FC = () => {
                 <Cloud className="w-4 h-4 text-blue-500 animate-pulse" />
               </div>
             )}
-            {isPlayingYouTube && (
-              <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                <Youtube className="w-4 h-4 text-red-500" />
-              </div>
-            )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1">
-              <p className="font-medium text-foreground truncate text-sm">{currentTrack.title}</p>
-              {isPlayingYouTube && (
-                <Youtube className="w-3 h-3 text-red-500 flex-shrink-0" />
-              )}
-            </div>
+            <p className="font-medium text-foreground truncate text-sm">{currentTrack.title}</p>
             <p className="text-xs text-muted-foreground truncate">{currentTrack.artist}</p>
           </div>
           <Button 
@@ -478,19 +456,9 @@ const Player: React.FC = () => {
                   <Cloud className="w-5 h-5 text-blue-500 animate-pulse" />
                 </div>
               )}
-              {isPlayingYouTube && (
-                <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                  <Youtube className="w-5 h-5 text-red-500" />
-                </div>
-              )}
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-1">
-                <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
-                {isPlayingYouTube && (
-                  <Youtube className="w-4 h-4 text-red-500 flex-shrink-0" />
-                )}
-              </div>
+              <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <button 
                   onClick={handleNavigateToArtist}
