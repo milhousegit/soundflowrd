@@ -296,6 +296,15 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                     ? "Stiamo aggiungendo la canzone a Real-Debrid per te..."
                     : "Adding the song to Real-Debrid for you..."}
                 </p>
+                {/* Download progress */}
+                {downloadProgress !== null && downloadProgress !== undefined && (
+                  <div className="mt-4 px-8">
+                    <Progress value={downloadProgress} className="h-2" />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {downloadProgress}%{downloadStatus && ` - ${downloadStatus}`}
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">

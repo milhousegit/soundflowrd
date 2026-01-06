@@ -184,12 +184,20 @@ export const useSyncAlbum = () => {
         }
       }
 
-      // Match and sync each track
+      // Match and sync each track - ONE AT A TIME to avoid RD rate limiting
       const tracksToSync = tracks.filter(t => !alreadySynced.has(t.id));
       const failedTracks: string[] = [];
       const downloadingTracks: Map<string, { track: Track; fileId: number; torrentId: string }> = new Map();
 
-      for (const track of tracksToSync) {
+      // Process tracks sequentially with delay
+      for (let i = 0; i < tracksToSync.length; i++) {
+        const track = tracksToSync[i];
+        
+        // Add delay between requests (2 seconds) to avoid RD rate limiting
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
         // Find matching file
         const matchingFile = bestTorrent.files!.find(file => {
           const matchesFileName = flexibleMatch(file.filename || '', track.title);
