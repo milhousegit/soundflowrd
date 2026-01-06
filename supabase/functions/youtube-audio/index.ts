@@ -160,33 +160,56 @@ async function searchVideos(query: string): Promise<VideoResult[]> {
 async function getAudioStream(videoId: string): Promise<AudioStream | null> {
   const instances = await getWorkingInstances();
   
+  // Clean videoId - remove any prefix like /watch?v=
+  const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
+  console.log(`Clean video ID: ${cleanVideoId}`);
+  
   for (const instance of instances) {
     try {
-      const url = `${instance}/streams/${videoId}`;
+      const url = `${instance}/streams/${cleanVideoId}`;
+      console.log(`Trying stream URL: ${url}`);
       const response = await tryFetch(url);
       
-      if (!response || !response.ok) continue;
+      if (!response) {
+        console.log('No response from instance');
+        continue;
+      }
+      
+      if (!response.ok) {
+        console.log(`Response not ok: ${response.status}`);
+        continue;
+      }
       
       const text = await response.text();
-      if (!text.startsWith('{')) continue;
+      console.log(`Stream response preview: ${text.substring(0, 200)}`);
+      
+      if (!text.startsWith('{')) {
+        console.log('Invalid JSON response for stream');
+        continue;
+      }
       
       const data = JSON.parse(text);
       
-      if (data.audioStreams && Array.isArray(data.audioStreams)) {
+      // Check for audioStreams
+      if (data.audioStreams && Array.isArray(data.audioStreams) && data.audioStreams.length > 0) {
+        console.log(`Found ${data.audioStreams.length} audio streams`);
+        
         const audioStreams = data.audioStreams
-          .filter((s: any) => s.url && s.bitrate)
-          .sort((a: any, b: any) => b.bitrate - a.bitrate);
+          .filter((s: any) => s.url && (s.bitrate || s.quality))
+          .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
         
         if (audioStreams.length > 0) {
           const best = audioStreams[0];
-          console.log(`Found audio: ${best.quality || best.bitrate}`);
+          console.log(`Best audio: bitrate=${best.bitrate}, quality=${best.quality}, mimeType=${best.mimeType}`);
           return {
             url: best.url,
-            quality: best.quality || `${Math.round(best.bitrate / 1000)}kbps`,
+            quality: best.quality || `${Math.round((best.bitrate || 128000) / 1000)}kbps`,
             mimeType: best.mimeType || 'audio/webm',
-            bitrate: best.bitrate,
+            bitrate: best.bitrate || 128000,
           };
         }
+      } else {
+        console.log('No audioStreams in response. Keys:', Object.keys(data).join(', '));
       }
     } catch (error) {
       console.error(`Stream error: ${error instanceof Error ? error.message : error}`);
@@ -194,6 +217,7 @@ async function getAudioStream(videoId: string): Promise<AudioStream | null> {
     }
   }
   
+  console.log('No audio stream found from any instance');
   return null;
 }
 
