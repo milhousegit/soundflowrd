@@ -3,7 +3,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { StreamResult, TorrentInfo, AudioFile } from '@/lib/realdebrid';
 import { YouTubeVideo, formatDuration } from '@/lib/youtube';
 import { DebugLogEntry } from '@/contexts/PlayerContext';
-import { X, Music, Check, Search, Loader2, Download, RefreshCw, ChevronDown, ChevronRight, Folder, FileAudio, AlertCircle, Info, CheckCircle, AlertTriangle, Cloud, Youtube, Play } from 'lucide-react';
+import { X, Music, Check, Search, Loader2, RefreshCw, ChevronDown, ChevronRight, Folder, FileAudio, AlertCircle, Info, CheckCircle, AlertTriangle, Cloud, Youtube, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TapArea from '@/components/TapArea';
 import { Input } from '@/components/ui/input';
@@ -26,13 +26,16 @@ interface BugsModalProps {
   downloadProgress?: number | null;
   downloadStatus?: string | null;
   currentMappedFileId?: number;
-  // YouTube fallback
   youtubeResults?: YouTubeVideo[];
   onPlayYouTube?: (video: YouTubeVideo) => void;
+  lastSearchQuery?: string | null;
+  onSearchYouTube?: () => Promise<void>;
 }
 
+type SourceTab = 'torrent' | 'youtube';
+
 const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
-  ({ isOpen, onClose, alternatives, torrents = [], onSelect, onSelectFile, onRefreshTorrent, currentStreamId, isLoading, onManualSearch, currentTrackInfo, debugLogs = [], downloadProgress, downloadStatus, currentMappedFileId, youtubeResults = [], onPlayYouTube }, ref) => {
+  ({ isOpen, onClose, alternatives, torrents = [], onSelect, onSelectFile, onRefreshTorrent, currentStreamId, isLoading, onManualSearch, currentTrackInfo, debugLogs = [], downloadProgress, downloadStatus, currentMappedFileId, youtubeResults = [], onPlayYouTube, lastSearchQuery, onSearchYouTube }, ref) => {
     const { t } = useSettings();
     const [manualQuery, setManualQuery] = useState('');
     const [expandedTorrents, setExpandedTorrents] = useState<Set<string>>(new Set());
@@ -40,11 +43,11 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
     const [selectingFiles, setSelectingFiles] = useState<Set<string>>(new Set());
     const [showDebugLogs, setShowDebugLogs] = useState(false);
     const [playingYouTubeId, setPlayingYouTubeId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<SourceTab>('torrent');
+    const [isSearchingYouTube, setIsSearchingYouTube] = useState(false);
 
-    // Auto-expand torrent with saved mapping when modal opens
     useEffect(() => {
       if (isOpen && torrents.length > 0 && currentMappedFileId !== undefined) {
-        // Find the torrent that contains the mapped file (track mapping, not RD "selected" state)
         const torrentWithMappedFile = torrents.find(t =>
           t.files.some(f => f.id === currentMappedFileId)
         );
@@ -54,7 +57,6 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
       }
     }, [isOpen, torrents, currentMappedFileId]);
 
-    // Auto-refresh downloading torrents every 15 seconds
     useEffect(() => {
       if (!isOpen || torrents.length === 0 || !onRefreshTorrent) return;
       
@@ -159,12 +161,9 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
     };
 
     const hasErrors = debugLogs.some(log => log.status === 'error');
-
-    // Check if we're in a downloading state (torrent found but still downloading)
     const isDownloading = isLoading || downloadProgress !== null || torrents.some(t => 
       ['downloading', 'queued', 'magnet_conversion'].includes(t.status)
     );
-    const hasFoundSources = alternatives.length > 0 || torrents.length > 0 || youtubeResults.length > 0;
 
     const handlePlayYouTube = async (video: YouTubeVideo) => {
       if (!onPlayYouTube || playingYouTubeId) return;
@@ -173,15 +172,21 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
       setPlayingYouTubeId(null);
     };
 
+    const handleSearchYouTube = async () => {
+      if (!onSearchYouTube || isSearchingYouTube) return;
+      setIsSearchingYouTube(true);
+      await onSearchYouTube();
+      setIsSearchingYouTube(false);
+      setActiveTab('youtube');
+    };
+
+    const hasTorrentResults = alternatives.length > 0 || torrents.length > 0;
+    const hasYouTubeResults = youtubeResults.length > 0;
+
     return (
       <div ref={ref} className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
-        {/* Backdrop */}
-        <div 
-          className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-          onClick={onClose}
-        />
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
         
-        {/* Modal */}
         <div className="relative w-full max-w-2xl max-h-[85vh] bg-card rounded-t-2xl md:rounded-2xl border border-border overflow-hidden animate-slide-up">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border">
@@ -258,16 +263,60 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                 )}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {t('language') === 'it' 
-                ? "Clicca su un torrent per vedere i file audio e selezionare la traccia" 
-                : "Click on a torrent to see audio files and select a track"}
-            </p>
+          </div>
+
+          {/* Source Tabs */}
+          <div className="px-4 border-b border-border">
+            <div className="flex gap-1">
+              <button
+                onClick={() => setActiveTab('torrent')}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-t-lg transition-colors",
+                  activeTab === 'torrent' 
+                    ? "bg-secondary text-foreground border-b-2 border-primary" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Folder className="w-4 h-4" />
+                Torrent
+                {hasTorrentResults && (
+                  <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                    {alternatives.length + torrents.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => hasYouTubeResults ? setActiveTab('youtube') : handleSearchYouTube()}
+                disabled={isSearchingYouTube}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-t-lg transition-colors",
+                  activeTab === 'youtube' 
+                    ? "bg-secondary text-foreground border-b-2 border-red-500" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {isSearchingYouTube ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Youtube className="w-4 h-4 text-red-500" />
+                )}
+                YouTube
+                {hasYouTubeResults && (
+                  <span className="text-xs bg-red-500/20 text-red-500 px-1.5 py-0.5 rounded-full">
+                    {youtubeResults.length}
+                  </span>
+                )}
+              </button>
+            </div>
+            {lastSearchQuery && (
+              <p className="text-xs text-muted-foreground py-1">
+                {t('language') === 'it' ? 'Ricerca:' : 'Search:'} "{lastSearchQuery}"
+              </p>
+            )}
           </div>
 
           {/* Content */}
-          <div className="p-4 overflow-y-auto max-h-[55vh]">
-            {/* Show loading indicator inline if searching but we have some results already */}
+          <div className="p-4 overflow-y-auto max-h-[50vh]">
             {isLoading && (
               <div className="flex items-center gap-3 p-3 mb-4 rounded-lg bg-primary/10 border border-primary/20">
                 <Loader2 className="w-5 h-5 text-primary animate-spin flex-shrink-0" />
@@ -275,280 +324,179 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                   <p className="text-sm font-medium text-foreground">
                     {t('language') === 'it' ? "Ricerca in corso..." : "Searching..."}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t('language') === 'it' ? "Puoi controllare i risultati mentre cerco" : "You can check results while searching"}
-                  </p>
                 </div>
               </div>
             )}
-            
-            {!hasFoundSources && !isDownloading && !isLoading ? (
-              <div className="text-center py-8">
-                <Music className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground">{t('noAlternatives')}</p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {t('language') === 'it' 
-                    ? "Prova la ricerca manuale sopra" 
-                    : "Try manual search above"}
-                </p>
-              </div>
-            ) : !hasFoundSources && isDownloading && !isLoading ? (
-              <div className="text-center py-8">
-                <div className="relative w-16 h-16 mx-auto mb-4">
-                  <Cloud className="w-16 h-16 text-primary" />
-                  <Loader2 className="w-6 h-6 text-primary-foreground absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin" />
-                </div>
-                <p className="text-foreground font-medium">
-                  {t('language') === 'it' 
-                    ? "Sei il primo a riprodurla!" 
-                    : "You're the first to play this!"}
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {t('language') === 'it' 
-                    ? "Stiamo aggiungendo la canzone a Real-Debrid per te..."
-                    : "Adding the song to Real-Debrid for you..."}
-                </p>
-                {/* Download progress */}
-                {downloadProgress !== null && downloadProgress !== undefined && (
-                  <div className="mt-4 px-8">
-                    <Progress value={downloadProgress} className="h-2" />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {downloadProgress}%{downloadStatus && ` - ${downloadStatus}`}
+
+            {/* Torrent Tab */}
+            {activeTab === 'torrent' && (
+              <>
+                {!hasTorrentResults && !isDownloading && !isLoading ? (
+                  <div className="text-center py-8">
+                    <Music className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">{t('noAlternatives')}</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {t('language') === 'it' ? "Prova YouTube" : "Try YouTube"}
                     </p>
+                    {lastSearchQuery && onSearchYouTube && (
+                      <Button variant="secondary" size="sm" className="mt-4" onClick={handleSearchYouTube} disabled={isSearchingYouTube}>
+                        {isSearchingYouTube ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Youtube className="w-4 h-4 mr-2 text-red-500" />}
+                        {t('language') === 'it' ? 'Cerca su YouTube' : 'Search YouTube'}
+                      </Button>
+                    )}
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {/* Ready streams */}
-                {alternatives.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-2 py-2">
-                      <Check className="w-4 h-4 text-green-500" />
-                      <span className="text-sm font-medium text-foreground">
-                        {t('language') === 'it' ? 'Pronti per la riproduzione' : 'Ready to play'}
-                      </span>
+                ) : !hasTorrentResults && isDownloading && !isLoading ? (
+                  <div className="text-center py-8">
+                    <div className="relative w-16 h-16 mx-auto mb-4">
+                      <Cloud className="w-16 h-16 text-primary" />
+                      <Loader2 className="w-6 h-6 text-primary-foreground absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin" />
                     </div>
-                    {alternatives.map((alt) => (
-                      <TapArea
-                        as="button"
-                        key={alt.id}
-                        onTap={() => onSelect(alt)}
-                        className={cn(
-                          "w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left touch-manipulation",
-                          currentStreamId === alt.id
-                            ? "bg-primary/20 border border-primary/50"
-                            : "bg-secondary hover:bg-secondary/80"
-                        )}
-                      >
-                        <FileAudio className="w-5 h-5 text-primary flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-foreground truncate">{alt.title}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {alt.quality} {alt.size && `• ${alt.size}`}
-                            {alt.source && ` • ${alt.source}`}
-                          </p>
-                        </div>
-                        {currentStreamId === alt.id && (
-                          <Check className="w-5 h-5 text-primary flex-shrink-0" />
-                        )}
-                      </TapArea>
-                    ))}
-                  </>
-                )}
-                
-                {/* Torrents with files */}
-                {torrents.length > 0 && (
-                  <>
-                    {alternatives.length > 0 && (
-                      <div className="flex items-center gap-2 py-2 mt-4">
-                        <div className="flex-1 h-px bg-border" />
-                        <span className="text-xs text-muted-foreground">
-                          {t('language') === 'it' ? 'Torrent disponibili' : 'Available torrents'}
-                        </span>
-                        <div className="flex-1 h-px bg-border" />
+                    <p className="text-foreground font-medium">
+                      {t('language') === 'it' ? "Sei il primo a riprodurla!" : "You're the first to play this!"}
+                    </p>
+                    {downloadProgress !== null && (
+                      <div className="mt-4 px-8">
+                        <Progress value={downloadProgress} className="h-2" />
+                        <p className="text-xs text-muted-foreground mt-1">{downloadProgress}%{downloadStatus && ` - ${downloadStatus}`}</p>
                       </div>
                     )}
-                    
-                    {torrents.map((torrent) => {
-                      const isExpanded = expandedTorrents.has(torrent.torrentId);
-                      const isDownloading = ['downloading', 'queued', 'magnet_conversion'].includes(torrent.status);
-                      // "Synced" here means "mapped for the current track"
-                      const hasMappedFile = torrent.files.some(f => f.id === currentMappedFileId);
-                      
-                      return (
-                        <div key={torrent.torrentId} className={cn(
-                          "rounded-lg border overflow-hidden",
-                          hasMappedFile ? "border-primary/50 bg-primary/5" : "border-border"
-                        )}>
-                          {/* Torrent header */}
-                          <TapArea
-                            as="button"
-                            onTap={() => toggleTorrentExpand(torrent.torrentId)}
-                            className="w-full flex items-center gap-3 p-3 bg-secondary/50 hover:bg-secondary/80 transition-colors text-left touch-manipulation"
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                            )}
-                            <Folder className={cn(
-                              "w-5 h-5 flex-shrink-0",
-                              hasMappedFile ? "text-primary" : "text-muted-foreground"
-                            )} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-foreground truncate">{torrent.title}</p>
-                                {hasMappedFile && (
-                                  <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full flex-shrink-0">
-                                    {t('language') === 'it' ? 'Sincronizzato' : 'Synced'}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 text-sm flex-wrap">
-                                <span className={getStatusColor(torrent.status)}>
-                                  {getStatusText(torrent.status)}
-                                </span>
-                                <span className="text-muted-foreground">•</span>
-                                <span className="text-muted-foreground">{torrent.files.length} file audio</span>
-                                <span className="text-muted-foreground">•</span>
-                                <span className="text-muted-foreground">{torrent.size}</span>
-                                <span className="text-muted-foreground">•</span>
-                                <span className="text-muted-foreground">{torrent.source}</span>
-                              </div>
-                              {isDownloading && torrent.progress > 0 && (
-                                <Progress value={torrent.progress} className="h-1 mt-2" />
-                              )}
-                            </div>
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRefreshTorrent(torrent.torrentId);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.stopPropagation();
-                                  handleRefreshTorrent(torrent.torrentId);
-                                }
-                              }}
-                              className={cn(
-                                "flex-shrink-0 p-2 rounded-md hover:bg-secondary transition-colors",
-                                refreshingIds.has(torrent.torrentId) && "pointer-events-none opacity-50"
-                              )}
-                            >
-                              <RefreshCw className={cn(
-                                "w-4 h-4",
-                                refreshingIds.has(torrent.torrentId) && "animate-spin"
-                              )} />
-                            </div>
-                          </TapArea>
-                          
-                          {/* Expanded file list */}
-                          {isExpanded && torrent.files.length > 0 && (
-                            <div className="border-t border-border bg-background/50">
-                              {torrent.files.map((file) => {
-                                const isSelecting = selectingFiles.has(`${torrent.torrentId}-${file.id}`);
-                                // Only the saved mapping for THIS track should be marked as synced.
-                                // Real-Debrid may report multiple "selected" files at torrent level, but that must not be treated as track mapping.
-                                const isMapped = currentMappedFileId === file.id;
-                                
-                                return (
-                                  <TapArea
-                                    as="button"
-                                    key={file.id}
-                                    onTap={() => handleSelectFile(torrent.torrentId, file)}
-                                    disabled={isSelecting}
-                                    className={cn(
-                                      "w-full flex items-center gap-3 p-3 hover:bg-secondary/50 transition-colors text-left border-b border-border/50 last:border-b-0 touch-manipulation",
-                                      isMapped && "bg-primary/10"
-                                    )}
-                                  >
-                                    {isSelecting ? (
-                                      <Loader2 className="w-4 h-4 text-primary animate-spin flex-shrink-0" />
-                                    ) : isMapped ? (
-                                      <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
-                                    ) : (
-                                      <FileAudio className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <span className={cn(
-                                        "text-sm truncate block",
-                                        isMapped ? "text-foreground font-medium" : "text-foreground"
-                                      )}>
-                                        {file.filename}
-                                      </span>
-                                      {isMapped && (
-                                        <span className="text-xs text-green-600">
-                                          {t('language') === 'it' ? 'Attualmente sincronizzato' : 'Currently synced'}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </TapArea>
-                                );
-                              })}
-                            </div>
-                          )}
-                          
-                          {isExpanded && torrent.files.length === 0 && (
-                            <div className="p-4 text-center text-sm text-muted-foreground border-t border-border">
-                              {t('language') === 'it' 
-                                ? 'Nessun file audio trovato in questo torrent' 
-                                : 'No audio files found in this torrent'}
-                            </div>
-                          )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {alternatives.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 py-2">
+                          <Check className="w-4 h-4 text-green-500" />
+                          <span className="text-sm font-medium text-foreground">
+                            {t('language') === 'it' ? 'Pronti' : 'Ready'}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </>
+                        {alternatives.map((alt) => (
+                          <TapArea as="button" key={alt.id} onTap={() => onSelect(alt)}
+                            className={cn("w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left touch-manipulation",
+                              currentStreamId === alt.id ? "bg-primary/20 border border-primary/50" : "bg-secondary hover:bg-secondary/80"
+                            )}>
+                            <FileAudio className="w-5 h-5 text-primary flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-foreground truncate">{alt.title}</p>
+                              <p className="text-sm text-muted-foreground">{alt.quality} {alt.size && `• ${alt.size}`}</p>
+                            </div>
+                            {currentStreamId === alt.id && <Check className="w-5 h-5 text-primary flex-shrink-0" />}
+                          </TapArea>
+                        ))}
+                      </>
+                    )}
+                    
+                    {torrents.length > 0 && (
+                      <>
+                        {alternatives.length > 0 && (
+                          <div className="flex items-center gap-2 py-2 mt-4">
+                            <div className="flex-1 h-px bg-border" />
+                            <span className="text-xs text-muted-foreground">Torrent</span>
+                            <div className="flex-1 h-px bg-border" />
+                          </div>
+                        )}
+                        {torrents.map((torrent) => {
+                          const isExpanded = expandedTorrents.has(torrent.torrentId);
+                          const torrentIsDownloading = ['downloading', 'queued', 'magnet_conversion'].includes(torrent.status);
+                          const hasMappedFile = torrent.files.some(f => f.id === currentMappedFileId);
+                          
+                          return (
+                            <div key={torrent.torrentId} className={cn("rounded-lg border overflow-hidden", hasMappedFile ? "border-primary/50 bg-primary/5" : "border-border")}>
+                              <TapArea as="button" onTap={() => toggleTorrentExpand(torrent.torrentId)}
+                                className="w-full flex items-center gap-3 p-3 bg-secondary/50 hover:bg-secondary/80 transition-colors text-left touch-manipulation">
+                                {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                                <Folder className={cn("w-5 h-5 flex-shrink-0", hasMappedFile ? "text-primary" : "text-muted-foreground")} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-foreground truncate">{torrent.title}</p>
+                                    {hasMappedFile && <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full flex-shrink-0">{t('language') === 'it' ? 'Sincronizzato' : 'Synced'}</span>}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm flex-wrap">
+                                    <span className={getStatusColor(torrent.status)}>{getStatusText(torrent.status)}</span>
+                                    <span className="text-muted-foreground">•</span>
+                                    <span className="text-muted-foreground">{torrent.files.length} file</span>
+                                    <span className="text-muted-foreground">•</span>
+                                    <span className="text-muted-foreground">{torrent.source}</span>
+                                  </div>
+                                  {torrentIsDownloading && torrent.progress > 0 && <Progress value={torrent.progress} className="h-1 mt-2" />}
+                                </div>
+                                <div role="button" tabIndex={0}
+                                  onClick={(e) => { e.stopPropagation(); handleRefreshTorrent(torrent.torrentId); }}
+                                  className={cn("flex-shrink-0 p-2 rounded-md hover:bg-secondary transition-colors", refreshingIds.has(torrent.torrentId) && "pointer-events-none opacity-50")}>
+                                  <RefreshCw className={cn("w-4 h-4", refreshingIds.has(torrent.torrentId) && "animate-spin")} />
+                                </div>
+                              </TapArea>
+                              
+                              {isExpanded && torrent.files.length > 0 && (
+                                <div className="border-t border-border bg-background/50">
+                                  {torrent.files.map((file) => {
+                                    const isSelecting = selectingFiles.has(`${torrent.torrentId}-${file.id}`);
+                                    const isMapped = currentMappedFileId === file.id;
+                                    return (
+                                      <TapArea as="button" key={file.id} onTap={() => handleSelectFile(torrent.torrentId, file)} disabled={isSelecting}
+                                        className={cn("w-full flex items-center gap-3 p-3 hover:bg-secondary/50 transition-colors text-left border-b border-border/50 last:border-b-0 touch-manipulation", isMapped && "bg-primary/10")}>
+                                        {isSelecting ? <Loader2 className="w-4 h-4 text-primary animate-spin flex-shrink-0" />
+                                          : isMapped ? <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                          : <FileAudio className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                                        <div className="flex-1 min-w-0">
+                                          <span className={cn("text-sm truncate block", isMapped ? "text-foreground font-medium" : "text-foreground")}>{file.filename}</span>
+                                          {isMapped && <span className="text-xs text-green-600">{t('language') === 'it' ? 'Sincronizzato' : 'Synced'}</span>}
+                                        </div>
+                                      </TapArea>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {isExpanded && torrent.files.length === 0 && (
+                                <div className="p-4 text-center text-sm text-muted-foreground border-t border-border">
+                                  {t('language') === 'it' ? 'Nessun file audio' : 'No audio files'}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
                 )}
+              </>
+            )}
 
-                {/* YouTube fallback results */}
-                {youtubeResults.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-2 py-2 mt-4">
-                      <Youtube className="w-4 h-4 text-red-500" />
-                      <span className="text-sm font-medium text-foreground">
-                        {t('language') === 'it' ? 'Alternative da YouTube' : 'YouTube alternatives'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      {t('language') === 'it' 
-                        ? 'Nessun torrent trovato. Puoi riprodurre l\'audio da YouTube:' 
-                        : 'No torrents found. You can play audio from YouTube:'}
+            {/* YouTube Tab */}
+            {activeTab === 'youtube' && (
+              <>
+                {!hasYouTubeResults ? (
+                  <div className="text-center py-8">
+                    <Youtube className="w-12 h-12 text-red-500 mx-auto mb-3" />
+                    <p className="text-muted-foreground">
+                      {t('language') === 'it' ? 'Nessun risultato YouTube' : 'No YouTube results'}
                     </p>
+                    {lastSearchQuery && onSearchYouTube && (
+                      <Button variant="secondary" size="sm" className="mt-4" onClick={handleSearchYouTube} disabled={isSearchingYouTube}>
+                        {isSearchingYouTube ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
+                        {t('language') === 'it' ? 'Cerca' : 'Search'}
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
                     {youtubeResults.map((video) => {
                       const isPlaying = playingYouTubeId === video.id;
-                      
                       return (
-                        <TapArea
-                          as="button"
-                          key={video.id}
-                          onTap={() => handlePlayYouTube(video)}
-                          disabled={isPlaying}
-                          className={cn(
-                            "w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left touch-manipulation",
-                            "bg-secondary hover:bg-secondary/80"
-                          )}
-                        >
-                          {isPlaying ? (
-                            <Loader2 className="w-5 h-5 text-red-500 animate-spin flex-shrink-0" />
-                          ) : (
-                            <Play className="w-5 h-5 text-red-500 flex-shrink-0" />
-                          )}
+                        <TapArea as="button" key={video.id} onTap={() => handlePlayYouTube(video)} disabled={isPlaying}
+                          className="w-full flex items-center gap-3 p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors text-left touch-manipulation">
+                          {isPlaying ? <Loader2 className="w-5 h-5 text-red-500 animate-spin flex-shrink-0" /> : <Play className="w-5 h-5 text-red-500 flex-shrink-0" />}
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-foreground truncate">{video.title}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {video.uploaderName} • {formatDuration(video.duration)}
-                            </p>
+                            <p className="text-sm text-muted-foreground">{video.uploaderName} • {formatDuration(video.duration)}</p>
                           </div>
                         </TapArea>
                       );
                     })}
-                  </>
+                  </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>
