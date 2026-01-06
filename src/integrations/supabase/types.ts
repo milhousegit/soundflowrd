@@ -83,6 +83,95 @@ export type Database = {
         }
         Relationships: []
       }
+      playlist_tracks: {
+        Row: {
+          added_at: string
+          id: string
+          playlist_id: string
+          position: number
+          track_album: string | null
+          track_album_id: string | null
+          track_artist: string
+          track_cover_url: string | null
+          track_duration: number | null
+          track_id: string
+          track_title: string
+        }
+        Insert: {
+          added_at?: string
+          id?: string
+          playlist_id: string
+          position: number
+          track_album?: string | null
+          track_album_id?: string | null
+          track_artist: string
+          track_cover_url?: string | null
+          track_duration?: number | null
+          track_id: string
+          track_title: string
+        }
+        Update: {
+          added_at?: string
+          id?: string
+          playlist_id?: string
+          position?: number
+          track_album?: string | null
+          track_album_id?: string | null
+          track_artist?: string
+          track_cover_url?: string | null
+          track_duration?: number | null
+          track_id?: string
+          track_title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playlist_tracks_playlist_id_fkey"
+            columns: ["playlist_id"]
+            isOneToOne: false
+            referencedRelation: "playlists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      playlists: {
+        Row: {
+          cover_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_synced: boolean | null
+          name: string
+          spotify_url: string | null
+          track_count: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cover_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_synced?: boolean | null
+          name: string
+          spotify_url?: string | null
+          track_count?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cover_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_synced?: boolean | null
+          name?: string
+          spotify_url?: string | null
+          track_count?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

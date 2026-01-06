@@ -15,6 +15,7 @@ import Library from "@/pages/Library";
 import Settings from "@/pages/Settings";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
+import Playlist from "@/pages/Playlist";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -65,6 +66,7 @@ const AppRoutes = () => {
         <Route path="settings" element={<Settings />} />
         <Route path="artist/:id" element={<Artist />} />
         <Route path="album/:id" element={<Album />} />
+        <Route path="playlist/:id" element={<Playlist />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

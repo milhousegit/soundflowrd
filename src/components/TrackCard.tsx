@@ -1,11 +1,12 @@
 import React, { forwardRef, useState } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudUpload, Loader2, Bug, ListMusic, Youtube } from 'lucide-react';
+import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudUpload, Loader2, Bug, ListMusic, Youtube, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
 import { useHasYouTubeMapping } from '@/hooks/useYouTubeMappings';
+import { usePlaylists } from '@/hooks/usePlaylists';
 import { useTap } from '@/hooks/useTap';
 import { toast } from 'sonner';
 import {
@@ -16,6 +17,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 
@@ -29,42 +31,35 @@ interface TrackCardProps {
   isSynced?: boolean;
   isSyncing?: boolean;
   isDownloading?: boolean;
+  onCreatePlaylist?: () => void;
 }
 
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
-  ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading }, ref) => {
+  ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading, onCreatePlaylist }, ref) => {
     const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase, isPlayingYouTube } = usePlayer();
     const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
     const hasYouTubeMapping = useHasYouTubeMapping(track.id);
+    const { playlists, addTrackToPlaylist } = usePlaylists();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
     
     const isCurrentTrack = currentTrack?.id === track.id;
     const isSynced = propIsSynced !== undefined ? propIsSynced : hookIsSynced(track.id);
     const isSyncing = propIsSyncing !== undefined ? propIsSyncing : hookIsSyncing(track.id);
     const isDownloading = propIsDownloading !== undefined ? propIsDownloading : hookIsDownloading(track.id);
     
-    // Check if current track is playing from YouTube
     const isCurrentTrackYouTube = isCurrentTrack && isPlayingYouTube;
-
-    // Current track is loading if loadingPhase is not idle
     const isCurrentTrackLoading = isCurrentTrack && loadingPhase !== 'idle';
     
-    // For the current track: use loadingPhase to determine state
-    // For other tracks: use hook values
     const showSearchingLoader = isCurrentTrack && loadingPhase === 'searching';
     const showLoadingCloud = isCurrentTrack && loadingPhase === 'loading';
     const showDownloadingCloud = isCurrentTrack 
       ? loadingPhase === 'downloading'
       : (isDownloading && !isSynced);
-    
-    // Show synced cloud only if:
-    // - Track is synced AND
-    // - Not currently loading (if current track) AND
-    // - Not downloading
     const showSyncedCloud = isSynced && !isCurrentTrackLoading && !showDownloadingCloud;
 
     const handleClick = () => {
-      if (isMenuOpen) return; // Don't trigger play when menu is open
+      if (isMenuOpen) return;
       if (isCurrentTrack) {
         toggle();
       } else {
@@ -72,10 +67,8 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       }
     };
 
-
     const handleSync = (e: React.MouseEvent) => {
       e.stopPropagation();
-      // Play the track to trigger sync search
       playTrack(track, queue);
       toast.info('Avvio sincronizzazione...');
     };
@@ -88,16 +81,17 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
 
     const handleOpenDebug = (e: React.MouseEvent) => {
       e.stopPropagation();
-      // Play the track first to load it, then user can open debug from player
       if (!isCurrentTrack) {
         playTrack(track, queue);
       }
       toast.info('Apri il pannello debug dal player');
     };
 
-    const handleAddToPlaylist = (e: React.MouseEvent) => {
+    const handleAddToPlaylist = async (e: React.MouseEvent, playlistId: string) => {
       e.stopPropagation();
-      toast.info('Funzionalità playlist in arrivo!');
+      setIsAddingToPlaylist(playlistId);
+      await addTrackToPlaylist(playlistId, track);
+      setIsAddingToPlaylist(null);
     };
 
     const formatDuration = (seconds: number) => {
@@ -229,10 +223,30 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
                   <ListMusic className="w-4 h-4 mr-2" />
                   Aggiungi a playlist
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="bg-popover">
-                  <DropdownMenuItem onClick={handleAddToPlaylist} className="cursor-pointer">
-                    + Crea nuova playlist
+                <DropdownMenuSubContent className="bg-popover w-48">
+                  <DropdownMenuItem 
+                    onClick={(e) => { e.stopPropagation(); onCreatePlaylist?.(); }} 
+                    className="cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Crea nuova playlist
                   </DropdownMenuItem>
+                  {playlists.length > 0 && <DropdownMenuSeparator />}
+                  {playlists.map((playlist) => (
+                    <DropdownMenuItem 
+                      key={playlist.id}
+                      onClick={(e) => handleAddToPlaylist(e, playlist.id)} 
+                      className="cursor-pointer"
+                      disabled={isAddingToPlaylist === playlist.id}
+                    >
+                      {isAddingToPlaylist === playlist.id ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <ListPlus className="w-4 h-4 mr-2" />
+                      )}
+                      <span className="truncate">{playlist.name}</span>
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
               {/* Show sync/remove only if not synced AND not downloading */}
