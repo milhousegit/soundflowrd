@@ -365,6 +365,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
           
           if (selectResult.error || selectResult.status === 'error') {
+            addDebugLog('⚠️ Torrent non valido', `Errore: ${selectResult.error || 'torrent in stato error'}`, 'warning');
+            // Continue to next torrent
             continue;
           }
           
@@ -392,7 +394,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               directLink: selectResult.streams[0].streamUrl,
             });
             
-            addDebugLog('Riproduzione', 'Stream avviato da cache', 'success');
+            addDebugLog('🔊 Riproduzione', 'Stream avviato da cache', 'success');
             return true;
           }
           
@@ -400,6 +402,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setLoadingPhase('downloading');
             setDownloadProgress(selectResult.progress);
             setDownloadStatus(selectResult.status);
+            
+            addDebugLog('📥 Download in corso', `Progresso: ${selectResult.progress}% - attesa completamento...`, 'info');
             
             // Save mapping without direct link
             await saveFileMapping({
@@ -411,8 +415,22 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               filePath: matchingFile.path,
             });
             
-            addDebugLog('Salvataggio', 'File in download (da cache)', 'success');
+            // Set up torrent for polling so UI can track progress
+            setAvailableTorrents([{
+              ...torrent,
+              status: selectResult.status,
+              progress: selectResult.progress,
+            }]);
+            
+            addDebugLog('💾 Mappatura salvata', 'In attesa del download RD...', 'success');
+            // Don't return true yet - keep loadingPhase as downloading
             return true;
+          }
+          
+          // If status is something unexpected, log it and try next
+          if (selectResult.status && selectResult.status !== 'downloaded') {
+            addDebugLog('⚠️ Stato inatteso', `Status: ${selectResult.status}`, 'warning');
+            continue;
           }
         }
       }
@@ -928,6 +946,23 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     try {
       const result = await checkTorrentStatus(credentials.realDebridApiKey, torrentId);
       
+      // Handle error state
+      if (result.status === 'error' || result.status === 'dead' || result.status === 'magnet_error') {
+        addDebugLog('❌ Torrent non valido', `Stato: ${result.status} - il torrent non è disponibile`, 'error');
+        setAvailableTorrents(prev => prev.map(t => 
+          t.torrentId === torrentId 
+            ? { ...t, status: result.status, progress: 0 }
+            : t
+        ));
+        // Clear downloading state for this torrent
+        if (downloadStatus && availableTorrents.find(t => t.torrentId === torrentId)) {
+          setDownloadProgress(null);
+          setDownloadStatus(null);
+          setLoadingPhase('idle');
+        }
+        return;
+      }
+      
       // Update torrent in list
       setAvailableTorrents(prev => prev.map(t => 
         t.torrentId === torrentId 
@@ -939,6 +974,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (result.status === 'downloading' || result.status === 'queued') {
         setDownloadProgress(result.progress);
         setDownloadStatus(result.status);
+        addDebugLog('📥 Download', `Progresso: ${result.progress}%`, 'info');
       }
       
       if (result.streams.length > 0) {
@@ -956,7 +992,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         
         setDownloadProgress(null);
         setDownloadStatus(null);
-        addDebugLog('Download completato', 'Stream pronti per la riproduzione', 'success');
+        setLoadingPhase('idle');
+        addDebugLog('✅ Download completato', 'Stream pronti per la riproduzione', 'success');
         
         // Auto-play if nothing is playing
         if (!currentStreamId && result.streams.length > 0) {
@@ -965,13 +1002,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             audioRef.current.src = result.streams[0].streamUrl;
             audioRef.current.play();
             setState(prev => ({ ...prev, isPlaying: true }));
+            addDebugLog('🔊 Riproduzione avviata', 'Streaming da Real-Debrid', 'success');
           }
         }
       }
     } catch (error) {
       addDebugLog('Errore refresh', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
     }
-  }, [credentials, currentStreamId, addDebugLog]);
+  }, [credentials, currentStreamId, addDebugLog, downloadStatus, availableTorrents]);
 
   const manualSearch = useCallback(async (query: string) => {
     await searchForStreams(query, true, undefined, true);
@@ -1371,6 +1409,82 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       });
     }
   }, [next, previous]);
+
+  // Auto-poll downloading torrents until they're ready
+  useEffect(() => {
+    if (loadingPhase !== 'downloading' || availableTorrents.length === 0) return;
+    if (!credentials?.realDebridApiKey) return;
+    
+    const downloadingTorrents = availableTorrents.filter(t => 
+      t.status === 'downloading' || t.status === 'queued' || t.status === 'magnet_conversion'
+    );
+    
+    if (downloadingTorrents.length === 0) return;
+    
+    console.log('Setting up auto-poll for downloading torrents:', downloadingTorrents.map(t => t.torrentId));
+    
+    const pollInterval = setInterval(async () => {
+      for (const torrent of downloadingTorrents) {
+        try {
+          const result = await checkTorrentStatus(credentials.realDebridApiKey, torrent.torrentId);
+          
+          // Handle error state
+          if (result.status === 'error' || result.status === 'dead' || result.status === 'magnet_error') {
+            addDebugLog('❌ Download fallito', `Torrent in stato: ${result.status}`, 'error');
+            setLoadingPhase('idle');
+            setDownloadProgress(null);
+            setDownloadStatus(null);
+            clearInterval(pollInterval);
+            return;
+          }
+          
+          // Update progress
+          if (result.status === 'downloading' || result.status === 'queued') {
+            setDownloadProgress(result.progress);
+            addDebugLog('📥 Download', `Progresso: ${result.progress}%`, 'info');
+          }
+          
+          // If we have streams, play immediately!
+          if (result.streams.length > 0) {
+            console.log('Download complete, streams available:', result.streams.length);
+            setAlternativeStreams(result.streams);
+            setCurrentStreamId(result.streams[0].id);
+            setDownloadProgress(null);
+            setDownloadStatus(null);
+            setLoadingPhase('idle');
+            
+            if (audioRef.current && result.streams[0].streamUrl) {
+              audioRef.current.src = result.streams[0].streamUrl;
+              audioRef.current.play();
+              setState(prev => ({ ...prev, isPlaying: true }));
+              addDebugLog('🔊 Riproduzione avviata', 'Download completato, streaming avviato', 'success');
+              
+              // Update direct link in database
+              const currentTrack = state.currentTrack;
+              if (currentTrack) {
+                await saveFileMapping({
+                  track: currentTrack,
+                  torrentId: torrent.torrentId,
+                  torrentTitle: torrent.title,
+                  fileId: torrent.files?.[0]?.id || 0,
+                  fileName: torrent.files?.[0]?.filename,
+                  filePath: torrent.files?.[0]?.path,
+                  directLink: result.streams[0].streamUrl,
+                });
+              }
+            }
+            
+            clearInterval(pollInterval);
+            return;
+          }
+        } catch (error) {
+          console.error('Poll error:', error);
+        }
+      }
+    }, 5000); // Poll every 5 seconds
+    
+    return () => clearInterval(pollInterval);
+  }, [loadingPhase, availableTorrents, credentials, state.currentTrack, addDebugLog, saveFileMapping]);
 
   // Pre-sync next track in queue when current track starts playing
   useEffect(() => {

@@ -1139,6 +1139,18 @@ async function selectFilesAndDownload(apiKey: string, torrentId: string, fileIds
     const checkInfo = await checkRes.json();
     console.log('Torrent exists, status:', checkInfo.status, 'files:', checkInfo.files?.length);
     
+    // Check for error/dead states - return error immediately
+    if (checkInfo.status === 'error' || checkInfo.status === 'dead' || checkInfo.status === 'magnet_error') {
+      console.log('Torrent in error state:', checkInfo.status);
+      return {
+        status: 'error',
+        progress: 0,
+        links: [],
+        files: [],
+        selectedFileIds: fileIds,
+      };
+    }
+    
     // Select files
     const selectForm = new FormData();
     selectForm.append('files', fileIds.join(','));

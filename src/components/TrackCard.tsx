@@ -1,7 +1,7 @@
 import React, { forwardRef, useState } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudOff, CloudUpload } from 'lucide-react';
+import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudOff, CloudUpload, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import { useSyncedTracks, removeSyncedTrack } from '@/hooks/useSyncedTracks';
@@ -30,7 +30,7 @@ interface TrackCardProps {
 
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
   ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading }, ref) => {
-    const { currentTrack, isPlaying, playTrack, toggle, addToQueue } = usePlayer();
+    const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase } = usePlayer();
     const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     
@@ -39,9 +39,16 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const isSyncing = propIsSyncing !== undefined ? propIsSyncing : hookIsSyncing(track.id);
     const isDownloading = propIsDownloading !== undefined ? propIsDownloading : hookIsDownloading(track.id);
 
-    // Show cloud icon only when synced (solid) or syncing/downloading (pulsing)
-    const showCloudIcon = isSynced || isSyncing || isDownloading;
-    const shouldPulse = (isSyncing || isDownloading) && !isSynced;
+    // Current track is loading if loadingPhase is not idle
+    const isCurrentTrackLoading = isCurrentTrack && loadingPhase !== 'idle';
+    
+    // Show cloud icon only when synced (solid green)
+    // Show loader when current track is loading
+    // Show pulsing cloud when downloading
+    const showSyncedCloud = isSynced && !isCurrentTrackLoading;
+    const showDownloadingCloud = (isDownloading || (isCurrentTrack && loadingPhase === 'downloading')) && !isSynced;
+    const showSearchingLoader = isCurrentTrack && loadingPhase === 'searching';
+    const showLoadingCloud = isCurrentTrack && loadingPhase === 'loading';
 
     const handleClick = () => {
       if (isMenuOpen) return; // Don't trigger play when menu is open
@@ -91,6 +98,32 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
 
     const tap = useTap({ onTap: handleClick });
 
+    // Render status icon
+    const renderStatusIcon = () => {
+      if (!showSyncStatus) return null;
+      
+      // Loading states for current track
+      if (showSearchingLoader) {
+        return <Loader2 className="w-3.5 h-3.5 flex-shrink-0 text-primary animate-spin" />;
+      }
+      if (showLoadingCloud) {
+        return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-primary animate-pulse" />;
+      }
+      if (showDownloadingCloud) {
+        return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-blue-500 animate-pulse" />;
+      }
+      // Synced - solid green cloud
+      if (showSyncedCloud) {
+        return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />;
+      }
+      // Syncing (not current track) - show pulsing
+      if (isSyncing && !isCurrentTrack) {
+        return <Loader2 className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground animate-spin" />;
+      }
+      
+      return null;
+    };
+
     return (
       <div
         ref={ref}
@@ -125,11 +158,17 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
         </div>
 
         {/* Cover */}
-        <div className="w-10 h-10 md:w-10 md:h-10 rounded bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div className="w-10 h-10 md:w-10 md:h-10 rounded bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 relative">
           {track.coverUrl ? (
             <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover" />
           ) : (
             <Music className="w-4 h-4 text-muted-foreground" />
+          )}
+          {/* Show loading overlay on cover for current track */}
+          {isCurrentTrackLoading && (
+            <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+            </div>
           )}
         </div>
 
@@ -142,16 +181,8 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
             )}>
               {track.title}
             </p>
-            {/* Sync status icon - only show when synced or syncing/downloading */}
-            {showSyncStatus && showCloudIcon && (
-              <Cloud 
-                className={cn(
-                  "w-3.5 h-3.5 flex-shrink-0",
-                  isSynced ? "text-green-500" : "text-primary",
-                  shouldPulse && "animate-pulse"
-                )} 
-              />
-            )}
+            {/* Sync status icon */}
+            {renderStatusIcon()}
           </div>
           {showArtist && (
             <p className="text-xs md:text-sm text-muted-foreground truncate">{track.artist}</p>
