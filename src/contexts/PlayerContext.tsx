@@ -614,15 +614,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         return false;
       }
 
-      // If no file match found but we have torrents, show popup for manual match
+      // If no file match found but we have torrents, just return false
+      // Don't show toast here - let the calling code decide after all attempts
       if (result.torrents.length > 0) {
         addDebugLog('Match manuale richiesto', `Nessun file corrisponde a "${track.title}" (query usata: "${track.album} ${track.artist}")`, 'warning');
         removeSyncingTrack(track.id);
-        // Show toast for manual matching required
-        toast.warning('Selezione manuale richiesta', {
-          description: 'Non ho trovato un match automatico. Apri il pannello sorgenti per selezionare il file manualmente.',
-          duration: 5000,
-        });
         return false;
       }
       
@@ -843,11 +839,20 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             }
             
             if (!foundInAlbum && showNoResultsToast) {
-              addDebugLog('Nessun risultato album', 'Nessuna sorgente trovata neanche per album', 'error');
-              removeSyncingTrack(track.id);
-              toast.error('Nessun contenuto trovato', {
-                description: 'Non è stato trovato nessun risultato per questa traccia.',
-              });
+              // Check if we at least have torrents to show for manual selection
+              if (availableTorrents.length > 0) {
+                addDebugLog('Match manuale richiesto', 'Nessun match automatico trovato, selezione manuale disponibile', 'warning');
+                toast.warning('Selezione manuale richiesta', {
+                  description: 'Non ho trovato un match automatico. Apri il pannello sorgenti per selezionare il file manualmente.',
+                  duration: 5000,
+                });
+              } else {
+                addDebugLog('Nessun risultato album', 'Nessuna sorgente trovata neanche per album', 'error');
+                removeSyncingTrack(track.id);
+                toast.error('Nessun contenuto trovato', {
+                  description: 'Non è stato trovato nessun risultato per questa traccia.',
+                });
+              }
             }
           }
         }
