@@ -45,7 +45,7 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
     <Button
       variant={variant}
       size="icon"
-      className={cn(sizeClasses[size], className)}
+      className={cn(sizeClasses[size], "border border-muted-foreground/30", className)}
       onClick={handleClick}
       title={isLiked ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
     >
@@ -53,7 +53,7 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
         className={cn(
           iconSizes[size],
           'transition-all',
-          isLiked && 'fill-primary text-primary'
+          isLiked ? 'fill-primary text-primary' : 'text-muted-foreground'
         )}
       />
     </Button>
