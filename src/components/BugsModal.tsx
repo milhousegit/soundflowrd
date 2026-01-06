@@ -184,6 +184,15 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
       setActiveTab('youtube');
     };
 
+    // Auto-search YouTube when switching to YouTube tab if no results yet
+    const handleYouTubeTabClick = () => {
+      if (hasYouTubeResults) {
+        setActiveTab('youtube');
+      } else {
+        handleSearchYouTube();
+      }
+    };
+
     const hasTorrentResults = alternatives.length > 0 || torrents.length > 0;
     const hasYouTubeResults = youtubeResults.length > 0;
 
@@ -290,7 +299,7 @@ const BugsModal = forwardRef<HTMLDivElement, BugsModalProps>(
                 )}
               </button>
               <button
-                onClick={() => hasYouTubeResults ? setActiveTab('youtube') : handleSearchYouTube()}
+                onClick={handleYouTubeTabClick}
                 disabled={isSearchingYouTube}
                 className={cn(
                   "flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-t-lg transition-colors",
