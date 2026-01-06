@@ -45,7 +45,7 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
     <Button
       variant={variant}
       size="icon"
-      className={cn(sizeClasses[size], "border border-muted-foreground/30", className)}
+      className={cn(sizeClasses[size], "border-0", className)}
       onClick={handleClick}
       title={isLiked ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
     >

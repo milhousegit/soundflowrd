@@ -195,25 +195,9 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
           )}
         </div>
 
-        {/* Duration */}
-        <span className="text-xs md:text-sm text-muted-foreground flex-shrink-0">
-          {formatDuration(track.duration)}
-        </span>
-
-        {/* Actions container - same spacing */}
+        {/* Actions container */}
         <div className="flex items-center gap-1">
-          {/* Favorite button */}
-          {showFavorite && (
-            <FavoriteButton
-              itemType="track"
-              item={track}
-              size="sm"
-              className="md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-              variant="ghost"
-            />
-          )}
-
-          {/* More menu */}
+          {/* More menu - before duration */}
           <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button 
@@ -256,6 +240,22 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Duration */}
+          <span className="text-xs md:text-sm text-muted-foreground flex-shrink-0 min-w-[36px] text-right">
+            {formatDuration(track.duration)}
+          </span>
+
+          {/* Favorite button */}
+          {showFavorite && (
+            <FavoriteButton
+              itemType="track"
+              item={track}
+              size="sm"
+              className="md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+              variant="ghost"
+            />
+          )}
         </div>
       </div>
     );
