@@ -1494,7 +1494,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           console.error('Poll error:', error);
         }
       }
-    }, 5000); // Poll every 5 seconds
+    }, 1000); // Poll every 1 second for fast audio downloads
     
     return () => clearInterval(pollInterval);
   }, [loadingPhase, availableTorrents, credentials, state.currentTrack, addDebugLog, saveFileMapping]);
