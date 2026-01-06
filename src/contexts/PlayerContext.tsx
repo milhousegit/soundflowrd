@@ -1421,7 +1421,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [next, previous]);
 
-  // Auto-poll downloading torrents until they're ready
+  // Auto-poll downloading torrents until they're ready - with timeout for unavailable files
   useEffect(() => {
     if (loadingPhase !== 'downloading' || availableTorrents.length === 0) return;
     if (!credentials?.realDebridApiKey) return;
@@ -1434,6 +1434,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     
     console.log('Setting up auto-poll for downloading torrents:', downloadingTorrents.map(t => t.torrentId));
     
+    const startTime = Date.now();
+    let lastProgress = 0;
+    
     const pollInterval = setInterval(async () => {
       for (const torrent of downloadingTorrents) {
         try {
@@ -1442,9 +1445,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           // Handle error state
           if (result.status === 'error' || result.status === 'dead' || result.status === 'magnet_error') {
             addDebugLog('❌ Download fallito', `Torrent in stato: ${result.status}`, 'error');
-            setLoadingPhase('idle');
+            setLoadingPhase('unavailable');
             setDownloadProgress(null);
             setDownloadStatus(null);
+            toast.error('File non disponibile', {
+              description: 'Il torrent non è accessibile. Riprova più tardi.',
+            });
             clearInterval(pollInterval);
             return;
           }
@@ -1453,6 +1459,22 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           if (result.status === 'downloading' || result.status === 'queued') {
             setDownloadProgress(result.progress);
             addDebugLog('📥 Download', `Progresso: ${result.progress}%`, 'info');
+            
+            // Check if stuck at 0% for more than 5 seconds
+            const elapsedSeconds = (Date.now() - startTime) / 1000;
+            if (result.progress === 0 && elapsedSeconds >= 5) {
+              addDebugLog('⏱️ Timeout', `Download fermo a 0% per ${Math.round(elapsedSeconds)}s - file non disponibile`, 'error');
+              setLoadingPhase('unavailable');
+              setDownloadProgress(null);
+              setDownloadStatus(null);
+              toast.error('File al momento non disponibile', {
+                description: 'Il download non è partito. Pochi seeders o torrent non valido.',
+              });
+              clearInterval(pollInterval);
+              return;
+            }
+            
+            lastProgress = result.progress;
           }
           
           // If we have streams, play immediately!
