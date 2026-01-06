@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { verifyApiKey } from '@/lib/realdebrid';
-import { StreamingMode } from '@/types/settings';
 import {
   User,
   Key,
@@ -19,10 +18,7 @@ import {
   X,
   Loader2,
   Save,
-  Wifi,
   Cloud,
-  Zap,
-  AlertCircle,
   Play,
   RefreshCw,
   Trash2,
@@ -72,16 +68,6 @@ const Settings: React.FC = () => {
     }
   }, [isEditingApiKey, profile?.real_debrid_api_key]);
 
-  // Auto-set streaming mode when RD key is added/removed
-  useEffect(() => {
-    if (hasRdApiKey && settings.streamingMode === 'direct') {
-      // User has RD, suggest hybrid mode
-      updateSettings({ streamingMode: 'hybrid' });
-    } else if (!hasRdApiKey && settings.streamingMode !== 'direct') {
-      // No RD key, force direct mode
-      updateSettings({ streamingMode: 'direct' });
-    }
-  }, [hasRdApiKey]);
 
   const handleLogout = async () => {
     await signOut();
@@ -103,20 +89,6 @@ const Settings: React.FC = () => {
         [key]: !settings.homeDisplayOptions[key],
       },
     });
-  };
-
-  const handleStreamingModeChange = (mode: StreamingMode) => {
-    if (mode !== 'direct' && !hasRdApiKey) {
-      toast({
-        title: settings.language === 'it' ? 'API Key richiesta' : 'API Key required',
-        description: settings.language === 'it' 
-          ? 'Configura la API Key di Real-Debrid per usare questa modalità.' 
-          : 'Configure your Real-Debrid API Key to use this mode.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    updateSettings({ streamingMode: mode });
   };
 
   const loadCloudFiles = async () => {
@@ -185,99 +157,6 @@ const Settings: React.FC = () => {
                 className="bg-secondary text-sm md:text-base"
               />
             </div>
-          </div>
-        </section>
-
-        {/* Streaming Mode Section */}
-        <section className="space-y-3 md:space-y-4">
-          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-            <Wifi className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-            <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('streamingMode')}</h2>
-          </div>
-          
-          <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
-            {/* Direct Mode */}
-            <button
-              onClick={() => handleStreamingModeChange('direct')}
-              className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
-                settings.streamingMode === 'direct' 
-                  ? 'border-primary bg-primary/10' 
-                  : 'border-border hover:border-muted-foreground/50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Zap className={`w-5 h-5 ${settings.streamingMode === 'direct' ? 'text-primary' : 'text-muted-foreground'}`} />
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">{t('streamingDirect')}</p>
-                  <p className="text-xs text-muted-foreground">{t('streamingDirectDesc')}</p>
-                </div>
-                {settings.streamingMode === 'direct' && <Check className="w-5 h-5 text-primary" />}
-              </div>
-            </button>
-
-            {/* Hybrid Mode */}
-            <button
-              onClick={() => handleStreamingModeChange('hybrid')}
-              disabled={!hasRdApiKey}
-              className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
-                settings.streamingMode === 'hybrid' 
-                  ? 'border-primary bg-primary/10' 
-                  : !hasRdApiKey 
-                    ? 'border-border opacity-50 cursor-not-allowed'
-                    : 'border-border hover:border-muted-foreground/50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Cloud className={`w-5 h-5 ${settings.streamingMode === 'hybrid' ? 'text-primary' : 'text-muted-foreground'}`} />
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">{t('streamingHybrid')}</p>
-                  <p className="text-xs text-muted-foreground">{t('streamingHybridDesc')}</p>
-                </div>
-                {settings.streamingMode === 'hybrid' && <Check className="w-5 h-5 text-primary" />}
-              </div>
-            </button>
-
-            {/* Debrid Only Mode */}
-            <button
-              onClick={() => handleStreamingModeChange('debrid_only')}
-              disabled={!hasRdApiKey}
-              className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
-                settings.streamingMode === 'debrid_only' 
-                  ? 'border-primary bg-primary/10' 
-                  : !hasRdApiKey 
-                    ? 'border-border opacity-50 cursor-not-allowed'
-                    : 'border-border hover:border-muted-foreground/50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Key className={`w-5 h-5 ${settings.streamingMode === 'debrid_only' ? 'text-primary' : 'text-muted-foreground'}`} />
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">{t('streamingDebridOnly')}</p>
-                  <p className="text-xs text-muted-foreground">{t('streamingDebridOnlyDesc')}</p>
-                </div>
-                {settings.streamingMode === 'debrid_only' && <Check className="w-5 h-5 text-primary" />}
-              </div>
-            </button>
-
-            {/* Warning for Debrid Only */}
-            {settings.streamingMode === 'debrid_only' && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                <AlertCircle className="w-4 h-4 text-yellow-500 mt-0.5 shrink-0" />
-                <p className="text-xs text-yellow-200">
-                  {settings.language === 'it' 
-                    ? 'I tempi di caricamento possono variare dai 4 ai 20 secondi per ogni canzone.'
-                    : 'Load times can vary from 4 to 20 seconds per song.'}
-                </p>
-              </div>
-            )}
-
-            {!hasRdApiKey && (
-              <p className="text-xs text-muted-foreground mt-2">
-                {settings.language === 'it' 
-                  ? 'Configura la API Key di Real-Debrid per sbloccare le modalità Ibrido e Solo RD.'
-                  : 'Configure your Real-Debrid API Key to unlock Hybrid and RD Only modes.'}
-              </p>
-            )}
           </div>
         </section>
 
@@ -414,8 +293,8 @@ const Settings: React.FC = () => {
                       </AlertDialogTitle>
                       <AlertDialogDescription>
                         {settings.language === 'it' 
-                          ? 'La tua API Key verrà eliminata e passerai al torrenting diretto. Potrai sempre ricollegarti in futuro.'
-                          : 'Your API Key will be deleted and you\'ll switch to direct torrenting. You can reconnect anytime.'}
+                          ? 'La tua API Key verrà eliminata. Potrai sempre ricollegarti in futuro.'
+                          : 'Your API Key will be deleted. You can reconnect anytime.'}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -426,7 +305,6 @@ const Settings: React.FC = () => {
                         onClick={async () => {
                           const { error } = await updateApiKey('');
                           if (!error) {
-                            updateSettings({ streamingMode: 'direct' });
                             toast({
                               title: settings.language === 'it' ? 'Disconnesso' : 'Disconnected',
                               description: settings.language === 'it' 
