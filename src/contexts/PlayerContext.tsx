@@ -319,7 +319,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         setCurrentMappedFileId(fileId);
         console.log('Saved file mapping for track:', track.title, { torrentId, fileId, hasDirectLink: !!directLink });
-        addSyncedTrack(track.id);
+        // Only mark as synced if we have a direct link (i.e., stream is ready)
+        // If no direct link, it's still downloading
+        if (directLink) {
+          addSyncedTrack(track.id);
+        }
       }
     } catch (error) {
       console.error('Failed to save file mapping:', error);
@@ -856,10 +860,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Only update searching state if this is still the current search
       if (!searchTrackId || currentSearchTrackIdRef.current === searchTrackId) {
         setIsSearchingStreams(false);
-        setLoadingPhase('idle');
+        // DON'T reset loadingPhase here if we're downloading - let the polling handle it
+        // Only reset if not in downloading phase
+        if (loadingPhase !== 'downloading') {
+          setLoadingPhase('idle');
+        }
       }
     }
-  }, [credentials, saveFileMapping, searchAlbumAndMatch, addDebugLog, clearDebugLogs]);
+  }, [credentials, saveFileMapping, searchAlbumAndMatch, addDebugLog, clearDebugLogs, loadingPhase]);
 
   const selectTorrentFile = useCallback(async (torrentId: string, fileIds: number[]) => {
     if (!credentials?.realDebridApiKey) return;
@@ -1170,7 +1178,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               return;
             }
 
-            if (result.streams.length > 0) {
+            // Handle error states - torrent expired or invalid
+            if (result.error || result.status === 'error' || result.status === 'dead' || result.status === 'magnet_error' || result.status === 'not_found') {
+              addDebugLog('⚠️ Torrent non valido', `Stato: ${result.status || result.error} - avvio nuova ricerca`, 'warning');
+              // Clear saved mapping as it's invalid
+              await supabase
+                .from('track_file_mappings')
+                .delete()
+                .eq('track_id', track.id);
+              // Fallthrough to new search below
+            } else if (result.streams.length > 0) {
               addDebugLog('✅ Stream pronto', `Link ottenuto da RD (${result.streams[0].quality || 'qualità sconosciuta'})`, 'success');
               setAlternativeStreams(result.streams);
               setCurrentStreamId(result.streams[0].id);
@@ -1254,10 +1271,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
       
       if (cachedMatch) {
-        // Found in cache, done!
+        // Found in cache! But only mark as synced if we actually have a stream playing
+        // If still downloading, don't mark as synced yet
         removeSyncingTrack(track.id);
-        addSyncedTrack(track.id);
-        setLoadingPhase('idle');
+        if (loadingPhase !== 'downloading') {
+          addSyncedTrack(track.id);
+          setLoadingPhase('idle');
+        }
         return;
       }
       
@@ -1459,7 +1479,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setState(prev => ({ ...prev, isPlaying: true }));
               addDebugLog('🔊 Riproduzione avviata', 'Download completato, streaming avviato', 'success');
               
-              // Update direct link in database
+              // Update direct link in database and mark as synced
               const currentTrack = state.currentTrack;
               if (currentTrack) {
                 await saveFileMapping({
@@ -1471,6 +1491,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   filePath: torrent.files?.[0]?.path,
                   directLink: result.streams[0].streamUrl,
                 });
+                // Now that we have a direct link, mark as synced
+                addSyncedTrack(currentTrack.id);
               }
             }
             
