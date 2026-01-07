@@ -81,14 +81,15 @@ const searchYouTubeForTrack = async (track: Track): Promise<{ videoId: string; t
       return null;
     }
 
-    const results = response.data?.results || [];
-    if (results.length > 0) {
-      const video = results[0];
+    // Edge function returns { videos: [...] } with fields: id, title, duration, uploaderName
+    const videos = response.data?.videos || [];
+    if (videos.length > 0) {
+      const video = videos[0];
       return {
-        videoId: video.videoId,
+        videoId: video.id,
         title: video.title,
         duration: video.duration || 0,
-        uploader: video.uploader || ''
+        uploader: video.uploaderName || ''
       };
     }
     return null;
