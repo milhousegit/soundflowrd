@@ -7,6 +7,7 @@ import {
   addSyncingTrack, 
   removeSyncingTrack, 
   addSyncedTrack,
+  addYouTubeSyncedTrack,
   addDownloadingTrack,
   removeDownloadingTrack 
 } from '@/hooks/useSyncedTracks';
@@ -216,7 +217,7 @@ export const useSyncAlbum = () => {
       alreadySyncedYT.forEach(trackId => {
         if (!alreadySyncedRD.has(trackId)) {
           removeSyncingTrack(trackId);
-          addSyncedTrack(trackId);
+          addYouTubeSyncedTrack(trackId);
           youtubeCount++;
         }
       });
@@ -404,7 +405,7 @@ export const useSyncAlbum = () => {
             );
             
             if (saved) {
-              addSyncedTrack(track.id);
+              addYouTubeSyncedTrack(track.id);
               youtubeCount++;
               trackSynced = true;
               console.log('Track synced via YouTube:', track.title, '->', ytResult.title);
