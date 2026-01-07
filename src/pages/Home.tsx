@@ -44,8 +44,32 @@ const Home: React.FC = () => {
 
   const country = getCountryFromLanguage(settings.language);
 
-  // Get favorite artists to use for recommendations
+  // Get all favorites to extract unique artist names
   const favoriteArtists = getFavoritesByType('artist');
+  const favoriteTracks = getFavoritesByType('track');
+  const favoriteAlbums = getFavoritesByType('album');
+
+  // Extract unique artist names from all favorites
+  const getUniqueArtistNames = (): string[] => {
+    const artistSet = new Set<string>();
+    
+    // From favorite artists
+    favoriteArtists.forEach(f => {
+      if (f.item_title) artistSet.add(f.item_title);
+    });
+    
+    // From favorite tracks (artist name is in item_artist)
+    favoriteTracks.forEach(f => {
+      if (f.item_artist) artistSet.add(f.item_artist);
+    });
+    
+    // From favorite albums (artist name is in item_artist)
+    favoriteAlbums.forEach(f => {
+      if (f.item_artist) artistSet.add(f.item_artist);
+    });
+    
+    return Array.from(artistSet);
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem('recentlyPlayed');
@@ -58,35 +82,50 @@ const Home: React.FC = () => {
     const fetchNewReleases = async () => {
       setIsLoadingReleases(true);
       try {
-        // If user has favorite artists, search for their releases
-        if (favoriteArtists.length > 0) {
-          const artistNames = favoriteArtists.slice(0, 3).map(f => f.item_title);
+        const uniqueArtistNames = getUniqueArtistNames();
+        
+        // If user has favorites, search for releases from those artists only
+        if (uniqueArtistNames.length > 0) {
           const allReleases: Album[] = [];
           
-          for (const artistName of artistNames) {
+          // Search releases for up to 5 artists to avoid too many requests
+          for (const artistName of uniqueArtistNames.slice(0, 5)) {
             try {
               const { data } = await import('@/integrations/supabase/client').then(m => 
                 m.supabase.functions.invoke('musicbrainz', {
                   body: { action: 'search-releases', query: artistName, limit: 6 },
                 })
               );
-              if (data) allReleases.push(...data);
+              if (data) {
+                // Filter to only include releases that match the artist name
+                const artistReleases = data.filter((album: Album) => 
+                  album.artist?.toLowerCase().includes(artistName.toLowerCase()) ||
+                  artistName.toLowerCase().includes(album.artist?.toLowerCase() || '')
+                );
+                allReleases.push(...artistReleases);
+              }
             } catch (e) {
               console.error('Error fetching releases for', artistName, e);
             }
           }
           
           // Sort by release date (newest first) and dedupe
-          const uniqueReleases = allReleases.reduce((acc, album) => {
-            if (!acc.find(a => a.id === album.id)) acc.push(album);
-            return acc;
-          }, [] as Album[]);
+          const uniqueReleases = allReleases
+            .reduce((acc, album) => {
+              if (!acc.find(a => a.id === album.id)) acc.push(album);
+              return acc;
+            }, [] as Album[])
+            .sort((a, b) => {
+              // Sort by release date if available (newest first)
+              const dateA = a.releaseDate ? new Date(a.releaseDate).getTime() : 0;
+              const dateB = b.releaseDate ? new Date(b.releaseDate).getTime() : 0;
+              return dateB - dateA;
+            });
           
           setNewReleases(uniqueReleases.slice(0, 12));
         } else {
-          // Fallback to popular releases in Italy
-          const releases = await getNewReleases(country);
-          setNewReleases(releases);
+          // No favorites yet - show empty state or popular releases
+          setNewReleases([]);
         }
       } catch (error) {
         console.error('Failed to fetch new releases:', error);
@@ -96,20 +135,21 @@ const Home: React.FC = () => {
     };
 
     fetchNewReleases();
-  }, [country, favoriteArtists.length]);
+  }, [favorites.length]); // Re-fetch when favorites change
 
   useEffect(() => {
     const fetchPopularArtists = async () => {
       setIsLoadingArtists(true);
       try {
-        // If user has favorite artists, find similar/related artists
-        if (favoriteArtists.length > 0) {
-          const favoriteNames = favoriteArtists.map(f => f.item_title.toLowerCase());
+        const uniqueArtistNames = getUniqueArtistNames();
+        
+        if (uniqueArtistNames.length > 0) {
+          const favoriteNamesLower = uniqueArtistNames.map(n => n.toLowerCase());
           const artists = await getPopularArtists(country);
           
           // Filter out artists the user already has in favorites
           const filteredArtists = artists.filter(
-            a => !favoriteNames.includes(a.name.toLowerCase())
+            a => !favoriteNamesLower.includes(a.name.toLowerCase())
           );
           
           setPopularArtists(filteredArtists.slice(0, 12));
@@ -125,7 +165,7 @@ const Home: React.FC = () => {
     };
 
     fetchPopularArtists();
-  }, [country, favoriteArtists.length]);
+  }, [country, favorites.length]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -136,6 +176,7 @@ const Home: React.FC = () => {
 
   const displayRecent = recentlyPlayed.slice(0, 6);
   const { homeDisplayOptions } = settings;
+  const hasAnyFavorites = favorites.length > 0;
 
   return (
     <div className="p-4 md:p-8 pb-32 space-y-8 md:space-y-10 animate-fade-in">
@@ -268,7 +309,19 @@ const Home: React.FC = () => {
               ))}
             </div>
           ) : (
-            <p className="text-muted-foreground text-center py-8">Nessuna nuova uscita disponibile</p>
+            <div className="text-center py-8 bg-secondary/30 rounded-xl">
+              <TrendingUp className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground">
+                {hasAnyFavorites 
+                  ? (t('language') === 'it' 
+                      ? "Nessuna nuova uscita dai tuoi artisti preferiti" 
+                      : "No new releases from your favorite artists")
+                  : (t('language') === 'it' 
+                      ? "Aggiungi artisti, brani o album ai preferiti per vedere le loro nuove uscite" 
+                      : "Add artists, tracks or albums to favorites to see their new releases")
+                }
+              </p>
+            </div>
           )}
         </section>
       )}
