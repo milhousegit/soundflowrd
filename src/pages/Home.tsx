@@ -5,6 +5,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { getNewReleases, getPopularArtists } from '@/lib/musicbrainz';
+import { supabase } from '@/integrations/supabase/client';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import PlaylistCard from '@/components/PlaylistCard';
@@ -91,11 +92,9 @@ const Home: React.FC = () => {
           // Search releases for up to 5 artists to avoid too many requests
           for (const artistName of uniqueArtistNames.slice(0, 5)) {
             try {
-              const { data } = await import('@/integrations/supabase/client').then(m => 
-                m.supabase.functions.invoke('musicbrainz', {
-                  body: { action: 'search-releases', query: artistName, limit: 6 },
-                })
-              );
+              const { data } = await supabase.functions.invoke('musicbrainz', {
+                body: { action: 'search-releases', query: artistName, limit: 6 },
+              });
               if (data) {
                 // Filter to only include releases that match the artist name
                 const artistReleases = data.filter((album: Album) => 
