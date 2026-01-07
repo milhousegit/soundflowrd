@@ -37,7 +37,7 @@ interface TrackCardProps {
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
   ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading, onCreatePlaylist }, ref) => {
     const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase, isPlayingYouTube } = usePlayer();
-    const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
+    const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading, isYouTubeSynced: hookIsYouTubeSynced } = useSyncedTracks([track.id]);
     const hasYouTubeMapping = useHasYouTubeMapping(track.id);
     const { playlists, addTrackToPlaylist } = usePlaylists();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -47,6 +47,7 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const isSynced = propIsSynced !== undefined ? propIsSynced : hookIsSynced(track.id);
     const isSyncing = propIsSyncing !== undefined ? propIsSyncing : hookIsSyncing(track.id);
     const isDownloading = propIsDownloading !== undefined ? propIsDownloading : hookIsDownloading(track.id);
+    const isYouTubeSynced = hookIsYouTubeSynced(track.id);
     
     const isCurrentTrackYouTube = isCurrentTrack && isPlayingYouTube;
     const isCurrentTrackLoading = isCurrentTrack && loadingPhase !== 'idle';
@@ -106,9 +107,8 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const renderStatusIcon = () => {
       if (!showSyncStatus) return null;
       
-      // YouTube mapping - show YouTube icon (red)
-      // For current track playing YouTube OR track with saved YouTube mapping
-      if (isCurrentTrackYouTube || (hasYouTubeMapping && !isSynced)) {
+      // YouTube synced (from album sync) or current track playing YouTube - show YouTube icon
+      if (isYouTubeSynced || isCurrentTrackYouTube || (hasYouTubeMapping && !isSynced)) {
         return <Youtube className="w-3.5 h-3.5 flex-shrink-0 text-red-500" />;
       }
       
@@ -123,7 +123,7 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       if (showDownloadingCloud) {
         return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-blue-500 animate-pulse" />;
       }
-      // Synced with direct_link - solid green cloud
+      // Synced with direct_link (Real-Debrid) - solid green cloud
       if (showSyncedCloud) {
         return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />;
       }
