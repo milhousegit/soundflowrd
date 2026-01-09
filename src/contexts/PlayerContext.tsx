@@ -119,6 +119,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const playYouTubeAudioById = useCallback(async (videoId: string, videoTitle?: string): Promise<boolean> => {
     setLoadingPhase('loading');
     const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
+    console.log('playYouTubeAudioById called with:', cleanVideoId);
+    
     setCurrentYouTubeVideoId(cleanVideoId);
     setIsPlayingYouTube(true);
     setUseYouTubeIframe(false);
@@ -136,8 +138,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           audioRef.current.src = result.audio.url;
           try {
             await audioRef.current.play();
+            console.log('Direct audio playback started successfully');
             setState(prev => ({ ...prev, isPlaying: true }));
             setLoadingPhase('idle');
+            // Keep iframe off since direct works
+            setUseYouTubeIframe(false);
             return true;
           } catch (playError) {
             console.error('YouTube audio play error, trying iframe fallback:', playError);
@@ -146,21 +151,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       }
       
-      // Fallback to iframe player
-      if (result.useIframe || !result.audio) {
-        console.log('Using YouTube iframe fallback for:', cleanVideoId);
-        setUseYouTubeIframe(true);
-        setLoadingPhase('loading');
-        // The YouTubePlayer component will handle playback
-        return true;
-      }
-      
-      // No playback method available
-      console.error('No audio method available for video:', cleanVideoId);
-      setLoadingPhase('unavailable');
-      setIsPlayingYouTube(false);
-      setCurrentYouTubeVideoId(null);
-      return false;
+      // Fallback to iframe player - this is now the primary path for reliability
+      console.log('Using YouTube iframe fallback for:', cleanVideoId);
+      setUseYouTubeIframe(true);
+      setLoadingPhase('loading');
+      // The YouTubePlayer component will handle playback and call setYouTubePlaybackStarted
+      return true;
     } catch (error) {
       console.error('YouTube audio fetch error:', error);
       // Try iframe as last resort
