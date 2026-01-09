@@ -7,7 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import BugsModal from './BugsModal';
 import QueueModal from './QueueModal';
 import FavoriteButton from './FavoriteButton';
-import { YouTubePlayer, YouTubePlayerRef } from './YouTubePlayer';
+
 import { 
   Play, 
   Pause, 
@@ -69,10 +69,6 @@ const Player: React.FC = () => {
     playYouTubeVideo,
     currentYouTubeVideoId,
     isPlayingYouTube,
-    setYouTubeProgress,
-    setYouTubeReady,
-    setYouTubePlaybackStarted,
-    setYoutubePlayerRef,
     lastSearchQuery,
     searchYouTubeManually,
     isShuffled,
@@ -84,65 +80,21 @@ const Player: React.FC = () => {
   const [showQueueModal, setShowQueueModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   
-  // YouTube player ref
-  const youtubePlayerRef = useRef<YouTubePlayerRef>(null);
-  
   // Swipe to close state
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Register YouTube player ref with context
-  useEffect(() => {
-    if (youtubePlayerRef.current) {
-      setYoutubePlayerRef(youtubePlayerRef);
-    }
-  }, [setYoutubePlayerRef, currentYouTubeVideoId]);
-  
-  // YouTube player callbacks
-  const handleYouTubeReady = useCallback(() => {
-    console.log('YouTube player ready');
-    setYouTubeReady();
-  }, [setYouTubeReady]);
-  
-  const handleYouTubeTimeUpdate = useCallback((currentTime: number, ytDuration: number) => {
-    setYouTubeProgress(currentTime, ytDuration);
-  }, [setYouTubeProgress]);
-  
-  const handleYouTubeEnded = useCallback(() => {
-    console.log('YouTube video ended, calling next()');
-    next();
-  }, [next]);
-  
-  // YouTube playback actually started
-  const handleYouTubePlaybackStarted = useCallback(() => {
-    console.log('YouTube playback actually started');
-    setYouTubePlaybackStarted();
-  }, [setYouTubePlaybackStarted]);
-  
-  // Handle seeking - ONLY for YouTube when playing YouTube, ONLY for audio when not
+  // Handle seeking
   const handleSeek = useCallback((time: number) => {
-    if (isPlayingYouTube && youtubePlayerRef.current) {
-      youtubePlayerRef.current.seekTo(time);
-      // Only update progress state, don't touch audio player
-      setYouTubeProgress(time, duration);
-    } else {
-      seek(time);
-    }
-  }, [isPlayingYouTube, seek, setYouTubeProgress, duration]);
+    seek(time);
+  }, [seek]);
   
-  // Handle toggle for both audio and YouTube
+  // Handle toggle
   const handleToggle = useCallback(() => {
-    if (isPlayingYouTube && youtubePlayerRef.current) {
-      if (isPlaying) {
-        youtubePlayerRef.current.pause();
-      } else {
-        youtubePlayerRef.current.play();
-      }
-    }
     toggle();
-  }, [isPlayingYouTube, isPlaying, toggle]);
+  }, [toggle]);
 
   if (!currentTrack) return null;
 
@@ -639,20 +591,6 @@ const Player: React.FC = () => {
         onPlayTrack={playQueueIndex}
         onClearQueue={clearQueue}
       />
-      
-      {/* Hidden YouTube Player */}
-      {currentYouTubeVideoId && (
-        <YouTubePlayer
-          ref={youtubePlayerRef}
-          videoId={currentYouTubeVideoId}
-          volume={volume * 100}
-          autoplay={true}
-          onReady={handleYouTubeReady}
-          onTimeUpdate={handleYouTubeTimeUpdate}
-          onEnded={handleYouTubeEnded}
-          onPlaybackStarted={handleYouTubePlaybackStarted}
-        />
-      )}
     </>
   );
 };

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { Track, PlayerState } from '@/types/music';
 import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
-import { YouTubeVideo, searchYouTube } from '@/lib/youtube';
+import { YouTubeVideo, searchYouTube, getYouTubeAudio } from '@/lib/youtube';
 import { invalidateYouTubeMappingCache } from '@/hooks/useYouTubeMappings';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
@@ -51,12 +51,6 @@ interface PlayerContextType extends PlayerState {
   playYouTubeVideo: (video: YouTubeVideo) => void;
   currentYouTubeVideoId: string | null;
   isPlayingYouTube: boolean;
-  // YouTube player control callbacks (set by Player component)
-  setYouTubeProgress: (progress: number, duration: number) => void;
-  setYouTubeReady: () => void;
-  setYouTubePlaybackStarted: () => void;
-  youtubePlayerRef: React.MutableRefObject<any> | null;
-  setYoutubePlayerRef: (ref: React.MutableRefObject<any>) => void;
   // Search query tracking
   lastSearchQuery: string | null;
   searchYouTubeManually: () => Promise<void>;
@@ -108,42 +102,56 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [currentYouTubeVideoId, setCurrentYouTubeVideoId] = useState<string | null>(null);
   const [isPlayingYouTube, setIsPlayingYouTube] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
-  const youtubePlayerRefState = useRef<any>(null);
   const originalQueueRef = useRef<Track[]>([]);
-  
-  // Ref to track isPlayingYouTube for callbacks (avoids stale closure)
-  const isPlayingYouTubeRef = useRef(false);
-  
-  // Keep ref in sync with state
-  useEffect(() => {
-    isPlayingYouTubeRef.current = isPlayingYouTube;
-  }, [isPlayingYouTube]);
-  
-  // YouTube progress/duration update callback - uses ref to avoid stale closure
-  const setYouTubeProgress = useCallback((progress: number, duration: number) => {
-    // Guard: only update progress if we're in YouTube mode (using ref for fresh value)
-    if (!isPlayingYouTubeRef.current) return;
-    setState(prev => ({ ...prev, progress, duration }));
-  }, []);
-  
-  // YouTube ready callback
-  const setYouTubeReady = useCallback(() => {
-    setLoadingPhase('idle');
-  }, []);
-  
-  // YouTube playback actually started callback
-  const setYouTubePlaybackStarted = useCallback(() => {
-    setState(prev => ({ ...prev, isPlaying: true }));
-    setLoadingPhase('idle');
-  }, []);
-  
-  // Set YouTube player ref from Player component
-  const setYoutubePlayerRef = useCallback((ref: React.MutableRefObject<any>) => {
-    youtubePlayerRefState.current = ref.current;
-  }, []);
   
   // Track ID currently being searched - used to cancel stale searches
   const currentSearchTrackIdRef = useRef<string | null>(null);
+  
+  // Helper function to play YouTube audio by video ID using direct audio extraction
+  const playYouTubeAudioById = useCallback(async (videoId: string, videoTitle?: string): Promise<boolean> => {
+    setLoadingPhase('loading');
+    setCurrentYouTubeVideoId(videoId);
+    setIsPlayingYouTube(true);
+    
+    try {
+      console.log('Extracting YouTube audio for:', videoId);
+      const audioData = await getYouTubeAudio(videoId);
+      
+      if (!audioData || !audioData.url) {
+        console.error('No audio URL returned for video:', videoId);
+        setLoadingPhase('unavailable');
+        setIsPlayingYouTube(false);
+        setCurrentYouTubeVideoId(null);
+        return false;
+      }
+      
+      console.log('Got YouTube audio URL, quality:', audioData.quality);
+      
+      // Play using the standard audio element
+      if (audioRef.current) {
+        audioRef.current.src = audioData.url;
+        try {
+          await audioRef.current.play();
+          setState(prev => ({ ...prev, isPlaying: true }));
+          setLoadingPhase('idle');
+          return true;
+        } catch (playError) {
+          console.error('YouTube audio play error:', playError);
+          setLoadingPhase('unavailable');
+          setIsPlayingYouTube(false);
+          setCurrentYouTubeVideoId(null);
+          return false;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('YouTube audio fetch error:', error);
+      setLoadingPhase('unavailable');
+      setIsPlayingYouTube(false);
+      setCurrentYouTubeVideoId(null);
+      return false;
+    }
+  }, []);
   
   // Cache for album torrent - reuse when playing multiple tracks from same album
   const albumCacheRef = useRef<{
@@ -717,11 +725,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               audioRef.current.src = '';
             }
             
-            // Set YouTube video ID for hidden player
-            setCurrentYouTubeVideoId(selectedVideo.id);
-            setIsPlayingYouTube(true);
-            // Don't set isPlaying to true yet - wait for onPlaybackStarted callback
-            setLoadingPhase('loading');
+            // Play YouTube audio using direct extraction
+            const success = await playYouTubeAudioById(selectedVideo.id, selectedVideo.title);
+            if (!success) {
+              addDebugLog('❌ YouTube fallback fallito', 'Impossibile riprodurre audio', 'error');
+            }
             setIsSearchingStreams(false);
             
             // Save the YouTube mapping for future use
@@ -858,12 +866,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               audioRef.current.pause();
               audioRef.current.src = '';
             }
-            
-            // Set YouTube video ID for hidden player
-            setCurrentYouTubeVideoId(selectedVideo.id);
-            setIsPlayingYouTube(true);
-            // Don't set isPlaying to true yet - wait for onPlaybackStarted callback
-            setLoadingPhase('loading');
+            // Play YouTube audio using direct extraction
+            await playYouTubeAudioById(selectedVideo.id, selectedVideo.title);
             
             // Save the YouTube mapping for future use
             try {
@@ -1036,11 +1040,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     audioRef.current.src = '';
                   }
                   
-                  // Set YouTube video ID for hidden player
-                  setCurrentYouTubeVideoId(selectedVideo.id);
-                  setIsPlayingYouTube(true);
-                  // Don't set isPlaying to true yet - wait for onPlaybackStarted callback
-                  setLoadingPhase('loading');
+                  // Play YouTube audio using direct extraction
+                  await playYouTubeAudioById(selectedVideo.id, selectedVideo.title);
                   
                   // Save the YouTube mapping for future use
                   try {
@@ -1275,34 +1276,63 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, []);
 
-  // Play audio from YouTube video using hidden player
-  const playYouTubeVideo = useCallback((video: YouTubeVideo) => {
+  // Play audio from YouTube video using direct audio stream
+  const playYouTubeVideo = useCallback(async (video: YouTubeVideo) => {
     const track = state.currentTrack;
     
     addDebugLog('🎬 YouTube selezionato', video.title, 'info');
-    
-    // Stop any existing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-    }
-    
-    // Set YouTube video ID - the YouTubePlayer component will handle playback
+    setLoadingPhase('loading');
     setCurrentYouTubeVideoId(video.id);
     setIsPlayingYouTube(true);
-    // Don't set isPlaying to true yet - wait for actual playback to start
-    setLoadingPhase('loading');
     
-    addDebugLog('▶️ Avvio player YouTube', `Video ID: ${video.id}`, 'info');
-    
-    // Save the YouTube mapping for this track
-    if (track) {
-      saveYouTubeMapping(track.id, video);
-      addDebugLog('💾 Salvato', 'Sorgente YouTube salvata per riutilizzo futuro', 'success');
+    try {
+      addDebugLog('🔗 Estrazione audio', `Video ID: ${video.id}`, 'info');
+      
+      // Get direct audio URL from edge function
+      const audioData = await getYouTubeAudio(video.id);
+      
+      if (!audioData || !audioData.url) {
+        addDebugLog('❌ Audio non disponibile', 'Impossibile estrarre audio dal video', 'error');
+        setLoadingPhase('unavailable');
+        setIsPlayingYouTube(false);
+        setCurrentYouTubeVideoId(null);
+        toast.error('Audio YouTube non disponibile');
+        return;
+      }
+      
+      addDebugLog('▶️ Riproduzione YouTube', `Qualità: ${audioData.quality}`, 'success');
+      
+      // Play using the standard audio element
+      if (audioRef.current) {
+        audioRef.current.src = audioData.url;
+        audioRef.current.play().then(() => {
+          setState(prev => ({ ...prev, isPlaying: true }));
+          setLoadingPhase('idle');
+        }).catch(err => {
+          console.error('YouTube audio playback error:', err);
+          addDebugLog('❌ Errore riproduzione', err.message, 'error');
+          setLoadingPhase('unavailable');
+          setIsPlayingYouTube(false);
+          setCurrentYouTubeVideoId(null);
+        });
+      }
+      
+      // Save the YouTube mapping for this track
+      if (track) {
+        saveYouTubeMapping(track.id, video);
+        addDebugLog('💾 Salvato', 'Sorgente YouTube salvata', 'success');
+      }
+      
+      // Clear YouTube results after selection
+      setYoutubeResults([]);
+    } catch (error) {
+      console.error('YouTube audio fetch error:', error);
+      addDebugLog('❌ Errore YouTube', error instanceof Error ? error.message : 'Errore', 'error');
+      setLoadingPhase('unavailable');
+      setIsPlayingYouTube(false);
+      setCurrentYouTubeVideoId(null);
+      toast.error('Errore caricamento audio YouTube');
     }
-    
-    // Clear YouTube results after selection
-    setYoutubeResults([]);
   }, [addDebugLog, state.currentTrack, saveYouTubeMapping]);
 
   // Search YouTube manually with current query
@@ -1443,11 +1473,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           audioRef.current.pause();
           audioRef.current.src = '';
         }
-        
-        setCurrentYouTubeVideoId(youtubeMapping.video_id);
-        setIsPlayingYouTube(true);
-        // Don't set isPlaying to true yet - wait for onPlaybackStarted callback
-        setLoadingPhase('loading');
+        // Play YouTube audio using direct extraction
+        await playYouTubeAudioById(youtubeMapping.video_id, youtubeMapping.video_title);
         
         // Save to recently played
         const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
@@ -2164,11 +2191,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         playYouTubeVideo,
         currentYouTubeVideoId,
         isPlayingYouTube,
-        setYouTubeProgress,
-        setYouTubeReady,
-        setYouTubePlaybackStarted,
-        youtubePlayerRef: youtubePlayerRefState,
-        setYoutubePlayerRef,
         lastSearchQuery,
         searchYouTubeManually,
         isShuffled,

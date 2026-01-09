@@ -13,11 +13,20 @@ interface VideoResult {
   thumbnail: string;
 }
 
-// Piped instances for search
+interface AudioStream {
+  url: string;
+  quality: string;
+  mimeType: string;
+  bitrate: number;
+}
+
+// Piped instances for search and audio extraction
 const PIPED_INSTANCES = [
   "https://pipedapi.kavin.rocks",
   "https://api.piped.private.coffee",
   "https://pipedapi.r4fo.com",
+  "https://pipedapi.syncpundit.io",
+  "https://api-piped.mha.fi",
 ];
 
 // Invidious instances as backup
@@ -25,6 +34,7 @@ const INVIDIOUS_INSTANCES = [
   "https://invidious.io.lol",
   "https://vid.puffyan.us",
   "https://yewtu.be",
+  "https://inv.nadeko.net",
 ];
 
 async function tryFetch(url: string, timeout = 10000): Promise<Response | null> {
@@ -121,6 +131,89 @@ async function searchVideos(query: string): Promise<VideoResult[]> {
   return [];
 }
 
+// Extract direct audio URL from video using Piped or Invidious
+async function getAudioStream(videoId: string): Promise<AudioStream | null> {
+  const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
+  
+  console.log('Extracting audio for:', cleanVideoId);
+  
+  // Try Piped instances first - they provide direct audio streams
+  for (const instance of PIPED_INSTANCES) {
+    try {
+      const url = `${instance}/streams/${cleanVideoId}`;
+      console.log(`Trying Piped: ${url}`);
+      const response = await tryFetch(url, 15000);
+      
+      if (!response || !response.ok) {
+        console.log(`Piped ${instance} failed: ${response?.status}`);
+        continue;
+      }
+      
+      const data = await response.json();
+      
+      // Get audio streams - prefer higher quality
+      if (data.audioStreams && Array.isArray(data.audioStreams) && data.audioStreams.length > 0) {
+        // Sort by bitrate descending to get best quality
+        const sortedStreams = data.audioStreams
+          .filter((s: any) => s.url && s.mimeType?.includes('audio'))
+          .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+        
+        if (sortedStreams.length > 0) {
+          const best = sortedStreams[0];
+          console.log(`Found audio stream: ${best.quality || best.bitrate}kbps`);
+          return {
+            url: best.url,
+            quality: best.quality || `${Math.round((best.bitrate || 0) / 1000)}kbps`,
+            mimeType: best.mimeType || 'audio/mp4',
+            bitrate: best.bitrate || 0,
+          };
+        }
+      }
+    } catch (error) {
+      console.error(`Piped audio error: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  
+  // Fallback to Invidious
+  for (const instance of INVIDIOUS_INSTANCES) {
+    try {
+      const url = `${instance}/api/v1/videos/${cleanVideoId}`;
+      console.log(`Trying Invidious: ${url}`);
+      const response = await tryFetch(url, 15000);
+      
+      if (!response || !response.ok) {
+        console.log(`Invidious ${instance} failed: ${response?.status}`);
+        continue;
+      }
+      
+      const data = await response.json();
+      
+      // Get adaptive formats (audio only)
+      if (data.adaptiveFormats && Array.isArray(data.adaptiveFormats)) {
+        const audioFormats = data.adaptiveFormats
+          .filter((f: any) => f.type?.includes('audio') && f.url)
+          .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+        
+        if (audioFormats.length > 0) {
+          const best = audioFormats[0];
+          console.log(`Found Invidious audio: ${best.bitrate}bps`);
+          return {
+            url: best.url,
+            quality: `${Math.round((best.bitrate || 0) / 1000)}kbps`,
+            mimeType: best.type?.split(';')[0] || 'audio/mp4',
+            bitrate: best.bitrate || 0,
+          };
+        }
+      }
+    } catch (error) {
+      console.error(`Invidious audio error: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  
+  console.log('No audio stream found for:', cleanVideoId);
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -148,7 +241,6 @@ serve(async (req) => {
       );
     }
 
-    // For getAudio, we now just return the embed URL - the frontend will use a hidden player
     if (action === 'getAudio') {
       if (!videoId) {
         return new Response(
@@ -157,24 +249,22 @@ serve(async (req) => {
         );
       }
 
-      const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
-      console.log('========== Get Audio ==========');
-      console.log('Video ID:', cleanVideoId);
+      console.log('========== Get Audio Stream ==========');
+      console.log('Video ID:', videoId);
       
-      // Return embed info - frontend will use YouTube IFrame API
-      return new Response(
-        JSON.stringify({ 
-          audio: {
-            videoId: cleanVideoId,
-            embedUrl: `https://www.youtube.com/embed/${cleanVideoId}?autoplay=1&enablejsapi=1`,
-            url: `https://www.youtube.com/watch?v=${cleanVideoId}`,
-            quality: 'YouTube',
-            mimeType: 'video/youtube',
-            bitrate: 0,
-          }
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      const audioStream = await getAudioStream(videoId);
+      
+      if (audioStream) {
+        return new Response(
+          JSON.stringify({ audio: audioStream }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        return new Response(
+          JSON.stringify({ error: 'No audio stream found', audio: null }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     return new Response(
