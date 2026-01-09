@@ -1281,41 +1281,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const track = state.currentTrack;
     
     addDebugLog('🎬 YouTube selezionato', video.title, 'info');
-    setLoadingPhase('loading');
-    setCurrentYouTubeVideoId(video.id);
-    setIsPlayingYouTube(true);
     
-    try {
-      addDebugLog('🔗 Estrazione audio', `Video ID: ${video.id}`, 'info');
-      
-      // Get direct audio URL from edge function
-      const audioData = await getYouTubeAudio(video.id);
-      
-      if (!audioData || !audioData.url) {
-        addDebugLog('❌ Audio non disponibile', 'Impossibile estrarre audio dal video', 'error');
-        setLoadingPhase('unavailable');
-        setIsPlayingYouTube(false);
-        setCurrentYouTubeVideoId(null);
-        toast.error('Audio YouTube non disponibile');
-        return;
-      }
-      
-      addDebugLog('▶️ Riproduzione YouTube', `Qualità: ${audioData.quality}`, 'success');
-      
-      // Play using the standard audio element
-      if (audioRef.current) {
-        audioRef.current.src = audioData.url;
-        audioRef.current.play().then(() => {
-          setState(prev => ({ ...prev, isPlaying: true }));
-          setLoadingPhase('idle');
-        }).catch(err => {
-          console.error('YouTube audio playback error:', err);
-          addDebugLog('❌ Errore riproduzione', err.message, 'error');
-          setLoadingPhase('unavailable');
-          setIsPlayingYouTube(false);
-          setCurrentYouTubeVideoId(null);
-        });
-      }
+    // Use the helper function for actual playback
+    const success = await playYouTubeAudioById(video.id, video.title);
+    
+    if (success) {
+      addDebugLog('▶️ Riproduzione YouTube', video.title, 'success');
       
       // Save the YouTube mapping for this track
       if (track) {
@@ -1325,15 +1296,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       // Clear YouTube results after selection
       setYoutubeResults([]);
-    } catch (error) {
-      console.error('YouTube audio fetch error:', error);
-      addDebugLog('❌ Errore YouTube', error instanceof Error ? error.message : 'Errore', 'error');
-      setLoadingPhase('unavailable');
-      setIsPlayingYouTube(false);
-      setCurrentYouTubeVideoId(null);
-      toast.error('Errore caricamento audio YouTube');
+    } else {
+      addDebugLog('❌ Errore YouTube', 'Impossibile riprodurre audio', 'error');
+      toast.error('Audio YouTube non disponibile');
     }
-  }, [addDebugLog, state.currentTrack, saveYouTubeMapping]);
+  }, [addDebugLog, state.currentTrack, saveYouTubeMapping, playYouTubeAudioById]);
 
   // Search YouTube manually with current query
   const searchYouTubeManually = useCallback(async () => {
@@ -1503,30 +1470,25 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           const selectedVideo = videos[0];
           addDebugLog('▶️ Auto-play YouTube', selectedVideo.title, 'success');
           
-          if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.src = '';
-          }
+          // Play YouTube audio using direct extraction
+          const success = await playYouTubeAudioById(selectedVideo.id, selectedVideo.title);
           
-          setCurrentYouTubeVideoId(selectedVideo.id);
-          setIsPlayingYouTube(true);
-          // Don't set isPlaying to true yet - wait for onPlaybackStarted callback
-          setLoadingPhase('loading');
-          
-          // Save the YouTube mapping
-          try {
-            await supabase
-              .from('youtube_track_mappings')
-              .upsert({
-                track_id: track.id,
-                video_id: selectedVideo.id,
-                video_title: selectedVideo.title,
-                video_duration: selectedVideo.duration,
-                uploader_name: selectedVideo.uploaderName,
-              }, { onConflict: 'track_id' });
-            invalidateYouTubeMappingCache(track.id);
-          } catch (saveError) {
-            console.error('Failed to save YouTube mapping:', saveError);
+          if (success) {
+            // Save the YouTube mapping
+            try {
+              await supabase
+                .from('youtube_track_mappings')
+                .upsert({
+                  track_id: track.id,
+                  video_id: selectedVideo.id,
+                  video_title: selectedVideo.title,
+                  video_duration: selectedVideo.duration,
+                  uploader_name: selectedVideo.uploaderName,
+                }, { onConflict: 'track_id' });
+              invalidateYouTubeMappingCache(track.id);
+            } catch (saveError) {
+              console.error('Failed to save YouTube mapping:', saveError);
+            }
           }
         } else {
           addDebugLog('❌ Nessun risultato', 'Nessun video YouTube trovato', 'error');
