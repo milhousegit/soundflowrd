@@ -24,6 +24,7 @@ interface YouTubePlayerProps {
   onError?: (error: number) => void;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onEnded?: () => void;
+  onPlaybackStarted?: () => void;
   volume?: number;
   autoplay?: boolean;
 }
@@ -65,6 +66,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
   onError,
   onTimeUpdate,
   onEnded,
+  onPlaybackStarted,
   volume = 100,
   autoplay = true,
 }, ref) => {
@@ -72,6 +74,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
   const playerRef = useRef<any>(null);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentVideoIdRef = useRef<string | null>(null);
+  const hasStartedPlayingRef = useRef(false);
 
   useImperativeHandle(ref, () => ({
     play: () => playerRef.current?.playVideo?.(),
@@ -101,6 +104,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
     }
 
     currentVideoIdRef.current = videoId;
+    hasStartedPlayingRef.current = false;
 
     const initPlayer = async () => {
       await loadYouTubeAPI();
@@ -155,6 +159,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
           onStateChange: (event: any) => {
             onStateChange?.(event.data);
             
+            // YT.PlayerState.PLAYING = 1
+            if (event.data === 1 && !hasStartedPlayingRef.current) {
+              hasStartedPlayingRef.current = true;
+              console.log('YouTube playback actually started');
+              onPlaybackStarted?.();
+            }
+            
             // YT.PlayerState.ENDED = 0
             if (event.data === 0) {
               onEnded?.();
@@ -175,7 +186,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
         clearInterval(timeUpdateIntervalRef.current);
       }
     };
-  }, [videoId, autoplay, volume, onReady, onStateChange, onError, onTimeUpdate, onEnded]);
+  }, [videoId, autoplay, volume, onReady, onStateChange, onError, onTimeUpdate, onEnded, onPlaybackStarted]);
 
   // Update volume when prop changes
   useEffect(() => {
