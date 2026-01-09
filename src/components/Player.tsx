@@ -75,6 +75,8 @@ const Player: React.FC = () => {
     setYoutubePlayerRef,
     lastSearchQuery,
     searchYouTubeManually,
+    isShuffled,
+    toggleShuffle,
   } = usePlayer();
   const { t } = useSettings();
   
@@ -261,7 +263,7 @@ const Player: React.FC = () => {
           </div>
 
           {/* Cover */}
-          <div className="flex-1 flex items-center justify-center px-8 pt-4 pb-2">
+          <div className="flex-1 flex items-center justify-center px-8 pt-2 pb-1">
             <div className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative">
               {currentTrack.coverUrl ? (
                 <img 
@@ -312,7 +314,7 @@ const Player: React.FC = () => {
           </div>
 
           {/* Track Info - moved closer to cover */}
-          <div className="px-8 pt-2 text-center">
+          <div className="px-8 pt-1 text-center">
             <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <button 
@@ -350,24 +352,21 @@ const Player: React.FC = () => {
           </div>
 
           {/* Controls with safe area for home indicator */}
-          <div className="flex items-center justify-between px-8 pb-safe" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
-            {/* Shuffle + Like */}
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground">
-                <Shuffle className="w-5 h-5" />
-              </Button>
-              <FavoriteButton
-                itemType="track"
-                item={currentTrack}
-                size="md"
-                variant="ghost"
-              />
-            </div>
+          <div className="flex items-center justify-between px-6 pb-safe" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
+            {/* Shuffle a sinistra */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className={cn("h-11 w-11", isShuffled ? "text-primary" : "text-muted-foreground")}
+              onClick={toggleShuffle}
+            >
+              <Shuffle className="w-5 h-5" />
+            </Button>
             
             {/* Main controls */}
-            <div className="flex items-center gap-6">
-              <Button variant="playerSecondary" size="icon" onClick={previous}>
-                <SkipBack className="w-7 h-7" />
+            <div className="flex items-center gap-4">
+              <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={previous}>
+                <SkipBack className="w-6 h-6" />
               </Button>
               <Button variant="player" className="h-16 w-16" onClick={handleToggle}>
                 {isPlaying ? (
@@ -376,13 +375,19 @@ const Player: React.FC = () => {
                   <Play className="w-8 h-8 ml-1" />
                 )}
               </Button>
-              <Button variant="playerSecondary" size="icon" onClick={next}>
-                <SkipForward className="w-7 h-7" />
+              <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={next}>
+                <SkipForward className="w-6 h-6" />
               </Button>
             </div>
             
-            {/* Spacer to balance layout */}
-            <div className="w-[88px]" />
+            {/* Mi piace a destra */}
+            <FavoriteButton
+              itemType="track"
+              item={currentTrack}
+              size="md"
+              variant="ghost"
+              className="h-11 w-11"
+            />
           </div>
         </div>
         

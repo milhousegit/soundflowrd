@@ -60,6 +60,9 @@ interface PlayerContextType extends PlayerState {
   // Search query tracking
   lastSearchQuery: string | null;
   searchYouTubeManually: () => Promise<void>;
+  // Shuffle
+  isShuffled: boolean;
+  toggleShuffle: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -104,14 +107,24 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
   const [currentYouTubeVideoId, setCurrentYouTubeVideoId] = useState<string | null>(null);
   const [isPlayingYouTube, setIsPlayingYouTube] = useState(false);
+  const [isShuffled, setIsShuffled] = useState(false);
   const youtubePlayerRefState = useRef<any>(null);
+  const originalQueueRef = useRef<Track[]>([]);
   
-  // YouTube progress/duration update callback - only update if we're actually playing YouTube
-  const setYouTubeProgress = useCallback((progress: number, duration: number) => {
-    // Guard: only update progress if we're in YouTube mode
-    if (!isPlayingYouTube) return;
-    setState(prev => ({ ...prev, progress, duration }));
+  // Ref to track isPlayingYouTube for callbacks (avoids stale closure)
+  const isPlayingYouTubeRef = useRef(false);
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    isPlayingYouTubeRef.current = isPlayingYouTube;
   }, [isPlayingYouTube]);
+  
+  // YouTube progress/duration update callback - uses ref to avoid stale closure
+  const setYouTubeProgress = useCallback((progress: number, duration: number) => {
+    // Guard: only update progress if we're in YouTube mode (using ref for fresh value)
+    if (!isPlayingYouTubeRef.current) return;
+    setState(prev => ({ ...prev, progress, duration }));
+  }, []);
   
   // YouTube ready callback
   const setYouTubeReady = useCallback(() => {
@@ -1797,7 +1810,51 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const clearQueue = useCallback(() => {
     setState(prev => ({ ...prev, queue: [], queueIndex: 0 }));
+    originalQueueRef.current = [];
+    setIsShuffled(false);
   }, []);
+
+  // Fisher-Yates shuffle algorithm
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
+  const toggleShuffle = useCallback(() => {
+    setState(prev => {
+      if (isShuffled) {
+        // Restore original order
+        const currentTrack = prev.queue[prev.queueIndex];
+        const originalQueue = originalQueueRef.current;
+        const newIndex = originalQueue.findIndex(t => t.id === currentTrack?.id);
+        return {
+          ...prev,
+          queue: originalQueue,
+          queueIndex: newIndex >= 0 ? newIndex : 0,
+        };
+      } else {
+        // Shuffle the queue, keeping current track at position 0
+        const currentTrack = prev.queue[prev.queueIndex];
+        const otherTracks = prev.queue.filter((_, i) => i !== prev.queueIndex);
+        const shuffledOthers = shuffleArray(otherTracks);
+        const newQueue = currentTrack ? [currentTrack, ...shuffledOthers] : shuffledOthers;
+        
+        // Save original order before shuffling
+        originalQueueRef.current = prev.queue;
+        
+        return {
+          ...prev,
+          queue: newQueue,
+          queueIndex: 0,
+        };
+      }
+    });
+    setIsShuffled(prev => !prev);
+  }, [isShuffled]);
 
   const playQueueIndex = useCallback((index: number) => {
     if (index >= 0 && index < state.queue.length) {
@@ -2114,6 +2171,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setYoutubePlayerRef,
         lastSearchQuery,
         searchYouTubeManually,
+        isShuffled,
+        toggleShuffle,
       }}
     >
       {children}
