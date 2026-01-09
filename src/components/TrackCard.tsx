@@ -231,30 +231,6 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
         )}
         style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}
       >
-        {/* Index or Play button - hide index on mobile */}
-        <div className="w-6 md:w-8 h-6 md:h-8 flex items-center justify-center flex-shrink-0">
-          {index !== undefined && !isMobile && (
-            <span className={cn(
-              "text-xs md:text-sm text-muted-foreground group-hover:hidden",
-              isCurrentTrack && "text-primary hidden"
-            )}>
-              {index + 1}
-            </span>
-          )}
-          <div className={cn(
-            "items-center justify-center",
-            // On mobile: always show play/pause icon
-            isMobile ? "flex" : "hidden group-hover:flex",
-            isCurrentTrack && "flex",
-            index === undefined && "flex"
-          )}>
-            {isCurrentTrack && isPlaying ? (
-              <Pause className="w-4 h-4 text-primary" />
-            ) : (
-              <Play className="w-4 h-4 text-foreground ml-0.5" />
-            )}
-          </div>
-        </div>
 
         {/* Cover */}
         <div className="w-10 h-10 md:w-10 md:h-10 rounded bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 relative">
