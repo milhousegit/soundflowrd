@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useEffect, forwardRef, useImperativeHandle, useState } from 'react';
 
 declare global {
   interface Window {
@@ -75,11 +75,21 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentVideoIdRef = useRef<string | null>(null);
   const hasStartedPlayingRef = useRef(false);
+  const [isReady, setIsReady] = useState(false);
 
   useImperativeHandle(ref, () => ({
-    play: () => playerRef.current?.playVideo?.(),
-    pause: () => playerRef.current?.pauseVideo?.(),
-    seekTo: (seconds: number) => playerRef.current?.seekTo?.(seconds, true),
+    play: () => {
+      console.log('YouTubePlayer: play() called, player exists:', !!playerRef.current);
+      playerRef.current?.playVideo?.();
+    },
+    pause: () => {
+      console.log('YouTubePlayer: pause() called');
+      playerRef.current?.pauseVideo?.();
+    },
+    seekTo: (seconds: number) => {
+      console.log('YouTubePlayer: seekTo()', seconds);
+      playerRef.current?.seekTo?.(seconds, true);
+    },
     setVolume: (vol: number) => playerRef.current?.setVolume?.(vol),
     getDuration: () => playerRef.current?.getDuration?.() || 0,
     getCurrentTime: () => playerRef.current?.getCurrentTime?.() || 0,
@@ -89,6 +99,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
       }
       playerRef.current?.destroy?.();
       playerRef.current = null;
+      setIsReady(false);
     },
   }));
 
@@ -97,6 +108,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
     
     // Don't reload if same video
     if (currentVideoIdRef.current === videoId && playerRef.current) {
+      console.log('YouTubePlayer: Same video, just playing');
       if (autoplay) {
         playerRef.current.playVideo?.();
       }
@@ -105,12 +117,18 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
 
     currentVideoIdRef.current = videoId;
     hasStartedPlayingRef.current = false;
+    setIsReady(false);
 
     const initPlayer = async () => {
+      console.log('YouTubePlayer: Initializing for video:', videoId);
       await loadYouTubeAPI();
 
       // Destroy existing player
       if (playerRef.current) {
+        if (timeUpdateIntervalRef.current) {
+          clearInterval(timeUpdateIntervalRef.current);
+          timeUpdateIntervalRef.current = null;
+        }
         playerRef.current.destroy();
         playerRef.current = null;
       }
@@ -134,12 +152,15 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
           modestbranding: 1,
           playsinline: 1,
           rel: 0,
-          // Mobile-specific: allow inline playback
+          // Mobile-specific
           webkit_playsinline: 1,
+          origin: window.location.origin,
         },
         events: {
           onReady: (event: any) => {
+            console.log('YouTubePlayer: onReady fired');
             event.target.setVolume(volume);
+            setIsReady(true);
             onReady?.();
             
             // Start time update interval
@@ -147,32 +168,55 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
               clearInterval(timeUpdateIntervalRef.current);
             }
             timeUpdateIntervalRef.current = setInterval(() => {
-              if (playerRef.current && onTimeUpdate) {
-                const currentTime = playerRef.current.getCurrentTime?.() || 0;
-                const duration = playerRef.current.getDuration?.() || 0;
-                if (duration > 0) {
-                  onTimeUpdate(currentTime, duration);
+              if (playerRef.current) {
+                try {
+                  const currentTime = playerRef.current.getCurrentTime?.() || 0;
+                  const duration = playerRef.current.getDuration?.() || 0;
+                  if (duration > 0 && onTimeUpdate) {
+                    onTimeUpdate(currentTime, duration);
+                  }
+                } catch (e) {
+                  // Player might be destroyed
                 }
               }
-            }, 500);
+            }, 250); // More frequent updates for smoother progress bar
+            
+            // Auto-play if needed
+            if (autoplay) {
+              console.log('YouTubePlayer: Attempting autoplay');
+              event.target.playVideo();
+            }
           },
           onStateChange: (event: any) => {
+            console.log('YouTubePlayer: State changed to', event.data);
             onStateChange?.(event.data);
             
             // YT.PlayerState.PLAYING = 1
-            if (event.data === 1 && !hasStartedPlayingRef.current) {
-              hasStartedPlayingRef.current = true;
-              console.log('YouTube playback actually started');
-              onPlaybackStarted?.();
+            if (event.data === 1) {
+              if (!hasStartedPlayingRef.current) {
+                hasStartedPlayingRef.current = true;
+                console.log('YouTubePlayer: Playback actually started');
+                onPlaybackStarted?.();
+              }
             }
             
             // YT.PlayerState.ENDED = 0
             if (event.data === 0) {
+              console.log('YouTubePlayer: Video ended');
               onEnded?.();
+            }
+            
+            // YT.PlayerState.UNSTARTED = -1 or CUED = 5 on mobile (autoplay blocked)
+            // Try to play again after a short delay
+            if (event.data === -1 || event.data === 5) {
+              console.log('YouTubePlayer: Video unstarted/cued, retrying play');
+              setTimeout(() => {
+                playerRef.current?.playVideo?.();
+              }, 500);
             }
           },
           onError: (event: any) => {
-            console.error('YouTube player error:', event.data);
+            console.error('YouTubePlayer: Error:', event.data);
             onError?.(event.data);
           },
         },
@@ -184,14 +228,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
     return () => {
       if (timeUpdateIntervalRef.current) {
         clearInterval(timeUpdateIntervalRef.current);
+        timeUpdateIntervalRef.current = null;
       }
     };
-  }, [videoId, autoplay, volume, onReady, onStateChange, onError, onTimeUpdate, onEnded, onPlaybackStarted]);
+  }, [videoId, autoplay]);
 
   // Update volume when prop changes
   useEffect(() => {
-    playerRef.current?.setVolume?.(volume);
-  }, [volume]);
+    if (isReady && playerRef.current) {
+      playerRef.current.setVolume?.(volume);
+    }
+  }, [volume, isReady]);
 
   return (
     <div 

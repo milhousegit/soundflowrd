@@ -93,6 +93,7 @@ const Player: React.FC = () => {
   
   // Handle seeking - works for both regular audio and YouTube iframe
   const handleSeek = useCallback((time: number) => {
+    console.log('handleSeek called:', time, 'useYouTubeIframe:', useYouTubeIframe);
     if (useYouTubeIframe && youtubePlayerRef.current) {
       youtubePlayerRef.current.seekTo(time);
     } else {
@@ -102,14 +103,18 @@ const Player: React.FC = () => {
   
   // Handle toggle - works for both regular audio and YouTube iframe
   const handleToggle = useCallback(() => {
+    console.log('handleToggle called, useYouTubeIframe:', useYouTubeIframe, 'isPlaying:', isPlaying);
     if (useYouTubeIframe && youtubePlayerRef.current) {
       if (isPlaying) {
         youtubePlayerRef.current.pause();
       } else {
         youtubePlayerRef.current.play();
       }
+      // Toggle the state directly since we're controlling YouTube
+      toggle();
+    } else {
+      toggle();
     }
-    toggle();
   }, [toggle, useYouTubeIframe, isPlaying]);
 
   if (!currentTrack) return null;
