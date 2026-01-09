@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import BugsModal from './BugsModal';
 import QueueModal from './QueueModal';
+import FavoriteButton from './FavoriteButton';
 import { YouTubePlayer, YouTubePlayerRef } from './YouTubePlayer';
 import { 
   Play, 
@@ -22,6 +23,7 @@ import {
   Cloud,
   ListMusic,
   Youtube,
+  Shuffle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
@@ -69,6 +71,7 @@ const Player: React.FC = () => {
     isPlayingYouTube,
     setYouTubeProgress,
     setYouTubeReady,
+    setYouTubePlaybackStarted,
     setYoutubePlayerRef,
     lastSearchQuery,
     searchYouTubeManually,
@@ -109,6 +112,12 @@ const Player: React.FC = () => {
     console.log('YouTube video ended, calling next()');
     next();
   }, [next]);
+  
+  // YouTube playback actually started
+  const handleYouTubePlaybackStarted = useCallback(() => {
+    console.log('YouTube playback actually started');
+    setYouTubePlaybackStarted();
+  }, [setYouTubePlaybackStarted]);
   
   // Handle seeking - ONLY for YouTube when playing YouTube, ONLY for audio when not
   const handleSeek = useCallback((time: number) => {
@@ -252,7 +261,7 @@ const Player: React.FC = () => {
           </div>
 
           {/* Cover */}
-          <div className="flex-1 flex items-center justify-center p-8">
+          <div className="flex-1 flex items-center justify-center px-8 pt-4 pb-2">
             <div className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative">
               {currentTrack.coverUrl ? (
                 <img 
@@ -288,11 +297,22 @@ const Player: React.FC = () => {
                   </div>
                 </div>
               )}
+              {/* Loading overlay for YouTube */}
+              {isPlayingYouTube && loadingPhase === 'loading' && (
+                <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+                  <div className="bg-card rounded-xl p-4 flex flex-col items-center">
+                    <Youtube className="w-8 h-8 text-red-500 animate-pulse mb-2" />
+                    <span className="text-sm text-foreground">
+                      {t('language') === 'it' ? "Caricando..." : "Loading..."}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Track Info */}
-          <div className="px-8 text-center">
+          {/* Track Info - moved closer to cover */}
+          <div className="px-8 pt-2 text-center">
             <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <button 
@@ -316,7 +336,7 @@ const Player: React.FC = () => {
           </div>
 
           {/* Progress */}
-          <div className="px-8 py-4">
+          <div className="px-8 py-3">
             <Slider
               value={[progress]}
               max={duration || 100}
@@ -330,20 +350,39 @@ const Player: React.FC = () => {
           </div>
 
           {/* Controls with safe area for home indicator */}
-          <div className="flex items-center justify-center gap-8 p-8 pb-safe" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
-            <Button variant="playerSecondary" size="icon" onClick={previous}>
-              <SkipBack className="w-8 h-8" />
-            </Button>
-            <Button variant="player" className="h-16 w-16" onClick={handleToggle}>
-              {isPlaying ? (
-                <Pause className="w-8 h-8" />
-              ) : (
-                <Play className="w-8 h-8 ml-1" />
-              )}
-            </Button>
-            <Button variant="playerSecondary" size="icon" onClick={next}>
-              <SkipForward className="w-8 h-8" />
-            </Button>
+          <div className="flex items-center justify-between px-8 pb-safe" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
+            {/* Shuffle + Like */}
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground">
+                <Shuffle className="w-5 h-5" />
+              </Button>
+              <FavoriteButton
+                itemType="track"
+                item={currentTrack}
+                size="md"
+                variant="ghost"
+              />
+            </div>
+            
+            {/* Main controls */}
+            <div className="flex items-center gap-6">
+              <Button variant="playerSecondary" size="icon" onClick={previous}>
+                <SkipBack className="w-7 h-7" />
+              </Button>
+              <Button variant="player" className="h-16 w-16" onClick={handleToggle}>
+                {isPlaying ? (
+                  <Pause className="w-8 h-8" />
+                ) : (
+                  <Play className="w-8 h-8 ml-1" />
+                )}
+              </Button>
+              <Button variant="playerSecondary" size="icon" onClick={next}>
+                <SkipForward className="w-7 h-7" />
+              </Button>
+            </div>
+            
+            {/* Spacer to balance layout */}
+            <div className="w-[88px]" />
           </div>
         </div>
         
@@ -606,6 +645,7 @@ const Player: React.FC = () => {
           onReady={handleYouTubeReady}
           onTimeUpdate={handleYouTubeTimeUpdate}
           onEnded={handleYouTubeEnded}
+          onPlaybackStarted={handleYouTubePlaybackStarted}
         />
       )}
     </>

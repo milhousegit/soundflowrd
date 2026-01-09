@@ -54,6 +54,7 @@ interface PlayerContextType extends PlayerState {
   // YouTube player control callbacks (set by Player component)
   setYouTubeProgress: (progress: number, duration: number) => void;
   setYouTubeReady: () => void;
+  setYouTubePlaybackStarted: () => void;
   youtubePlayerRef: React.MutableRefObject<any> | null;
   setYoutubePlayerRef: (ref: React.MutableRefObject<any>) => void;
   // Search query tracking
@@ -114,6 +115,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   
   // YouTube ready callback
   const setYouTubeReady = useCallback(() => {
+    setLoadingPhase('idle');
+  }, []);
+  
+  // YouTube playback actually started callback
+  const setYouTubePlaybackStarted = useCallback(() => {
+    setState(prev => ({ ...prev, isPlaying: true }));
     setLoadingPhase('idle');
   }, []);
   
@@ -700,8 +707,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             // Set YouTube video ID for hidden player
             setCurrentYouTubeVideoId(selectedVideo.id);
             setIsPlayingYouTube(true);
-            setState(prev => ({ ...prev, isPlaying: true }));
-            setLoadingPhase('idle');
+            // Don't set isPlaying to true yet - wait for onPlaybackStarted callback
+            setLoadingPhase('loading');
             setIsSearchingStreams(false);
             
             // Save the YouTube mapping for future use
@@ -842,8 +849,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             // Set YouTube video ID for hidden player
             setCurrentYouTubeVideoId(selectedVideo.id);
             setIsPlayingYouTube(true);
-            setState(prev => ({ ...prev, isPlaying: true }));
-            setLoadingPhase('idle');
+            // Don't set isPlaying to true yet - wait for onPlaybackStarted callback
+            setLoadingPhase('loading');
             
             // Save the YouTube mapping for future use
             try {
@@ -1019,8 +1026,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   // Set YouTube video ID for hidden player
                   setCurrentYouTubeVideoId(selectedVideo.id);
                   setIsPlayingYouTube(true);
-                  setState(prev => ({ ...prev, isPlaying: true }));
-                  setLoadingPhase('idle');
+                  // Don't set isPlaying to true yet - wait for onPlaybackStarted callback
+                  setLoadingPhase('loading');
                   
                   // Save the YouTube mapping for future use
                   try {
@@ -1270,10 +1277,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Set YouTube video ID - the YouTubePlayer component will handle playback
     setCurrentYouTubeVideoId(video.id);
     setIsPlayingYouTube(true);
-    setState(prev => ({ ...prev, isPlaying: true }));
+    // Don't set isPlaying to true yet - wait for actual playback to start
     setLoadingPhase('loading');
     
-    addDebugLog('▶️ Avvio player YouTube', `Video ID: ${video.id}`, 'success');
+    addDebugLog('▶️ Avvio player YouTube', `Video ID: ${video.id}`, 'info');
     
     // Save the YouTube mapping for this track
     if (track) {
@@ -1426,7 +1433,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         
         setCurrentYouTubeVideoId(youtubeMapping.video_id);
         setIsPlayingYouTube(true);
-        setState(prev => ({ ...prev, isPlaying: true }));
+        // Don't set isPlaying to true yet - wait for onPlaybackStarted callback
+        setLoadingPhase('loading');
         
         // Save to recently played
         const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
@@ -1462,8 +1470,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           
           setCurrentYouTubeVideoId(selectedVideo.id);
           setIsPlayingYouTube(true);
-          setState(prev => ({ ...prev, isPlaying: true }));
-          setLoadingPhase('idle');
+          // Don't set isPlaying to true yet - wait for onPlaybackStarted callback
+          setLoadingPhase('loading');
           
           // Save the YouTube mapping
           try {
@@ -2101,6 +2109,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         isPlayingYouTube,
         setYouTubeProgress,
         setYouTubeReady,
+        setYouTubePlaybackStarted,
         youtubePlayerRef: youtubePlayerRefState,
         setYoutubePlayerRef,
         lastSearchQuery,
