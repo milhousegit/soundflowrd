@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { Track, PlayerState } from '@/types/music';
 import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
-import { YouTubeVideo, searchYouTube, getYouTubeAudio } from '@/lib/youtube';
+import { YouTubeVideo, YouTubeAudioResult, searchYouTube, getYouTubeAudio } from '@/lib/youtube';
 import { invalidateYouTubeMappingCache } from '@/hooks/useYouTubeMappings';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
@@ -51,6 +51,9 @@ interface PlayerContextType extends PlayerState {
   playYouTubeVideo: (video: YouTubeVideo) => void;
   currentYouTubeVideoId: string | null;
   isPlayingYouTube: boolean;
+  useYouTubeIframe: boolean;
+  setYouTubeProgress?: (currentTime: number, duration: number) => void;
+  setYouTubePlaybackStarted?: () => void;
   // Search query tracking
   lastSearchQuery: string | null;
   searchYouTubeManually: () => Promise<void>;
@@ -107,49 +110,64 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Track ID currently being searched - used to cancel stale searches
   const currentSearchTrackIdRef = useRef<string | null>(null);
   
+  // Ref for YouTube iframe player
+  const youtubePlayerRef = useRef<any>(null);
+  const [useYouTubeIframe, setUseYouTubeIframe] = useState(false);
+  
   // Helper function to play YouTube audio by video ID using direct audio extraction
+  // Falls back to iframe if direct audio is not available
   const playYouTubeAudioById = useCallback(async (videoId: string, videoTitle?: string): Promise<boolean> => {
     setLoadingPhase('loading');
-    setCurrentYouTubeVideoId(videoId);
+    const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
+    setCurrentYouTubeVideoId(cleanVideoId);
     setIsPlayingYouTube(true);
+    setUseYouTubeIframe(false);
     
     try {
-      console.log('Extracting YouTube audio for:', videoId);
-      const audioData = await getYouTubeAudio(videoId);
+      console.log('Extracting YouTube audio for:', cleanVideoId);
+      const result = await getYouTubeAudio(cleanVideoId);
       
-      if (!audioData || !audioData.url) {
-        console.error('No audio URL returned for video:', videoId);
-        setLoadingPhase('unavailable');
-        setIsPlayingYouTube(false);
-        setCurrentYouTubeVideoId(null);
-        return false;
-      }
-      
-      console.log('Got YouTube audio URL, quality:', audioData.quality);
-      
-      // Play using the standard audio element
-      if (audioRef.current) {
-        audioRef.current.src = audioData.url;
-        try {
-          await audioRef.current.play();
-          setState(prev => ({ ...prev, isPlaying: true }));
-          setLoadingPhase('idle');
-          return true;
-        } catch (playError) {
-          console.error('YouTube audio play error:', playError);
-          setLoadingPhase('unavailable');
-          setIsPlayingYouTube(false);
-          setCurrentYouTubeVideoId(null);
-          return false;
+      // Check if we have direct audio URL
+      if (result.audio && result.audio.url) {
+        console.log('Got YouTube audio URL, quality:', result.audio.quality);
+        
+        // Play using the standard audio element
+        if (audioRef.current) {
+          audioRef.current.src = result.audio.url;
+          try {
+            await audioRef.current.play();
+            setState(prev => ({ ...prev, isPlaying: true }));
+            setLoadingPhase('idle');
+            return true;
+          } catch (playError) {
+            console.error('YouTube audio play error, trying iframe fallback:', playError);
+            // Fall through to iframe fallback
+          }
         }
       }
-      return false;
-    } catch (error) {
-      console.error('YouTube audio fetch error:', error);
+      
+      // Fallback to iframe player
+      if (result.useIframe || !result.audio) {
+        console.log('Using YouTube iframe fallback for:', cleanVideoId);
+        setUseYouTubeIframe(true);
+        setLoadingPhase('loading');
+        // The YouTubePlayer component will handle playback
+        return true;
+      }
+      
+      // No playback method available
+      console.error('No audio method available for video:', cleanVideoId);
       setLoadingPhase('unavailable');
       setIsPlayingYouTube(false);
       setCurrentYouTubeVideoId(null);
       return false;
+    } catch (error) {
+      console.error('YouTube audio fetch error:', error);
+      // Try iframe as last resort
+      console.log('Error occurred, trying iframe fallback');
+      setUseYouTubeIframe(true);
+      setLoadingPhase('loading');
+      return true;
     }
   }, []);
   
@@ -2153,6 +2171,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         playYouTubeVideo,
         currentYouTubeVideoId,
         isPlayingYouTube,
+        useYouTubeIframe,
+        setYouTubeProgress: (currentTime: number, dur: number) => {
+          setState(prev => ({ ...prev, progress: currentTime, duration: dur }));
+        },
+        setYouTubePlaybackStarted: () => {
+          setState(prev => ({ ...prev, isPlaying: true }));
+          setLoadingPhase('idle');
+        },
         lastSearchQuery,
         searchYouTubeManually,
         isShuffled,

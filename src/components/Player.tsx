@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import BugsModal from './BugsModal';
 import QueueModal from './QueueModal';
 import FavoriteButton from './FavoriteButton';
+import { YouTubePlayer, YouTubePlayerRef } from './YouTubePlayer';
 
 import { 
   Play, 
@@ -69,6 +70,9 @@ const Player: React.FC = () => {
     playYouTubeVideo,
     currentYouTubeVideoId,
     isPlayingYouTube,
+    useYouTubeIframe,
+    setYouTubeProgress,
+    setYouTubePlaybackStarted,
     lastSearchQuery,
     searchYouTubeManually,
     isShuffled,
@@ -85,16 +89,28 @@ const Player: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const startY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const youtubePlayerRef = useRef<YouTubePlayerRef>(null);
   
-  // Handle seeking
+  // Handle seeking - works for both regular audio and YouTube iframe
   const handleSeek = useCallback((time: number) => {
-    seek(time);
-  }, [seek]);
+    if (useYouTubeIframe && youtubePlayerRef.current) {
+      youtubePlayerRef.current.seekTo(time);
+    } else {
+      seek(time);
+    }
+  }, [seek, useYouTubeIframe]);
   
-  // Handle toggle
+  // Handle toggle - works for both regular audio and YouTube iframe
   const handleToggle = useCallback(() => {
+    if (useYouTubeIframe && youtubePlayerRef.current) {
+      if (isPlaying) {
+        youtubePlayerRef.current.pause();
+      } else {
+        youtubePlayerRef.current.play();
+      }
+    }
     toggle();
-  }, [toggle]);
+  }, [toggle, useYouTubeIframe, isPlaying]);
 
   if (!currentTrack) return null;
 
@@ -591,6 +607,19 @@ const Player: React.FC = () => {
         onPlayTrack={playQueueIndex}
         onClearQueue={clearQueue}
       />
+      
+      {/* Hidden YouTube iframe player for fallback */}
+      {useYouTubeIframe && currentYouTubeVideoId && (
+        <YouTubePlayer
+          ref={youtubePlayerRef}
+          videoId={currentYouTubeVideoId}
+          volume={volume * 100}
+          autoplay={true}
+          onPlaybackStarted={setYouTubePlaybackStarted}
+          onTimeUpdate={setYouTubeProgress}
+          onEnded={next}
+        />
+      )}
     </>
   );
 };

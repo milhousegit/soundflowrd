@@ -20,44 +20,68 @@ interface AudioStream {
   bitrate: number;
 }
 
-// Piped instances for search and audio extraction
+// Updated and expanded Piped instances pool (2025)
 const PIPED_INSTANCES = [
   "https://pipedapi.kavin.rocks",
-  "https://api.piped.private.coffee",
-  "https://pipedapi.r4fo.com",
-  "https://pipedapi.syncpundit.io",
-  "https://api-piped.mha.fi",
+  "https://pipedapi.adminforge.de",
+  "https://api.piped.yt",
+  "https://pipedapi.darkness.services",
+  "https://pipedapi.drgns.space",
+  "https://piped-api.hostux.net",
+  "https://api.piped.projectsegfau.lt",
+  "https://pipedapi.in.projectsegfau.lt",
+  "https://pipedapi.leptons.xyz",
+  "https://pipedapi.reallyaweso.me",
 ];
 
-// Invidious instances as backup
+// Updated Invidious instances pool (2025)
 const INVIDIOUS_INSTANCES = [
-  "https://invidious.io.lol",
-  "https://vid.puffyan.us",
-  "https://yewtu.be",
-  "https://inv.nadeko.net",
+  "https://invidious.nerdvpn.de",
+  "https://iv.nboeck.de",
+  "https://invidious.protokolla.fi",
+  "https://inv.tux.pizza",
+  "https://invidious.privacyredirect.com",
+  "https://invidious.drgns.space",
+  "https://invidious.einfachzocken.eu",
+  "https://yt.artemislena.eu",
+  "https://invidious.lunar.icu",
+  "https://iv.melmac.space",
 ];
 
-async function tryFetch(url: string, timeout = 10000): Promise<Response | null> {
+async function tryFetch(url: string, timeout = 8000): Promise<Response | null> {
   try {
     const response = await fetch(url, { 
       signal: AbortSignal.timeout(timeout),
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json',
       }
     });
     return response;
   } catch (e) {
-    console.error(`Fetch error for ${url}: ${e instanceof Error ? e.message : e}`);
     return null;
   }
+}
+
+// Shuffle array to distribute load and avoid hitting same instances
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
 }
 
 async function searchVideos(query: string): Promise<VideoResult[]> {
   const encodedQuery = encodeURIComponent(query);
   
+  // Shuffle instances to distribute load
+  const pipedInstances = shuffleArray(PIPED_INSTANCES);
+  const invidiousInstances = shuffleArray(INVIDIOUS_INSTANCES);
+  
   // Try Piped first for search
-  for (const instance of PIPED_INSTANCES) {
+  for (const instance of pipedInstances) {
     try {
       const url = `${instance}/search?q=${encodedQuery}&filter=videos`;
       console.log(`Searching: ${url}`);
@@ -96,7 +120,7 @@ async function searchVideos(query: string): Promise<VideoResult[]> {
   }
   
   // Fallback to Invidious search
-  for (const instance of INVIDIOUS_INSTANCES) {
+  for (const instance of invidiousInstances) {
     try {
       const url = `${instance}/api/v1/search?q=${encodedQuery}&type=video`;
       console.log(`Invidious search: ${url}`);
@@ -137,12 +161,16 @@ async function getAudioStream(videoId: string): Promise<AudioStream | null> {
   
   console.log('Extracting audio for:', cleanVideoId);
   
+  // Shuffle instances for load distribution
+  const pipedInstances = shuffleArray(PIPED_INSTANCES);
+  const invidiousInstances = shuffleArray(INVIDIOUS_INSTANCES);
+  
   // Try Piped instances first - they provide direct audio streams
-  for (const instance of PIPED_INSTANCES) {
+  for (const instance of pipedInstances) {
     try {
       const url = `${instance}/streams/${cleanVideoId}`;
       console.log(`Trying Piped: ${url}`);
-      const response = await tryFetch(url, 15000);
+      const response = await tryFetch(url, 12000);
       
       if (!response || !response.ok) {
         console.log(`Piped ${instance} failed: ${response?.status}`);
@@ -160,7 +188,7 @@ async function getAudioStream(videoId: string): Promise<AudioStream | null> {
         
         if (sortedStreams.length > 0) {
           const best = sortedStreams[0];
-          console.log(`Found audio stream: ${best.quality || best.bitrate}kbps`);
+          console.log(`Found audio stream: ${best.quality || best.bitrate}kbps from ${instance}`);
           return {
             url: best.url,
             quality: best.quality || `${Math.round((best.bitrate || 0) / 1000)}kbps`,
@@ -175,11 +203,11 @@ async function getAudioStream(videoId: string): Promise<AudioStream | null> {
   }
   
   // Fallback to Invidious
-  for (const instance of INVIDIOUS_INSTANCES) {
+  for (const instance of invidiousInstances) {
     try {
       const url = `${instance}/api/v1/videos/${cleanVideoId}`;
       console.log(`Trying Invidious: ${url}`);
-      const response = await tryFetch(url, 15000);
+      const response = await tryFetch(url, 12000);
       
       if (!response || !response.ok) {
         console.log(`Invidious ${instance} failed: ${response?.status}`);
@@ -196,7 +224,7 @@ async function getAudioStream(videoId: string): Promise<AudioStream | null> {
         
         if (audioFormats.length > 0) {
           const best = audioFormats[0];
-          console.log(`Found Invidious audio: ${best.bitrate}bps`);
+          console.log(`Found Invidious audio: ${best.bitrate}bps from ${instance}`);
           return {
             url: best.url,
             quality: `${Math.round((best.bitrate || 0) / 1000)}kbps`,
@@ -260,9 +288,16 @@ serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       } else {
+        // Return useIframe flag so client can fallback to iframe player
+        console.log('Falling back to iframe mode for:', videoId);
         return new Response(
-          JSON.stringify({ error: 'No audio stream found', audio: null }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ 
+            error: 'No audio stream found', 
+            audio: null,
+            useIframe: true,
+            videoId: videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0]
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     }
