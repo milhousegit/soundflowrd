@@ -125,6 +125,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setIsPlayingYouTube(true);
     setUseYouTubeIframe(false);
     
+    // Set a timeout to force loading to idle after 10 seconds (mobile fallback)
+    const loadingTimeout = setTimeout(() => {
+      console.log('YouTube loading timeout - forcing idle state');
+      setLoadingPhase('idle');
+      setState(prev => ({ ...prev, isPlaying: true }));
+    }, 10000);
+    
     try {
       console.log('Extracting YouTube audio for:', cleanVideoId);
       const result = await getYouTubeAudio(cleanVideoId);
@@ -139,6 +146,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           try {
             await audioRef.current.play();
             console.log('Direct audio playback started successfully');
+            clearTimeout(loadingTimeout);
             setState(prev => ({ ...prev, isPlaying: true }));
             setLoadingPhase('idle');
             // Keep iframe off since direct works
@@ -154,15 +162,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Fallback to iframe player - this is now the primary path for reliability
       console.log('Using YouTube iframe fallback for:', cleanVideoId);
       setUseYouTubeIframe(true);
-      setLoadingPhase('loading');
-      // The YouTubePlayer component will handle playback and call setYouTubePlaybackStarted
+      // Don't clear timeout - let the iframe's onPlaybackStarted clear it or timeout
       return true;
     } catch (error) {
       console.error('YouTube audio fetch error:', error);
       // Try iframe as last resort
       console.log('Error occurred, trying iframe fallback');
       setUseYouTubeIframe(true);
-      setLoadingPhase('loading');
       return true;
     }
   }, []);
@@ -2170,8 +2176,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         useYouTubeIframe,
         setYouTubeProgress: (currentTime: number, dur: number) => {
           setState(prev => ({ ...prev, progress: currentTime, duration: dur }));
+          // If we're receiving progress updates, playback has started
+          if (loadingPhase === 'loading') {
+            setLoadingPhase('idle');
+          }
         },
         setYouTubePlaybackStarted: () => {
+          console.log('setYouTubePlaybackStarted called, setting loadingPhase to idle');
           setState(prev => ({ ...prev, isPlaying: true }));
           setLoadingPhase('idle');
         },
