@@ -130,6 +130,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
           modestbranding: 1,
           playsinline: 1,
           rel: 0,
+          // Mobile-specific: allow inline playback
+          webkit_playsinline: 1,
         },
         events: {
           onReady: (event: any) => {
