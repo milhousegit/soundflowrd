@@ -1,4 +1,4 @@
-import React, { forwardRef, useState } from 'react';
+import React, { forwardRef, useState, useCallback } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudUpload, Loader2, Bug, ListMusic, Youtube, Plus } from 'lucide-react';
@@ -8,6 +8,7 @@ import { useSyncedTracks } from '@/hooks/useSyncedTracks';
 import { useHasYouTubeMapping } from '@/hooks/useYouTubeMappings';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useTap } from '@/hooks/useTap';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import {
   DropdownMenu,
@@ -19,6 +20,16 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { Button } from '@/components/ui/button';
 
 interface TrackCardProps {
@@ -42,6 +53,7 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const { playlists, addTrackToPlaylist } = usePlaylists();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
+    const isMobile = useIsMobile();
     
     const isCurrentTrack = currentTrack?.id === track.id;
     const isSynced = propIsSynced !== undefined ? propIsSynced : hookIsSynced(track.id);
@@ -58,15 +70,6 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       ? loadingPhase === 'downloading'
       : (isDownloading && !isSynced);
     const showSyncedCloud = isSynced && !isCurrentTrackLoading && !showDownloadingCloud;
-
-    const handleClick = () => {
-      if (isMenuOpen) return;
-      if (isCurrentTrack) {
-        toggle();
-      } else {
-        playTrack(track, queue);
-      }
-    };
 
     const handleSync = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -101,7 +104,85 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const tap = useTap({ onTap: handleClick });
+    const handleContextMenu = useCallback((e: React.MouseEvent) => {
+      // Prevent default context menu on mobile to let Radix handle it
+      if (isMobile) {
+        e.preventDefault();
+      }
+    }, [isMobile]);
+
+    // Combined click handler
+    const handleTapClick = useCallback(() => {
+      if (isMenuOpen) return;
+      if (isCurrentTrack) {
+        toggle();
+      } else {
+        playTrack(track, queue);
+      }
+    }, [isMenuOpen, isCurrentTrack, toggle, playTrack, track, queue]);
+
+    // Menu content (shared between DropdownMenu and ContextMenu)
+    const renderMenuItems = (isContext: boolean = false) => {
+      const MenuItem = isContext ? ContextMenuItem : DropdownMenuItem;
+      const MenuSub = isContext ? ContextMenuSub : DropdownMenuSub;
+      const MenuSubTrigger = isContext ? ContextMenuSubTrigger : DropdownMenuSubTrigger;
+      const MenuSubContent = isContext ? ContextMenuSubContent : DropdownMenuSubContent;
+      const MenuSeparator = isContext ? ContextMenuSeparator : DropdownMenuSeparator;
+
+      return (
+        <>
+          <MenuItem onClick={handleAddToQueue} className="cursor-pointer">
+            <ListPlus className="w-4 h-4 mr-2" />
+            Aggiungi alla coda
+          </MenuItem>
+          <MenuSub>
+            <MenuSubTrigger className="cursor-pointer">
+              <ListMusic className="w-4 h-4 mr-2" />
+              Aggiungi a playlist
+            </MenuSubTrigger>
+            <MenuSubContent className="bg-popover w-48">
+              <MenuItem 
+                onClick={(e) => { e.stopPropagation(); onCreatePlaylist?.(); }} 
+                className="cursor-pointer"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Crea nuova playlist
+              </MenuItem>
+              {playlists.length > 0 && <MenuSeparator />}
+              {playlists.map((playlist) => (
+                <MenuItem 
+                  key={playlist.id}
+                  onClick={(e) => handleAddToPlaylist(e as React.MouseEvent, playlist.id)} 
+                  className="cursor-pointer"
+                  disabled={isAddingToPlaylist === playlist.id}
+                >
+                  {isAddingToPlaylist === playlist.id ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <ListPlus className="w-4 h-4 mr-2" />
+                  )}
+                  <span className="truncate">{playlist.name}</span>
+                </MenuItem>
+              ))}
+            </MenuSubContent>
+          </MenuSub>
+          {!isSynced && !isDownloading && (
+            <MenuItem onClick={handleSync} className="cursor-pointer">
+              <CloudUpload className="w-4 h-4 mr-2" />
+              Sincronizza
+            </MenuItem>
+          )}
+          {(isSynced || isDownloading) && (
+            <MenuItem onClick={handleOpenDebug} className="cursor-pointer">
+              <Bug className="w-4 h-4 mr-2" />
+              Debug
+            </MenuItem>
+          )}
+        </>
+      );
+    };
+
+    const tap = useTap({ onTap: handleTapClick });
 
     // Render status icon
     const renderStatusIcon = () => {
@@ -135,15 +216,20 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       return null;
     };
 
-    return (
+    // Track card content
+    const trackCardContent = (
       <div
         ref={ref}
         {...tap}
+        onContextMenu={handleContextMenu}
         className={cn(
-          "group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200 touch-manipulation",
+          "group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200 touch-manipulation select-none",
           "hover:bg-secondary/80 active:scale-[0.99]",
-          isCurrentTrack && "bg-secondary"
+          isCurrentTrack && "bg-secondary",
+          // Disable text selection on long press
+          "-webkit-touch-callout-none"
         )}
+        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}
       >
         {/* Index or Play button */}
         <div className="w-6 md:w-8 h-6 md:h-8 flex items-center justify-center flex-shrink-0">
@@ -171,7 +257,7 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
         {/* Cover */}
         <div className="w-10 h-10 md:w-10 md:h-10 rounded bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 relative">
           {track.coverUrl ? (
-            <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover" />
+            <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover pointer-events-none" draggable={false} />
           ) : (
             <Music className="w-4 h-4 text-muted-foreground" />
           )}
@@ -202,69 +288,23 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
 
         {/* Actions container */}
         <div className="flex items-center gap-1">
-          {/* More menu - before duration */}
-          <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0"
-              >
-                <MoreVertical className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 bg-popover z-[100]">
-              <DropdownMenuItem onClick={handleAddToQueue} className="cursor-pointer">
-                <ListPlus className="w-4 h-4 mr-2" />
-                Aggiungi alla coda
-              </DropdownMenuItem>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer">
-                  <ListMusic className="w-4 h-4 mr-2" />
-                  Aggiungi a playlist
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="bg-popover w-48">
-                  <DropdownMenuItem 
-                    onClick={(e) => { e.stopPropagation(); onCreatePlaylist?.(); }} 
-                    className="cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Crea nuova playlist
-                  </DropdownMenuItem>
-                  {playlists.length > 0 && <DropdownMenuSeparator />}
-                  {playlists.map((playlist) => (
-                    <DropdownMenuItem 
-                      key={playlist.id}
-                      onClick={(e) => handleAddToPlaylist(e, playlist.id)} 
-                      className="cursor-pointer"
-                      disabled={isAddingToPlaylist === playlist.id}
-                    >
-                      {isAddingToPlaylist === playlist.id ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <ListPlus className="w-4 h-4 mr-2" />
-                      )}
-                      <span className="truncate">{playlist.name}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              {/* Show sync/remove only if not synced AND not downloading */}
-              {!isSynced && !isDownloading && (
-                <DropdownMenuItem onClick={handleSync} className="cursor-pointer">
-                  <CloudUpload className="w-4 h-4 mr-2" />
-                  Sincronizza
-                </DropdownMenuItem>
-              )}
-              {/* Show debug if synced or downloading */}
-              {(isSynced || isDownloading) && (
-                <DropdownMenuItem onClick={handleOpenDebug} className="cursor-pointer">
-                  <Bug className="w-4 h-4 mr-2" />
-                  Debug
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* More menu - DESKTOP ONLY */}
+          {!isMobile && (
+            <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-popover z-[100]">
+                {renderMenuItems(false)}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {/* Duration */}
           <span className="text-xs md:text-sm text-muted-foreground flex-shrink-0 min-w-[36px] text-right">
@@ -284,6 +324,23 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
         </div>
       </div>
     );
+
+    // On mobile, wrap with ContextMenu for long-press
+    if (isMobile) {
+      return (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            {trackCardContent}
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-48 bg-popover z-[100]">
+            {renderMenuItems(true)}
+          </ContextMenuContent>
+        </ContextMenu>
+      );
+    }
+
+    // Desktop: just return the content
+    return trackCardContent;
   }
 );
 
