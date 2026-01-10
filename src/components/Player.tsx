@@ -425,6 +425,21 @@ const Player: React.FC = () => {
           onPlayTrack={playQueueIndex}
           onClearQueue={clearQueue}
         />
+        
+        {/* Hidden YouTube iframe player - must be present in expanded view too */}
+        {useYouTubeIframe && currentYouTubeVideoId && (
+          <YouTubePlayer
+            ref={youtubePlayerRef}
+            videoId={currentYouTubeVideoId}
+            volume={volume * 100}
+            autoplay={true}
+            onPlaybackStarted={setYouTubePlaybackStarted}
+            onPaused={setYouTubePaused}
+            onNeedsUserGesture={setYouTubeNeedsGesture}
+            onTimeUpdate={setYouTubeProgress}
+            onEnded={next}
+          />
+        )}
       </>
     );
   }
