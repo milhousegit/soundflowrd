@@ -221,7 +221,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
             console.log('YouTubePlayer: State changed to', event.data);
             onStateChange?.(event.data);
             
-            // YT.PlayerState.PLAYING = 1
+          // YT.PlayerState.PLAYING = 1
             if (event.data === 1) {
               // Unmute when playing starts (muted autoplay succeeded)
               if (playerRef.current?.isMuted?.()) {
@@ -239,12 +239,12 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
                 }, 600);
               }
               
-              if (!hasStartedPlayingRef.current) {
-                hasStartedPlayingRef.current = true;
-                autoplayBlockedRef.current = false;
-                console.log('YouTubePlayer: Playback actually started');
-                onPlaybackStarted?.();
-              }
+              // ALWAYS call onPlaybackStarted when state changes to PLAYING
+              // This fixes the issue where resume after pause didn't update isPlaying state
+              autoplayBlockedRef.current = false;
+              console.log('YouTubePlayer: Playback state PLAYING, hasStartedBefore:', hasStartedPlayingRef.current);
+              onPlaybackStarted?.();
+              hasStartedPlayingRef.current = true;
             }
             
             // YT.PlayerState.PAUSED = 2
