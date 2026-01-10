@@ -99,7 +99,7 @@ const Home: React.FC = () => {
       try {
         const uniqueArtistNames = getUniqueArtistNames();
         
-        // If user has favorites, search for releases from those artists only
+        // If user has favorites, search for releases from those artists
         if (uniqueArtistNames.length > 0) {
           const allReleases: Album[] = [];
           
@@ -129,7 +129,6 @@ const Home: React.FC = () => {
               return acc;
             }, [] as Album[])
             .sort((a, b) => {
-              // Sort by release date if available (newest first)
               const dateA = a.releaseDate ? new Date(a.releaseDate).getTime() : 0;
               const dateB = b.releaseDate ? new Date(b.releaseDate).getTime() : 0;
               return dateB - dateA;
@@ -137,8 +136,26 @@ const Home: React.FC = () => {
           
           setNewReleases(uniqueReleases.slice(0, 12));
         } else {
-          // No favorites yet - show empty state or popular releases
-          setNewReleases([]);
+          // No favorites - try to get cached releases from edge function
+          try {
+            const { data } = await supabase.functions.invoke('home-content', {
+              body: null,
+              method: 'GET',
+            });
+            // Use URL params approach
+            const response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-content?type=new_releases&country=${country}&language=${settings.language}`
+            );
+            if (response.ok) {
+              const result = await response.json();
+              if (result.data && Array.isArray(result.data)) {
+                setNewReleases(result.data.slice(0, 12));
+              }
+            }
+          } catch (cacheError) {
+            console.error('Failed to fetch cached releases:', cacheError);
+            setNewReleases([]);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch new releases:', error);
@@ -148,28 +165,43 @@ const Home: React.FC = () => {
     };
 
     fetchNewReleases();
-  }, [favorites.length]); // Re-fetch when favorites change
+  }, [favorites.length, country, settings.language]);
 
   useEffect(() => {
     const fetchPopularArtists = async () => {
       setIsLoadingArtists(true);
       try {
         const uniqueArtistNames = getUniqueArtistNames();
+        const favoriteNamesLower = uniqueArtistNames.map(n => n.toLowerCase());
         
-        if (uniqueArtistNames.length > 0) {
-          const favoriteNamesLower = uniqueArtistNames.map(n => n.toLowerCase());
-          const artists = await getPopularArtists(country);
-          
-          // Filter out artists the user already has in favorites
-          const filteredArtists = artists.filter(
-            a => !favoriteNamesLower.includes(a.name.toLowerCase())
+        // Try to get cached artists from edge function first
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-content?type=popular_artists&country=${country}&language=${settings.language}`
           );
           
-          setPopularArtists(filteredArtists.slice(0, 12));
-        } else {
-          const artists = await getPopularArtists(country);
-          setPopularArtists(artists);
+          if (response.ok) {
+            const result = await response.json();
+            if (result.data && Array.isArray(result.data)) {
+              // Filter out artists the user already has in favorites
+              const filteredArtists = result.data.filter(
+                (a: Artist) => !favoriteNamesLower.includes(a.name.toLowerCase())
+              );
+              setPopularArtists(filteredArtists.slice(0, 12));
+              setIsLoadingArtists(false);
+              return;
+            }
+          }
+        } catch (cacheError) {
+          console.error('Failed to fetch cached artists:', cacheError);
         }
+        
+        // Fallback to direct API call
+        const artists = await getPopularArtists(country);
+        const filteredArtists = artists.filter(
+          a => !favoriteNamesLower.includes(a.name.toLowerCase())
+        );
+        setPopularArtists(filteredArtists.slice(0, 12));
       } catch (error) {
         console.error('Failed to fetch popular artists:', error);
       } finally {
@@ -178,7 +210,7 @@ const Home: React.FC = () => {
     };
 
     fetchPopularArtists();
-  }, [country, favorites.length]);
+  }, [country, favorites.length, settings.language]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();

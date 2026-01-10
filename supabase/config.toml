@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.real-debrid]
 verify_jwt = false
+
+[functions.home-content]
+verify_jwt = false
