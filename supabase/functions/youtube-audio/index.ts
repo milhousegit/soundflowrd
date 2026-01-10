@@ -20,7 +20,17 @@ interface AudioStream {
   bitrate: number;
 }
 
-// Updated and expanded Piped instances pool (2025)
+// Cobalt API instances (primary source - most reliable for 2025)
+const COBALT_INSTANCES = [
+  "https://api.cobalt.tools",
+  "https://cobalt-api.kwiatekmiki.com",
+  "https://cobalt.canine.tools",
+  "https://co.eepy.today",
+  "https://cobalt-api.hyper.lol",
+  "https://api.aqua.rip",
+];
+
+// Piped instances pool (fallback)
 const PIPED_INSTANCES = [
   "https://pipedapi.kavin.rocks",
   "https://pipedapi.adminforge.de",
@@ -34,7 +44,7 @@ const PIPED_INSTANCES = [
   "https://pipedapi.reallyaweso.me",
 ];
 
-// Updated Invidious instances pool (2025)
+// Invidious instances pool (last fallback)
 const INVIDIOUS_INSTANCES = [
   "https://invidious.nerdvpn.de",
   "https://iv.nboeck.de",
@@ -48,14 +58,16 @@ const INVIDIOUS_INSTANCES = [
   "https://iv.melmac.space",
 ];
 
-async function tryFetch(url: string, timeout = 8000): Promise<Response | null> {
+async function tryFetch(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response | null> {
   try {
     const response = await fetch(url, { 
       signal: AbortSignal.timeout(timeout),
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json',
-      }
+        ...options.headers,
+      },
+      ...options,
     });
     return response;
   } catch (e) {
@@ -63,7 +75,7 @@ async function tryFetch(url: string, timeout = 8000): Promise<Response | null> {
   }
 }
 
-// Shuffle array to distribute load and avoid hitting same instances
+// Shuffle array to distribute load
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -73,10 +85,205 @@ function shuffleArray<T>(array: T[]): T[] {
   return shuffled;
 }
 
+// ============ COBALT API (Primary) ============
+async function getAudioStreamCobalt(videoId: string): Promise<AudioStream | null> {
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const cobaltInstances = shuffleArray(COBALT_INSTANCES);
+  
+  for (const instance of cobaltInstances) {
+    try {
+      console.log(`Trying Cobalt: ${instance}`);
+      
+      const response = await tryFetch(instance, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: youtubeUrl,
+          downloadMode: 'audio',
+          audioFormat: 'mp3',
+          audioBitrate: '320',
+        }),
+      }, 15000);
+      
+      if (!response) {
+        console.log(`Cobalt ${instance} failed: no response`);
+        continue;
+      }
+      
+      // Check if response is ok
+      if (!response.ok) {
+        console.log(`Cobalt ${instance} failed: ${response.status}`);
+        continue;
+      }
+      
+      const data = await response.json();
+      console.log(`Cobalt ${instance} response:`, JSON.stringify(data).substring(0, 200));
+      
+      // Cobalt API v7+ response format
+      if (data.status === 'tunnel' || data.status === 'redirect' || data.status === 'stream') {
+        const audioUrl = data.url || data.audio;
+        if (audioUrl) {
+          console.log(`Cobalt success from ${instance}: got audio URL`);
+          return {
+            url: audioUrl,
+            quality: '320kbps',
+            mimeType: 'audio/mpeg',
+            bitrate: 320000,
+          };
+        }
+      }
+      
+      // Handle picker response (when multiple options available)
+      if (data.status === 'picker' && data.picker && data.picker.length > 0) {
+        const audioOption = data.picker.find((p: any) => p.type === 'audio');
+        if (audioOption?.url) {
+          console.log(`Cobalt picker success from ${instance}`);
+          return {
+            url: audioOption.url,
+            quality: '320kbps',
+            mimeType: 'audio/mpeg',
+            bitrate: 320000,
+          };
+        }
+      }
+      
+      // Error responses
+      if (data.status === 'error') {
+        console.log(`Cobalt ${instance} error: ${data.error?.code || data.text || 'unknown'}`);
+        continue;
+      }
+      
+    } catch (error) {
+      console.error(`Cobalt ${instance} error:`, error instanceof Error ? error.message : error);
+    }
+  }
+  
+  return null;
+}
+
+// ============ PIPED API (Secondary) ============
+async function getAudioStreamPiped(videoId: string): Promise<AudioStream | null> {
+  const pipedInstances = shuffleArray(PIPED_INSTANCES);
+  
+  for (const instance of pipedInstances) {
+    try {
+      const url = `${instance}/streams/${videoId}`;
+      console.log(`Trying Piped: ${url}`);
+      const response = await tryFetch(url, {}, 12000);
+      
+      if (!response || !response.ok) {
+        console.log(`Piped ${instance} failed: ${response?.status}`);
+        continue;
+      }
+      
+      const data = await response.json();
+      
+      if (data.audioStreams && Array.isArray(data.audioStreams) && data.audioStreams.length > 0) {
+        const sortedStreams = data.audioStreams
+          .filter((s: any) => s.url && s.mimeType?.includes('audio'))
+          .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+        
+        if (sortedStreams.length > 0) {
+          const best = sortedStreams[0];
+          console.log(`Piped success: ${best.quality || best.bitrate}kbps from ${instance}`);
+          return {
+            url: best.url,
+            quality: best.quality || `${Math.round((best.bitrate || 0) / 1000)}kbps`,
+            mimeType: best.mimeType || 'audio/mp4',
+            bitrate: best.bitrate || 0,
+          };
+        }
+      }
+    } catch (error) {
+      console.error(`Piped error: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  
+  return null;
+}
+
+// ============ INVIDIOUS API (Tertiary) ============
+async function getAudioStreamInvidious(videoId: string): Promise<AudioStream | null> {
+  const invidiousInstances = shuffleArray(INVIDIOUS_INSTANCES);
+  
+  for (const instance of invidiousInstances) {
+    try {
+      const url = `${instance}/api/v1/videos/${videoId}`;
+      console.log(`Trying Invidious: ${url}`);
+      const response = await tryFetch(url, {}, 12000);
+      
+      if (!response || !response.ok) {
+        console.log(`Invidious ${instance} failed: ${response?.status}`);
+        continue;
+      }
+      
+      const data = await response.json();
+      
+      if (data.adaptiveFormats && Array.isArray(data.adaptiveFormats)) {
+        const audioFormats = data.adaptiveFormats
+          .filter((f: any) => f.type?.includes('audio') && f.url)
+          .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+        
+        if (audioFormats.length > 0) {
+          const best = audioFormats[0];
+          console.log(`Invidious success: ${best.bitrate}bps from ${instance}`);
+          return {
+            url: best.url,
+            quality: `${Math.round((best.bitrate || 0) / 1000)}kbps`,
+            mimeType: best.type?.split(';')[0] || 'audio/mp4',
+            bitrate: best.bitrate || 0,
+          };
+        }
+      }
+    } catch (error) {
+      console.error(`Invidious error: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  
+  return null;
+}
+
+// ============ MAIN AUDIO EXTRACTION ============
+async function getAudioStream(videoId: string): Promise<AudioStream | null> {
+  const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
+  
+  console.log('========== Extracting audio for:', cleanVideoId, '==========');
+  
+  // 1. Try Cobalt first (most reliable)
+  console.log('--- Trying Cobalt API ---');
+  let audioStream = await getAudioStreamCobalt(cleanVideoId);
+  if (audioStream) {
+    console.log('SUCCESS: Got audio from Cobalt');
+    return audioStream;
+  }
+  
+  // 2. Fallback to Piped
+  console.log('--- Trying Piped API ---');
+  audioStream = await getAudioStreamPiped(cleanVideoId);
+  if (audioStream) {
+    console.log('SUCCESS: Got audio from Piped');
+    return audioStream;
+  }
+  
+  // 3. Last resort: Invidious
+  console.log('--- Trying Invidious API ---');
+  audioStream = await getAudioStreamInvidious(cleanVideoId);
+  if (audioStream) {
+    console.log('SUCCESS: Got audio from Invidious');
+    return audioStream;
+  }
+  
+  console.log('FAILED: No audio stream found from any source');
+  return null;
+}
+
+// ============ VIDEO SEARCH ============
 async function searchVideos(query: string): Promise<VideoResult[]> {
   const encodedQuery = encodeURIComponent(query);
   
-  // Shuffle instances to distribute load
   const pipedInstances = shuffleArray(PIPED_INSTANCES);
   const invidiousInstances = shuffleArray(INVIDIOUS_INSTANCES);
   
@@ -155,93 +362,7 @@ async function searchVideos(query: string): Promise<VideoResult[]> {
   return [];
 }
 
-// Extract direct audio URL from video using Piped or Invidious
-async function getAudioStream(videoId: string): Promise<AudioStream | null> {
-  const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
-  
-  console.log('Extracting audio for:', cleanVideoId);
-  
-  // Shuffle instances for load distribution
-  const pipedInstances = shuffleArray(PIPED_INSTANCES);
-  const invidiousInstances = shuffleArray(INVIDIOUS_INSTANCES);
-  
-  // Try Piped instances first - they provide direct audio streams
-  for (const instance of pipedInstances) {
-    try {
-      const url = `${instance}/streams/${cleanVideoId}`;
-      console.log(`Trying Piped: ${url}`);
-      const response = await tryFetch(url, 12000);
-      
-      if (!response || !response.ok) {
-        console.log(`Piped ${instance} failed: ${response?.status}`);
-        continue;
-      }
-      
-      const data = await response.json();
-      
-      // Get audio streams - prefer higher quality
-      if (data.audioStreams && Array.isArray(data.audioStreams) && data.audioStreams.length > 0) {
-        // Sort by bitrate descending to get best quality
-        const sortedStreams = data.audioStreams
-          .filter((s: any) => s.url && s.mimeType?.includes('audio'))
-          .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
-        
-        if (sortedStreams.length > 0) {
-          const best = sortedStreams[0];
-          console.log(`Found audio stream: ${best.quality || best.bitrate}kbps from ${instance}`);
-          return {
-            url: best.url,
-            quality: best.quality || `${Math.round((best.bitrate || 0) / 1000)}kbps`,
-            mimeType: best.mimeType || 'audio/mp4',
-            bitrate: best.bitrate || 0,
-          };
-        }
-      }
-    } catch (error) {
-      console.error(`Piped audio error: ${error instanceof Error ? error.message : error}`);
-    }
-  }
-  
-  // Fallback to Invidious
-  for (const instance of invidiousInstances) {
-    try {
-      const url = `${instance}/api/v1/videos/${cleanVideoId}`;
-      console.log(`Trying Invidious: ${url}`);
-      const response = await tryFetch(url, 12000);
-      
-      if (!response || !response.ok) {
-        console.log(`Invidious ${instance} failed: ${response?.status}`);
-        continue;
-      }
-      
-      const data = await response.json();
-      
-      // Get adaptive formats (audio only)
-      if (data.adaptiveFormats && Array.isArray(data.adaptiveFormats)) {
-        const audioFormats = data.adaptiveFormats
-          .filter((f: any) => f.type?.includes('audio') && f.url)
-          .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
-        
-        if (audioFormats.length > 0) {
-          const best = audioFormats[0];
-          console.log(`Found Invidious audio: ${best.bitrate}bps from ${instance}`);
-          return {
-            url: best.url,
-            quality: `${Math.round((best.bitrate || 0) / 1000)}kbps`,
-            mimeType: best.type?.split(';')[0] || 'audio/mp4',
-            bitrate: best.bitrate || 0,
-          };
-        }
-      }
-    } catch (error) {
-      console.error(`Invidious audio error: ${error instanceof Error ? error.message : error}`);
-    }
-  }
-  
-  console.log('No audio stream found for:', cleanVideoId);
-  return null;
-}
-
+// ============ SERVER ============
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
