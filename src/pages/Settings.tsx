@@ -24,7 +24,23 @@ import {
   Trash2,
   Youtube,
   Music,
+  Smartphone,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import IOSDiagnostics from '@/components/IOSDiagnostics';
+import { isIOS, isSafari, isPWA } from '@/hooks/useIOSAudioSession';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -568,6 +584,22 @@ const Settings: React.FC = () => {
           </div>
         </section>
 
+        {/* iOS Diagnostics - show on iOS/Safari or PWA */}
+        {(isIOS() || isSafari() || isPWA()) && (
+          <section className="space-y-3 md:space-y-4">
+            <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+              <Smartphone className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+              <h2 className="text-lg md:text-xl font-semibold text-foreground">
+                {settings.language === 'it' ? 'Diagnostica iOS' : 'iOS Diagnostics'}
+              </h2>
+            </div>
+            
+            <div className="p-3 md:p-4 rounded-xl bg-card">
+              <IOSDiagnostics language={settings.language} />
+            </div>
+          </section>
+        )}
+
         {/* Logout */}
         <div className="pt-4">
           <Button 
@@ -591,7 +623,7 @@ const Settings: React.FC = () => {
             {settings.language === 'it' ? 'Aggiorna App' : 'Refresh App'}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            SoundFlow 0.6.6
+            SoundFlow 0.7.0
           </p>
         </div>
       </div>

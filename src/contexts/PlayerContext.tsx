@@ -3,6 +3,7 @@ import { Track, PlayerState } from '@/types/music';
 import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
 import { YouTubeVideo, YouTubeAudioResult, searchYouTube, getYouTubeAudio } from '@/lib/youtube';
 import { invalidateYouTubeMappingCache } from '@/hooks/useYouTubeMappings';
+import { useIOSAudioSession, isIOS, isPWA } from '@/hooks/useIOSAudioSession';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -95,6 +96,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials } = useAuth();
   const { settings, audioSourceMode } = useSettings();
+  const iosAudio = useIOSAudioSession();
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
   const [currentStreamId, setCurrentStreamId] = useState<string>();
@@ -1469,30 +1471,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // This makes the first YouTube play far more reliable because the later async load happens
   // after the session is already unlocked.
   const tryUnlockAudioFromUserGesture = useCallback(() => {
-    try {
-      if (sessionStorage.getItem('audio_unlocked')) return;
-
-      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-
-      const ctx: AudioContext = new AudioCtx();
-
-      // Create a tiny silent buffer and play it immediately.
-      const buffer = ctx.createBuffer(1, 1, 22050);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.start(0);
-
-      if ((ctx as any).state === 'suspended') {
-        (ctx as any).resume?.();
-      }
-
-      sessionStorage.setItem('audio_unlocked', 'true');
-    } catch {
-      // ignore
-    }
-  }, []);
+    // Use the robust iOS audio session unlock
+    iosAudio.quickUnlock();
+    iosAudio.keepAlive();
+    iosAudio.addLog('info', 'playTrack: quickUnlock called');
+  }, [iosAudio]);
 
   const playTrack = useCallback(async (track: Track, queue?: Track[]) => {
     // IMPORTANT: call this synchronously at the beginning of the tap-triggered flow

@@ -3,16 +3,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
-// Lock screen orientation to portrait on mobile
-if ('screen' in window && 'orientation' in window.screen) {
-  const orientation = window.screen.orientation as any;
-  if (typeof orientation?.lock === 'function') {
-    orientation.lock('portrait').catch(() => {
-      // Orientation lock not supported or requires fullscreen/PWA
-      console.log('Screen orientation lock not available');
-    });
-  }
-}
+// NOTE: Orientation lock is now handled inside useIOSAudioSession hook
+// during user gesture (tap) for better iOS PWA compatibility.
+// The manifest.json "orientation": "portrait" provides the base intent.
 
 // Keep audio playing when screen is off - request wake lock if available
 let wakeLock: WakeLockSentinel | null = null;
@@ -21,13 +14,13 @@ const requestWakeLock = async () => {
   if ('wakeLock' in navigator) {
     try {
       wakeLock = await navigator.wakeLock.request('screen');
-      console.log('Wake lock acquired');
+      console.log('[Main] Wake lock acquired');
       
       wakeLock.addEventListener('release', () => {
-        console.log('Wake lock released');
+        console.log('[Main] Wake lock released');
       });
     } catch (err) {
-      console.log('Wake lock request failed:', err);
+      console.log('[Main] Wake lock request failed:', err);
     }
   }
 };
@@ -36,6 +29,16 @@ const requestWakeLock = async () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     requestWakeLock();
+    
+    // Also try orientation lock on visibility change
+    if ('screen' in window && 'orientation' in window.screen) {
+      const orientation = window.screen.orientation as any;
+      if (typeof orientation?.lock === 'function') {
+        orientation.lock('portrait').catch(() => {
+          // Expected to fail outside user gesture
+        });
+      }
+    }
   }
 });
 

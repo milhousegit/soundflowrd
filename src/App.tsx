@@ -11,6 +11,7 @@ import Layout from "@/components/Layout";
 import InstallPrompt from "@/components/InstallPrompt";
 import SilentAudioKeepAlive from "@/components/SilentAudioKeepAlive";
 import AudioUnlockOverlay from "@/components/AudioUnlockOverlay";
+import LandscapeBlocker from "@/components/LandscapeBlocker";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Library from "@/pages/Library";
@@ -86,6 +87,7 @@ const App = () => (
             <InstallPrompt />
             <SilentAudioKeepAlive />
             <AudioUnlockOverlay />
+            <LandscapeBlocker />
             <BrowserRouter>
               <AppRoutes />
             </BrowserRouter>
