@@ -117,6 +117,14 @@ const Player: React.FC = () => {
   const handleToggle = useCallback(() => {
     console.log('handleToggle called, useYouTubeIframe:', useYouTubeIframe, 'isPlaying:', isPlaying);
     if (useYouTubeIframe && youtubePlayerRef.current) {
+      // iOS case: video may be "playing" but still muted (no user gesture yet).
+      // In that case, the play button should try to unmute/replay, NOT pause.
+      const isMuted = youtubePlayerRef.current.isMuted?.() ?? false;
+      if (isPlaying && isMuted) {
+        youtubePlayerRef.current.play();
+        return;
+      }
+
       if (isPlaying) {
         youtubePlayerRef.current.pause();
       } else {

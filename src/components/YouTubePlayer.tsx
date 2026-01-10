@@ -14,6 +14,7 @@ export interface YouTubePlayerRef {
   setVolume: (volume: number) => void;
   getDuration: () => number;
   getCurrentTime: () => number;
+  isMuted: () => boolean;
   destroy: () => void;
 }
 
@@ -86,7 +87,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
     play: () => {
       console.log('YouTubePlayer: play() called, player exists:', !!playerRef.current);
       try {
-        // On iOS, unmuting often requires a user gesture: do it here in the tap handler path.
+        // Attempt to unmute (may be ignored by iOS without a user gesture)
         if (playerRef.current?.isMuted?.()) {
           console.log('YouTubePlayer: play() unmuting before play');
           playerRef.current.unMute?.();
@@ -108,6 +109,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
     setVolume: (vol: number) => playerRef.current?.setVolume?.(vol),
     getDuration: () => playerRef.current?.getDuration?.() || 0,
     getCurrentTime: () => playerRef.current?.getCurrentTime?.() || 0,
+    isMuted: () => !!playerRef.current?.isMuted?.(),
     destroy: () => {
       if (timeUpdateIntervalRef.current) {
         clearInterval(timeUpdateIntervalRef.current);
