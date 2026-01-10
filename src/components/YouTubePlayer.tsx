@@ -128,9 +128,134 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
     });
   }, []);
 
+  // Pre-create player on first user interaction (helps iOS autoplay)
+  useEffect(() => {
+    const warmUpPlayer = async () => {
+      // Only warm up once, and only if no player exists
+      if (playerRef.current || !containerRef.current) return;
+      
+      console.log('YouTubePlayer: Warming up player on user interaction');
+      await loadYouTubeAPI();
+      
+      if (!containerRef.current || playerRef.current) return;
+      
+      const playerId = `yt-player-warmup-${Date.now()}`;
+      containerRef.current.innerHTML = `<div id="${playerId}"></div>`;
+      
+      playerRef.current = new window.YT.Player(playerId, {
+        height: '1',
+        width: '1',
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          iv_load_policy: 3,
+          modestbranding: 1,
+          playsinline: 1,
+          rel: 0,
+          webkit_playsinline: 1,
+          origin: window.location.origin,
+        },
+        events: {
+          onReady: () => {
+            console.log('YouTubePlayer: Warm-up player ready');
+            setIsReady(true);
+            
+            // Start time update interval
+            if (timeUpdateIntervalRef.current) {
+              clearInterval(timeUpdateIntervalRef.current);
+            }
+            timeUpdateIntervalRef.current = setInterval(() => {
+              if (playerRef.current) {
+                try {
+                  const currentTime = playerRef.current.getCurrentTime?.() || 0;
+                  const duration = playerRef.current.getDuration?.() || 0;
+                  if (onTimeUpdate) {
+                    onTimeUpdate(currentTime, duration);
+                  }
+                } catch (e) {
+                  // Player might be destroyed
+                }
+              }
+            }, 250);
+          },
+          onStateChange: (event: any) => {
+            console.log('YouTubePlayer: State changed to', event.data);
+            onStateChange?.(event.data);
+            
+            if (event.data === 1) {
+              if (playerRef.current?.isMuted?.()) {
+                console.log('YouTubePlayer: Attempting unmute after PLAYING');
+                playerRef.current.unMute?.();
+                playerRef.current.setVolume?.(volume);
+                
+                setTimeout(() => {
+                  const stillMuted = !!playerRef.current?.isMuted?.();
+                  if (stillMuted) {
+                    console.log('YouTubePlayer: Still muted after unmute attempt; needs user gesture');
+                    onNeedsUserGesture?.();
+                  }
+                }, 600);
+              }
+              
+              autoplayBlockedRef.current = false;
+              console.log('YouTubePlayer: Playback state PLAYING');
+              onPlaybackStarted?.();
+              hasStartedPlayingRef.current = true;
+            }
+            
+            if (event.data === 2) {
+              console.log('YouTubePlayer: Video paused');
+              onPaused?.();
+            }
+            
+            if (event.data === 0) {
+              console.log('YouTubePlayer: Video ended');
+              onEnded?.();
+            }
+            
+            if (event.data === -1 || event.data === 5) {
+              if (!autoplayBlockedRef.current && currentVideoIdRef.current) {
+                console.log('YouTubePlayer: Video unstarted/cued, trying muted play');
+                autoplayBlockedRef.current = true;
+                playerRef.current?.mute?.();
+                setTimeout(() => {
+                  playerRef.current?.playVideo?.();
+                }, 300);
+              } else if (currentVideoIdRef.current) {
+                console.log('YouTubePlayer: Autoplay definitely blocked, needs user gesture');
+                onNeedsUserGesture?.();
+              }
+            }
+          },
+          onError: (event: any) => {
+            console.error('YouTubePlayer: Error:', event.data);
+            onError?.(event.data);
+          },
+        },
+      });
+    };
+    
+    // Listen for first user interaction to warm up player
+    const handleInteraction = () => {
+      warmUpPlayer();
+      // Remove listeners after first interaction
+      document.removeEventListener('touchstart', handleInteraction);
+      document.removeEventListener('click', handleInteraction);
+    };
+    
+    document.addEventListener('touchstart', handleInteraction, { once: true, passive: true });
+    document.addEventListener('click', handleInteraction, { once: true });
+    
+    return () => {
+      document.removeEventListener('touchstart', handleInteraction);
+      document.removeEventListener('click', handleInteraction);
+    };
+  }, []);
+
   useEffect(() => {
     // When switching away from YouTube, explicitly pause the existing player.
-    // Otherwise audio can keep playing in background even if we stop rendering controls.
     if (!videoId) {
       try {
         playerRef.current?.pauseVideo?.();
@@ -140,71 +265,48 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
       return;
     }
     
-    // If we have an existing player for a different video, use loadVideoById instead of destroying
-    // This helps maintain the "user gesture" permission on iOS
-    if (playerRef.current && currentVideoIdRef.current !== videoId) {
-      console.log('YouTubePlayer: Loading new video without destroying player:', videoId);
-      currentVideoIdRef.current = videoId;
-      hasStartedPlayingRef.current = false;
-      autoplayBlockedRef.current = false;
-      
-      try {
-        // Ensure time update interval is running for the new video
-        if (!timeUpdateIntervalRef.current) {
-          timeUpdateIntervalRef.current = setInterval(() => {
-            if (playerRef.current) {
-              try {
-                const currentTime = playerRef.current.getCurrentTime?.() || 0;
-                const duration = playerRef.current.getDuration?.() || 0;
-                if (onTimeUpdate && (currentTime > 0 || duration > 0)) {
-                  onTimeUpdate(currentTime, duration);
-                }
-              } catch (e) {
-                // Player might be destroyed
-              }
-            }
-          }, 250);
-        }
+    // If player exists (warmed up or from previous video), use loadVideoById
+    if (playerRef.current && isReady) {
+      if (currentVideoIdRef.current !== videoId) {
+        console.log('YouTubePlayer: Using loadVideoById for:', videoId);
+        currentVideoIdRef.current = videoId;
+        hasStartedPlayingRef.current = false;
+        autoplayBlockedRef.current = false;
         
-        // loadVideoById maintains the player instance and is more likely to autoplay on iOS
-        playerRef.current.loadVideoById({
-          videoId: videoId,
-          startSeconds: 0,
-        });
+        try {
+          playerRef.current.loadVideoById({
+            videoId: videoId,
+            startSeconds: 0,
+          });
+          return;
+        } catch (e) {
+          console.log('YouTubePlayer: loadVideoById failed', e);
+        }
+      } else {
+        // Same video, reset to start
+        console.log('YouTubePlayer: Same video, resetting to start');
+        hasStartedPlayingRef.current = false;
+        try {
+          playerRef.current.seekTo?.(0, true);
+          if (autoplay) {
+            playerRef.current.playVideo?.();
+          }
+        } catch (e) {
+          console.log('YouTubePlayer: seekTo failed', e);
+        }
         return;
-      } catch (e) {
-        console.log('YouTubePlayer: loadVideoById failed, will recreate player', e);
-        // Fall through to recreate player
       }
     }
     
-    // If same video and player exists, reset to start and play
-    if (currentVideoIdRef.current === videoId && playerRef.current) {
-      console.log('YouTubePlayer: Same video, resetting to start');
-      hasStartedPlayingRef.current = false;
-      try {
-        playerRef.current.seekTo?.(0, true);
-        if (autoplay) {
-          playerRef.current.playVideo?.();
-        }
-      } catch (e) {
-        console.log('YouTubePlayer: seekTo failed, will recreate player', e);
-        // Fall through to recreate player
-        currentVideoIdRef.current = null;
-      }
-      return;
-    }
-
+    // Fallback: create player if it doesn't exist yet
     currentVideoIdRef.current = videoId;
     hasStartedPlayingRef.current = false;
     autoplayBlockedRef.current = false;
-    setIsReady(false);
 
     const initPlayer = async () => {
-      console.log('YouTubePlayer: Initializing for video:', videoId);
+      console.log('YouTubePlayer: Creating new player for video:', videoId);
       await loadYouTubeAPI();
 
-      // Destroy existing player only if we couldn't use loadVideoById
       if (playerRef.current) {
         if (timeUpdateIntervalRef.current) {
           clearInterval(timeUpdateIntervalRef.current);
@@ -216,7 +318,6 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
 
       if (!containerRef.current) return;
 
-      // Create unique container for player
       const playerId = `yt-player-${Date.now()}`;
       containerRef.current.innerHTML = `<div id="${playerId}"></div>`;
 
@@ -233,7 +334,6 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
           modestbranding: 1,
           playsinline: 1,
           rel: 0,
-          // Mobile-specific
           webkit_playsinline: 1,
           origin: window.location.origin,
         },
@@ -243,7 +343,6 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
             setIsReady(true);
             onReady?.();
             
-            // Start time update interval - always call onTimeUpdate even if duration is 0
             if (timeUpdateIntervalRef.current) {
               clearInterval(timeUpdateIntervalRef.current);
             }
@@ -252,7 +351,6 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
                 try {
                   const currentTime = playerRef.current.getCurrentTime?.() || 0;
                   const duration = playerRef.current.getDuration?.() || 0;
-                  // Always call onTimeUpdate to keep UI in sync
                   if (onTimeUpdate) {
                     onTimeUpdate(currentTime, duration);
                   }
@@ -262,17 +360,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
               }
             }, 250);
             
-            // Mobile-friendly autoplay: mute first, then play
             if (autoplay) {
               console.log('YouTubePlayer: Attempting muted autoplay for mobile compatibility');
               event.target.mute();
               event.target.playVideo();
               
-              // Set a timeout to detect if autoplay was blocked
               setTimeout(() => {
                 const state = playerRef.current?.getPlayerState?.();
                 console.log('YouTubePlayer: State after autoplay attempt:', state);
-                // States: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
                 if (state === -1 || state === 5 || state === 2) {
                   console.log('YouTubePlayer: Autoplay blocked, needs user gesture');
                   autoplayBlockedRef.current = true;
@@ -285,15 +380,12 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
             console.log('YouTubePlayer: State changed to', event.data);
             onStateChange?.(event.data);
             
-          // YT.PlayerState.PLAYING = 1
             if (event.data === 1) {
-              // Unmute when playing starts (muted autoplay succeeded)
               if (playerRef.current?.isMuted?.()) {
                 console.log('YouTubePlayer: Attempting unmute after PLAYING');
                 playerRef.current.unMute?.();
                 playerRef.current.setVolume?.(volume);
 
-                // If still muted shortly after, require a user gesture (iOS Safari behavior)
                 setTimeout(() => {
                   const stillMuted = !!playerRef.current?.isMuted?.();
                   if (stillMuted) {
@@ -303,28 +395,22 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
                 }, 600);
               }
               
-              // ALWAYS call onPlaybackStarted when state changes to PLAYING
-              // This fixes the issue where resume after pause didn't update isPlaying state
               autoplayBlockedRef.current = false;
-              console.log('YouTubePlayer: Playback state PLAYING, hasStartedBefore:', hasStartedPlayingRef.current);
+              console.log('YouTubePlayer: Playback state PLAYING');
               onPlaybackStarted?.();
               hasStartedPlayingRef.current = true;
             }
             
-            // YT.PlayerState.PAUSED = 2
             if (event.data === 2) {
               console.log('YouTubePlayer: Video paused');
               onPaused?.();
             }
             
-            // YT.PlayerState.ENDED = 0
             if (event.data === 0) {
               console.log('YouTubePlayer: Video ended');
               onEnded?.();
             }
             
-            // YT.PlayerState.UNSTARTED = -1 or CUED = 5 on mobile (autoplay blocked)
-            // Only retry once, then signal need for user gesture
             if (event.data === -1 || event.data === 5) {
               if (!autoplayBlockedRef.current) {
                 console.log('YouTubePlayer: Video unstarted/cued, trying muted play');
@@ -355,7 +441,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
         timeUpdateIntervalRef.current = null;
       }
     };
-  }, [videoId, autoplay]);
+  }, [videoId, autoplay, isReady]);
 
   // Update volume when prop changes
   useEffect(() => {
