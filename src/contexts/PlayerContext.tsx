@@ -267,6 +267,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const normalizedFile = normalizeForMatch(fileName);
     const normalizedTitle = normalizeForMatch(trackTitle);
     
+    // For very short titles (single word), check if that word is in the file
+    if (normalizedTitle.length <= 10 && normalizedTitle.length > 2) {
+      if (normalizedFile.includes(normalizedTitle)) {
+        return true;
+      }
+    }
+    
     // First try exact substring match (after normalization)
     if (normalizedFile.includes(normalizedTitle)) {
       return true;
@@ -289,13 +296,35 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return true;
     }
     
+    // For single-word titles, be more lenient - check if the word appears anywhere
+    if (titleWords.length === 1 && titleWords[0].length >= 3) {
+      // Check if the main word is in the file (with some fuzzy matching for accents)
+      const mainWord = titleWords[0];
+      if (normalizedFile.includes(mainWord)) {
+        return true;
+      }
+    }
+    
+    // For 2-word titles, require at least one word to match if the word is long enough
+    if (titleWords.length === 2) {
+      const longWords = titleWords.filter(w => w.length >= 4);
+      const matchingLongWords = longWords.filter(word => normalizedFile.includes(word));
+      if (longWords.length > 0 && matchingLongWords.length === longWords.length) {
+        return true;
+      }
+      // If both words match, definitely a match
+      if (matchingWords.length === 2) {
+        return true;
+      }
+    }
+    
     // For titles with 4+ words, require at least 3 matching words
     if (titleWords.length >= 4 && matchingWords.length >= 3) {
       return true;
     }
     
-    // For shorter titles (2-3 words), require all words to match
-    if (titleWords.length <= 3 && matchingWords.length === titleWords.length) {
+    // For 3-word titles, require at least 2 words to match
+    if (titleWords.length === 3 && matchingWords.length >= 2) {
       return true;
     }
     
@@ -306,6 +335,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const fileWordsInTitle = fileWords.filter(fw => titleWords.includes(fw));
       // If most file words are in the title, it's likely a match
       if (fileWordsInTitle.length >= fileWords.length * 0.8 && fileWordsInTitle.length >= 2) {
+        return true;
+      }
+    }
+    
+    // Last resort: check if any file word is exactly the normalized title
+    if (fileWords.some(fw => fw === normalizedTitle || normalizedTitle.includes(fw))) {
+      if (normalizedTitle.length >= 4) {
         return true;
       }
     }
@@ -1324,7 +1360,43 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Load saved mapping to show in BugsModal for editing
   const loadSavedMapping = useCallback(async () => {
     const track = state.currentTrack;
-    if (!credentials?.realDebridApiKey || !track?.albumId) return;
+    if (!track) {
+      addDebugLog('⚠️ Nessuna traccia', 'Nessuna traccia in riproduzione', 'warning');
+      return;
+    }
+    
+    // First, show what source is currently being used
+    if (isPlayingYouTube) {
+      addDebugLog('📺 Sorgente attuale', `YouTube: ${currentYouTubeVideoId}`, 'info');
+    } else if (currentStreamId) {
+      addDebugLog('📀 Sorgente attuale', 'Real-Debrid stream', 'info');
+    }
+    
+    // Check for YouTube mapping
+    try {
+      const { data: youtubeMapping } = await supabase
+        .from('youtube_track_mappings')
+        .select('video_title, video_id')
+        .eq('track_id', track.id)
+        .maybeSingle();
+      
+      if (youtubeMapping) {
+        addDebugLog('🎬 YouTube salvato', youtubeMapping.video_title, 'success');
+      }
+    } catch (e) {
+      console.error('Error checking YouTube mapping:', e);
+    }
+    
+    // Check for RD mapping
+    if (!credentials?.realDebridApiKey) {
+      addDebugLog('⚠️ Real-Debrid', 'API key non configurata', 'warning');
+      return;
+    }
+    
+    if (!track.albumId) {
+      addDebugLog('⚠️ Album ID mancante', 'Impossibile cercare mappature RD', 'warning');
+      return;
+    }
     
     try {
       const { data: trackMapping } = await supabase
@@ -1340,6 +1412,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const fileId = trackMapping.file_id;
         
         setCurrentMappedFileId(fileId);
+        addDebugLog('📀 RD salvato', `File: ${trackMapping.file_name}`, 'success');
         
         // Get torrent info with all files
         const result = await checkTorrentStatus(credentials.realDebridApiKey, torrentId);
@@ -1365,19 +1438,32 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           
           if (result.streams.length > 0) {
             setAlternativeStreams(result.streams);
+            addDebugLog('✅ Stream RD pronto', `${result.streams.length} stream disponibili`, 'success');
+          } else if (result.status === 'downloading') {
+            addDebugLog('📥 RD in download', `Progresso: ${result.progress}%`, 'info');
           }
-          
-          addDebugLog('Mappatura caricata', `Torrent: ${trackMapping.album_torrent_mappings.torrent_title}`, 'success');
         }
       } else {
         setCurrentMappedFileId(undefined);
-        addDebugLog('Nessuna mappatura', 'Nessuna mappatura eseguita in precedenza, proseguo con la ricerca', 'info');
+        addDebugLog('ℹ️ Nessuna mappatura RD', 'Questa traccia non ha ancora una sorgente RD salvata', 'info');
+        
+        // Check if there's an album mapping we could use
+        const { data: albumMapping } = await supabase
+          .from('album_torrent_mappings')
+          .select('torrent_title')
+          .eq('album_id', track.albumId)
+          .maybeSingle();
+        
+        if (albumMapping) {
+          addDebugLog('📦 Album RD trovato', `Torrent: ${albumMapping.torrent_title}`, 'info');
+          addDebugLog('💡 Suggerimento', 'Cerca manualmente per trovare il file corrispondente', 'info');
+        }
       }
     } catch (error) {
       console.error('Failed to load saved mapping:', error);
-      addDebugLog('Errore caricamento', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
+      addDebugLog('❌ Errore caricamento', error instanceof Error ? error.message : 'Errore sconosciuto', 'error');
     }
-  }, [state.currentTrack, credentials, addDebugLog]);
+  }, [state.currentTrack, credentials, addDebugLog, isPlayingYouTube, currentYouTubeVideoId, currentStreamId]);
 
   const playTrack = useCallback(async (track: Track, queue?: Track[]) => {
     // Stop any existing audio and cancel pending searches

@@ -59,6 +59,7 @@ const Player: React.FC = () => {
     isSearchingStreams,
     manualSearch,
     debugLogs,
+    clearDebugLogs,
     downloadProgress,
     downloadStatus,
     loadSavedMapping,
@@ -163,6 +164,10 @@ const Player: React.FC = () => {
   };
 
   const handleOpenBugsModal = () => {
+    // Clear debug logs and reload saved mapping when opening modal
+    // This ensures the modal shows fresh, contextual info for the current track
+    clearDebugLogs();
+    loadSavedMapping();
     setShowBugsModal(true);
   };
 
