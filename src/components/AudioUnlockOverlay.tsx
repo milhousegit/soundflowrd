@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useIOSAudioSession, isIOS, isSafari, isPWA } from '@/hooks/useIOSAudioSession';
 
 /**
  * This overlay appears on iOS devices when audio autoplay is blocked.
@@ -10,26 +11,31 @@ import { Button } from '@/components/ui/button';
 const AudioUnlockOverlay: React.FC = () => {
   const [showOverlay, setShowOverlay] = useState(false);
   const [hasUnlocked, setHasUnlocked] = useState(false);
+  const iosAudio = useIOSAudioSession();
 
   useEffect(() => {
+    // Initialize iOS audio session on mount
+    iosAudio.initialize();
+
     // Check if we've already unlocked audio in this session
     const unlocked = sessionStorage.getItem('audio_unlocked');
     if (unlocked) {
       setHasUnlocked(true);
+      iosAudio.addLog('info', 'Audio already unlocked (session)');
       return;
     }
 
-    // Detect iOS
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    // Detect iOS or Safari
+    const needsUnlock = isIOS() || isSafari();
     
-    // Also check for Safari on macOS which has similar restrictions
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    iosAudio.addLog('info', 'AudioUnlockOverlay check', `iOS: ${isIOS()}, Safari: ${isSafari()}, PWA: ${isPWA()}`);
     
-    if (isIOS || isSafari) {
+    if (needsUnlock) {
       // Show overlay after a short delay to give time for natural user interaction
       const timer = setTimeout(() => {
         if (!sessionStorage.getItem('audio_unlocked')) {
           setShowOverlay(true);
+          iosAudio.addLog('info', 'Showing unlock overlay');
         }
       }, 500);
       
@@ -37,29 +43,23 @@ const AudioUnlockOverlay: React.FC = () => {
     }
   }, []);
 
-  const handleUnlock = useCallback(() => {
-    // Create and play a silent audio to unlock the audio context
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const handleUnlock = useCallback(async () => {
+    iosAudio.addLog('info', 'User tapped unlock button');
     
-    // Create a short silent buffer
-    const buffer = audioContext.createBuffer(1, 1, 22050);
-    const source = audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioContext.destination);
-    source.start(0);
+    // Use the robust unlock mechanism
+    const success = await iosAudio.unlock();
     
-    // Also try to resume any suspended audio contexts
-    if (audioContext.state === 'suspended') {
-      audioContext.resume();
+    if (success) {
+      setHasUnlocked(true);
+      setShowOverlay(false);
+      iosAudio.addLog('success', 'Unlock overlay dismissed');
+    } else {
+      // Even if some parts failed, mark as attempted and dismiss
+      setHasUnlocked(true);
+      setShowOverlay(false);
+      iosAudio.addLog('warning', 'Unlock partially failed, dismissing anyway');
     }
-    
-    // Mark as unlocked
-    sessionStorage.setItem('audio_unlocked', 'true');
-    setHasUnlocked(true);
-    setShowOverlay(false);
-    
-    console.log('Audio unlocked by user gesture');
-  }, []);
+  }, [iosAudio]);
 
   // Also listen for any user interaction to auto-dismiss
   useEffect(() => {
