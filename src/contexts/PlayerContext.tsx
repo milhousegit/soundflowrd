@@ -139,6 +139,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       audioRef.current.src = '';
     }
     
+    // CRITICAL: On iOS, "warm up" the audio session before YouTube iframe
+    // This helps iOS allow the iframe to autoplay since audio is already active
+    try {
+      console.log('[YouTube] Warming up audio session before iframe...');
+      await iosAudio.quickUnlock();
+      iosAudio.keepAlive(); // Start silent audio to keep session active
+    } catch (e) {
+      console.log('[YouTube] Audio warmup failed (expected if not iOS):', e);
+    }
+    
     setLoadingPhase('loading');
     setYoutubeNeedsUserGesture(false);
     const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
@@ -164,7 +174,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }, 3000);
     
     return true;
-  }, []);
+  }, [iosAudio]);
   
   // Cache for album torrent - reuse when playing multiple tracks from same album
   const albumCacheRef = useRef<{
