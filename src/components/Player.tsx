@@ -75,6 +75,7 @@ const Player: React.FC = () => {
     setYouTubeProgress,
     setYouTubePlaybackStarted,
     setYouTubePaused,
+    setYouTubeNeedsGesture,
     lastSearchQuery,
     searchYouTubeManually,
     isShuffled,
@@ -93,16 +94,18 @@ const Player: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const youtubePlayerRef = useRef<YouTubePlayerRef>(null);
   
-  // Auto-play when YouTube player signals it needs gesture - simulate it automatically
+  // Handle when YouTube player signals it needs a user gesture
   const handleYouTubeNeedsGesture = useCallback(() => {
-    console.log('YouTubePlayer needs gesture - auto-triggering play');
-    // Try to play automatically
+    console.log('YouTubePlayer needs gesture - signaling to show hint');
+    // Set the state so the iOS hint will show
+    setYouTubeNeedsGesture?.();
+    // Still try to auto-play (might work on some browsers)
     setTimeout(() => {
       if (youtubePlayerRef.current) {
         youtubePlayerRef.current.play();
       }
     }, 100);
-  }, []);
+  }, [setYouTubeNeedsGesture]);
   
   // Resume playback when page becomes visible again (e.g., screen turned back on)
   // This prevents the song from staying paused when the user locks/unlocks the screen
