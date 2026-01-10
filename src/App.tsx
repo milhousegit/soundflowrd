@@ -10,7 +10,6 @@ import Login from "@/components/Login";
 import Layout from "@/components/Layout";
 import InstallPrompt from "@/components/InstallPrompt";
 import SilentAudioKeepAlive from "@/components/SilentAudioKeepAlive";
-import AudioUnlockOverlay from "@/components/AudioUnlockOverlay";
 import LandscapeBlocker from "@/components/LandscapeBlocker";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
@@ -85,7 +84,6 @@ const App = () => (
             <Toaster />
             <Sonner position="top-center" />
             <InstallPrompt />
-            <AudioUnlockOverlay />
             <LandscapeBlocker />
             <BrowserRouter>
               <SilentAudioKeepAlive />
