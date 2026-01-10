@@ -9,6 +9,8 @@ import { SettingsProvider } from "@/contexts/SettingsContext";
 import Login from "@/components/Login";
 import Layout from "@/components/Layout";
 import InstallPrompt from "@/components/InstallPrompt";
+import SilentAudioKeepAlive from "@/components/SilentAudioKeepAlive";
+import AudioUnlockOverlay from "@/components/AudioUnlockOverlay";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Library from "@/pages/Library";
@@ -82,6 +84,8 @@ const App = () => (
             <Toaster />
             <Sonner position="top-center" />
             <InstallPrompt />
+            <SilentAudioKeepAlive />
+            <AudioUnlockOverlay />
             <BrowserRouter>
               <AppRoutes />
             </BrowserRouter>
