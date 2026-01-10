@@ -85,10 +85,10 @@ const App = () => (
             <Toaster />
             <Sonner position="top-center" />
             <InstallPrompt />
-            <SilentAudioKeepAlive />
             <AudioUnlockOverlay />
             <LandscapeBlocker />
             <BrowserRouter>
+              <SilentAudioKeepAlive />
               <AppRoutes />
             </BrowserRouter>
           </TooltipProvider>
