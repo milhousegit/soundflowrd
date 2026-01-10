@@ -579,6 +579,13 @@ const Settings: React.FC = () => {
             {t('logout')}
           </Button>
         </div>
+
+        {/* App Version */}
+        <div className="pt-6 border-t border-border">
+          <p className="text-center text-xs text-muted-foreground">
+            SoundFlow v0.1
+          </p>
+        </div>
       </div>
     </div>
   );
