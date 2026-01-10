@@ -371,15 +371,19 @@ const Home: React.FC = () => {
             <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('newReleases')}</h2>
           </div>
           {isLoadingReleases ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
               {Array.from({ length: 6 }).map((_, i) => (
-                <AlbumCardSkeleton key={i} />
+                <div key={i} className="flex-shrink-0 w-32 md:w-auto">
+                  <AlbumCardSkeleton />
+                </div>
               ))}
             </div>
           ) : newReleases.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
               {newReleases.slice(0, 12).map((album) => (
-                <AlbumCard key={album.id} album={album} />
+                <div key={album.id} className="flex-shrink-0 w-32 md:w-auto">
+                  <AlbumCard album={album} />
+                </div>
               ))}
             </div>
           ) : (

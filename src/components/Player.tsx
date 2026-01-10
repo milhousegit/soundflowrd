@@ -366,18 +366,18 @@ const Player: React.FC = () => {
               <Shuffle className="w-5 h-5" />
             </Button>
             
-            <div className="flex items-center gap-4">
-              <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={previous}>
+            <div className="flex items-center gap-4" onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}>
+              <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={(e) => { e.stopPropagation(); previous(); }}>
                 <SkipBack className="w-6 h-6" />
               </Button>
-              <Button variant="player" className="h-16 w-16" onClick={handleToggle}>
+              <Button variant="player" className="h-16 w-16" onClick={(e) => { e.stopPropagation(); handleToggle(); }}>
                 {isPlaying ? (
                   <Pause className="w-8 h-8" />
                 ) : (
                   <Play className="w-8 h-8 ml-1" />
                 )}
               </Button>
-              <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={next}>
+              <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={(e) => { e.stopPropagation(); next(); }}>
                 <SkipForward className="w-6 h-6" />
               </Button>
             </div>
