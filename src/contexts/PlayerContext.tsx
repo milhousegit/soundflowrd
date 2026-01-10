@@ -121,8 +121,24 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const youtubePlayerRef = useRef<any>(null);
   const [useYouTubeIframe, setUseYouTubeIframe] = useState(false);
   
+  // Helper function to stop YouTube playback
+  const stopYouTubePlayback = useCallback(() => {
+    if (currentYouTubeVideoId || isPlayingYouTube) {
+      console.log('[PlayerContext] Stopping YouTube playback');
+      setCurrentYouTubeVideoId(null);
+      setIsPlayingYouTube(false);
+      setUseYouTubeIframe(false);
+    }
+  }, [currentYouTubeVideoId, isPlayingYouTube]);
+  
   // Helper function to play YouTube audio by video ID - uses iframe directly for reliability
   const playYouTubeAudioById = useCallback(async (videoId: string, videoTitle?: string): Promise<boolean> => {
+    // Stop any existing regular audio first
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+    
     setLoadingPhase('loading');
     setYoutubeNeedsUserGesture(false);
     const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
@@ -478,6 +494,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setLoadingPhase('idle');
             
             if (audioRef.current && selectResult.streams[0].streamUrl) {
+              // Stop YouTube if it's playing before starting RD audio
+              stopYouTubePlayback();
               audioRef.current.src = selectResult.streams[0].streamUrl;
               audioRef.current.play();
               setState((prev) => ({ ...prev, isPlaying: true }));
@@ -647,6 +665,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setLoadingPhase('idle');
 
               if (audioRef.current && selectResult.streams[0].streamUrl) {
+                // Stop YouTube if it's playing before starting RD audio
+                stopYouTubePlayback();
                 audioRef.current.src = selectResult.streams[0].streamUrl;
                 audioRef.current.play();
                 setState((prev) => ({ ...prev, isPlaying: true }));
@@ -852,6 +872,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
           
           if (audioRef.current && selectedStream.streamUrl) {
+            // Stop YouTube if it's playing before starting RD audio
+            stopYouTubePlayback();
             audioRef.current.src = selectedStream.streamUrl;
             audioRef.current.play();
             setState(prev => ({ ...prev, isPlaying: true }));
@@ -1809,6 +1831,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setDownloadProgress(null);
     setDownloadStatus(null);
     
+    // Stop YouTube if it's playing before starting RD audio
+    stopYouTubePlayback();
+    
     if (audioRef.current && stream.streamUrl) {
       audioRef.current.src = stream.streamUrl;
       audioRef.current.currentTime = 0;
@@ -1817,7 +1842,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
     
     addDebugLog('Stream selezionato', `Riproduco: ${stream.title}`, 'success');
-  }, [addDebugLog]);
+  }, [addDebugLog, stopYouTubePlayback]);
 
   const play = useCallback((track?: Track) => {
     if (track) {
