@@ -94,7 +94,7 @@ const updateMediaSessionMetadata = (track: Track | null, isPlaying: boolean) => 
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials } = useAuth();
-  const { settings } = useSettings();
+  const { settings, audioSourceMode } = useSettings();
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
   const [currentStreamId, setCurrentStreamId] = useState<string>();
@@ -1430,111 +1430,164 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       progress: 0,
     }));
     
-    // Clear previous streams
+    // Clear previous state
+    clearDebugLogs();
     setAlternativeStreams([]);
     setAvailableTorrents([]);
     setCurrentStreamId(undefined);
     setDownloadProgress(null);
     setDownloadStatus(null);
     setLoadingPhase('idle');
-    // Stop any YouTube playback
     setCurrentYouTubeVideoId(null);
     setIsPlayingYouTube(false);
+    
+    const isYouTubeOnlyMode = audioSourceMode === 'youtube_only';
+    const hasRdKey = !!credentials?.realDebridApiKey;
+    
+    addDebugLog('🎵 Inizio riproduzione', `"${track.title}" di ${track.artist}`, 'info');
+    addDebugLog('⚙️ Modalità', isYouTubeOnlyMode ? 'Solo YouTube' : 'Real-Debrid + YouTube', 'info');
 
-    // Check if YouTube-only mode is enabled
-    const isYouTubeOnlyMode = settings.audioSourceMode === 'youtube_only';
+    // Save to recently played
+    const saveRecentlyPlayed = () => {
+      const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
+      const filtered = recent.filter((t: Track) => t.id !== track.id);
+      const updated = [track, ...filtered].slice(0, 20);
+      localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+    };
 
-    // FIRST: Check if we have a saved YouTube mapping for this track
-    try {
-      const { data: youtubeMapping } = await supabase
-        .from('youtube_track_mappings')
-        .select('*')
-        .eq('track_id', track.id)
-        .maybeSingle();
-
-      if (currentSearchTrackIdRef.current !== track.id) {
-        console.log('Track changed during YouTube mapping lookup, aborting');
-        return;
-      }
-
-      if (youtubeMapping) {
-        console.log('Found saved YouTube mapping for track:', track.title, youtubeMapping.video_id);
-        addDebugLog('🎬 YouTube salvato', youtubeMapping.video_title, 'success');
-        
-        // Play the saved YouTube video
-        if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current.src = '';
-        }
-        // Play YouTube audio using direct extraction
-        await playYouTubeAudioById(youtubeMapping.video_id, youtubeMapping.video_title);
-        
-        // Save to recently played
-        const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
-        const filtered = recent.filter((t: Track) => t.id !== track.id);
-        const updated = [track, ...filtered].slice(0, 20);
-        localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
-        return;
-      }
+    // Helper: Play YouTube and save mapping
+    const playAndSaveYouTube = async (video: YouTubeVideo) => {
+      addDebugLog('▶️ Riproduzione YouTube', video.title, 'success');
+      await playYouTubeAudioById(video.id, video.title);
       
-      // If YouTube-only mode, search YouTube directly
-      if (isYouTubeOnlyMode) {
-        const youtubeQuery = `${track.artist} ${track.title}`;
-        addDebugLog('🔍 Ricerca YouTube', `Modalità solo YouTube - Query: ${youtubeQuery}`, 'info');
-        setLoadingPhase('searching');
-        setLastSearchQuery(youtubeQuery);
-        
-        const videos = await searchYouTube(youtubeQuery);
-        
-        if (currentSearchTrackIdRef.current !== track.id) {
-          console.log('Track changed during YouTube search, aborting');
-          return;
-        }
-        
-        if (videos.length > 0) {
-          setYoutubeResults(videos);
-          const selectedVideo = videos[0];
-          addDebugLog('▶️ Auto-play YouTube', selectedVideo.title, 'success');
-          
-          // Play YouTube audio using direct extraction
-          const success = await playYouTubeAudioById(selectedVideo.id, selectedVideo.title);
-          
-          if (success) {
-            // Save the YouTube mapping
-            try {
-              await supabase
-                .from('youtube_track_mappings')
-                .upsert({
-                  track_id: track.id,
-                  video_id: selectedVideo.id,
-                  video_title: selectedVideo.title,
-                  video_duration: selectedVideo.duration,
-                  uploader_name: selectedVideo.uploaderName,
-                }, { onConflict: 'track_id' });
-              invalidateYouTubeMappingCache(track.id);
-            } catch (saveError) {
-              console.error('Failed to save YouTube mapping:', saveError);
+      // Save the YouTube mapping for future use
+      try {
+        await supabase
+          .from('youtube_track_mappings')
+          .upsert({
+            track_id: track.id,
+            video_id: video.id,
+            video_title: video.title,
+            video_duration: video.duration,
+            uploader_name: video.uploaderName,
+          }, { onConflict: 'track_id' });
+        invalidateYouTubeMappingCache(track.id);
+        addDebugLog('💾 YouTube salvato', 'Sorgente memorizzata per riutilizzo', 'success');
+      } catch (saveError) {
+        console.error('Failed to save YouTube mapping:', saveError);
+      }
+    };
+
+    // Helper: Search torrent in background and save for next time
+    const syncTorrentInBackground = async () => {
+      if (!hasRdKey || !track.album) return;
+      
+      addDebugLog('🔍 Ricerca torrent', `Background sync per "${track.album}"`, 'info');
+      addSyncingTrack(track.id);
+      
+      try {
+        // First try cache
+        const cache = albumCacheRef.current;
+        if (cache && cache.albumId === track.albumId && cache.torrents.length > 0) {
+          for (const torrent of cache.torrents) {
+            if (torrent.files && torrent.files.length > 0) {
+              const matchingFile = torrent.files.find(file => 
+                flexibleMatch(file.filename || '', track.title) || 
+                flexibleMatch(file.path || '', track.title)
+              );
+              
+              if (matchingFile) {
+                addDebugLog('🎯 Match in cache', matchingFile.filename || '', 'success');
+                const result = await selectFilesAndPlay(credentials!.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
+                
+                if (!result.error && result.status !== 'error') {
+                  const directLink = result.streams.length > 0 ? result.streams[0].streamUrl : undefined;
+                  await saveFileMapping({
+                    track,
+                    torrentId: torrent.torrentId,
+                    torrentTitle: torrent.title,
+                    fileId: matchingFile.id,
+                    fileName: matchingFile.filename,
+                    filePath: matchingFile.path,
+                    directLink,
+                  });
+                  addDebugLog('✅ Torrent sincronizzato', 'Pronto per la prossima riproduzione', 'success');
+                  removeSyncingTrack(track.id);
+                  addSyncedTrack(track.id);
+                  return;
+                }
+              }
             }
           }
-        } else {
-          addDebugLog('❌ Nessun risultato', 'Nessun video YouTube trovato', 'error');
-          setLoadingPhase('idle');
-          toast.error('Nessun contenuto trovato');
         }
         
-        // Save to recently played
-        const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
-        const filtered = recent.filter((t: Track) => t.id !== track.id);
-        const updated = [track, ...filtered].slice(0, 20);
-        localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
-        return;
+        // Search for album torrents
+        const result = await searchStreams(credentials!.realDebridApiKey, `${track.album} ${track.artist}`);
+        
+        if (result.torrents.length > 0) {
+          // Update cache
+          if (track.albumId) {
+            albumCacheRef.current = {
+              albumId: track.albumId,
+              torrents: result.torrents,
+              searchedAt: Date.now(),
+            };
+          }
+          
+          addDebugLog('📦 Torrent trovati', `${result.torrents.length} risultati`, 'info');
+          
+          for (const torrent of result.torrents) {
+            if (torrent.files && torrent.files.length > 0) {
+              const matchingFile = torrent.files.find(file => 
+                flexibleMatch(file.filename || '', track.title) || 
+                flexibleMatch(file.path || '', track.title)
+              );
+              
+              if (matchingFile) {
+                addDebugLog('🎯 Match trovato', matchingFile.filename || '', 'success');
+                const selectResult = await selectFilesAndPlay(credentials!.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
+                
+                if (!selectResult.error && selectResult.status !== 'error') {
+                  const directLink = selectResult.streams.length > 0 ? selectResult.streams[0].streamUrl : undefined;
+                  await saveFileMapping({
+                    track,
+                    torrentId: torrent.torrentId,
+                    torrentTitle: torrent.title,
+                    fileId: matchingFile.id,
+                    fileName: matchingFile.filename,
+                    filePath: matchingFile.path,
+                    directLink,
+                  });
+                  
+                  if (selectResult.status === 'downloading' || selectResult.status === 'queued') {
+                    addDebugLog('📥 Download RD avviato', `${selectResult.progress}% - verrà usato la prossima volta`, 'info');
+                  } else {
+                    addDebugLog('✅ Torrent sincronizzato', 'Pronto per la prossima riproduzione', 'success');
+                  }
+                  removeSyncingTrack(track.id);
+                  addSyncedTrack(track.id);
+                  return;
+                }
+              }
+            }
+          }
+          
+          addDebugLog('⚠️ Nessun match file', 'Torrent trovati ma nessun file corrisponde', 'warning');
+        } else {
+          addDebugLog('⚠️ Nessun torrent', 'Nessun torrent trovato per questo album', 'warning');
+        }
+        
+        removeSyncingTrack(track.id);
+      } catch (error) {
+        addDebugLog('❌ Errore sync', error instanceof Error ? error.message : 'Errore', 'error');
+        removeSyncingTrack(track.id);
       }
-    } catch (error) {
-      console.error('Failed to check YouTube mapping:', error);
-    }
+    };
 
-    // Then check for torrent mapping if we have Real-Debrid credentials
-    if (credentials?.realDebridApiKey && track.albumId) {
+    // =============== MAIN LOGIC ===============
+
+    // STEP 1: Check for existing RD mapping (only if RD mode and has key)
+    if (!isYouTubeOnlyMode && hasRdKey && track.albumId) {
       try {
         const { data: trackMapping } = await supabase
           .from('track_file_mappings')
@@ -1542,32 +1595,21 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           .eq('track_id', track.id)
           .maybeSingle();
 
-        // Verify track is still current
-        if (currentSearchTrackIdRef.current !== track.id) {
-          console.log('Track changed during mapping lookup, aborting');
-          return;
-        }
+        if (currentSearchTrackIdRef.current !== track.id) return;
 
         if (trackMapping) {
-          console.log('Found saved mapping for track:', track.title, trackMapping);
-
           const torrentId = trackMapping.album_torrent_mappings.torrent_id;
           const fileId = trackMapping.file_id;
           const directLink = trackMapping.direct_link;
 
-          // Guard: old buggy mappings could have non-sensical file ids
-          if (!Number.isFinite(fileId) || fileId <= 0) {
-            console.log('Ignoring invalid saved mapping fileId:', fileId);
-          } else {
+          if (Number.isFinite(fileId) && fileId > 0) {
             setCurrentMappedFileId(fileId);
+            addDebugLog('🎯 Mappatura RD trovata', `File ID: ${fileId}`, 'success');
 
-            // If we have a direct link saved, try to use it directly
+            // Try direct link first
             if (directLink) {
-              console.log('Using cached direct link for instant playback');
+              addDebugLog('⚡ Link diretto RD', 'Riproduzione istantanea', 'success');
               setLoadingPhase('loading');
-              addDebugLog('🎯 Mappatura trovata', `File ID: ${fileId}`, 'success');
-              addDebugLog('⚡ Riproduzione istantanea', 'Link diretto RD disponibile', 'success');
-              addDebugLog('🔗 Link RD', directLink.substring(0, 80) + '...', 'info');
               
               if (audioRef.current) {
                 audioRef.current.src = directLink;
@@ -1576,40 +1618,25 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               }
               
               setLoadingPhase('idle');
-              
-              // Save to recently played
-              const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
-              const filtered = recent.filter((t: Track) => t.id !== track.id);
-              const updated = [track, ...filtered].slice(0, 20);
-              localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+              saveRecentlyPlayed();
               return;
             }
 
-            // No direct link - fetch from RD
+            // Fetch from RD
             setLoadingPhase('loading');
-            addDebugLog('🎯 Mappatura trovata', `File ID: ${fileId}, torrent: ${torrentId.substring(0, 8)}...`, 'success');
-            addDebugLog('☁️ Recupero da Real-Debrid', 'Richiesta link...', 'info');
-            
-            const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
+            const result = await selectFilesAndPlay(credentials!.realDebridApiKey, torrentId, [fileId]);
 
-            // Verify track is still current
-            if (currentSearchTrackIdRef.current !== track.id) {
-              console.log('Track changed during file selection, aborting');
-              return;
-            }
+            if (currentSearchTrackIdRef.current !== track.id) return;
 
-            // Handle error states - torrent expired or invalid
             if (result.error || result.status === 'error' || result.status === 'dead' || result.status === 'magnet_error' || result.status === 'not_found') {
-              addDebugLog('⚠️ Torrent non valido', `Stato: ${result.status || result.error} - avvio nuova ricerca`, 'warning');
-              // Clear saved mapping as it's invalid
-              await supabase
-                .from('track_file_mappings')
-                .delete()
-                .eq('track_id', track.id);
-              // Fallthrough to new search below
+              addDebugLog('⚠️ Torrent non valido', `Stato: ${result.status || result.error}`, 'warning');
+              // Clear invalid mapping
+              await supabase.from('track_file_mappings').delete().eq('track_id', track.id);
+              // Fall through to YouTube
             } else if (result.streams.length > 0) {
               const streamUrl = result.streams[0].streamUrl;
-              addDebugLog('⚡ Riproduzione istantanea', streamUrl.substring(0, 80) + '...', 'success');
+              addDebugLog('⚡ Stream RD pronto', result.streams[0].title, 'success');
+              
               setAlternativeStreams(result.streams);
               setCurrentStreamId(result.streams[0].id);
 
@@ -1618,9 +1645,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 audioRef.current.play();
                 setState(prev => ({ ...prev, isPlaying: true }));
                 
-                addDebugLog('💾 Aggiornamento cache', 'Salvo link diretto per prossimi ascolti (29 giorni)', 'info');
-                
-                // Update direct link in database for next time
+                // Update direct link
                 await saveFileMapping({
                   track,
                   torrentId,
@@ -1628,116 +1653,81 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   fileId,
                   fileName: trackMapping.file_name,
                   filePath: trackMapping.file_path,
-                  directLink: result.streams[0].streamUrl,
+                  directLink: streamUrl,
                 });
               }
               
               setLoadingPhase('idle');
-
-              // Save to recently played
-              const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
-              const filtered = recent.filter((t: Track) => t.id !== track.id);
-              const updated = [track, ...filtered].slice(0, 20);
-              localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+              saveRecentlyPlayed();
               return;
             } else if (result.status === 'downloading' || result.status === 'queued') {
-              // Torrent is downloading, show progress
-              addDebugLog('📥 Download su RD in corso', `Stato: ${result.status}, progresso: ${result.progress}%`, 'info');
-              setLoadingPhase('downloading');
-              setDownloadProgress(result.progress);
-              setDownloadStatus(result.status);
-              setAvailableTorrents([
-                {
-                  torrentId,
-                  title: trackMapping.album_torrent_mappings.torrent_title,
-                  size: 'Unknown',
-                  source: 'Saved',
-                  seeders: 0,
-                  status: result.status,
-                  progress: result.progress,
-                  files: [],
-                  hasLinks: false,
-                },
-              ]);
-              return;
+              addDebugLog('📥 RD in download', `${result.progress}% - uso YouTube nel frattempo`, 'info');
+              // Fall through to YouTube but don't sync in background (already synced)
             }
           }
         }
       } catch (error) {
-        console.error('Failed to check saved mapping:', error);
+        console.error('Failed to check RD mapping:', error);
       }
     }
 
-    // Verify track is still current before starting search
-    if (currentSearchTrackIdRef.current !== track.id) {
-      console.log('Track changed before search, aborting');
-      return;
-    }
+    // STEP 2: Check for saved YouTube mapping
+    try {
+      const { data: youtubeMapping } = await supabase
+        .from('youtube_track_mappings')
+        .select('*')
+        .eq('track_id', track.id)
+        .maybeSingle();
 
-    // No saved mapping - start searching
-    setLoadingPhase('searching');
-    clearDebugLogs();
-    addDebugLog('🔍 Inizio ricerca', `Traccia: "${track.title}" di ${track.artist}`, 'info');
-    addDebugLog('📁 Album', track.album || 'Non specificato', 'info');
-    addSyncingTrack(track.id);
-    
-    if (track.album?.trim() && track.artist?.trim()) {
-      // First: try to match from cached album torrents (instant, no network)
-      const cachedMatch = await matchTrackFromCache(track);
-      
-      if (currentSearchTrackIdRef.current !== track.id) {
-        console.log('Track changed during cache match, aborting');
-        return;
-      }
-      
-      if (cachedMatch) {
-        // Found in cache! But only mark as synced if we actually have a stream playing
-        // If still downloading, don't mark as synced yet
-        removeSyncingTrack(track.id);
-        if (loadingPhase !== 'downloading') {
-          addSyncedTrack(track.id);
-          setLoadingPhase('idle');
+      if (currentSearchTrackIdRef.current !== track.id) return;
+
+      if (youtubeMapping) {
+        addDebugLog('🎬 YouTube salvato', youtubeMapping.video_title, 'success');
+        await playYouTubeAudioById(youtubeMapping.video_id, youtubeMapping.video_title);
+        
+        // If RD mode, sync torrent in background for next time
+        if (!isYouTubeOnlyMode && hasRdKey) {
+          syncTorrentInBackground();
         }
+        
+        saveRecentlyPlayed();
         return;
       }
+    } catch (error) {
+      console.error('Failed to check YouTube mapping:', error);
+    }
+
+    // STEP 3: Search YouTube and play immediately
+    const youtubeQuery = `${track.artist} ${track.title}`;
+    setLastSearchQuery(youtubeQuery);
+    setLoadingPhase('searching');
+    addDebugLog('🔍 Ricerca YouTube', youtubeQuery, 'info');
+    
+    try {
+      const videos = await searchYouTube(youtubeQuery);
       
-      // Second: try album search (and cache results for future tracks)
-      const albumQuery = `${track.album} ${track.artist}`;
-      addDebugLog('Strategia ricerca', `Ricerca album (query: "${albumQuery}")`, 'info');
-      const foundInAlbum = await searchAlbumAndMatch(track);
+      if (currentSearchTrackIdRef.current !== track.id) return;
       
-      if (currentSearchTrackIdRef.current !== track.id) {
-        console.log('Track changed during album search, aborting');
-        return;
-      }
-      
-      if (!foundInAlbum) {
-        // Album search failed, try track search as fallback
-        const trackQuery = `${track.artist} ${track.title}`;
-        addDebugLog('Fallback', `Album non trovato: provo traccia (query: "${trackQuery}")`, 'warning');
-        searchForStreams(trackQuery, true, track, false);
+      if (videos.length > 0) {
+        setYoutubeResults(videos);
+        await playAndSaveYouTube(videos[0]);
+        
+        // If RD mode, sync torrent in background for next time
+        if (!isYouTubeOnlyMode && hasRdKey) {
+          syncTorrentInBackground();
+        }
       } else {
+        addDebugLog('❌ Nessun risultato', 'Nessun video YouTube trovato', 'error');
         setLoadingPhase('idle');
+        toast.error('Nessun contenuto trovato');
       }
-    } else {
-      // No album info, search directly for track
-      const trackQuery = `${track.artist} ${track.title}`;
-      addDebugLog('Strategia ricerca', 'Album mancante: parto direttamente dalla traccia', 'warning');
-      searchForStreams(trackQuery, true, track, false);
+    } catch (error) {
+      addDebugLog('❌ Errore YouTube', error instanceof Error ? error.message : 'Errore', 'error');
+      setLoadingPhase('idle');
     }
-
-    // If track has a stream URL, play it
-    if (audioRef.current && track.streamUrl) {
-      audioRef.current.src = track.streamUrl;
-      audioRef.current.play();
-    }
-
-    // Save to recently played
-    const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
-    const filtered = recent.filter((t: Track) => t.id !== track.id);
-    const updated = [track, ...filtered].slice(0, 20);
-    localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
-  }, [searchForStreams, credentials, saveFileMapping]);
+    
+    saveRecentlyPlayed();
+  }, [credentials, audioSourceMode, saveFileMapping, addDebugLog, clearDebugLogs, playYouTubeAudioById]);
 
   const selectStream = useCallback(async (stream: StreamResult) => {
     // Switch stream for current playback immediately - no download needed since stream is already ready

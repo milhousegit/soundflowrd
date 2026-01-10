@@ -50,7 +50,7 @@ interface CloudFile {
 
 const Settings: React.FC = () => {
   const { profile, updateApiKey, signOut, credentials } = useAuth();
-  const { settings, updateSettings, t } = useSettings();
+  const { settings, updateSettings, t, audioSourceMode, setAudioSourceMode } = useSettings();
   const { toast } = useToast();
 
   const [isEditingApiKey, setIsEditingApiKey] = useState(false);
@@ -172,44 +172,44 @@ const Settings: React.FC = () => {
           <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
             {/* YouTube Only Option */}
             <button
-              onClick={() => updateSettings({ audioSourceMode: 'youtube_only' })}
+              onClick={() => setAudioSourceMode('youtube_only')}
               className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
-                settings.audioSourceMode === 'youtube_only' 
+                audioSourceMode === 'youtube_only' 
                   ? 'bg-red-500/20 border border-red-500/50' 
                   : 'bg-secondary hover:bg-secondary/80'
               }`}
             >
-              <Youtube className={`w-5 h-5 mt-0.5 ${settings.audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-muted-foreground'}`} />
+              <Youtube className={`w-5 h-5 mt-0.5 ${audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-muted-foreground'}`} />
               <div className="flex-1">
-                <p className={`font-medium ${settings.audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-foreground'}`}>
+                <p className={`font-medium ${audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-foreground'}`}>
                   {t('youtubeOnly')}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">{t('youtubeOnlyDesc')}</p>
               </div>
-              {settings.audioSourceMode === 'youtube_only' && <Check className="w-5 h-5 text-red-500" />}
+              {audioSourceMode === 'youtube_only' && <Check className="w-5 h-5 text-red-500" />}
             </button>
             
             {/* Real-Debrid Priority Option */}
             <button
-              onClick={() => updateSettings({ audioSourceMode: 'rd_priority' })}
+              onClick={() => setAudioSourceMode('rd_priority')}
               className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
-                settings.audioSourceMode === 'rd_priority' 
+                audioSourceMode === 'rd_priority' 
                   ? 'bg-primary/20 border border-primary/50' 
                   : 'bg-secondary hover:bg-secondary/80'
               }`}
             >
-              <Cloud className={`w-5 h-5 mt-0.5 ${settings.audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <Cloud className={`w-5 h-5 mt-0.5 ${audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-muted-foreground'}`} />
               <div className="flex-1">
-                <p className={`font-medium ${settings.audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-foreground'}`}>
+                <p className={`font-medium ${audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-foreground'}`}>
                   {t('rdPriority')}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">{t('rdPriorityDesc')}</p>
               </div>
-              {settings.audioSourceMode === 'rd_priority' && <Check className="w-5 h-5 text-primary" />}
+              {audioSourceMode === 'rd_priority' && <Check className="w-5 h-5 text-primary" />}
             </button>
 
             {/* Real-Debrid API Key - shown below when rd_priority is selected or has key */}
-            {(settings.audioSourceMode === 'rd_priority' || hasRdApiKey) && (
+            {(audioSourceMode === 'rd_priority' || hasRdApiKey) && (
               <div className="pt-3 border-t border-border">
                 <label className="text-xs md:text-sm text-muted-foreground block mb-2">
                   <Key className="w-3 h-3 inline mr-1" />
@@ -583,7 +583,7 @@ const Settings: React.FC = () => {
         {/* App Version */}
         <div className="pt-6 border-t border-border">
           <p className="text-center text-xs text-muted-foreground">
-            SoundFlow v0.3
+            SoundFlow v0.5
           </p>
         </div>
       </div>

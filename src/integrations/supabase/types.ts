@@ -174,6 +174,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          audio_source_mode: string | null
           created_at: string
           email: string | null
           id: string
@@ -182,6 +183,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          audio_source_mode?: string | null
           created_at?: string
           email?: string | null
           id: string
@@ -190,6 +192,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          audio_source_mode?: string | null
           created_at?: string
           email?: string | null
           id?: string
