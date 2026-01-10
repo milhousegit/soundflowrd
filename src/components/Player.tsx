@@ -106,20 +106,26 @@ const Player: React.FC = () => {
   
   // Resume playback when page becomes visible again (e.g., screen turned back on)
   // This prevents the song from staying paused when the user locks/unlocks the screen
+  // On iOS PWA, YouTube iframe is paused when screen turns off - we resume it when visible
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && isPlaying && useYouTubeIframe && youtubePlayerRef.current) {
+      if (document.visibilityState === 'visible' && useYouTubeIframe && youtubePlayerRef.current) {
         console.log('Page visible again, ensuring YouTube playback continues');
         // Small delay to let the page fully resume
         setTimeout(() => {
+          // Force play regardless of isPlaying state - iOS may have paused it
           youtubePlayerRef.current?.play();
-        }, 300);
+        }, 200);
+        // Second attempt after a longer delay for reliability
+        setTimeout(() => {
+          youtubePlayerRef.current?.play();
+        }, 500);
       }
     };
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isPlaying, useYouTubeIframe]);
+  }, [useYouTubeIframe]);
   
   // Handle seeking - works for both regular audio and YouTube iframe
   const handleSeek = useCallback((time: number) => {

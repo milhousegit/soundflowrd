@@ -149,6 +149,23 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
       autoplayBlockedRef.current = false;
       
       try {
+        // Ensure time update interval is running for the new video
+        if (!timeUpdateIntervalRef.current) {
+          timeUpdateIntervalRef.current = setInterval(() => {
+            if (playerRef.current) {
+              try {
+                const currentTime = playerRef.current.getCurrentTime?.() || 0;
+                const duration = playerRef.current.getDuration?.() || 0;
+                if (onTimeUpdate && (currentTime > 0 || duration > 0)) {
+                  onTimeUpdate(currentTime, duration);
+                }
+              } catch (e) {
+                // Player might be destroyed
+              }
+            }
+          }, 250);
+        }
+        
         // loadVideoById maintains the player instance and is more likely to autoplay on iOS
         playerRef.current.loadVideoById({
           videoId: videoId,
