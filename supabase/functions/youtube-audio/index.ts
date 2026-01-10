@@ -20,28 +20,43 @@ interface AudioStream {
   bitrate: number;
 }
 
-// Updated Piped instances - January 2025
+// Comprehensive list of Piped instances - January 2026
 const PIPED_INSTANCES = [
   "https://pipedapi.kavin.rocks",
-  "https://api.piped.projectsegfau.lt",
-  "https://pipedapi.moomoo.me",
-  "https://pipedapi.syncpundit.io",
-  "https://api.piped.privacydev.net",
-  "https://pipedapi.r4fo.com",
-  "https://pipedapi.smnz.de",
+  "https://pipedapi-libre.kavin.rocks",
+  "https://pipedapi.leptons.xyz",
+  "https://piped-api.privacy.com.de",
+  "https://api.piped.yt",
+  "https://pipedapi.drgns.space",
+  "https://pipedapi.owo.si",
+  "https://pipedapi.ducks.party",
+  "https://piped-api.codespace.cz",
+  "https://pipedapi.reallyaweso.me",
+  "https://api.piped.private.coffee",
+  "https://pipedapi.darkness.services",
+  "https://pipedapi.orangenet.cc",
 ];
 
-// Updated Invidious instances - January 2025
+// Comprehensive list of Invidious instances - January 2026
 const INVIDIOUS_INSTANCES = [
+  "https://inv.nadeko.net",
+  "https://invidious.privacyredirect.com",
+  "https://invidious.protokolla.fi",
+  "https://invidious.perennialte.ch",
+  "https://invidious.darkness.services",
   "https://vid.puffyan.us",
-  "https://invidious.snopyta.org",
-  "https://yewtu.be",
-  "https://inv.riverside.rocks",
-  "https://invidious.kavin.rocks",
-  "https://invidious.osi.kr",
+  "https://invidious.lunar.icu",
+  "https://iv.ggtyler.dev",
+  "https://invidious.fdn.fr",
+  "https://yt.drgnz.club",
 ];
 
-async function tryFetch(url: string, options: RequestInit = {}, timeout = 12000): Promise<Response | null> {
+function log(category: string, message: string, data?: Record<string, unknown>) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [${category}] ${message}`, data ? JSON.stringify(data) : "");
+}
+
+async function tryFetch(url: string, options: RequestInit = {}, timeout = 15000): Promise<Response | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -49,8 +64,9 @@ async function tryFetch(url: string, options: RequestInit = {}, timeout = 12000)
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
         ...options.headers,
       },
       ...options,
@@ -58,7 +74,7 @@ async function tryFetch(url: string, options: RequestInit = {}, timeout = 12000)
     
     clearTimeout(timeoutId);
     return response;
-  } catch {
+  } catch (error) {
     return null;
   }
 }
@@ -79,24 +95,19 @@ async function getAudioStreamPiped(videoId: string): Promise<AudioStream | null>
   for (const instance of instances) {
     try {
       const url = `${instance}/streams/${videoId}`;
-      console.log(`Trying Piped: ${url}`);
+      log("PIPED", `Trying ${instance}`);
       const response = await tryFetch(url);
       
-      if (!response) {
-        console.log(`Piped ${instance} failed: no response`);
-        continue;
-      }
+      if (!response) continue;
       
       if (!response.ok) {
-        console.log(`Piped ${instance} failed: ${response.status}`);
+        log("PIPED", `${instance} failed`, { status: response.status });
         continue;
       }
       
       const text = await response.text();
       
-      // Check if response is valid JSON
       if (!text.startsWith("{")) {
-        console.log(`Piped ${instance} failed: invalid JSON response`);
         continue;
       }
       
@@ -109,7 +120,7 @@ async function getAudioStreamPiped(videoId: string): Promise<AudioStream | null>
         
         if (sortedStreams.length > 0) {
           const best = sortedStreams[0];
-          console.log(`Piped SUCCESS: ${best.quality || best.bitrate}kbps from ${instance}`);
+          log("PIPED", `SUCCESS from ${instance}`, { quality: best.quality || `${best.bitrate}bps` });
           return {
             url: best.url,
             quality: best.quality || `${Math.round((best.bitrate || 0) / 1000)}kbps`,
@@ -118,8 +129,8 @@ async function getAudioStreamPiped(videoId: string): Promise<AudioStream | null>
           };
         }
       }
-    } catch (error) {
-      console.error(`Piped error: ${error instanceof Error ? error.message : error}`);
+    } catch {
+      // Silent fail, try next instance
     }
   }
   
@@ -133,23 +144,19 @@ async function getAudioStreamInvidious(videoId: string): Promise<AudioStream | n
   for (const instance of instances) {
     try {
       const url = `${instance}/api/v1/videos/${videoId}`;
-      console.log(`Trying Invidious: ${url}`);
+      log("INVIDIOUS", `Trying ${instance}`);
       const response = await tryFetch(url);
       
-      if (!response) {
-        console.log(`Invidious ${instance} failed: no response`);
-        continue;
-      }
+      if (!response) continue;
       
       if (!response.ok) {
-        console.log(`Invidious ${instance} failed: ${response.status}`);
+        log("INVIDIOUS", `${instance} failed`, { status: response.status });
         continue;
       }
       
       const text = await response.text();
       
       if (!text.startsWith("{")) {
-        console.log(`Invidious ${instance} failed: invalid JSON response`);
         continue;
       }
       
@@ -162,7 +169,7 @@ async function getAudioStreamInvidious(videoId: string): Promise<AudioStream | n
         
         if (audioFormats.length > 0) {
           const best = audioFormats[0];
-          console.log(`Invidious SUCCESS: ${best.bitrate}bps from ${instance}`);
+          log("INVIDIOUS", `SUCCESS from ${instance}`, { bitrate: best.bitrate });
           return {
             url: best.url,
             quality: `${Math.round((best.bitrate || 0) / 1000)}kbps`,
@@ -171,8 +178,8 @@ async function getAudioStreamInvidious(videoId: string): Promise<AudioStream | n
           };
         }
       }
-    } catch (error) {
-      console.error(`Invidious error: ${error instanceof Error ? error.message : error}`);
+    } catch {
+      // Silent fail, try next instance
     }
   }
   
@@ -183,7 +190,7 @@ async function getAudioStreamInvidious(videoId: string): Promise<AudioStream | n
 async function getAudioStream(videoId: string): Promise<AudioStream | null> {
   const cleanVideoId = videoId.replace("/watch?v=", "").replace("watch?v=", "").split("&")[0];
   
-  console.log("========== Extracting audio for:", cleanVideoId, "==========");
+  log("SERVER", "Extracting audio", { videoId: cleanVideoId });
   
   // Try both in parallel for faster results
   const [pipedResult, invidiousResult] = await Promise.allSettled([
@@ -191,103 +198,126 @@ async function getAudioStream(videoId: string): Promise<AudioStream | null> {
     getAudioStreamInvidious(cleanVideoId),
   ]);
   
-  // Return first successful result
   if (pipedResult.status === "fulfilled" && pipedResult.value) {
-    console.log("SUCCESS: Got audio from Piped");
     return pipedResult.value;
   }
   
   if (invidiousResult.status === "fulfilled" && invidiousResult.value) {
-    console.log("SUCCESS: Got audio from Invidious");
     return invidiousResult.value;
   }
   
-  console.log("FAILED: No audio stream found from any source");
+  log("SERVER", "No audio stream found");
   return null;
 }
 
-// ============ VIDEO SEARCH ============
+// ============ SEARCH: try a single Piped instance ============
+async function searchPipedInstance(instance: string, encodedQuery: string): Promise<VideoResult[] | null> {
+  try {
+    const url = `${instance}/search?q=${encodedQuery}&filter=videos`;
+    const response = await tryFetch(url);
+    
+    if (!response?.ok) return null;
+    
+    const text = await response.text();
+    if (!text.startsWith("{") && !text.startsWith("[")) return null;
+    
+    const data = JSON.parse(text);
+    
+    if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+      const results = data.items
+        .filter((item: any) => item.type === "stream" && item.duration > 0 && item.duration < 900)
+        .slice(0, 8)
+        .map((item: any) => ({
+          id: item.url?.replace("/watch?v=", "") || "",
+          title: item.title || "Unknown",
+          duration: item.duration || 0,
+          uploaderName: item.uploaderName || "Unknown",
+          thumbnail: item.thumbnail || "",
+        }));
+      
+      if (results.length > 0) {
+        log("SEARCH", `Found ${results.length} results from Piped`, { instance });
+        return results;
+      }
+    }
+  } catch {
+    // Silent fail
+  }
+  return null;
+}
+
+// ============ SEARCH: try a single Invidious instance ============
+async function searchInvidiousInstance(instance: string, encodedQuery: string): Promise<VideoResult[] | null> {
+  try {
+    const url = `${instance}/api/v1/search?q=${encodedQuery}&type=video`;
+    const response = await tryFetch(url);
+    
+    if (!response?.ok) return null;
+    
+    const text = await response.text();
+    if (!text.startsWith("[")) return null;
+    
+    const data = JSON.parse(text);
+    
+    if (Array.isArray(data) && data.length > 0) {
+      const results = data
+        .filter((item: any) => item.type === "video" && item.lengthSeconds > 0 && item.lengthSeconds < 900)
+        .slice(0, 8)
+        .map((item: any) => ({
+          id: item.videoId || "",
+          title: item.title || "Unknown",
+          duration: item.lengthSeconds || 0,
+          uploaderName: item.author || "Unknown",
+          thumbnail: item.videoThumbnails?.[0]?.url || "",
+        }));
+      
+      if (results.length > 0) {
+        log("SEARCH", `Found ${results.length} results from Invidious`, { instance });
+        return results;
+      }
+    }
+  } catch {
+    // Silent fail
+  }
+  return null;
+}
+
+// ============ VIDEO SEARCH (parallel) ============
 async function searchVideos(query: string): Promise<VideoResult[]> {
   const encodedQuery = encodeURIComponent(query);
   const pipedInstances = shuffleArray(PIPED_INSTANCES);
   const invidiousInstances = shuffleArray(INVIDIOUS_INSTANCES);
   
-  // Try Piped first
-  for (const instance of pipedInstances) {
-    try {
-      const url = `${instance}/search?q=${encodedQuery}&filter=videos`;
-      console.log(`Searching: ${url}`);
-      const response = await tryFetch(url);
-      
-      if (!response?.ok) {
-        console.log(`${instance} failed: ${response?.status}`);
-        continue;
-      }
-      
-      const text = await response.text();
-      if (!text.startsWith("{") && !text.startsWith("[")) continue;
-      
-      const data = JSON.parse(text);
-      
-      if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-        const results = data.items
-          .filter((item: any) => item.type === "stream" && item.duration > 0 && item.duration < 900)
-          .slice(0, 5)
-          .map((item: any) => ({
-            id: item.url?.replace("/watch?v=", "") || "",
-            title: item.title || "Unknown",
-            duration: item.duration || 0,
-            uploaderName: item.uploaderName || "Unknown",
-            thumbnail: item.thumbnail || "",
-          }));
-        
-        if (results.length > 0) {
-          console.log(`Found ${results.length} results from Piped`);
-          return results;
-        }
-      }
-    } catch (error) {
-      console.error(`Piped search error: ${error instanceof Error ? error.message : error}`);
-    }
-  }
+  log("SEARCH", "Starting video search", { query });
   
-  // Fallback to Invidious
-  for (const instance of invidiousInstances) {
-    try {
-      const url = `${instance}/api/v1/search?q=${encodedQuery}&type=video`;
-      console.log(`Invidious search: ${url}`);
-      const response = await tryFetch(url);
-      
-      if (!response?.ok) continue;
-      
-      const text = await response.text();
-      if (!text.startsWith("[")) continue;
-      
-      const data = JSON.parse(text);
-      
-      if (Array.isArray(data) && data.length > 0) {
-        const results = data
-          .filter((item: any) => item.type === "video" && item.lengthSeconds > 0 && item.lengthSeconds < 900)
-          .slice(0, 5)
-          .map((item: any) => ({
-            id: item.videoId || "",
-            title: item.title || "Unknown",
-            duration: item.lengthSeconds || 0,
-            uploaderName: item.author || "Unknown",
-            thumbnail: item.videoThumbnails?.[0]?.url || "",
-          }));
-        
-        if (results.length > 0) {
-          console.log(`Found ${results.length} results from Invidious`);
-          return results;
-        }
-      }
-    } catch (error) {
-      console.error(`Invidious search error: ${error instanceof Error ? error.message : error}`);
-    }
-  }
+  // Try ALL Piped instances in parallel (not just 3)
+  const pipedPromises = pipedInstances.map(instance => 
+    searchPipedInstance(instance, encodedQuery)
+  );
   
-  return [];
+  // Try ALL Invidious instances in parallel
+  const invidiousPromises = invidiousInstances.map(instance => 
+    searchInvidiousInstance(instance, encodedQuery)
+  );
+  
+  // Race: first successful result wins
+  const allPromises = [...pipedPromises, ...invidiousPromises];
+  
+  // Use Promise.any to get the first successful result
+  try {
+    const firstResult = await Promise.any(
+      allPromises.map(async (p) => {
+        const result = await p;
+        if (result && result.length > 0) return result;
+        throw new Error("No results");
+      })
+    );
+    return firstResult;
+  } catch {
+    // All failed, return empty
+    log("SEARCH", "No results found from any source");
+    return [];
+  }
 }
 
 // ============ SERVER ============
@@ -307,10 +337,9 @@ serve(async (req) => {
         );
       }
 
-      console.log("========== YouTube Search ==========");
-      console.log("Query:", query);
+      log("SERVER", "Search Request", { query });
       const results = await searchVideos(query);
-      console.log("Results:", results.length);
+      log("SERVER", "Search completed", { resultsCount: results.length });
 
       return new Response(
         JSON.stringify({ videos: results }),
@@ -326,8 +355,7 @@ serve(async (req) => {
         );
       }
 
-      console.log("========== Get Audio Stream ==========");
-      console.log("Video ID:", videoId);
+      log("SERVER", "Get Audio Stream", { videoId });
       
       const audioStream = await getAudioStream(videoId);
       
@@ -337,7 +365,7 @@ serve(async (req) => {
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       } else {
-        console.log("Falling back to iframe mode for:", videoId);
+        log("SERVER", "Falling back to iframe mode", { videoId });
         return new Response(
           JSON.stringify({ 
             error: "No audio stream found", 
@@ -355,7 +383,7 @@ serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("YouTube audio error:", error);
+    log("SERVER", "Error", { error: error instanceof Error ? error.message : String(error) });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

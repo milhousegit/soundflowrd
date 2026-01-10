@@ -1587,6 +1587,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // =============== MAIN LOGIC ===============
 
     // STEP 1: Check for existing RD mapping (only if RD mode and has key)
+    // IMPORTANT: YouTube-only users should NEVER use RD mappings even if they exist
     if (!isYouTubeOnlyMode && hasRdKey && track.albumId) {
       try {
         const { data: trackMapping } = await supabase
