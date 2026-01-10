@@ -123,6 +123,27 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
   useEffect(() => {
     if (!videoId) return;
     
+    // If we have an existing player for a different video, use loadVideoById instead of destroying
+    // This helps maintain the "user gesture" permission on iOS
+    if (playerRef.current && currentVideoIdRef.current !== videoId) {
+      console.log('YouTubePlayer: Loading new video without destroying player:', videoId);
+      currentVideoIdRef.current = videoId;
+      hasStartedPlayingRef.current = false;
+      autoplayBlockedRef.current = false;
+      
+      try {
+        // loadVideoById maintains the player instance and is more likely to autoplay on iOS
+        playerRef.current.loadVideoById({
+          videoId: videoId,
+          startSeconds: 0,
+        });
+        return;
+      } catch (e) {
+        console.log('YouTubePlayer: loadVideoById failed, will recreate player', e);
+        // Fall through to recreate player
+      }
+    }
+    
     // Don't reload if same video
     if (currentVideoIdRef.current === videoId && playerRef.current) {
       console.log('YouTubePlayer: Same video, just playing');
@@ -134,13 +155,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
 
     currentVideoIdRef.current = videoId;
     hasStartedPlayingRef.current = false;
+    autoplayBlockedRef.current = false;
     setIsReady(false);
 
     const initPlayer = async () => {
       console.log('YouTubePlayer: Initializing for video:', videoId);
       await loadYouTubeAPI();
 
-      // Destroy existing player
+      // Destroy existing player only if we couldn't use loadVideoById
       if (playerRef.current) {
         if (timeUpdateIntervalRef.current) {
           clearInterval(timeUpdateIntervalRef.current);
