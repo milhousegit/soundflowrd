@@ -83,6 +83,36 @@ export type Database = {
         }
         Relationships: []
       }
+      home_content_cache: {
+        Row: {
+          content_type: string
+          country: string
+          created_at: string
+          data: Json
+          id: string
+          language: string
+          updated_at: string
+        }
+        Insert: {
+          content_type: string
+          country?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          language?: string
+          updated_at?: string
+        }
+        Update: {
+          content_type?: string
+          country?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          language?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       playlist_tracks: {
         Row: {
           added_at: string
