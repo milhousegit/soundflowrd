@@ -583,7 +583,7 @@ const Settings: React.FC = () => {
         {/* App Version */}
         <div className="pt-6 border-t border-border">
           <p className="text-center text-xs text-muted-foreground">
-            SoundFlow v0.2
+            SoundFlow v0.3
           </p>
         </div>
       </div>
