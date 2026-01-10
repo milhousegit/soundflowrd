@@ -1548,20 +1548,25 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const isYouTubeOnlyMode = audioSourceMode === 'youtube_only';
     const hasRdKey = !!credentials?.realDebridApiKey;
 
-    // Fast path: if we already have a cached YouTube mapping, start YouTube immediately.
-    // This avoids losing the "user gesture" to async database reads on iOS.
-    try {
-      const cached = localStorage.getItem(`youtube_mapping_${track.id}`);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed?.video_id) {
-          addDebugLog('⚡ YouTube cache', parsed.video_title || parsed.video_id, 'info');
-          // Do not await: keep it as immediate as possible.
-          playYouTubeAudioById(parsed.video_id, parsed.video_title);
+    // Fast path: if we already have a cached YouTube mapping AND we're in YouTube-only mode,
+    // start YouTube immediately. This avoids losing the "user gesture" to async database reads on iOS.
+    // For RD mode, we first check if RD is available before falling back to YouTube.
+    let usedYouTubeCache = false;
+    if (isYouTubeOnlyMode) {
+      try {
+        const cached = localStorage.getItem(`youtube_mapping_${track.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed?.video_id) {
+            addDebugLog('⚡ YouTube cache', parsed.video_title || parsed.video_id, 'info');
+            // Do not await: keep it as immediate as possible.
+            playYouTubeAudioById(parsed.video_id, parsed.video_title);
+            usedYouTubeCache = true;
+          }
         }
+      } catch {
+        // ignore cache errors
       }
-    } catch {
-      // ignore cache errors
     }
 
     addDebugLog('🎵 Inizio riproduzione', `"${track.title}" di ${track.artist}`, 'info');
@@ -1811,6 +1816,17 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     // STEP 2: Check for saved YouTube mapping
+    // Skip if we already started YouTube from local cache (YouTube-only mode)
+    if (usedYouTubeCache) {
+      addDebugLog('⏭️ Skip DB check', 'Already using YouTube cache', 'info');
+      // If RD mode, sync torrent in background for next time
+      if (!isYouTubeOnlyMode && hasRdKey) {
+        syncTorrentInBackground();
+      }
+      saveRecentlyPlayed();
+      return;
+    }
+    
     try {
       const { data: youtubeMapping } = await supabase
         .from('youtube_track_mappings')
@@ -1823,6 +1839,21 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (youtubeMapping) {
         addDebugLog('🎬 YouTube salvato', youtubeMapping.video_title, 'success');
         await playYouTubeAudioById(youtubeMapping.video_id, youtubeMapping.video_title);
+        
+        // Cache locally for instant next-time playback (iOS gesture-safe)
+        try {
+          localStorage.setItem(
+            `youtube_mapping_${track.id}`,
+            JSON.stringify({
+              video_id: youtubeMapping.video_id,
+              video_title: youtubeMapping.video_title,
+              video_duration: youtubeMapping.video_duration,
+              uploader_name: youtubeMapping.uploader_name,
+            })
+          );
+        } catch {
+          // ignore
+        }
         
         // If RD mode, sync torrent in background for next time
         if (!isYouTubeOnlyMode && hasRdKey) {
