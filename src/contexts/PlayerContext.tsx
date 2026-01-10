@@ -54,6 +54,10 @@ interface PlayerContextType extends PlayerState {
   useYouTubeIframe: boolean;
   setYouTubeProgress?: (currentTime: number, duration: number) => void;
   setYouTubePlaybackStarted?: () => void;
+  setYouTubePaused?: () => void;
+  setYouTubeNeedsGesture?: () => void;
+  youtubeNeedsUserGesture: boolean;
+  clearYouTubeNeedsGesture: () => void;
   // Search query tracking
   lastSearchQuery: string | null;
   searchYouTubeManually: () => Promise<void>;
@@ -105,6 +109,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [currentYouTubeVideoId, setCurrentYouTubeVideoId] = useState<string | null>(null);
   const [isPlayingYouTube, setIsPlayingYouTube] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
+  const [youtubeNeedsUserGesture, setYoutubeNeedsUserGesture] = useState(false);
   const originalQueueRef = useRef<Track[]>([]);
   
   // Track ID currently being searched - used to cancel stale searches
@@ -118,6 +123,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Falls back to iframe if direct audio is not available
   const playYouTubeAudioById = useCallback(async (videoId: string, videoTitle?: string): Promise<boolean> => {
     setLoadingPhase('loading');
+    setYoutubeNeedsUserGesture(false);
     const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
     console.log('playYouTubeAudioById called with:', cleanVideoId);
     
@@ -125,12 +131,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setIsPlayingYouTube(true);
     setUseYouTubeIframe(false);
     
-    // Set a timeout to force loading to idle after 10 seconds (mobile fallback)
+    // Set a timeout - if no playback after 8s, assume autoplay blocked
     const loadingTimeout = setTimeout(() => {
-      console.log('YouTube loading timeout - forcing idle state');
+      console.log('YouTube loading timeout - requesting user gesture');
       setLoadingPhase('idle');
-      setState(prev => ({ ...prev, isPlaying: true }));
-    }, 10000);
+      setYoutubeNeedsUserGesture(true);
+    }, 8000);
     
     try {
       console.log('Extracting YouTube audio for:', cleanVideoId);
@@ -2180,11 +2186,29 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           if (loadingPhase === 'loading') {
             setLoadingPhase('idle');
           }
+          // Clear gesture requirement if we're receiving updates
+          if (youtubeNeedsUserGesture) {
+            setYoutubeNeedsUserGesture(false);
+          }
         },
         setYouTubePlaybackStarted: () => {
           console.log('setYouTubePlaybackStarted called, setting loadingPhase to idle');
           setState(prev => ({ ...prev, isPlaying: true }));
           setLoadingPhase('idle');
+          setYoutubeNeedsUserGesture(false);
+        },
+        setYouTubePaused: () => {
+          console.log('setYouTubePaused called');
+          setState(prev => ({ ...prev, isPlaying: false }));
+        },
+        setYouTubeNeedsGesture: () => {
+          console.log('setYouTubeNeedsGesture called');
+          setYoutubeNeedsUserGesture(true);
+          setLoadingPhase('idle');
+        },
+        youtubeNeedsUserGesture,
+        clearYouTubeNeedsGesture: () => {
+          setYoutubeNeedsUserGesture(false);
         },
         lastSearchQuery,
         searchYouTubeManually,

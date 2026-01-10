@@ -25,6 +25,8 @@ interface YouTubePlayerProps {
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onEnded?: () => void;
   onPlaybackStarted?: () => void;
+  onPaused?: () => void;
+  onNeedsUserGesture?: () => void;
   volume?: number;
   autoplay?: boolean;
 }
@@ -67,6 +69,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
   onTimeUpdate,
   onEnded,
   onPlaybackStarted,
+  onPaused,
+  onNeedsUserGesture,
   volume = 100,
   autoplay = true,
 }, ref) => {
@@ -75,6 +79,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentVideoIdRef = useRef<string | null>(null);
   const hasStartedPlayingRef = useRef(false);
+  const autoplayBlockedRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
 
   useImperativeHandle(ref, () => ({
@@ -159,11 +164,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
         events: {
           onReady: (event: any) => {
             console.log('YouTubePlayer: onReady fired');
-            event.target.setVolume(volume);
             setIsReady(true);
             onReady?.();
             
-            // Start time update interval
+            // Start time update interval - always call onTimeUpdate even if duration is 0
             if (timeUpdateIntervalRef.current) {
               clearInterval(timeUpdateIntervalRef.current);
             }
@@ -172,19 +176,33 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
                 try {
                   const currentTime = playerRef.current.getCurrentTime?.() || 0;
                   const duration = playerRef.current.getDuration?.() || 0;
-                  if (duration > 0 && onTimeUpdate) {
+                  // Always call onTimeUpdate to keep UI in sync
+                  if (onTimeUpdate) {
                     onTimeUpdate(currentTime, duration);
                   }
                 } catch (e) {
                   // Player might be destroyed
                 }
               }
-            }, 250); // More frequent updates for smoother progress bar
+            }, 250);
             
-            // Auto-play if needed
+            // Mobile-friendly autoplay: mute first, then play
             if (autoplay) {
-              console.log('YouTubePlayer: Attempting autoplay');
+              console.log('YouTubePlayer: Attempting muted autoplay for mobile compatibility');
+              event.target.mute();
               event.target.playVideo();
+              
+              // Set a timeout to detect if autoplay was blocked
+              setTimeout(() => {
+                const state = playerRef.current?.getPlayerState?.();
+                console.log('YouTubePlayer: State after autoplay attempt:', state);
+                // States: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
+                if (state === -1 || state === 5 || state === 2) {
+                  console.log('YouTubePlayer: Autoplay blocked, needs user gesture');
+                  autoplayBlockedRef.current = true;
+                  onNeedsUserGesture?.();
+                }
+              }, 1500);
             }
           },
           onStateChange: (event: any) => {
@@ -193,11 +211,25 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
             
             // YT.PlayerState.PLAYING = 1
             if (event.data === 1) {
+              // Unmute when playing starts (muted autoplay succeeded)
+              if (playerRef.current?.isMuted?.()) {
+                console.log('YouTubePlayer: Unmuting after successful autoplay');
+                playerRef.current.unMute();
+                playerRef.current.setVolume(volume);
+              }
+              
               if (!hasStartedPlayingRef.current) {
                 hasStartedPlayingRef.current = true;
+                autoplayBlockedRef.current = false;
                 console.log('YouTubePlayer: Playback actually started');
                 onPlaybackStarted?.();
               }
+            }
+            
+            // YT.PlayerState.PAUSED = 2
+            if (event.data === 2) {
+              console.log('YouTubePlayer: Video paused');
+              onPaused?.();
             }
             
             // YT.PlayerState.ENDED = 0
@@ -207,12 +239,19 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
             }
             
             // YT.PlayerState.UNSTARTED = -1 or CUED = 5 on mobile (autoplay blocked)
-            // Try to play again after a short delay
+            // Only retry once, then signal need for user gesture
             if (event.data === -1 || event.data === 5) {
-              console.log('YouTubePlayer: Video unstarted/cued, retrying play');
-              setTimeout(() => {
-                playerRef.current?.playVideo?.();
-              }, 500);
+              if (!autoplayBlockedRef.current) {
+                console.log('YouTubePlayer: Video unstarted/cued, trying muted play');
+                autoplayBlockedRef.current = true;
+                playerRef.current?.mute?.();
+                setTimeout(() => {
+                  playerRef.current?.playVideo?.();
+                }, 300);
+              } else {
+                console.log('YouTubePlayer: Autoplay definitely blocked, needs user gesture');
+                onNeedsUserGesture?.();
+              }
             }
           },
           onError: (event: any) => {

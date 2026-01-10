@@ -73,6 +73,10 @@ const Player: React.FC = () => {
     useYouTubeIframe,
     setYouTubeProgress,
     setYouTubePlaybackStarted,
+    setYouTubePaused,
+    setYouTubeNeedsGesture,
+    youtubeNeedsUserGesture,
+    clearYouTubeNeedsGesture,
     lastSearchQuery,
     searchYouTubeManually,
     isShuffled,
@@ -107,15 +111,25 @@ const Player: React.FC = () => {
     if (useYouTubeIframe && youtubePlayerRef.current) {
       if (isPlaying) {
         youtubePlayerRef.current.pause();
+        // Don't call toggle() - let onPaused callback update state
       } else {
         youtubePlayerRef.current.play();
+        clearYouTubeNeedsGesture?.();
+        // Don't call toggle() - let onPlaybackStarted callback update state
       }
-      // Toggle the state directly since we're controlling YouTube
-      toggle();
     } else {
       toggle();
     }
-  }, [toggle, useYouTubeIframe, isPlaying]);
+  }, [toggle, useYouTubeIframe, isPlaying, clearYouTubeNeedsGesture]);
+  
+  // Handle tap-to-start for YouTube when autoplay is blocked
+  const handleYouTubeTapToStart = useCallback(() => {
+    console.log('handleYouTubeTapToStart called');
+    if (youtubePlayerRef.current) {
+      youtubePlayerRef.current.play();
+      clearYouTubeNeedsGesture?.();
+    }
+  }, [clearYouTubeNeedsGesture]);
 
   if (!currentTrack) return null;
 
@@ -273,12 +287,29 @@ const Player: React.FC = () => {
                 </div>
               )}
               {/* Loading overlay for YouTube */}
-              {isPlayingYouTube && loadingPhase === 'loading' && (
+              {isPlayingYouTube && loadingPhase === 'loading' && !youtubeNeedsUserGesture && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Youtube className="w-8 h-8 text-red-500 animate-pulse mb-2" />
                     <span className="text-sm text-foreground">
                       {t('language') === 'it' ? "Caricando..." : "Loading..."}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {/* Tap-to-start overlay for YouTube when autoplay is blocked */}
+              {isPlayingYouTube && youtubeNeedsUserGesture && (
+                <div 
+                  className="absolute inset-0 bg-background/70 flex items-center justify-center cursor-pointer"
+                  onClick={handleYouTubeTapToStart}
+                >
+                  <div className="bg-card rounded-xl p-6 flex flex-col items-center shadow-lg">
+                    <Youtube className="w-12 h-12 text-red-500 mb-3" />
+                    <span className="text-base font-medium text-foreground mb-1">
+                      {t('language') === 'it' ? "Tocca per avviare" : "Tap to play"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {t('language') === 'it' ? "Autoplay bloccato dal browser" : "Autoplay blocked by browser"}
                     </span>
                   </div>
                 </div>
@@ -621,6 +652,8 @@ const Player: React.FC = () => {
           volume={volume * 100}
           autoplay={true}
           onPlaybackStarted={setYouTubePlaybackStarted}
+          onPaused={setYouTubePaused}
+          onNeedsUserGesture={setYouTubeNeedsGesture}
           onTimeUpdate={setYouTubeProgress}
           onEnded={next}
         />
