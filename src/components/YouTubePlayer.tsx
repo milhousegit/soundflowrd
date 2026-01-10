@@ -120,6 +120,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
     },
   }));
 
+  // Preload the YouTube IFrame API as soon as the component is mounted.
+  // This improves first-play reliability on iOS where autoplay can be timing-sensitive.
+  useEffect(() => {
+    loadYouTubeAPI().catch(() => {
+      // ignore
+    });
+  }, []);
+
   useEffect(() => {
     if (!videoId) return;
     

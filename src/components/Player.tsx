@@ -210,20 +210,18 @@ const Player: React.FC = () => {
 
   return (
     <>
-      {/* SINGLE YouTube player instance - always rendered, never destroyed on view change */}
-      {useYouTubeIframe && currentYouTubeVideoId && (
-        <YouTubePlayer
-          ref={youtubePlayerRef}
-          videoId={currentYouTubeVideoId}
-          volume={volume * 100}
-          autoplay={true}
-          onPlaybackStarted={setYouTubePlaybackStarted}
-          onPaused={setYouTubePaused}
-          onNeedsUserGesture={handleYouTubeNeedsGesture}
-          onTimeUpdate={setYouTubeProgress}
-          onEnded={next}
-        />
-      )}
+      {/* SINGLE YouTube player instance - kept mounted to preload API and improve iOS first-play */}
+      <YouTubePlayer
+        ref={youtubePlayerRef}
+        videoId={useYouTubeIframe ? currentYouTubeVideoId : null}
+        volume={volume * 100}
+        autoplay={true}
+        onPlaybackStarted={setYouTubePlaybackStarted}
+        onPaused={setYouTubePaused}
+        onNeedsUserGesture={handleYouTubeNeedsGesture}
+        onTimeUpdate={setYouTubeProgress}
+        onEnded={next}
+      />
 
       {/* Mobile expanded view */}
       {isExpanded && (
