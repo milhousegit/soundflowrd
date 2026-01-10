@@ -178,11 +178,19 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
       }
     }
     
-    // Don't reload if same video
+    // If same video and player exists, reset to start and play
     if (currentVideoIdRef.current === videoId && playerRef.current) {
-      console.log('YouTubePlayer: Same video, just playing');
-      if (autoplay) {
-        playerRef.current.playVideo?.();
+      console.log('YouTubePlayer: Same video, resetting to start');
+      hasStartedPlayingRef.current = false;
+      try {
+        playerRef.current.seekTo?.(0, true);
+        if (autoplay) {
+          playerRef.current.playVideo?.();
+        }
+      } catch (e) {
+        console.log('YouTubePlayer: seekTo failed, will recreate player', e);
+        // Fall through to recreate player
+        currentVideoIdRef.current = null;
       }
       return;
     }

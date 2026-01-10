@@ -11,6 +11,7 @@ import Layout from "@/components/Layout";
 import InstallPrompt from "@/components/InstallPrompt";
 import SilentAudioKeepAlive from "@/components/SilentAudioKeepAlive";
 import LandscapeBlocker from "@/components/LandscapeBlocker";
+import IOSPlayHint from "@/components/iOSPlayHint";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Library from "@/pages/Library";
@@ -87,6 +88,7 @@ const App = () => (
             <LandscapeBlocker />
             <BrowserRouter>
               <SilentAudioKeepAlive />
+              <IOSPlayHint />
               <AppRoutes />
             </BrowserRouter>
           </TooltipProvider>
