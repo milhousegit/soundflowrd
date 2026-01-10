@@ -21,7 +21,7 @@ const MobileNav: React.FC = () => {
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {/* Icons aligned towards top with small padding */}
-      <div className="h-20 flex items-start justify-around px-4 pt-[5px]">
+      <div className="h-14 flex items-center justify-around px-4">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
