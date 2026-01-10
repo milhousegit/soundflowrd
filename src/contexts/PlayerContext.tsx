@@ -1548,25 +1548,24 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const isYouTubeOnlyMode = audioSourceMode === 'youtube_only';
     const hasRdKey = !!credentials?.realDebridApiKey;
 
-    // Fast path: if we already have a cached YouTube mapping AND we're in YouTube-only mode,
-    // start YouTube immediately. This avoids losing the "user gesture" to async database reads on iOS.
-    // For RD mode, we first check if RD is available before falling back to YouTube.
+    // CRITICAL FIX for iOS autoplay: Start YouTube from cache IMMEDIATELY to preserve user gesture.
+    // This works for BOTH YouTube-only AND RD+YouTube modes.
+    // If RD finds a valid stream later, we'll stop YouTube and switch to RD.
+    // This ensures the first song plays even on fresh app start.
     let usedYouTubeCache = false;
-    if (isYouTubeOnlyMode) {
-      try {
-        const cached = localStorage.getItem(`youtube_mapping_${track.id}`);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed?.video_id) {
-            addDebugLog('⚡ YouTube cache', parsed.video_title || parsed.video_id, 'info');
-            // Do not await: keep it as immediate as possible.
-            playYouTubeAudioById(parsed.video_id, parsed.video_title);
-            usedYouTubeCache = true;
-          }
+    try {
+      const cached = localStorage.getItem(`youtube_mapping_${track.id}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.video_id) {
+          addDebugLog('⚡ YouTube cache (gesture-safe)', parsed.video_title || parsed.video_id, 'info');
+          // Do not await: keep it as immediate as possible to preserve user gesture.
+          playYouTubeAudioById(parsed.video_id, parsed.video_title);
+          usedYouTubeCache = true;
         }
-      } catch {
-        // ignore cache errors
       }
+    } catch {
+      // ignore cache errors
     }
 
     addDebugLog('🎵 Inizio riproduzione', `"${track.title}" di ${track.artist}`, 'info');
@@ -1816,17 +1815,27 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     // STEP 2: Check for saved YouTube mapping
-    // Skip if we already started YouTube from local cache (YouTube-only mode)
+    // If we're in YouTube-only mode and already using cache, we're done
+    if (usedYouTubeCache && isYouTubeOnlyMode) {
+      addDebugLog('⏭️ Skip DB check', 'YouTube-only mode with cache', 'info');
+      saveRecentlyPlayed();
+      return;
+    }
+    
+    // If we used YouTube cache in RD mode, sync torrent in background but don't return yet
+    // The YouTube is already playing - if RD had a valid cached stream, it would have played above
+    // If we already used YouTube cache in RD mode, YouTube is already playing.
+    // Just sync in background for next time and we're done.
     if (usedYouTubeCache) {
-      addDebugLog('⏭️ Skip DB check', 'Already using YouTube cache', 'info');
-      // If RD mode, sync torrent in background for next time
-      if (!isYouTubeOnlyMode && hasRdKey) {
+      addDebugLog('📡 RD mode con YouTube cache', 'Syncing torrent in background', 'info');
+      if (hasRdKey) {
         syncTorrentInBackground();
       }
       saveRecentlyPlayed();
       return;
     }
     
+    // No YouTube cache - check DB for saved mapping
     try {
       const { data: youtubeMapping } = await supabase
         .from('youtube_track_mappings')
