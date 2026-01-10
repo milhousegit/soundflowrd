@@ -39,15 +39,26 @@ const Search: React.FC = () => {
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '') // Remove accents
-      .replace(/[^\w\s]/g, '') // Remove special chars
+      .replace(/[^\w\s]/g, ' ') // Replace special chars with space
+      .replace(/\s+/g, ' ') // Collapse spaces
       .trim();
   };
 
-  // Check if a result matches the query
-  const matchesQuery = (text: string, searchQuery: string): boolean => {
-    const normalizedText = normalizeForMatch(text);
+  // Token-based matching: supports queries like "geolier fotografia" and "fotografia geolier"
+  const matchesTokens = (haystacks: string[], searchQuery: string): boolean => {
     const normalizedQuery = normalizeForMatch(searchQuery);
-    return normalizedText.includes(normalizedQuery);
+    if (!normalizedQuery) return true;
+
+    const tokens = normalizedQuery.split(' ').filter(Boolean);
+    if (tokens.length === 0) return true;
+
+    const combined = normalizeForMatch(haystacks.join(' '));
+
+    // Fast path: full phrase match
+    if (combined.includes(normalizedQuery)) return true;
+
+    // Require every token to be present somewhere across the combined metadata
+    return tokens.every((t) => combined.includes(t));
   };
 
   const performSearch = useCallback(async (searchQuery: string) => {
@@ -59,25 +70,20 @@ const Search: React.FC = () => {
     setIsLoading(true);
     try {
       const data = await searchAll(searchQuery);
-      
-      // Filter results to only show items that contain the search query in their metadata
-      // Keep the original order (sorted by popularity/score from API)
-      const filteredArtists = data.artists.filter(artist => 
-        matchesQuery(artist.name, searchQuery)
+
+      // Filter results (keep API ranking/order)
+      const filteredArtists = data.artists.filter((artist) =>
+        matchesTokens([artist.name], searchQuery)
       );
-      
-      const filteredAlbums = data.albums.filter(album => 
-        matchesQuery(album.title, searchQuery) || 
-        matchesQuery(album.artist, searchQuery)
+
+      const filteredAlbums = data.albums.filter((album) =>
+        matchesTokens([album.title, album.artist], searchQuery)
       );
-      
-      const filteredTracks = data.tracks.filter(track => 
-        matchesQuery(track.title, searchQuery) || 
-        matchesQuery(track.artist, searchQuery) ||
-        matchesQuery(track.album, searchQuery)
+
+      const filteredTracks = data.tracks.filter((track) =>
+        matchesTokens([track.title, track.artist, track.album], searchQuery)
       );
-      
-      // Results are already sorted by popularity/score from MusicBrainz API
+
       setResults({
         artists: filteredArtists,
         albums: filteredAlbums,

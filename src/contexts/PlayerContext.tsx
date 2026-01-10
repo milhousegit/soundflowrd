@@ -1465,16 +1465,49 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [state.currentTrack, credentials, addDebugLog, isPlayingYouTube, currentYouTubeVideoId, currentStreamId]);
 
+  // Try to unlock iOS/Safari audio *during the user's tap* that starts playback.
+  // This makes the first YouTube play far more reliable because the later async load happens
+  // after the session is already unlocked.
+  const tryUnlockAudioFromUserGesture = useCallback(() => {
+    try {
+      if (sessionStorage.getItem('audio_unlocked')) return;
+
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+
+      const ctx: AudioContext = new AudioCtx();
+
+      // Create a tiny silent buffer and play it immediately.
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+
+      if ((ctx as any).state === 'suspended') {
+        (ctx as any).resume?.();
+      }
+
+      sessionStorage.setItem('audio_unlocked', 'true');
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const playTrack = useCallback(async (track: Track, queue?: Track[]) => {
+    // IMPORTANT: call this synchronously at the beginning of the tap-triggered flow
+    // to maximize iOS autoplay success.
+    tryUnlockAudioFromUserGesture();
+
     // Stop any existing audio and cancel pending searches
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = '';
     }
-    
+
     // Set the new track ID for search cancellation
     currentSearchTrackIdRef.current = track.id;
-    
+
     setState(prev => ({
       ...prev,
       currentTrack: track,
@@ -1484,7 +1517,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       duration: track.duration,
       progress: 0,
     }));
-    
+
     // Clear previous state
     clearDebugLogs();
     setAlternativeStreams([]);
@@ -1495,10 +1528,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setLoadingPhase('idle');
     setCurrentYouTubeVideoId(null);
     setIsPlayingYouTube(false);
-    
+
     const isYouTubeOnlyMode = audioSourceMode === 'youtube_only';
     const hasRdKey = !!credentials?.realDebridApiKey;
-    
+
     addDebugLog('🎵 Inizio riproduzione', `"${track.title}" di ${track.artist}`, 'info');
     addDebugLog('⚙️ Modalità', isYouTubeOnlyMode ? 'Solo YouTube' : 'Real-Debrid + YouTube', 'info');
 
@@ -1783,7 +1816,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
     
     saveRecentlyPlayed();
-  }, [credentials, audioSourceMode, saveFileMapping, addDebugLog, clearDebugLogs, playYouTubeAudioById]);
+  }, [credentials, audioSourceMode, saveFileMapping, addDebugLog, clearDebugLogs, playYouTubeAudioById, tryUnlockAudioFromUserGesture]);
 
   const selectStream = useCallback(async (stream: StreamResult) => {
     // Switch stream for current playback immediately - no download needed since stream is already ready
