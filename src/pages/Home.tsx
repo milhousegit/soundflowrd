@@ -4,6 +4,7 @@ import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { getNewReleases, getPopularArtists } from '@/lib/musicbrainz';
 import { supabase } from '@/integrations/supabase/client';
 import AlbumCard from '@/components/AlbumCard';
@@ -13,9 +14,20 @@ import CreatePlaylistModal from '@/components/CreatePlaylistModal';
 import TapArea from '@/components/TapArea';
 import AlbumCardSkeleton from '@/components/skeletons/AlbumCardSkeleton';
 import ArtistCardSkeleton from '@/components/skeletons/ArtistCardSkeleton';
-import { Clock, TrendingUp, ListMusic, Music, Plus } from 'lucide-react';
+import { Clock, TrendingUp, ListMusic, Music, Plus, ListPlus, Loader2 } from 'lucide-react';
 import { Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 
 const Home: React.FC = () => {
   const [recentlyPlayed, setRecentlyPlayed] = useState<Track[]>([]);
@@ -24,11 +36,13 @@ const Home: React.FC = () => {
   const [isLoadingReleases, setIsLoadingReleases] = useState(true);
   const [isLoadingArtists, setIsLoadingArtists] = useState(true);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
+  const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
   
   const { settings, t } = useSettings();
-  const { currentTrack, isPlaying, playTrack, toggle } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, toggle, addToQueue } = usePlayer();
   const { favorites, getFavoritesByType } = useFavorites();
-  const { playlists, isLoading: isLoadingPlaylists } = usePlaylists();
+  const { playlists, isLoading: isLoadingPlaylists, addTrackToPlaylist } = usePlaylists();
+  const isMobile = useIsMobile();
 
   // Get country code from language
   const getCountryFromLanguage = (lang: string): string => {
@@ -195,9 +209,20 @@ const Home: React.FC = () => {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {displayRecent.map((track) => {
               const isCurrentTrack = currentTrack?.id === track.id;
-              return (
+              
+              const handleAddToQueue = () => {
+                addToQueue([track]);
+                toast.success('Aggiunto alla coda');
+              };
+
+              const handleAddToPlaylist = async (playlistId: string) => {
+                setIsAddingToPlaylist(playlistId);
+                await addTrackToPlaylist(playlistId, track);
+                setIsAddingToPlaylist(null);
+              };
+
+              const trackContent = (
                 <TapArea
-                  key={track.id}
                   onTap={() => (isCurrentTrack ? toggle() : playTrack(track, displayRecent))}
                   className="group flex items-center gap-2 md:gap-4 p-2 md:p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-all cursor-pointer touch-manipulation"
                 >
@@ -223,6 +248,56 @@ const Home: React.FC = () => {
                   </div>
                 </TapArea>
               );
+
+              // Wrap with ContextMenu for long-press on mobile
+              if (isMobile) {
+                return (
+                  <ContextMenu key={track.id}>
+                    <ContextMenuTrigger asChild>
+                      {trackContent}
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="w-48 bg-popover z-[100]">
+                      <ContextMenuItem onClick={handleAddToQueue} className="cursor-pointer">
+                        <ListPlus className="w-4 h-4 mr-2" />
+                        Aggiungi alla coda
+                      </ContextMenuItem>
+                      <ContextMenuSub>
+                        <ContextMenuSubTrigger className="cursor-pointer">
+                          <ListMusic className="w-4 h-4 mr-2" />
+                          Aggiungi a playlist
+                        </ContextMenuSubTrigger>
+                        <ContextMenuSubContent className="bg-popover w-48">
+                          <ContextMenuItem 
+                            onClick={() => setShowCreatePlaylist(true)} 
+                            className="cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Crea nuova playlist
+                          </ContextMenuItem>
+                          {playlists.length > 0 && <ContextMenuSeparator />}
+                          {playlists.map((playlist) => (
+                            <ContextMenuItem 
+                              key={playlist.id}
+                              onClick={() => handleAddToPlaylist(playlist.id)} 
+                              className="cursor-pointer"
+                              disabled={isAddingToPlaylist === playlist.id}
+                            >
+                              {isAddingToPlaylist === playlist.id ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <ListPlus className="w-4 h-4 mr-2" />
+                              )}
+                              <span className="truncate">{playlist.name}</span>
+                            </ContextMenuItem>
+                          ))}
+                        </ContextMenuSubContent>
+                      </ContextMenuSub>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                );
+              }
+
+              return <div key={track.id}>{trackContent}</div>;
             })}
           </div>
         </section>
