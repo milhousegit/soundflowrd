@@ -74,9 +74,6 @@ const Player: React.FC = () => {
     setYouTubeProgress,
     setYouTubePlaybackStarted,
     setYouTubePaused,
-    setYouTubeNeedsGesture,
-    youtubeNeedsUserGesture,
-    clearYouTubeNeedsGesture,
     lastSearchQuery,
     searchYouTubeManually,
     isShuffled,
@@ -95,6 +92,17 @@ const Player: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const youtubePlayerRef = useRef<YouTubePlayerRef>(null);
   
+  // Auto-play when YouTube player signals it needs gesture - simulate it automatically
+  const handleYouTubeNeedsGesture = useCallback(() => {
+    console.log('YouTubePlayer needs gesture - auto-triggering play');
+    // Try to play automatically
+    setTimeout(() => {
+      if (youtubePlayerRef.current) {
+        youtubePlayerRef.current.play();
+      }
+    }, 100);
+  }, []);
+  
   // Handle seeking - works for both regular audio and YouTube iframe
   const handleSeek = useCallback((time: number) => {
     console.log('handleSeek called:', time, 'useYouTubeIframe:', useYouTubeIframe);
@@ -111,25 +119,13 @@ const Player: React.FC = () => {
     if (useYouTubeIframe && youtubePlayerRef.current) {
       if (isPlaying) {
         youtubePlayerRef.current.pause();
-        // Don't call toggle() - let onPaused callback update state
       } else {
         youtubePlayerRef.current.play();
-        clearYouTubeNeedsGesture?.();
-        // Don't call toggle() - let onPlaybackStarted callback update state
       }
     } else {
       toggle();
     }
-  }, [toggle, useYouTubeIframe, isPlaying, clearYouTubeNeedsGesture]);
-  
-  // Handle tap-to-start for YouTube when autoplay is blocked
-  const handleYouTubeTapToStart = useCallback(() => {
-    console.log('handleYouTubeTapToStart called');
-    if (youtubePlayerRef.current) {
-      youtubePlayerRef.current.play();
-      clearYouTubeNeedsGesture?.();
-    }
-  }, [clearYouTubeNeedsGesture]);
+  }, [toggle, useYouTubeIframe, isPlaying]);
 
   if (!currentTrack) return null;
 
@@ -159,8 +155,6 @@ const Player: React.FC = () => {
   };
 
   const handleOpenBugsModal = () => {
-    // Just open the modal - don't trigger loadSavedMapping which could interfere with ongoing search
-    // The modal will show current debug logs and torrents from the ongoing search
     setShowBugsModal(true);
   };
 
@@ -178,7 +172,6 @@ const Player: React.FC = () => {
     if (!isDragging) return;
     const currentY = e.touches[0].clientY;
     const diff = currentY - startY.current;
-    // Only allow dragging down
     if (diff > 0) {
       setDragY(diff);
     }
@@ -186,7 +179,6 @@ const Player: React.FC = () => {
 
   const handleTouchEnd = () => {
     setIsDragging(false);
-    // If dragged more than 150px, close the player
     if (dragY > 150) {
       setIsExpanded(false);
     }
@@ -201,10 +193,27 @@ const Player: React.FC = () => {
     transition: isDragging ? 'none' : 'all 0.3s ease-out',
   };
 
-  // Mobile expanded view
-  if (isExpanded) {
-    return (
-      <>
+  const navbarHeight = 80;
+
+  return (
+    <>
+      {/* SINGLE YouTube player instance - always rendered, never destroyed on view change */}
+      {useYouTubeIframe && currentYouTubeVideoId && (
+        <YouTubePlayer
+          ref={youtubePlayerRef}
+          videoId={currentYouTubeVideoId}
+          volume={volume * 100}
+          autoplay={true}
+          onPlaybackStarted={setYouTubePlaybackStarted}
+          onPaused={setYouTubePaused}
+          onNeedsUserGesture={handleYouTubeNeedsGesture}
+          onTimeUpdate={setYouTubeProgress}
+          onEnded={next}
+        />
+      )}
+
+      {/* Mobile expanded view */}
+      {isExpanded && (
         <div 
           ref={containerRef}
           className="fixed inset-0 z-[60] bg-background flex flex-col md:hidden"
@@ -263,7 +272,7 @@ const Player: React.FC = () => {
                   <Music className="w-24 h-24 text-muted-foreground" />
                 </div>
               )}
-              {/* Status overlay - only show when not YouTube (YouTube has its own loading) */}
+              {/* Status overlay - only show when not YouTube */}
               {!isPlayingYouTube && loadingPhase === 'searching' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
@@ -287,7 +296,7 @@ const Player: React.FC = () => {
                 </div>
               )}
               {/* Loading overlay for YouTube */}
-              {isPlayingYouTube && loadingPhase === 'loading' && !youtubeNeedsUserGesture && (
+              {isPlayingYouTube && loadingPhase === 'loading' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Youtube className="w-8 h-8 text-red-500 animate-pulse mb-2" />
@@ -297,27 +306,10 @@ const Player: React.FC = () => {
                   </div>
                 </div>
               )}
-              {/* Tap-to-start overlay for YouTube when autoplay is blocked */}
-              {isPlayingYouTube && youtubeNeedsUserGesture && (
-                <div 
-                  className="absolute inset-0 bg-background/70 flex items-center justify-center cursor-pointer"
-                  onClick={handleYouTubeTapToStart}
-                >
-                  <div className="bg-card rounded-xl p-6 flex flex-col items-center shadow-lg">
-                    <Youtube className="w-12 h-12 text-red-500 mb-3" />
-                    <span className="text-base font-medium text-foreground mb-1">
-                      {t('language') === 'it' ? "Tocca per avviare" : "Tap to play"}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {t('language') === 'it' ? "Autoplay bloccato dal browser" : "Autoplay blocked by browser"}
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Track Info - moved closer to cover */}
+          {/* Track Info */}
           <div className="px-8 pt-1 text-center">
             <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
@@ -355,9 +347,8 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          {/* Controls with safe area for home indicator */}
+          {/* Controls with safe area */}
           <div className="flex items-center justify-between px-6 pb-safe" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
-            {/* Shuffle a sinistra */}
             <Button 
               variant="ghost" 
               size="icon" 
@@ -367,7 +358,6 @@ const Player: React.FC = () => {
               <Shuffle className="w-5 h-5" />
             </Button>
             
-            {/* Main controls */}
             <div className="flex items-center gap-4">
               <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={previous}>
                 <SkipBack className="w-6 h-6" />
@@ -384,7 +374,6 @@ const Player: React.FC = () => {
               </Button>
             </div>
             
-            {/* Mi piace a destra */}
             <FavoriteButton
               itemType="track"
               item={currentTrack}
@@ -394,109 +383,58 @@ const Player: React.FC = () => {
             />
           </div>
         </div>
-        
-        <BugsModal
-          isOpen={showBugsModal}
-          onClose={() => setShowBugsModal(false)}
-          alternatives={alternativeStreams}
-          torrents={availableTorrents}
-          onSelect={handleSelectStream}
-          onSelectFile={handleSelectFile}
-          onRefreshTorrent={refreshTorrent}
-          currentStreamId={currentStreamId}
-          isLoading={isSearchingStreams}
-          onManualSearch={handleManualSearch}
-          currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
-          debugLogs={debugLogs}
-          downloadProgress={downloadProgress}
-          downloadStatus={downloadStatus}
-          currentMappedFileId={currentMappedFileId}
-          youtubeResults={youtubeResults}
-          onPlayYouTube={playYouTubeVideo}
-          lastSearchQuery={lastSearchQuery}
-          onSearchYouTube={searchYouTubeManually}
-        />
-        
-        <QueueModal
-          isOpen={showQueueModal}
-          onClose={() => setShowQueueModal(false)}
-          queue={queue}
-          currentIndex={queueIndex}
-          onPlayTrack={playQueueIndex}
-          onClearQueue={clearQueue}
-        />
-        
-        {/* Hidden YouTube iframe player - must be present in expanded view too */}
-        {useYouTubeIframe && currentYouTubeVideoId && (
-          <YouTubePlayer
-            ref={youtubePlayerRef}
-            videoId={currentYouTubeVideoId}
-            volume={volume * 100}
-            autoplay={true}
-            onPlaybackStarted={setYouTubePlaybackStarted}
-            onPaused={setYouTubePaused}
-            onNeedsUserGesture={setYouTubeNeedsGesture}
-            onTimeUpdate={setYouTubeProgress}
-            onEnded={next}
-          />
-        )}
-      </>
-    );
-  }
+      )}
 
-  // Navbar height: h-20 (80px) + safe area - player sits directly on top
-  const navbarHeight = 80;
-
-  return (
-    <>
-      {/* Mobile mini player - positioned directly above navbar (no gap) */}
-      <div 
-        className="fixed left-0 right-0 h-14 glass border-t border-border z-50 md:hidden"
-        style={{ bottom: `calc(${navbarHeight}px + env(safe-area-inset-bottom, 0px))` }}
-        onClick={() => setIsExpanded(true)}
-      >
-        <div className="h-full flex items-center px-3 gap-3">
-          <div className="w-10 h-10 rounded-lg bg-secondary overflow-hidden flex-shrink-0 relative">
-            {currentTrack.coverUrl ? (
-              <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Music className="w-4 h-4 text-muted-foreground" />
-              </div>
-            )}
-            {!isPlayingYouTube && loadingPhase === 'searching' && (
-              <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              </div>
-            )}
-            {!isPlayingYouTube && loadingPhase === 'downloading' && (
-              <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                <Cloud className="w-4 h-4 text-blue-500 animate-pulse" />
-              </div>
-            )}
+      {/* Mobile mini player */}
+      {!isExpanded && (
+        <div 
+          className="fixed left-0 right-0 h-14 glass border-t border-border z-50 md:hidden"
+          style={{ bottom: `calc(${navbarHeight}px + env(safe-area-inset-bottom, 0px))` }}
+          onClick={() => setIsExpanded(true)}
+        >
+          <div className="h-full flex items-center px-3 gap-3">
+            <div className="w-10 h-10 rounded-lg bg-secondary overflow-hidden flex-shrink-0 relative">
+              {currentTrack.coverUrl ? (
+                <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Music className="w-4 h-4 text-muted-foreground" />
+                </div>
+              )}
+              {!isPlayingYouTube && loadingPhase === 'searching' && (
+                <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                </div>
+              )}
+              {!isPlayingYouTube && loadingPhase === 'downloading' && (
+                <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+                  <Cloud className="w-4 h-4 text-blue-500 animate-pulse" />
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-foreground truncate text-sm">{currentTrack.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{currentTrack.artist}</p>
+            </div>
+            <Button 
+              variant="playerSecondary" 
+              size="icon"
+              className="h-9 w-9"
+              onClick={(e) => { e.stopPropagation(); handleToggle(); }}
+            >
+              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+            </Button>
+            <ChevronUp className="w-4 h-4 text-muted-foreground" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-foreground truncate text-sm">{currentTrack.title}</p>
-            <p className="text-xs text-muted-foreground truncate">{currentTrack.artist}</p>
+          {/* Progress bar */}
+          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary">
+            <div 
+              className="h-full bg-primary transition-all"
+              style={{ width: `${(progress / (duration || 1)) * 100}%` }}
+            />
           </div>
-          <Button 
-            variant="playerSecondary" 
-            size="icon"
-            className="h-9 w-9"
-            onClick={(e) => { e.stopPropagation(); handleToggle(); }}
-          >
-            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-          </Button>
-          <ChevronUp className="w-4 h-4 text-muted-foreground" />
         </div>
-        {/* Progress bar */}
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary">
-          <div 
-            className="h-full bg-primary transition-all"
-            style={{ width: `${(progress / (duration || 1)) * 100}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Desktop player */}
       <div className="fixed bottom-0 left-0 right-0 h-24 glass border-t border-border z-50 animate-slide-up hidden md:block">
@@ -658,21 +596,6 @@ const Player: React.FC = () => {
         onPlayTrack={playQueueIndex}
         onClearQueue={clearQueue}
       />
-      
-      {/* Hidden YouTube iframe player for fallback */}
-      {useYouTubeIframe && currentYouTubeVideoId && (
-        <YouTubePlayer
-          ref={youtubePlayerRef}
-          videoId={currentYouTubeVideoId}
-          volume={volume * 100}
-          autoplay={true}
-          onPlaybackStarted={setYouTubePlaybackStarted}
-          onPaused={setYouTubePaused}
-          onNeedsUserGesture={setYouTubeNeedsGesture}
-          onTimeUpdate={setYouTubeProgress}
-          onEnded={next}
-        />
-      )}
     </>
   );
 };
