@@ -119,64 +119,33 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const youtubePlayerRef = useRef<any>(null);
   const [useYouTubeIframe, setUseYouTubeIframe] = useState(false);
   
-  // Helper function to play YouTube audio by video ID using direct audio extraction
-  // Falls back to iframe if direct audio is not available
+  // Helper function to play YouTube audio by video ID - uses iframe directly for reliability
   const playYouTubeAudioById = useCallback(async (videoId: string, videoTitle?: string): Promise<boolean> => {
     setLoadingPhase('loading');
     setYoutubeNeedsUserGesture(false);
     const cleanVideoId = videoId.replace('/watch?v=', '').replace('watch?v=', '').split('&')[0];
     console.log('playYouTubeAudioById called with:', cleanVideoId);
     
+    // Set state immediately - use iframe directly for fastest playback
     setCurrentYouTubeVideoId(cleanVideoId);
     setIsPlayingYouTube(true);
-    setUseYouTubeIframe(false);
+    setUseYouTubeIframe(true); // Use iframe immediately - no delay
+    setState(prev => ({ ...prev, isPlaying: true }));
     
-    // Set a timeout - if no playback after 8s, assume autoplay blocked
-    const loadingTimeout = setTimeout(() => {
-      console.log('YouTube loading timeout - requesting user gesture');
-      setLoadingPhase('idle');
-      setYoutubeNeedsUserGesture(true);
-    }, 8000);
-    
-    try {
-      console.log('Extracting YouTube audio for:', cleanVideoId);
-      const result = await getYouTubeAudio(cleanVideoId);
-      
-      // Check if we have direct audio URL
-      if (result.audio && result.audio.url) {
-        console.log('Got YouTube audio URL, quality:', result.audio.quality);
-        
-        // Play using the standard audio element
-        if (audioRef.current) {
-          audioRef.current.src = result.audio.url;
-          try {
-            await audioRef.current.play();
-            console.log('Direct audio playback started successfully');
-            clearTimeout(loadingTimeout);
-            setState(prev => ({ ...prev, isPlaying: true }));
-            setLoadingPhase('idle');
-            // Keep iframe off since direct works
-            setUseYouTubeIframe(false);
-            return true;
-          } catch (playError) {
-            console.error('YouTube audio play error, trying iframe fallback:', playError);
-            // Fall through to iframe fallback
-          }
+    // Set a shorter timeout (3s) - if no playback, assume autoplay blocked
+    setTimeout(() => {
+      // Only show gesture prompt if still in loading phase
+      setLoadingPhase(prev => {
+        if (prev === 'loading') {
+          console.log('YouTube loading timeout - requesting user gesture');
+          setYoutubeNeedsUserGesture(true);
+          return 'idle';
         }
-      }
-      
-      // Fallback to iframe player - this is now the primary path for reliability
-      console.log('Using YouTube iframe fallback for:', cleanVideoId);
-      setUseYouTubeIframe(true);
-      // Don't clear timeout - let the iframe's onPlaybackStarted clear it or timeout
-      return true;
-    } catch (error) {
-      console.error('YouTube audio fetch error:', error);
-      // Try iframe as last resort
-      console.log('Error occurred, trying iframe fallback');
-      setUseYouTubeIframe(true);
-      return true;
-    }
+        return prev;
+      });
+    }, 3000);
+    
+    return true;
   }, []);
   
   // Cache for album torrent - reuse when playing multiple tracks from same album
