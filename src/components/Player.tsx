@@ -223,7 +223,7 @@ const Player: React.FC = () => {
     transition: isDragging ? 'none' : 'all 0.3s ease-out',
   };
 
-  const navbarHeight = 80;
+  const navbarHeight = 56;
 
   return (
     <>

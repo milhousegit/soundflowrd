@@ -1543,9 +1543,26 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setLoadingPhase('idle');
     setCurrentYouTubeVideoId(null);
     setIsPlayingYouTube(false);
+    setUseYouTubeIframe(false);
 
     const isYouTubeOnlyMode = audioSourceMode === 'youtube_only';
     const hasRdKey = !!credentials?.realDebridApiKey;
+
+    // Fast path: if we already have a cached YouTube mapping, start YouTube immediately.
+    // This avoids losing the "user gesture" to async database reads on iOS.
+    try {
+      const cached = localStorage.getItem(`youtube_mapping_${track.id}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.video_id) {
+          addDebugLog('⚡ YouTube cache', parsed.video_title || parsed.video_id, 'info');
+          // Do not await: keep it as immediate as possible.
+          playYouTubeAudioById(parsed.video_id, parsed.video_title);
+        }
+      }
+    } catch {
+      // ignore cache errors
+    }
 
     addDebugLog('🎵 Inizio riproduzione', `"${track.title}" di ${track.artist}`, 'info');
     addDebugLog('⚙️ Modalità', isYouTubeOnlyMode ? 'Solo YouTube' : 'Real-Debrid + YouTube', 'info');
@@ -1562,7 +1579,21 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const playAndSaveYouTube = async (video: YouTubeVideo) => {
       addDebugLog('▶️ Riproduzione YouTube', video.title, 'success');
       await playYouTubeAudioById(video.id, video.title);
-      
+
+      // Cache mapping locally for instant next-time playback (iOS gesture-safe)
+      try {
+        localStorage.setItem(
+          `youtube_mapping_${track.id}`,
+          JSON.stringify({
+            video_id: video.id,
+            video_title: video.title,
+            video_duration: video.duration,
+            uploader_name: video.uploaderName,
+          })
+        );
+      } catch {
+        // ignore
+      }
       // Save the YouTube mapping for future use
       try {
         await supabase
@@ -1716,6 +1747,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setLoadingPhase('loading');
               
               if (audioRef.current) {
+                // Stop YouTube if it was started from cache or previously playing
+                stopYouTubePlayback();
                 audioRef.current.src = directLink;
                 audioRef.current.play();
                 setState(prev => ({ ...prev, isPlaying: true }));
@@ -1745,6 +1778,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setCurrentStreamId(result.streams[0].id);
 
               if (audioRef.current && streamUrl) {
+                // Stop YouTube if it was started from cache or previously playing
+                stopYouTubePlayback();
                 audioRef.current.src = streamUrl;
                 audioRef.current.play();
                 setState(prev => ({ ...prev, isPlaying: true }));
