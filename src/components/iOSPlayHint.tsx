@@ -55,11 +55,15 @@ const IOSPlayHint: React.FC = () => {
   
   return (
     <div 
-      className="fixed bottom-20 left-0 right-0 z-[55] flex flex-col items-center pointer-events-none animate-fade-in md:hidden"
+      className="fixed z-[55] pointer-events-none animate-fade-in md:hidden"
+      style={{ 
+        bottom: 'calc(56px + 56px + env(safe-area-inset-bottom, 0px) + 8px)', // miniplayer height + navbar height + safe area + gap
+        right: '16px' // Align with the play button on the right side of miniplayer
+      }}
       onClick={() => setShow(false)}
     >
       {/* Message bubble */}
-      <div className="bg-primary text-primary-foreground px-4 py-3 rounded-xl shadow-lg max-w-[280px] text-center pointer-events-auto">
+      <div className="bg-primary text-primary-foreground px-4 py-3 rounded-xl shadow-lg max-w-[240px] text-center pointer-events-auto">
         <div className="flex items-center justify-center gap-2 mb-1">
           <Play className="w-4 h-4" />
           <span className="font-medium text-sm">
@@ -73,8 +77,8 @@ const IOSPlayHint: React.FC = () => {
         </p>
       </div>
       
-      {/* Arrow pointing down to miniplayer */}
-      <div className="flex flex-col items-center mt-2 animate-bounce">
+      {/* Arrow pointing down to the play button */}
+      <div className="flex flex-col items-center mt-2 animate-bounce" style={{ marginRight: '24px' }}>
         <ChevronDown className="w-6 h-6 text-primary" />
         <ChevronDown className="w-6 h-6 text-primary -mt-3" />
       </div>
