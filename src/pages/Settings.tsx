@@ -580,10 +580,18 @@ const Settings: React.FC = () => {
           </Button>
         </div>
 
-        {/* App Version */}
-        <div className="pt-6 border-t border-border">
+        {/* App Version & Refresh */}
+        <div className="pt-6 border-t border-border space-y-3">
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCw className="w-4 h-4" />
+            {settings.language === 'it' ? 'Aggiorna App' : 'Refresh App'}
+          </Button>
           <p className="text-center text-xs text-muted-foreground">
-            SoundFlow v0.5
+            SoundFlow 0.6
           </p>
         </div>
       </div>
