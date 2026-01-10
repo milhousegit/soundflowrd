@@ -85,7 +85,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
   useImperativeHandle(ref, () => ({
     play: () => {
       console.log('YouTubePlayer: play() called, player exists:', !!playerRef.current);
-      playerRef.current?.playVideo?.();
+      try {
+        // On iOS, unmuting often requires a user gesture: do it here in the tap handler path.
+        if (playerRef.current?.isMuted?.()) {
+          console.log('YouTubePlayer: play() unmuting before play');
+          playerRef.current.unMute?.();
+          playerRef.current.setVolume?.(volume);
+        }
+        playerRef.current?.playVideo?.();
+      } catch (e) {
+        console.error('YouTubePlayer: play() failed', e);
+      }
     },
     pause: () => {
       console.log('YouTubePlayer: pause() called');
@@ -213,9 +223,18 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
             if (event.data === 1) {
               // Unmute when playing starts (muted autoplay succeeded)
               if (playerRef.current?.isMuted?.()) {
-                console.log('YouTubePlayer: Unmuting after successful autoplay');
-                playerRef.current.unMute();
-                playerRef.current.setVolume(volume);
+                console.log('YouTubePlayer: Attempting unmute after PLAYING');
+                playerRef.current.unMute?.();
+                playerRef.current.setVolume?.(volume);
+
+                // If still muted shortly after, require a user gesture (iOS Safari behavior)
+                setTimeout(() => {
+                  const stillMuted = !!playerRef.current?.isMuted?.();
+                  if (stillMuted) {
+                    console.log('YouTubePlayer: Still muted after unmute attempt; needs user gesture');
+                    onNeedsUserGesture?.();
+                  }
+                }, 600);
               }
               
               if (!hasStartedPlayingRef.current) {
