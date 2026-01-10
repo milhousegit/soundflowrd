@@ -129,7 +129,16 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(({
   }, []);
 
   useEffect(() => {
-    if (!videoId) return;
+    // When switching away from YouTube, explicitly pause the existing player.
+    // Otherwise audio can keep playing in background even if we stop rendering controls.
+    if (!videoId) {
+      try {
+        playerRef.current?.pauseVideo?.();
+      } catch {
+        // ignore
+      }
+      return;
+    }
     
     // If we have an existing player for a different video, use loadVideoById instead of destroying
     // This helps maintain the "user gesture" permission on iOS
