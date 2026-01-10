@@ -8,6 +8,7 @@ interface Profile {
   email: string | null;
   real_debrid_api_key: string | null;
   preferred_language: string | null;
+  audio_source_mode: string | null;
 }
 
 interface AuthContextType {
@@ -21,6 +22,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateApiKey: (apiKey: string) => Promise<{ error: Error | null }>;
+  updateAudioSourceMode: (mode: string) => Promise<{ error: Error | null }>;
   // Legacy support for existing code
   login: (credentials: UserCredentials) => void;
   logout: () => void;
@@ -136,6 +138,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { error: error as Error | null };
   };
 
+  const updateAudioSourceMode = async (mode: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id ?? user?.id;
+
+    if (!userId) return { error: new Error('Not authenticated') };
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ audio_source_mode: mode })
+      .eq('id', userId);
+
+    if (!error) {
+      await fetchProfile(userId);
+    }
+
+    return { error: error as Error | null };
+  };
+
   // Build credentials from profile for compatibility
   const credentials: UserCredentials | null = profile?.real_debrid_api_key
     ? {
@@ -185,6 +205,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       signIn,
       signOut,
       updateApiKey,
+      updateAudioSourceMode,
       login,
       logout,
     }}>
