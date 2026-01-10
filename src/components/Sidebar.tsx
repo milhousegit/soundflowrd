@@ -3,7 +3,6 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { Home, Search, Library, Settings, Headphones } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
-import { cn } from '@/lib/utils';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
@@ -37,7 +36,7 @@ const Sidebar: React.FC = () => {
               <Button
                 variant={isActive ? 'navActive' : 'nav'}
                 size="nav"
-                className={cn('w-full', isActive && 'shadow-glow')}
+                className="w-full"
               >
                 <item.icon className="w-5 h-5" />
                 {item.label}

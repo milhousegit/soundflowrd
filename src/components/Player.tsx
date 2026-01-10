@@ -263,21 +263,21 @@ const Player: React.FC = () => {
 
           {/* Header with safe area */}
           <div className="flex items-center justify-between px-4 pt-safe">
-            <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)}>
+            <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)} className="w-10">
               <ChevronDown className="w-6 h-6" />
             </Button>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2">
               {isSearchingStreams && (
                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
               )}
               <span className="text-sm text-muted-foreground">Now Playing</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center">
               <Button 
                 variant="ghost" 
                 size="icon"
                 onClick={() => setShowQueueModal(true)}
-                className="text-muted-foreground hover:text-primary"
+                className="text-muted-foreground hover:text-primary w-10"
               >
                 <ListMusic className="w-5 h-5" />
               </Button>
@@ -285,7 +285,7 @@ const Player: React.FC = () => {
                 variant="ghost" 
                 size="icon"
                 onClick={handleOpenBugsModal}
-                className="text-muted-foreground hover:text-destructive"
+                className="text-muted-foreground hover:text-destructive w-10"
               >
                 <Bug className="w-5 h-5" />
               </Button>
