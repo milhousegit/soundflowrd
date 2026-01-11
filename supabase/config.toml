@@ -11,3 +11,7 @@ verify_jwt = false
 
 [functions.squidwtf]
 verify_jwt = false
+
+[functions.check-new-releases]
+verify_jwt = false
+schedule = "0 8 * * *"

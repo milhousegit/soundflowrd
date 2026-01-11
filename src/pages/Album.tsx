@@ -172,7 +172,7 @@ const Album: React.FC = () => {
               onClick={handleSyncAlbum}
               disabled={isSyncingAlbum || allTracksSynced}
               className="w-12 h-12"
-              title={allTracksSynced ? 'Album sincronizzato' : 'Sincronizza Album (RD + YouTube fallback)'}
+              title={allTracksSynced ? 'Album sincronizzato' : 'Sincronizza Album'}
             >
               {isSyncingAlbum ? (
                 <Loader2 className="w-6 h-6 text-primary animate-spin" />
