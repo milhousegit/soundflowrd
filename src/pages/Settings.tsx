@@ -22,7 +22,6 @@ import {
   Play,
   RefreshCw,
   Trash2,
-  Youtube,
   Music,
   Smartphone,
 } from 'lucide-react';
@@ -192,24 +191,6 @@ const Settings: React.FC = () => {
               {audioSourceMode === 'deezer_priority' && <Check className="w-5 h-5 text-purple-500" />}
             </button>
 
-            {/* YouTube Only Option */}
-            <button
-              onClick={() => setAudioSourceMode('youtube_only')}
-              className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
-                audioSourceMode === 'youtube_only' 
-                  ? 'bg-red-500/20 border border-red-500/50' 
-                  : 'bg-secondary hover:bg-secondary/80'
-              }`}
-            >
-              <Youtube className={`w-5 h-5 mt-0.5 ${audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-muted-foreground'}`} />
-              <div className="flex-1">
-                <p className={`font-medium ${audioSourceMode === 'youtube_only' ? 'text-red-500' : 'text-foreground'}`}>
-                  {t('youtubeOnly')}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{t('youtubeOnlyDesc')}</p>
-              </div>
-              {audioSourceMode === 'youtube_only' && <Check className="w-5 h-5 text-red-500" />}
-            </button>
             
             {/* Real-Debrid Priority Option */}
             <button
