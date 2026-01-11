@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { Track } from '@/types/music';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { searchStreams, selectFilesAndPlay, checkTorrentStatus, TorrentInfo, AudioFile } from '@/lib/realdebrid';
 import {
   addSyncingTrack,
