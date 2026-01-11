@@ -10,7 +10,6 @@ const browserHeaders = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
-  'Accept-Encoding': 'gzip, deflate, br',
   'DNT': '1',
   'Connection': 'keep-alive',
   'Upgrade-Insecure-Requests': '1',
@@ -21,7 +20,49 @@ const browserHeaders = {
   'Cache-Control': 'max-age=0',
 };
 
-// Alternative approach: Use lucida.to directly by resolving the track
+// Parse enclosed value from HTML like the Rust client does
+function parseEnclosedValue(startMarker: string, endMarker: string, text: string): string | null {
+  const startIndex = text.indexOf(startMarker);
+  if (startIndex === -1) {
+    console.log(`[Lucida] Start marker not found: ${startMarker.substring(0, 50)}`);
+    return null;
+  }
+  
+  const contentStart = startIndex + startMarker.length;
+  const endIndex = text.indexOf(endMarker, contentStart);
+  if (endIndex === -1) {
+    console.log(`[Lucida] End marker not found: ${endMarker.substring(0, 50)}`);
+    return null;
+  }
+  
+  return text.substring(contentStart, endIndex);
+}
+
+interface PageData {
+  info: {
+    type: 'track' | 'album';
+    title: string;
+    url: string;
+    csrf: string;
+    csrfFallback?: string;
+    artists?: { name: string }[];
+    album?: {
+      title: string;
+      coverArtwork?: { url: string }[];
+    };
+  };
+  token: string;
+  tokenExpiry: number;
+  originalService: string;
+}
+
+interface TrackInfo {
+  url: string;
+  csrf: string;
+  csrfFallback?: string;
+}
+
+// Resolve track via Lucida using the same approach as the Rust client
 async function resolveTrackViaLucida(deezerTrackId: string, country = 'auto'): Promise<{ streamUrl: string } | { error: string }> {
   const trackUrl = `https://www.deezer.com/track/${deezerTrackId}`;
   
@@ -47,92 +88,111 @@ async function resolveTrackViaLucida(deezerTrackId: string, country = 'auto'): P
     const html = await pageResponse.text();
     console.log(`[Lucida] HTML length: ${html.length}`);
     
-    // Try multiple patterns to find the data
-    let pageData: any = null;
+    // Check for known error messages
+    const knownErrors = [
+      "An error occured trying to process your request.",
+      'Message: "Cannot contact any valid server"',
+      "An error occurred. Had an issue getting that item, try again.",
+    ];
     
-    // Pattern 1: Script tag with id="pageData"
-    const pattern1 = /<script id="pageData" type="application\/json">([\s\S]*?)<\/script>/;
-    const match1 = html.match(pattern1);
-    if (match1) {
-      console.log('[Lucida] Found pageData via pattern 1');
-      try {
-        pageData = JSON.parse(match1[1]);
-      } catch (e) {
-        console.error('[Lucida] Failed to parse pattern 1:', e);
+    for (const errorMsg of knownErrors) {
+      if (html.includes(errorMsg)) {
+        console.error(`[Lucida] HTML contains error: ${errorMsg}`);
+        return { error: errorMsg };
       }
     }
     
-    // Pattern 2: __NUXT__ or similar hydration data
-    if (!pageData) {
-      const pattern2 = /window\.__NUXT__\s*=\s*({[\s\S]*?});?\s*<\/script>/;
-      const match2 = html.match(pattern2);
-      if (match2) {
-        console.log('[Lucida] Found pageData via pattern 2 (__NUXT__)');
-        try {
-          pageData = JSON.parse(match2[1]);
-        } catch (e) {
-          console.error('[Lucida] Failed to parse pattern 2:', e);
+    // Extract pageData using SvelteKit data format
+    // Pattern from Rust client: ,{"type":"data","data": ... ,"uses":{"url":1}}];
+    const pageDataJson = parseEnclosedValue(
+      ',{"type":"data","data":',
+      ',"uses":{"url":1}}];',
+      html
+    );
+    
+    if (!pageDataJson) {
+      // Try alternative patterns for newer SvelteKit versions
+      const patterns = [
+        { start: '{"type":"data","data":', end: ',"uses":{' },
+        { start: 'pageData = ', end: ';\n' },
+        { start: '__sveltekit_', end: ']]' },
+      ];
+      
+      let foundData = null;
+      for (const pattern of patterns) {
+        const match = parseEnclosedValue(pattern.start, pattern.end, html);
+        if (match) {
+          console.log(`[Lucida] Found data with pattern: ${pattern.start.substring(0, 30)}...`);
+          foundData = match;
+          break;
         }
       }
-    }
-    
-    // Pattern 3: Next.js __NEXT_DATA__
-    if (!pageData) {
-      const pattern3 = /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/;
-      const match3 = html.match(pattern3);
-      if (match3) {
-        console.log('[Lucida] Found pageData via pattern 3 (__NEXT_DATA__)');
-        try {
-          pageData = JSON.parse(match3[1]);
-        } catch (e) {
-          console.error('[Lucida] Failed to parse pattern 3:', e);
+      
+      if (!foundData) {
+        // Log HTML snippet for debugging
+        console.error('[Lucida] Could not find pageData. Searching for data patterns...');
+        
+        // Try to find any JSON with track info
+        const trackDataMatch = html.match(/"type"\s*:\s*"track"[^}]+}/);
+        if (trackDataMatch) {
+          console.log('[Lucida] Found track type indicator');
         }
+        
+        // Log a relevant snippet
+        const dataIndex = html.indexOf('"type":"data"');
+        if (dataIndex !== -1) {
+          console.log('[Lucida] Data snippet:', html.substring(dataIndex, dataIndex + 500));
+        } else {
+          console.error('[Lucida] No "type":"data" found in HTML');
+          console.log('[Lucida] HTML snippet:', html.substring(0, 1000));
+        }
+        
+        return { error: 'Could not extract page data from Lucida' };
       }
     }
     
-    // Pattern 4: Any JSON-like data in a script tag
-    if (!pageData) {
-      const pattern4 = /<script[^>]*type="application\/json"[^>]*>([\s\S]*?)<\/script>/g;
-      let match4;
-      while ((match4 = pattern4.exec(html)) !== null) {
-        try {
-          const parsed = JSON.parse(match4[1]);
-          if (parsed && (parsed.info || parsed.token || parsed.pageData)) {
-            console.log('[Lucida] Found pageData via pattern 4 (generic JSON)');
-            pageData = parsed;
-            break;
-          }
-        } catch (e) {
-          // Continue trying
-        }
+    let pageData: PageData;
+    try {
+      // The extracted JSON might need some cleanup
+      let jsonToParse = pageDataJson || '';
+      
+      // Remove trailing characters that aren't part of JSON
+      jsonToParse = jsonToParse.trim();
+      if (jsonToParse.endsWith(',')) {
+        jsonToParse = jsonToParse.slice(0, -1);
       }
+      
+      pageData = JSON.parse(jsonToParse);
+      console.log('[Lucida] Parsed pageData, type:', pageData.info?.type);
+    } catch (e) {
+      console.error('[Lucida] Failed to parse pageData JSON:', e);
+      console.log('[Lucida] Raw JSON (first 500 chars):', pageDataJson?.substring(0, 500));
+      return { error: 'Failed to parse page data' };
     }
     
-    if (!pageData) {
-      // Log a snippet of HTML for debugging
-      console.error('[Lucida] Could not find pageData. HTML snippet:', html.substring(0, 500));
-      return { error: 'Could not extract page data from Lucida' };
-    }
-    
-    console.log('[Lucida] PageData keys:', Object.keys(pageData));
-    
-    // Extract track info and tokens
-    const info = pageData.info || pageData.pageData?.info;
-    const token = pageData.token || pageData.pageData?.token;
-    const tokenExpiry = pageData.tokenExpiry || pageData.pageData?.tokenExpiry;
+    const { info, token, tokenExpiry } = pageData;
     
     if (!info) {
-      console.error('[Lucida] No info in pageData:', JSON.stringify(pageData).substring(0, 500));
-      return { error: 'No track info found in page data' };
+      return { error: 'No track info in page data' };
     }
     
-    console.log('[Lucida] Track info type:', info.type, 'title:', info.title);
+    // For single tracks, the info contains the track directly
+    // For albums, we'd need to get the track from tracks array
+    let trackInfo: TrackInfo;
     
-    const csrf = info.csrf;
-    const csrfFallback = info.csrfFallback;
-    const trackDownloadUrl = info.url;
+    if (info.type === 'track') {
+      trackInfo = {
+        url: info.url,
+        csrf: info.csrf || token,
+        csrfFallback: info.csrfFallback,
+      };
+    } else {
+      return { error: 'Album URLs not supported, please use track URL' };
+    }
     
-    if (!csrf || !trackDownloadUrl) {
+    console.log(`[Lucida] Track URL: ${trackInfo.url}, CSRF length: ${trackInfo.csrf?.length || 0}`);
+    
+    if (!trackInfo.csrf || !trackInfo.url) {
       return { error: 'Missing CSRF token or track URL' };
     }
     
@@ -156,11 +216,11 @@ async function resolveTrackViaLucida(deezerTrackId: string, country = 'auto'): P
         private: true,
         token: {
           expiry: tokenExpiry || Date.now() + 3600000,
-          primary: csrf,
-          secondary: csrfFallback || null,
+          primary: trackInfo.csrf,
+          secondary: trackInfo.csrfFallback || null,
         },
         upload: { enabled: false },
-        url: trackDownloadUrl,
+        url: trackInfo.url,
       }),
     });
     
@@ -196,12 +256,15 @@ async function resolveTrackViaLucida(deezerTrackId: string, country = 'auto'): P
       
       if (!statusResponse.ok) {
         console.error(`[Lucida] Status check failed: ${statusResponse.status}`);
+        if (statusResponse.status === 500) {
+          return { error: 'Server error while processing track' };
+        }
         await new Promise(r => setTimeout(r, 500));
         continue;
       }
       
       const status = await statusResponse.json();
-      console.log(`[Lucida] Status (attempt ${i + 1}):`, status.status);
+      console.log(`[Lucida] Status (attempt ${i + 1}): ${status.status} - ${status.message || ''}`);
       
       if (status.status === 'completed' || status.status === 'done' || status.status === 'complete') {
         const streamUrl = `https://${server}.lucida.to/api/fetch/request/${handoff}/download`;
@@ -231,7 +294,7 @@ serve(async (req) => {
   }
 
   try {
-    const { action, trackId, deezerUrl, country } = await req.json();
+    const { action, trackId, country } = await req.json();
     
     console.log(`[Lucida] Request: action=${action}, trackId=${trackId}`);
     
