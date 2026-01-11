@@ -9,6 +9,7 @@ import { SettingsProvider } from "@/contexts/SettingsContext";
 import Login from "@/components/Login";
 import Layout from "@/components/Layout";
 import InstallPrompt from "@/components/InstallPrompt";
+import NewReleasesNotificationPopup from "@/components/NewReleasesNotificationPopup";
 import SilentAudioKeepAlive from "@/components/SilentAudioKeepAlive";
 import LandscapeBlocker from "@/components/LandscapeBlocker";
 import IOSPlayHint from "@/components/iOSPlayHint";
@@ -87,6 +88,7 @@ const App = () => (
             <Toaster />
             <Sonner position="top-center" />
             <InstallPrompt />
+            <NewReleasesNotificationPopup />
             <LandscapeBlocker />
             <BrowserRouter>
               <SilentAudioKeepAlive />

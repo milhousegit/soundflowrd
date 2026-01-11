@@ -68,6 +68,7 @@ const Player: React.FC = () => {
     isShuffled,
     toggleShuffle,
     lastSearchQuery,
+    currentAudioSource,
   } = usePlayer();
 
   const { t } = useSettings();
@@ -265,6 +266,18 @@ const Player: React.FC = () => {
                 </>
               )}
             </div>
+            {currentAudioSource && (
+              <div className="mt-2">
+                <span className={cn(
+                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
+                  currentAudioSource === 'tidal' 
+                    ? "bg-sky-500/20 text-sky-400" 
+                    : "bg-orange-500/20 text-orange-400"
+                )}>
+                  {currentAudioSource === 'tidal' ? '🎵 Tidal HQ' : '📦 Real-Debrid'}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="px-8 py-3">

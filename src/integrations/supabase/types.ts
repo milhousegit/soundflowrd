@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      artist_release_tracking: {
+        Row: {
+          artist_id: string
+          artist_name: string
+          created_at: string
+          id: string
+          last_album_id: string | null
+          last_check_at: string
+          user_id: string
+        }
+        Insert: {
+          artist_id: string
+          artist_name: string
+          created_at?: string
+          id?: string
+          last_album_id?: string | null
+          last_check_at?: string
+          user_id: string
+        }
+        Update: {
+          artist_id?: string
+          artist_name?: string
+          created_at?: string
+          id?: string
+          last_album_id?: string | null
+          last_check_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       favorites: {
         Row: {
           created_at: string
@@ -110,6 +140,39 @@ export type Database = {
           id?: string
           language?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      notification_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          enabled: boolean
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          enabled?: boolean
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          enabled?: boolean
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

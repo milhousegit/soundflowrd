@@ -90,6 +90,19 @@ export function useFavorites() {
         syncTrackInBackground(item as Track, credentials.realDebridApiKey);
       }
 
+      // Track artist for new release notifications
+      if (itemType === 'artist') {
+        try {
+          await supabase.from('artist_release_tracking').upsert({
+            user_id: user.id,
+            artist_id: item.id,
+            artist_name: 'name' in item ? item.name : (item as any).title || 'Unknown',
+          }, { onConflict: 'user_id,artist_id' });
+        } catch (e) {
+          console.log('Failed to track artist for notifications:', e);
+        }
+      }
+
       return true;
     } catch (error) {
       console.error('Error adding favorite:', error);
