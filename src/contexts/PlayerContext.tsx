@@ -1552,8 +1552,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     // =============== DEEZER PRIORITY MODE ===============
     // Try Deezer first when in deezer_priority mode
-    if (isDeezerPriorityMode) {
-      addDebugLog('🎵 Modalità Deezer HQ', 'Tentativo stream Deezer...', 'info');
+    // Only attempt if track.id is a valid Deezer numeric ID
+    const isValidDeezerId = /^\d+$/.test(track.id);
+    
+    if (isDeezerPriorityMode && isValidDeezerId) {
+      addDebugLog('🎵 Modalità Deezer HQ', `Tentativo stream per ID: ${track.id}`, 'info');
       setLoadingPhase('searching');
       
       try {
@@ -1595,6 +1598,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Deezer failed, fall back to YouTube
       addDebugLog('🔄 Fallback YouTube', 'Deezer non disponibile, uso YouTube', 'info');
       setLoadingPhase('idle');
+    } else if (isDeezerPriorityMode && !isValidDeezerId) {
+      addDebugLog('⚠️ ID non Deezer', `"${track.id}" non è un ID Deezer valido, uso YouTube`, 'warning');
     }
 
     // CRITICAL FIX for iOS autoplay: Start YouTube from cache IMMEDIATELY to preserve user gesture.
