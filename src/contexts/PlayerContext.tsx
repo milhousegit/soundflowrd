@@ -35,6 +35,7 @@ export interface DebugLogEntry {
 }
 
 export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading' | 'unavailable';
+export type AudioSource = 'tidal' | 'real-debrid' | null;
 
 interface PlayerContextType extends PlayerState {
   play: (track?: Track) => void;
@@ -73,6 +74,8 @@ interface PlayerContextType extends PlayerState {
 
   isShuffled: boolean;
   toggleShuffle: () => void;
+  
+  currentAudioSource: AudioSource;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -223,6 +226,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [currentMappedFileId, setCurrentMappedFileId] = useState<number | undefined>();
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
+  const [currentAudioSource, setCurrentAudioSource] = useState<AudioSource>(null);
 
   const [isShuffled, setIsShuffled] = useState(false);
   const originalQueueRef = useRef<Track[]>([]);
@@ -414,6 +418,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setDownloadProgress(null);
       setDownloadStatus(null);
       setLoadingPhase('idle');
+      setCurrentAudioSource(null);
 
       const isDeezerPriorityMode = audioSourceMode === 'deezer_priority';
       const hasRdKey = !!credentials?.realDebridApiKey;
@@ -434,6 +439,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             await audioRef.current.play();
             setState((prev) => ({ ...prev, isPlaying: true }));
             setLoadingPhase('idle');
+            setCurrentAudioSource('tidal');
             
             const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
               ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
@@ -499,6 +505,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 await audioRef.current.play();
                 setState((prev) => ({ ...prev, isPlaying: true }));
                 setLoadingPhase('idle');
+                setCurrentAudioSource('real-debrid');
                 saveRecentlyPlayed();
                 return;
               }
@@ -533,6 +540,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 }
 
                 setLoadingPhase('idle');
+                setCurrentAudioSource('real-debrid');
                 saveRecentlyPlayed();
                 return;
               } else if (['downloading', 'queued', 'magnet_conversion'].includes(result.status)) {
@@ -574,6 +582,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             await audioRef.current.play();
             setState((prev) => ({ ...prev, isPlaying: true }));
             setLoadingPhase('idle');
+            setCurrentAudioSource('real-debrid');
             addDebugLog('🔊 Riproduzione', selected.title, 'success');
             saveRecentlyPlayed();
             return;
@@ -617,6 +626,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
             setLoadingPhase('idle');
             setIsSearchingStreams(false);
+            setCurrentAudioSource('real-debrid');
             saveRecentlyPlayed();
             return;
           }
@@ -1071,6 +1081,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         lastSearchQuery,
         isShuffled,
         toggleShuffle,
+        currentAudioSource,
       }}
     >
       {children}
