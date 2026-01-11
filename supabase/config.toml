@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.home-content]
 verify_jwt = false
+
+[functions.squidwtf]
+verify_jwt = false

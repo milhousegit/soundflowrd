@@ -120,10 +120,11 @@ serve(async (req) => {
       }
 
       case 'get-artist': {
-        const [artistData, albumsData, topData] = await Promise.all([
+        const [artistData, albumsData, topData, relatedData] = await Promise.all([
           fetchWithRetry(`${DEEZER_API}/artist/${id}`),
           fetchWithRetry(`${DEEZER_API}/artist/${id}/albums?limit=50`),
-          fetchWithRetry(`${DEEZER_API}/artist/${id}/top?limit=10`),
+          fetchWithRetry(`${DEEZER_API}/artist/${id}/top?limit=20`),
+          fetchWithRetry(`${DEEZER_API}/artist/${id}/related?limit=10`).catch(() => ({ data: [] })),
         ]);
 
         const artist = {
@@ -139,6 +140,7 @@ serve(async (req) => {
             coverUrl: album.cover_medium || album.cover_big || album.cover || undefined,
             releaseDate: album.release_date || undefined,
             trackCount: album.nb_tracks || undefined,
+            recordType: album.record_type || 'album',
           })),
           topTracks: (topData.data || []).map((track: any) => ({
             id: String(track.id),
@@ -150,6 +152,12 @@ serve(async (req) => {
             duration: track.duration || 0,
             coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
             previewUrl: track.preview || undefined,
+          })),
+          relatedArtists: (relatedData.data || []).map((artist: any) => ({
+            id: String(artist.id),
+            name: artist.name,
+            imageUrl: artist.picture_medium || artist.picture_big || artist.picture || undefined,
+            popularity: artist.nb_fan || 0,
           })),
         };
 
@@ -277,6 +285,110 @@ serve(async (req) => {
         }));
 
         return new Response(JSON.stringify(artists), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      case 'search-playlists': {
+        const data = await fetchWithRetry(
+          `${DEEZER_API}/search/playlist?q=${encodeURIComponent(query)}&limit=${limit}`
+        );
+        
+        const playlists = (data.data || []).map((playlist: any) => ({
+          id: String(playlist.id),
+          title: playlist.title,
+          description: playlist.description || '',
+          coverUrl: playlist.picture_medium || playlist.picture_big || playlist.picture || undefined,
+          trackCount: playlist.nb_tracks || 0,
+          creator: playlist.user?.name || 'Deezer',
+          isEditable: false,
+          isDeezerPlaylist: true,
+        }));
+
+        return new Response(JSON.stringify(playlists), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      case 'get-playlist': {
+        const data = await fetchWithRetry(`${DEEZER_API}/playlist/${id}`);
+        
+        const playlist = {
+          id: String(data.id),
+          title: data.title,
+          description: data.description || '',
+          coverUrl: data.picture_big || data.picture_medium || data.picture || undefined,
+          trackCount: data.nb_tracks || 0,
+          creator: data.creator?.name || 'Deezer',
+          duration: data.duration || 0,
+          tracks: (data.tracks?.data || []).map((track: any, index: number) => ({
+            id: String(track.id),
+            title: track.title,
+            artist: track.artist?.name || 'Unknown Artist',
+            artistId: String(track.artist?.id || ''),
+            album: track.album?.title || 'Unknown Album',
+            albumId: String(track.album?.id || ''),
+            duration: track.duration || 0,
+            coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+            previewUrl: track.preview || undefined,
+            trackNumber: index + 1,
+          })),
+        };
+
+        return new Response(JSON.stringify(playlist), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      case 'get-artist-playlists': {
+        // Search for "100% ArtistName" playlists on Deezer
+        const artistName = query;
+        const searchQueries = [
+          `100% ${artistName}`,
+          `This is ${artistName}`,
+          `Best of ${artistName}`,
+          artistName,
+        ];
+        
+        const allPlaylists: any[] = [];
+        
+        for (const q of searchQueries) {
+          try {
+            const data = await fetchWithRetry(
+              `${DEEZER_API}/search/playlist?q=${encodeURIComponent(q)}&limit=5`
+            );
+            
+            const playlists = (data.data || [])
+              .filter((p: any) => {
+                const title = p.title?.toLowerCase() || '';
+                const artistLower = artistName.toLowerCase();
+                return title.includes(artistLower) || 
+                       title.includes('100%') ||
+                       title.includes('this is') ||
+                       title.includes('best of');
+              })
+              .map((playlist: any) => ({
+                id: String(playlist.id),
+                title: playlist.title,
+                description: playlist.description || '',
+                coverUrl: playlist.picture_medium || playlist.picture_big || playlist.picture || undefined,
+                trackCount: playlist.nb_tracks || 0,
+                creator: playlist.user?.name || 'Deezer',
+              }));
+            
+            allPlaylists.push(...playlists);
+          } catch (e) {
+            console.error(`Error searching playlists for "${q}":`, e);
+          }
+        }
+        
+        // Dedupe by ID
+        const unique = allPlaylists.reduce((acc, p) => {
+          if (!acc.find((x: any) => x.id === p.id)) acc.push(p);
+          return acc;
+        }, [] as any[]);
+
+        return new Response(JSON.stringify(unique.slice(0, 6)), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
