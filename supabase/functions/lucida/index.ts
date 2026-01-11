@@ -20,6 +20,12 @@ const browserHeaders = {
   'Cache-Control': 'max-age=0',
 };
 
+const knownLucidaErrors = [
+  "An error occured trying to process your request.",
+  'Message: "Cannot contact any valid server"',
+  "An error occurred. Had an issue getting that item, try again.",
+];
+
 // Parse enclosed value from HTML like the Rust client does
 function parseEnclosedValue(startMarker: string, endMarker: string, text: string): string | null {
   const startIndex = text.indexOf(startMarker);
@@ -27,15 +33,88 @@ function parseEnclosedValue(startMarker: string, endMarker: string, text: string
     console.log(`[Lucida] Start marker not found: ${startMarker.substring(0, 50)}`);
     return null;
   }
-  
+
   const contentStart = startIndex + startMarker.length;
   const endIndex = text.indexOf(endMarker, contentStart);
   if (endIndex === -1) {
     console.log(`[Lucida] End marker not found: ${endMarker.substring(0, 50)}`);
     return null;
   }
-  
+
   return text.substring(contentStart, endIndex);
+}
+
+function htmlHasKnownError(html: string): string | null {
+  for (const msg of knownLucidaErrors) {
+    if (html.includes(msg)) return msg;
+  }
+  return null;
+}
+
+async function fetchLucidaHtml(resolveUrl: string): Promise<{ html: string; source: 'direct' | 'firecrawl' }> {
+  // 1) Try direct fetch first
+  try {
+    const pageResponse = await fetch(resolveUrl, {
+      headers: browserHeaders,
+      redirect: 'follow',
+    });
+
+    console.log(`[Lucida] Page response status: ${pageResponse.status}`);
+
+    if (pageResponse.ok) {
+      const html = await pageResponse.text();
+      console.log(`[Lucida] HTML length (direct): ${html.length}`);
+
+      const knownError = htmlHasKnownError(html);
+      if (!knownError) {
+        return { html, source: 'direct' };
+      }
+
+      console.error(`[Lucida] Direct HTML contains error: ${knownError}`);
+    } else {
+      console.error(`[Lucida] Direct fetch not OK: ${pageResponse.status}`);
+    }
+  } catch (e) {
+    console.error('[Lucida] Direct fetch failed:', e);
+  }
+
+  // 2) Fallback: Firecrawl render (handles JS/SPAs)
+  const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
+  if (!firecrawlKey) {
+    throw new Error('Lucida request failed and Firecrawl connector not configured');
+  }
+
+  console.log('[Lucida] Falling back to Firecrawl rendered HTML...');
+
+  const scrapeRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${firecrawlKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      url: resolveUrl,
+      formats: ['rawHtml'],
+      onlyMainContent: false,
+      waitFor: 3000,
+    }),
+  });
+
+  const scrapeJson = await scrapeRes.json();
+  if (!scrapeRes.ok) {
+    console.error('[Lucida] Firecrawl error:', JSON.stringify(scrapeJson).substring(0, 500));
+    throw new Error(`Firecrawl scrape failed: ${scrapeRes.status}`);
+  }
+
+  // Firecrawl nests into data
+  const rawHtml = scrapeJson?.data?.rawHtml ?? scrapeJson?.rawHtml;
+  if (!rawHtml || typeof rawHtml !== 'string') {
+    console.error('[Lucida] Firecrawl response missing rawHtml:', JSON.stringify(scrapeJson).substring(0, 500));
+    throw new Error('Firecrawl did not return rawHtml');
+  }
+
+  console.log(`[Lucida] HTML length (firecrawl): ${rawHtml.length}`);
+  return { html: rawHtml, source: 'firecrawl' };
 }
 
 interface PageData {
@@ -65,43 +144,18 @@ interface TrackInfo {
 // Resolve track via Lucida using the same approach as the Rust client
 async function resolveTrackViaLucida(deezerTrackId: string, country = 'auto'): Promise<{ streamUrl: string } | { error: string }> {
   const trackUrl = `https://www.deezer.com/track/${deezerTrackId}`;
-  
+
   console.log(`[Lucida] Resolving track: ${trackUrl}`);
-  
+
   // Step 1: Visit lucida.to with the Deezer URL to get page data
   const resolveUrl = new URL('https://lucida.to/');
   resolveUrl.searchParams.set('url', trackUrl);
   resolveUrl.searchParams.set('country', country);
-  
+
   try {
-    const pageResponse = await fetch(resolveUrl.toString(), {
-      headers: browserHeaders,
-      redirect: 'follow',
-    });
-    
-    console.log(`[Lucida] Page response status: ${pageResponse.status}`);
-    
-    if (!pageResponse.ok) {
-      return { error: `Lucida page returned ${pageResponse.status}` };
-    }
-    
-    const html = await pageResponse.text();
-    console.log(`[Lucida] HTML length: ${html.length}`);
-    
-    // Check for known error messages
-    const knownErrors = [
-      "An error occured trying to process your request.",
-      'Message: "Cannot contact any valid server"',
-      "An error occurred. Had an issue getting that item, try again.",
-    ];
-    
-    for (const errorMsg of knownErrors) {
-      if (html.includes(errorMsg)) {
-        console.error(`[Lucida] HTML contains error: ${errorMsg}`);
-        return { error: errorMsg };
-      }
-    }
-    
+    const { html, source } = await fetchLucidaHtml(resolveUrl.toString());
+    console.log(`[Lucida] Using HTML source: ${source}`);
+
     // Extract pageData using SvelteKit data format
     // Pattern from Rust client: ,{"type":"data","data": ... ,"uses":{"url":1}}];
     const pageDataJson = parseEnclosedValue(
@@ -109,93 +163,57 @@ async function resolveTrackViaLucida(deezerTrackId: string, country = 'auto'): P
       ',"uses":{"url":1}}];',
       html
     );
-    
+
     if (!pageDataJson) {
-      // Try alternative patterns for newer SvelteKit versions
-      const patterns = [
-        { start: '{"type":"data","data":', end: ',"uses":{' },
-        { start: 'pageData = ', end: ';\n' },
-        { start: '__sveltekit_', end: ']]' },
-      ];
-      
-      let foundData = null;
-      for (const pattern of patterns) {
-        const match = parseEnclosedValue(pattern.start, pattern.end, html);
-        if (match) {
-          console.log(`[Lucida] Found data with pattern: ${pattern.start.substring(0, 30)}...`);
-          foundData = match;
-          break;
-        }
+      console.error('[Lucida] Could not find pageData in rendered HTML.');
+      const dataIndex = html.indexOf('"type":"data"');
+      if (dataIndex !== -1) {
+        console.log('[Lucida] Data snippet:', html.substring(dataIndex, dataIndex + 500));
+      } else {
+        console.log('[Lucida] HTML head snippet:', html.substring(0, 800));
       }
-      
-      if (!foundData) {
-        // Log HTML snippet for debugging
-        console.error('[Lucida] Could not find pageData. Searching for data patterns...');
-        
-        // Try to find any JSON with track info
-        const trackDataMatch = html.match(/"type"\s*:\s*"track"[^}]+}/);
-        if (trackDataMatch) {
-          console.log('[Lucida] Found track type indicator');
-        }
-        
-        // Log a relevant snippet
-        const dataIndex = html.indexOf('"type":"data"');
-        if (dataIndex !== -1) {
-          console.log('[Lucida] Data snippet:', html.substring(dataIndex, dataIndex + 500));
-        } else {
-          console.error('[Lucida] No "type":"data" found in HTML');
-          console.log('[Lucida] HTML snippet:', html.substring(0, 1000));
-        }
-        
-        return { error: 'Could not extract page data from Lucida' };
-      }
+      return { error: 'Could not extract page data from Lucida' };
     }
-    
+
     let pageData: PageData;
     try {
-      // The extracted JSON might need some cleanup
-      let jsonToParse = pageDataJson || '';
-      
-      // Remove trailing characters that aren't part of JSON
-      jsonToParse = jsonToParse.trim();
+      let jsonToParse = pageDataJson.trim();
       if (jsonToParse.endsWith(',')) {
         jsonToParse = jsonToParse.slice(0, -1);
       }
-      
       pageData = JSON.parse(jsonToParse);
       console.log('[Lucida] Parsed pageData, type:', pageData.info?.type);
     } catch (e) {
       console.error('[Lucida] Failed to parse pageData JSON:', e);
-      console.log('[Lucida] Raw JSON (first 500 chars):', pageDataJson?.substring(0, 500));
+      console.log('[Lucida] Raw JSON (first 500 chars):', pageDataJson.substring(0, 500));
       return { error: 'Failed to parse page data' };
     }
-    
-    const { info, token, tokenExpiry } = pageData;
-    
+
+    const { info, tokenExpiry } = pageData;
+
     if (!info) {
       return { error: 'No track info in page data' };
     }
-    
-    // For single tracks, the info contains the track directly
-    // For albums, we'd need to get the track from tracks array
+
     let trackInfo: TrackInfo;
-    
+
     if (info.type === 'track') {
       trackInfo = {
         url: info.url,
-        csrf: info.csrf || token,
+        // In Rust, csrf is passed as token.primary; keep that.
+        csrf: info.csrf,
         csrfFallback: info.csrfFallback,
       };
     } else {
       return { error: 'Album URLs not supported, please use track URL' };
     }
-    
+
     console.log(`[Lucida] Track URL: ${trackInfo.url}, CSRF length: ${trackInfo.csrf?.length || 0}`);
-    
+
     if (!trackInfo.csrf || !trackInfo.url) {
       return { error: 'Missing CSRF token or track URL' };
     }
-    
+
     // Step 2: Request the download/stream
     console.log('[Lucida] Requesting stream...');
     
