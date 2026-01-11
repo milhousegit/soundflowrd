@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useRef, useCallback, ReactN
 import { Track, PlayerState } from '@/types/music';
 import { StreamResult, TorrentInfo, AudioFile, searchStreams, selectFilesAndPlay, checkTorrentStatus } from '@/lib/realdebrid';
 import { YouTubeVideo, YouTubeAudioResult, searchYouTube, getYouTubeAudio } from '@/lib/youtube';
+import { getDeezerStream } from '@/lib/lucida';
 import { invalidateYouTubeMappingCache } from '@/hooks/useYouTubeMappings';
 import { useIOSAudioSession, isIOS, isPWA } from '@/hooks/useIOSAudioSession';
 import { useAuth } from './AuthContext';
@@ -1546,7 +1547,55 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setUseYouTubeIframe(false);
 
     const isYouTubeOnlyMode = audioSourceMode === 'youtube_only';
+    const isDeezerPriorityMode = audioSourceMode === 'deezer_priority';
     const hasRdKey = !!credentials?.realDebridApiKey;
+
+    // =============== DEEZER PRIORITY MODE ===============
+    // Try Deezer first when in deezer_priority mode
+    if (isDeezerPriorityMode) {
+      addDebugLog('🎵 Modalità Deezer HQ', 'Tentativo stream Deezer...', 'info');
+      setLoadingPhase('searching');
+      
+      try {
+        const deezerResult = await getDeezerStream(track.id);
+        
+        if (currentSearchTrackIdRef.current !== track.id) return;
+        
+        if ('streamUrl' in deezerResult && deezerResult.streamUrl) {
+          addDebugLog('🎧 Deezer stream', 'Audio HQ disponibile', 'success');
+          setLoadingPhase('loading');
+          
+          if (audioRef.current) {
+            stopYouTubePlayback();
+            audioRef.current.src = deezerResult.streamUrl;
+            try {
+              await audioRef.current.play();
+              setState(prev => ({ ...prev, isPlaying: true }));
+              setLoadingPhase('idle');
+              addDebugLog('✅ Riproduzione Deezer', 'Stream HQ avviato', 'success');
+              
+              // Save to recently played
+              const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
+              const filtered = recent.filter((t: Track) => t.id !== track.id);
+              const updated = [track, ...filtered].slice(0, 20);
+              localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+              return;
+            } catch (playError) {
+              addDebugLog('⚠️ Errore play Deezer', playError instanceof Error ? playError.message : 'Errore', 'warning');
+            }
+          }
+        } else {
+          const errorMsg = 'error' in deezerResult ? deezerResult.error : 'Stream non disponibile';
+          addDebugLog('⚠️ Deezer non disponibile', errorMsg, 'warning');
+        }
+      } catch (error) {
+        addDebugLog('⚠️ Errore Deezer', error instanceof Error ? error.message : 'Errore', 'warning');
+      }
+      
+      // Deezer failed, fall back to YouTube
+      addDebugLog('🔄 Fallback YouTube', 'Deezer non disponibile, uso YouTube', 'info');
+      setLoadingPhase('idle');
+    }
 
     // CRITICAL FIX for iOS autoplay: Start YouTube from cache IMMEDIATELY to preserve user gesture.
     // This works for BOTH YouTube-only AND RD+YouTube modes.
@@ -1569,7 +1618,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     addDebugLog('🎵 Inizio riproduzione', `"${track.title}" di ${track.artist}`, 'info');
-    addDebugLog('⚙️ Modalità', isYouTubeOnlyMode ? 'Solo YouTube' : 'Real-Debrid + YouTube', 'info');
+    addDebugLog('⚙️ Modalità', isYouTubeOnlyMode ? 'Solo YouTube' : (isDeezerPriorityMode ? 'Deezer HQ (fallback YouTube)' : 'Real-Debrid + YouTube'), 'info');
 
     // Save to recently played
     const saveRecentlyPlayed = () => {
@@ -1725,8 +1774,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // =============== MAIN LOGIC ===============
 
     // STEP 1: Check for existing RD mapping (only if RD mode and has key)
-    // IMPORTANT: YouTube-only users should NEVER use RD mappings even if they exist
-    if (!isYouTubeOnlyMode && hasRdKey && track.albumId) {
+    // IMPORTANT: YouTube-only and Deezer-priority users should NEVER use RD mappings even if they exist
+    if (!isYouTubeOnlyMode && !isDeezerPriorityMode && hasRdKey && track.albumId) {
       try {
         const { data: trackMapping } = await supabase
           .from('track_file_mappings')
@@ -1815,9 +1864,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     // STEP 2: Check for saved YouTube mapping
-    // If we're in YouTube-only mode and already using cache, we're done
-    if (usedYouTubeCache && isYouTubeOnlyMode) {
-      addDebugLog('⏭️ Skip DB check', 'YouTube-only mode with cache', 'info');
+    // If we're in YouTube-only or Deezer-priority mode and already using cache, we're done
+    if (usedYouTubeCache && (isYouTubeOnlyMode || isDeezerPriorityMode)) {
+      addDebugLog('⏭️ Skip DB check', 'YouTube/Deezer mode with cache', 'info');
       saveRecentlyPlayed();
       return;
     }
@@ -1826,9 +1875,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // The YouTube is already playing - if RD had a valid cached stream, it would have played above
     // If we already used YouTube cache in RD mode, YouTube is already playing.
     // Just sync in background for next time and we're done.
+    // Note: Deezer-priority users don't need RD sync
     if (usedYouTubeCache) {
-      addDebugLog('📡 RD mode con YouTube cache', 'Syncing torrent in background', 'info');
-      if (hasRdKey) {
+      if (!isDeezerPriorityMode && hasRdKey) {
+        addDebugLog('📡 RD mode con YouTube cache', 'Syncing torrent in background', 'info');
         syncTorrentInBackground();
       }
       saveRecentlyPlayed();
@@ -1864,8 +1914,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           // ignore
         }
         
-        // If RD mode, sync torrent in background for next time
-        if (!isYouTubeOnlyMode && hasRdKey) {
+        // If RD mode (not YouTube-only or Deezer-priority), sync torrent in background for next time
+        if (!isYouTubeOnlyMode && !isDeezerPriorityMode && hasRdKey) {
           syncTorrentInBackground();
         }
         
@@ -1891,8 +1941,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setYoutubeResults(videos);
         await playAndSaveYouTube(videos[0]);
         
-        // If RD mode, sync torrent in background for next time
-        if (!isYouTubeOnlyMode && hasRdKey) {
+        // If RD mode (not YouTube-only or Deezer-priority), sync torrent in background for next time
+        if (!isYouTubeOnlyMode && !isDeezerPriorityMode && hasRdKey) {
           syncTorrentInBackground();
         }
       } else {
@@ -1906,7 +1956,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
     
     saveRecentlyPlayed();
-  }, [credentials, audioSourceMode, saveFileMapping, addDebugLog, clearDebugLogs, playYouTubeAudioById, tryUnlockAudioFromUserGesture]);
+  }, [credentials, audioSourceMode, saveFileMapping, addDebugLog, clearDebugLogs, playYouTubeAudioById, tryUnlockAudioFromUserGesture, stopYouTubePlayback]);
 
   const selectStream = useCallback(async (stream: StreamResult) => {
     // Switch stream for current playback immediately - no download needed since stream is already ready
