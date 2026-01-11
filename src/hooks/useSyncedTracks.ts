@@ -11,7 +11,7 @@ interface SyncedTrackInfo {
 let syncedTracksCache: Set<string> = new Set();
 let syncingTracksCache: Set<string> = new Set();
 let downloadingTracksCache: Set<string> = new Set();
-let youtubeSyncedTracksCache: Set<string> = new Set(); // Tracks synced via YouTube
+
 let listeners: Set<() => void> = new Set();
 
 const notifyListeners = () => {
@@ -45,16 +45,9 @@ export const addSyncedTrack = (trackId: string) => {
   notifyListeners();
 };
 
-export const addYouTubeSyncedTrack = (trackId: string) => {
-  youtubeSyncedTracksCache.add(trackId);
-  syncingTracksCache.delete(trackId);
-  downloadingTracksCache.delete(trackId);
-  notifyListeners();
-};
 
 export const removeSyncedTrack = (trackId: string) => {
   syncedTracksCache.delete(trackId);
-  youtubeSyncedTracksCache.delete(trackId);
   notifyListeners();
 };
 
@@ -62,7 +55,7 @@ export const useSyncedTracks = (trackIds?: string[]) => {
   const [syncedTracks, setSyncedTracks] = useState<Set<string>>(syncedTracksCache);
   const [syncingTracks, setSyncingTracks] = useState<Set<string>>(syncingTracksCache);
   const [downloadingTracks, setDownloadingTracks] = useState<Set<string>>(downloadingTracksCache);
-  const [youtubeSyncedTracks, setYouTubeSyncedTracks] = useState<Set<string>>(youtubeSyncedTracksCache);
+  
   const [isLoading, setIsLoading] = useState(false);
 
   // Subscribe to global state changes
@@ -71,7 +64,7 @@ export const useSyncedTracks = (trackIds?: string[]) => {
       setSyncedTracks(new Set(syncedTracksCache));
       setSyncingTracks(new Set(syncingTracksCache));
       setDownloadingTracks(new Set(downloadingTracksCache));
-      setYouTubeSyncedTracks(new Set(youtubeSyncedTracksCache));
+      
     };
     listeners.add(listener);
     return () => {
@@ -178,19 +171,14 @@ export const useSyncedTracks = (trackIds?: string[]) => {
     return downloadingTracks.has(trackId);
   }, [downloadingTracks]);
 
-  const isYouTubeSynced = useCallback((trackId: string) => {
-    return youtubeSyncedTracks.has(trackId);
-  }, [youtubeSyncedTracks]);
 
   return {
     syncedTracks,
     syncingTracks,
     downloadingTracks,
-    youtubeSyncedTracks,
     isSynced,
     isSyncing,
     isDownloading,
-    isYouTubeSynced,
     isLoading,
     refetch: fetchSyncedTracks,
   };

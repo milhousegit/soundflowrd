@@ -232,6 +232,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const originalQueueRef = useRef<Track[]>([]);
 
   const currentSearchTrackIdRef = useRef<string | null>(null);
+  const nextRef = useRef<() => void>(() => {});
+  const previousRef = useRef<() => void>(() => {});
 
   const [state, setState] = useState<PlayerState>({
     currentTrack: null,
@@ -253,9 +255,25 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const clearDebugLogs = useCallback(() => setDebugLogs([]), []);
 
+  // Update Media Session metadata when track changes
   useEffect(() => {
     updateMediaSessionMetadata(state.currentTrack, state.isPlaying);
   }, [state.currentTrack, state.isPlaying]);
+
+  // Update position state for Media Session scrubbing
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !state.currentTrack) return;
+    
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: state.duration || 0,
+        playbackRate: 1,
+        position: Math.min(state.progress, state.duration || 0),
+      });
+    } catch (e) {
+      // Ignore errors on browsers that don't support setPositionState
+    }
+  }, [state.progress, state.duration, state.currentTrack]);
 
   useEffect(() => {
     audioRef.current = new Audio();
@@ -281,10 +299,20 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setState((prev) => ({ ...prev, isPlaying: false }));
       });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime !== undefined) {
+        if (details.seekTime !== undefined && audio.duration) {
           audio.currentTime = details.seekTime;
           setState((prev) => ({ ...prev, progress: details.seekTime! }));
         }
+      });
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        const skipTime = details.seekOffset || 10;
+        audio.currentTime = Math.max(0, audio.currentTime - skipTime);
+        setState((prev) => ({ ...prev, progress: audio.currentTime }));
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        const skipTime = details.seekOffset || 10;
+        audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + skipTime);
+        setState((prev) => ({ ...prev, progress: audio.currentTime }));
       });
     }
 
@@ -899,11 +927,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [playTrack, seek, state.progress, state.queue, state.queueIndex]);
 
+  // Keep refs updated for Media Session handlers
+  useEffect(() => {
+    nextRef.current = next;
+    previousRef.current = previous;
+  }, [next, previous]);
+
+  // Set up Media Session next/previous handlers once (using refs)
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
-    navigator.mediaSession.setActionHandler('previoustrack', () => previous());
-    navigator.mediaSession.setActionHandler('nexttrack', () => next());
-  }, [next, previous]);
+    navigator.mediaSession.setActionHandler('previoustrack', () => previousRef.current());
+    navigator.mediaSession.setActionHandler('nexttrack', () => nextRef.current());
+  }, []);
 
   // Auto-poll downloading torrents (kept, without YouTube interplay)
   useEffect(() => {
