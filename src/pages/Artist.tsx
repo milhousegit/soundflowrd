@@ -9,7 +9,7 @@ import AlbumCard from '@/components/AlbumCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { getArtist, getArtistTopTracks } from '@/lib/musicbrainz';
+import { getArtist } from '@/lib/deezer';
 import { Artist as ArtistType, Album, Track } from '@/types/music';
 
 const Artist: React.FC = () => {
@@ -30,10 +30,7 @@ const Artist: React.FC = () => {
       setIsLoading(true);
       
       try {
-        const [artistData, tracksData] = await Promise.all([
-          getArtist(id),
-          getArtistTopTracks(id),
-        ]);
+        const artistData = await getArtist(id);
         
         setArtist(artistData);
         
@@ -45,8 +42,8 @@ const Artist: React.FC = () => {
         });
         setReleases(sortedReleases);
         
-        // Set top tracks (these are actual tracks from the artist)
-        setTopTracks(tracksData.slice(0, 10));
+        // Use top tracks from artist data (Deezer returns them with get-artist)
+        setTopTracks((artistData.topTracks || []).slice(0, 10));
       } catch (error) {
         console.error('Failed to fetch artist:', error);
       } finally {

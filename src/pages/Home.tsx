@@ -5,7 +5,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getNewReleases, getPopularArtists } from '@/lib/musicbrainz';
+import { getNewReleases, getPopularArtists, searchAlbums } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
@@ -103,20 +103,16 @@ const Home: React.FC = () => {
         if (uniqueArtistNames.length > 0) {
           const allReleases: Album[] = [];
           
-          // Search releases for up to 5 artists to avoid too many requests
+          // Search releases for up to 5 artists using Deezer
           for (const artistName of uniqueArtistNames.slice(0, 5)) {
             try {
-              const { data } = await supabase.functions.invoke('musicbrainz', {
-                body: { action: 'search-releases', query: artistName, limit: 6 },
-              });
-              if (data) {
-                // Filter to only include releases that match the artist name
-                const artistReleases = data.filter((album: Album) => 
-                  album.artist?.toLowerCase().includes(artistName.toLowerCase()) ||
-                  artistName.toLowerCase().includes(album.artist?.toLowerCase() || '')
-                );
-                allReleases.push(...artistReleases);
-              }
+              const albums = await searchAlbums(artistName);
+              // Filter to only include releases that match the artist name
+              const artistReleases = albums.filter((album: Album) => 
+                album.artist?.toLowerCase().includes(artistName.toLowerCase()) ||
+                artistName.toLowerCase().includes(album.artist?.toLowerCase() || '')
+              );
+              allReleases.push(...artistReleases.slice(0, 6));
             } catch (e) {
               console.error('Error fetching releases for', artistName, e);
             }
@@ -136,24 +132,12 @@ const Home: React.FC = () => {
           
           setNewReleases(uniqueReleases.slice(0, 12));
         } else {
-          // No favorites - try to get cached releases from edge function
+          // No favorites - get new releases from Deezer
           try {
-            const { data } = await supabase.functions.invoke('home-content', {
-              body: null,
-              method: 'GET',
-            });
-            // Use URL params approach
-            const response = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-content?type=new_releases&country=${country}&language=${settings.language}`
-            );
-            if (response.ok) {
-              const result = await response.json();
-              if (result.data && Array.isArray(result.data)) {
-                setNewReleases(result.data.slice(0, 12));
-              }
-            }
+            const releases = await getNewReleases();
+            setNewReleases(releases.slice(0, 12));
           } catch (cacheError) {
-            console.error('Failed to fetch cached releases:', cacheError);
+            console.error('Failed to fetch new releases:', cacheError);
             setNewReleases([]);
           }
         }
@@ -165,7 +149,7 @@ const Home: React.FC = () => {
     };
 
     fetchNewReleases();
-  }, [favorites.length, country, settings.language]);
+  }, [favorites.length]);
 
   useEffect(() => {
     const fetchPopularArtists = async () => {
@@ -174,30 +158,8 @@ const Home: React.FC = () => {
         const uniqueArtistNames = getUniqueArtistNames();
         const favoriteNamesLower = uniqueArtistNames.map(n => n.toLowerCase());
         
-        // Try to get cached artists from edge function first
-        try {
-          const response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-content?type=popular_artists&country=${country}&language=${settings.language}`
-          );
-          
-          if (response.ok) {
-            const result = await response.json();
-            if (result.data && Array.isArray(result.data)) {
-              // Filter out artists the user already has in favorites
-              const filteredArtists = result.data.filter(
-                (a: Artist) => !favoriteNamesLower.includes(a.name.toLowerCase())
-              );
-              setPopularArtists(filteredArtists.slice(0, 12));
-              setIsLoadingArtists(false);
-              return;
-            }
-          }
-        } catch (cacheError) {
-          console.error('Failed to fetch cached artists:', cacheError);
-        }
-        
-        // Fallback to direct API call
-        const artists = await getPopularArtists(country);
+        // Use Deezer API directly for popular artists
+        const artists = await getPopularArtists();
         const filteredArtists = artists.filter(
           a => !favoriteNamesLower.includes(a.name.toLowerCase())
         );
@@ -210,7 +172,7 @@ const Home: React.FC = () => {
     };
 
     fetchPopularArtists();
-  }, [country, favorites.length, settings.language]);
+  }, [favorites.length]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();

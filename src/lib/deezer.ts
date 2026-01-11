@@ -1,0 +1,93 @@
+import { supabase } from '@/integrations/supabase/client';
+import { Track, Album, Artist } from '@/types/music';
+
+export async function searchArtists(query: string): Promise<Artist[]> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'search-artists', query, limit: 20 },
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function searchAlbums(query: string): Promise<Album[]> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'search-albums', query, limit: 20 },
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function searchTracks(query: string): Promise<Track[]> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'search-tracks', query, limit: 30 },
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getArtist(id: string): Promise<Artist & { releases: Album[]; topTracks: Track[] }> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-artist', id },
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getArtistTopTracks(id: string): Promise<Track[]> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-artist-top', id, limit: 10 },
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getAlbum(id: string): Promise<Album & { tracks: Track[] }> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-album', id },
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getChart(): Promise<{ tracks: Track[]; albums: Album[]; artists: Artist[] }> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-chart', limit: 20 },
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getNewReleases(): Promise<Album[]> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-new-releases', limit: 20 },
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getPopularArtists(): Promise<Artist[]> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-popular-artists', limit: 12 },
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function searchAll(query: string) {
+  const [artists, albums, tracks] = await Promise.all([
+    searchArtists(query).catch(() => []),
+    searchAlbums(query).catch(() => []),
+    searchTracks(query).catch(() => []),
+  ]);
+
+  return { artists, albums, tracks };
+}

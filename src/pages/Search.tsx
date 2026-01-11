@@ -8,7 +8,7 @@ import ArtistCard from '@/components/ArtistCard';
 import TapArea from '@/components/TapArea';
 import SearchResultsSkeleton from '@/components/skeletons/SearchResultsSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
-import { searchAll } from '@/lib/musicbrainz';
+import { searchAll } from '@/lib/deezer';
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
 
