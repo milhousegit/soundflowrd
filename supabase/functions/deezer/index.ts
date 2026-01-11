@@ -7,12 +7,22 @@ const corsHeaders = {
 
 const DEEZER_API = 'https://api.deezer.com';
 
+// Headers to avoid being blocked by Deezer API
+const requestHeaders = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'application/json',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
+
 // Fetch with timeout
 async function fetchWithTimeout(url: string, timeout = 10000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, { 
+      signal: controller.signal,
+      headers: requestHeaders,
+    });
     return response;
   } finally {
     clearTimeout(id);
@@ -25,10 +35,14 @@ async function fetchWithRetry(url: string, retries = 3): Promise<any> {
     try {
       const response = await fetchWithTimeout(url);
       if (!response.ok) {
+        // Log response body for debugging
+        const text = await response.text();
+        console.error(`Deezer API response ${response.status}:`, text.substring(0, 200));
         throw new Error(`HTTP ${response.status}`);
       }
       return await response.json();
     } catch (error) {
+      console.log(`Attempt ${i + 1} failed:`, error);
       if (i === retries - 1) throw error;
       await new Promise(r => setTimeout(r, 1000 * (i + 1)));
     }
