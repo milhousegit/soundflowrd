@@ -173,6 +173,25 @@ const Settings: React.FC = () => {
           </div>
           
           <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
+            {/* Deezer Priority Option */}
+            <button
+              onClick={() => setAudioSourceMode('deezer_priority')}
+              className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
+                audioSourceMode === 'deezer_priority' 
+                  ? 'bg-purple-500/20 border border-purple-500/50' 
+                  : 'bg-secondary hover:bg-secondary/80'
+              }`}
+            >
+              <Music className={`w-5 h-5 mt-0.5 ${audioSourceMode === 'deezer_priority' ? 'text-purple-500' : 'text-muted-foreground'}`} />
+              <div className="flex-1">
+                <p className={`font-medium ${audioSourceMode === 'deezer_priority' ? 'text-purple-500' : 'text-foreground'}`}>
+                  {t('deezerPriority')}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('deezerPriorityDesc')}</p>
+              </div>
+              {audioSourceMode === 'deezer_priority' && <Check className="w-5 h-5 text-purple-500" />}
+            </button>
+
             {/* YouTube Only Option */}
             <button
               onClick={() => setAudioSourceMode('youtube_only')}

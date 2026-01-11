@@ -1,4 +1,4 @@
-export type AudioSourceMode = 'rd_priority' | 'youtube_only';
+export type AudioSourceMode = 'deezer_priority' | 'rd_priority' | 'youtube_only';
 
 export interface AppSettings {
   language: 'en' | 'it';
@@ -12,7 +12,7 @@ export interface AppSettings {
   audioQuality: 'high' | 'medium' | 'low';
   crossfade: number; // seconds, 0 = off
   realDebridApiKey?: string;
-  audioSourceMode: AudioSourceMode; // 'rd_priority' = RD + YouTube fallback, 'youtube_only' = YouTube only
+  audioSourceMode: AudioSourceMode; // 'deezer_priority' = Deezer (Lucida), 'rd_priority' = RD + YouTube fallback, 'youtube_only' = YouTube only
 }
 
 export const defaultSettings: AppSettings = {
@@ -27,7 +27,7 @@ export const defaultSettings: AppSettings = {
   audioQuality: 'high',
   crossfade: 0,
   realDebridApiKey: undefined,
-  audioSourceMode: 'rd_priority',
+  audioSourceMode: 'deezer_priority',
 };
 
 export const translations = {
@@ -87,10 +87,12 @@ export const translations = {
     loadingCloudFiles: 'Loading cloud files...',
     playFromCloud: 'Play from cloud',
     audioSource: 'Audio Source',
+    deezerPriority: 'Deezer (HQ)',
+    deezerPriorityDesc: 'FLAC/320kbps from Deezer, YouTube fallback',
     rdPriority: 'Real-Debrid + YouTube',
     rdPriorityDesc: 'High quality (FLAC/320kbps), YouTube fallback',
     youtubeOnly: 'YouTube Only',
-    youtubeOnlyDesc: 'Instant playback, no Real-Debrid needed',
+    youtubeOnlyDesc: 'Instant playback, no external service needed',
   },
   it: {
     home: 'Home',
@@ -148,10 +150,12 @@ export const translations = {
     loadingCloudFiles: 'Caricamento file cloud...',
     playFromCloud: 'Riproduci da cloud',
     audioSource: 'Sorgente Audio',
+    deezerPriority: 'Deezer (HQ)',
+    deezerPriorityDesc: 'FLAC/320kbps da Deezer, fallback YouTube',
     rdPriority: 'Real-Debrid + YouTube',
     rdPriorityDesc: 'Alta qualità (FLAC/320kbps), fallback YouTube',
     youtubeOnly: 'Solo YouTube',
-    youtubeOnlyDesc: 'Riproduzione istantanea, senza Real-Debrid',
+    youtubeOnlyDesc: 'Riproduzione istantanea, senza servizi esterni',
   },
 };
 
