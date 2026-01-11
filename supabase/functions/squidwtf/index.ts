@@ -5,14 +5,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// SquidWTF uses api.binimum.org as backend (hifi-api)
-const SQUIDWTF_API = 'https://tidal.squid.wtf/api/proxy';
+// Direct Tidal API via hifi-api
+const HIFI_API = 'https://api.binimum.org';
 
 /**
- * Search for a track on Tidal using the SquidWTF proxy
+ * Search for a track on Tidal
  */
 async function searchTrack(query: string): Promise<any[]> {
-  const searchUrl = `${SQUIDWTF_API}?url=${encodeURIComponent(`https://api.binimum.org/search/?s=${encodeURIComponent(query)}`)}`;
+  const searchUrl = `${HIFI_API}/search/?s=${encodeURIComponent(query)}`;
   
   console.log(`[SquidWTF] Searching: ${query}`);
   
@@ -20,25 +20,28 @@ async function searchTrack(query: string): Promise<any[]> {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       'Accept': 'application/json',
+      'Origin': 'https://tidal.squid.wtf',
+      'Referer': 'https://tidal.squid.wtf/',
     },
   });
 
   if (!response.ok) {
-    console.error(`[SquidWTF] Search failed: ${response.status}`);
+    const text = await response.text();
+    console.error(`[SquidWTF] Search failed: ${response.status}, body: ${text.substring(0, 200)}`);
     throw new Error(`Search failed: ${response.status}`);
   }
 
   const data = await response.json();
-  console.log(`[SquidWTF] Found ${data?.data?.items?.length || 0} results`);
+  console.log(`[SquidWTF] Found ${data?.data?.items?.length || data?.items?.length || 0} results`);
   
-  return data?.data?.items || [];
+  return data?.data?.items || data?.items || [];
 }
 
 /**
  * Get stream URL for a Tidal track
  */
 async function getTrackStream(tidalId: string, quality = 'LOSSLESS'): Promise<{ streamUrl: string; quality: string; bitDepth?: number; sampleRate?: number }> {
-  const trackUrl = `${SQUIDWTF_API}?url=${encodeURIComponent(`https://api.binimum.org/track/?id=${tidalId}&quality=${quality}`)}`;
+  const trackUrl = `${HIFI_API}/track/?id=${tidalId}&quality=${quality}`;
   
   console.log(`[SquidWTF] Getting stream for Tidal ID: ${tidalId}, quality: ${quality}`);
   
@@ -46,11 +49,14 @@ async function getTrackStream(tidalId: string, quality = 'LOSSLESS'): Promise<{ 
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       'Accept': 'application/json',
+      'Origin': 'https://tidal.squid.wtf',
+      'Referer': 'https://tidal.squid.wtf/',
     },
   });
 
   if (!response.ok) {
-    console.error(`[SquidWTF] Track request failed: ${response.status}`);
+    const text = await response.text();
+    console.error(`[SquidWTF] Track request failed: ${response.status}, body: ${text.substring(0, 200)}`);
     throw new Error(`Track request failed: ${response.status}`);
   }
 
