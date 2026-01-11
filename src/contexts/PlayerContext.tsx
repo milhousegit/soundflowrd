@@ -1550,12 +1550,21 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const isDeezerPriorityMode = audioSourceMode === 'deezer_priority';
     const hasRdKey = !!credentials?.realDebridApiKey;
 
-    // =============== DEEZER PRIORITY MODE ===============
-    // Try Deezer first when in deezer_priority mode
+    // =============== DEEZER PRIORITY MODE (NO YOUTUBE FALLBACK) ===============
+    // When in deezer_priority mode, ONLY use Deezer - no YouTube at all
     // Only attempt if track.id is a valid Deezer numeric ID
     const isValidDeezerId = /^\d+$/.test(track.id);
     
-    if (isDeezerPriorityMode && isValidDeezerId) {
+    if (isDeezerPriorityMode) {
+      if (!isValidDeezerId) {
+        addDebugLog('❌ ID non Deezer', `"${track.id}" non è un ID Deezer numerico`, 'error');
+        setLoadingPhase('unavailable');
+        toast.error('Traccia non disponibile', {
+          description: 'Questa traccia non proviene da Deezer e non può essere riprodotta in modalità Deezer HQ.',
+        });
+        return;
+      }
+      
       addDebugLog('🎵 Modalità Deezer HQ', `Tentativo stream per ID: ${track.id}`, 'info');
       setLoadingPhase('searching');
       
@@ -1584,24 +1593,34 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
               return;
             } catch (playError) {
-              addDebugLog('⚠️ Errore play Deezer', playError instanceof Error ? playError.message : 'Errore', 'warning');
+              addDebugLog('❌ Errore play Deezer', playError instanceof Error ? playError.message : 'Errore', 'error');
+              setLoadingPhase('unavailable');
+              toast.error('Errore riproduzione', {
+                description: 'Impossibile riprodurre l\'audio Deezer.',
+              });
+              return;
             }
           }
         } else {
           const errorMsg = 'error' in deezerResult ? deezerResult.error : 'Stream non disponibile';
-          addDebugLog('⚠️ Deezer non disponibile', errorMsg, 'warning');
+          addDebugLog('❌ Deezer non disponibile', errorMsg, 'error');
+          setLoadingPhase('unavailable');
+          toast.error('Deezer non disponibile', {
+            description: errorMsg,
+          });
+          return;
         }
       } catch (error) {
-        addDebugLog('⚠️ Errore Deezer', error instanceof Error ? error.message : 'Errore', 'warning');
+        addDebugLog('❌ Errore Deezer', error instanceof Error ? error.message : 'Errore', 'error');
+        setLoadingPhase('unavailable');
+        toast.error('Errore Deezer', {
+          description: error instanceof Error ? error.message : 'Errore sconosciuto',
+        });
+        return;
       }
-      
-      // Deezer failed, fall back to YouTube
-      addDebugLog('🔄 Fallback YouTube', 'Deezer non disponibile, uso YouTube', 'info');
-      setLoadingPhase('idle');
-    } else if (isDeezerPriorityMode && !isValidDeezerId) {
-      addDebugLog('⚠️ ID non Deezer', `"${track.id}" non è un ID Deezer valido, uso YouTube`, 'warning');
     }
 
+    // =============== YOUTUBE / RD MODES ===============
     // CRITICAL FIX for iOS autoplay: Start YouTube from cache IMMEDIATELY to preserve user gesture.
     // This works for BOTH YouTube-only AND RD+YouTube modes.
     // If RD finds a valid stream later, we'll stop YouTube and switch to RD.
@@ -1623,7 +1642,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     addDebugLog('🎵 Inizio riproduzione', `"${track.title}" di ${track.artist}`, 'info');
-    addDebugLog('⚙️ Modalità', isYouTubeOnlyMode ? 'Solo YouTube' : (isDeezerPriorityMode ? 'Deezer HQ (fallback YouTube)' : 'Real-Debrid + YouTube'), 'info');
+    addDebugLog('⚙️ Modalità', isYouTubeOnlyMode ? 'Solo YouTube' : 'Real-Debrid + YouTube', 'info');
 
     // Save to recently played
     const saveRecentlyPlayed = () => {
