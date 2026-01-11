@@ -5,35 +5,57 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Direct Tidal API via hifi-api
-const HIFI_API = 'https://api.binimum.org';
+// Public Tidal API mirrors used by tidal.squid.wtf.
+// We avoid calling api.binimum.org directly because DNS resolution can fail in our runtime.
+const API_TARGETS = [
+  'https://triton.squid.wtf',
+  'https://tidal-api.binimum.org',
+  'https://tidal.kinoplus.online',
+  'https://hund.qqdl.site',
+  'https://katze.qqdl.site',
+  'https://maus.qqdl.site',
+] as const;
+
+async function fetchJsonWithFallback(path: string): Promise<any> {
+  let lastErr: unknown;
+
+  for (const baseUrl of API_TARGETS) {
+    const url = `${baseUrl}${path}`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error(`[SquidWTF] ${url} -> ${res.status} (${text.substring(0, 120)})`);
+        lastErr = new Error(`HTTP ${res.status}`);
+        continue;
+      }
+
+      return await res.json();
+    } catch (e) {
+      console.error(`[SquidWTF] Fetch failed for ${url}:`, e);
+      lastErr = e;
+      continue;
+    }
+  }
+
+  throw new Error(`All API targets failed${lastErr ? `: ${(lastErr as any)?.message ?? String(lastErr)}` : ''}`);
+}
 
 /**
  * Search for a track on Tidal
  */
 async function searchTrack(query: string): Promise<any[]> {
-  const searchUrl = `${HIFI_API}/search/?s=${encodeURIComponent(query)}`;
-  
   console.log(`[SquidWTF] Searching: ${query}`);
-  
-  const response = await fetch(searchUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Accept': 'application/json',
-      'Origin': 'https://tidal.squid.wtf',
-      'Referer': 'https://tidal.squid.wtf/',
-    },
-  });
 
-  if (!response.ok) {
-    const text = await response.text();
-    console.error(`[SquidWTF] Search failed: ${response.status}, body: ${text.substring(0, 200)}`);
-    throw new Error(`Search failed: ${response.status}`);
-  }
+  const data = await fetchJsonWithFallback(`/search/?s=${encodeURIComponent(query)}`);
 
-  const data = await response.json();
   console.log(`[SquidWTF] Found ${data?.data?.items?.length || data?.items?.length || 0} results`);
-  
   return data?.data?.items || data?.items || [];
 }
 
@@ -41,9 +63,9 @@ async function searchTrack(query: string): Promise<any[]> {
  * Get stream URL for a Tidal track
  */
 async function getTrackStream(tidalId: string, quality = 'LOSSLESS'): Promise<{ streamUrl: string; quality: string; bitDepth?: number; sampleRate?: number }> {
-  const trackUrl = `${HIFI_API}/track/?id=${tidalId}&quality=${quality}`;
+  const target = `https://api.binimum.org/track/?id=${encodeURIComponent(tidalId)}&quality=${encodeURIComponent(quality)}`;
+  const trackUrl = `${SQUIDWTF_PROXY}?url=${encodeURIComponent(target)}`;
   
-  console.log(`[SquidWTF] Getting stream for Tidal ID: ${tidalId}, quality: ${quality}`);
   
   const response = await fetch(trackUrl, {
     headers: {
