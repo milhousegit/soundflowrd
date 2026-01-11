@@ -94,9 +94,10 @@ async function fetchLucidaHtml(resolveUrl: string): Promise<{ html: string; sour
     },
     body: JSON.stringify({
       url: resolveUrl,
-      formats: ['rawHtml'],
+      // Prefer rendered HTML (scripts executed). rawHtml can be pre-hydration.
+      formats: ['html', 'rawHtml'],
       onlyMainContent: false,
-      waitFor: 3000,
+      waitFor: 8000,
     }),
   });
 
@@ -107,14 +108,73 @@ async function fetchLucidaHtml(resolveUrl: string): Promise<{ html: string; sour
   }
 
   // Firecrawl nests into data
-  const rawHtml = scrapeJson?.data?.rawHtml ?? scrapeJson?.rawHtml;
-  if (!rawHtml || typeof rawHtml !== 'string') {
-    console.error('[Lucida] Firecrawl response missing rawHtml:', JSON.stringify(scrapeJson).substring(0, 500));
-    throw new Error('Firecrawl did not return rawHtml');
+  const renderedHtml =
+    scrapeJson?.data?.html ??
+    scrapeJson?.html ??
+    scrapeJson?.data?.rawHtml ??
+    scrapeJson?.rawHtml;
+
+  if (!renderedHtml || typeof renderedHtml !== 'string') {
+    console.error('[Lucida] Firecrawl response missing html/rawHtml:', JSON.stringify(scrapeJson).substring(0, 500));
+    throw new Error('Firecrawl did not return html');
   }
 
-  console.log(`[Lucida] HTML length (firecrawl): ${rawHtml.length}`);
-  return { html: rawHtml, source: 'firecrawl' };
+  console.log(`[Lucida] HTML length (firecrawl): ${renderedHtml.length}`);
+  return { html: renderedHtml, source: 'firecrawl' };
+}
+
+async function extractTrackInfoViaFirecrawlJson(resolveUrl: string): Promise<{ trackInfo: TrackInfo; tokenExpiry: number } | null> {
+  const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
+  if (!firecrawlKey) return null;
+
+  console.log('[Lucida] Trying Firecrawl JSON extraction fallback...');
+
+  const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${firecrawlKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      url: resolveUrl,
+      onlyMainContent: false,
+      waitFor: 8000,
+      formats: [
+        {
+          type: 'json',
+          prompt:
+            'Extract Lucida pageData needed to request a track stream. Return JSON with: url (string, the lucida track url used in POST /api/load), csrf (string), csrfFallback (string|null), tokenExpiry (number ms). If not present, return null fields.',
+        },
+      ],
+    }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    console.error('[Lucida] Firecrawl JSON extraction failed:', JSON.stringify(json).substring(0, 300));
+    return null;
+  }
+
+  const extracted = json?.data?.json ?? json?.json;
+  if (!extracted || typeof extracted !== 'object') {
+    console.error('[Lucida] Firecrawl JSON extraction missing json field');
+    return null;
+  }
+
+  const url = (extracted as any).url;
+  const csrf = (extracted as any).csrf;
+  const csrfFallback = (extracted as any).csrfFallback ?? null;
+  const tokenExpiry = Number((extracted as any).tokenExpiry ?? (Date.now() + 3600000));
+
+  if (!url || !csrf) {
+    console.error('[Lucida] Firecrawl JSON extraction did not return url/csrf:', JSON.stringify(extracted).substring(0, 300));
+    return null;
+  }
+
+  return {
+    trackInfo: { url, csrf, csrfFallback },
+    tokenExpiry,
+  };
 }
 
 interface PageData {
@@ -166,13 +226,108 @@ async function resolveTrackViaLucida(deezerTrackId: string, country = 'auto'): P
 
     if (!pageDataJson) {
       console.error('[Lucida] Could not find pageData in rendered HTML.');
-      const dataIndex = html.indexOf('"type":"data"');
-      if (dataIndex !== -1) {
-        console.log('[Lucida] Data snippet:', html.substring(dataIndex, dataIndex + 500));
-      } else {
-        console.log('[Lucida] HTML head snippet:', html.substring(0, 800));
+
+      // Last resort: ask Firecrawl to extract the needed fields via JSON.
+      const extracted = await extractTrackInfoViaFirecrawlJson(resolveUrl.toString());
+      if (!extracted) {
+        const dataIndex = html.indexOf('"type":"data"');
+        if (dataIndex !== -1) {
+          console.log('[Lucida] Data snippet:', html.substring(dataIndex, dataIndex + 500));
+        } else {
+          console.log('[Lucida] HTML head snippet:', html.substring(0, 800));
+        }
+        return { error: 'Could not extract page data from Lucida' };
       }
-      return { error: 'Could not extract page data from Lucida' };
+
+      console.log('[Lucida] Got trackInfo via Firecrawl JSON extraction');
+      // We can skip pageData parsing and go straight to stream request.
+      const trackInfo = extracted.trackInfo;
+      const tokenExpiry = extracted.tokenExpiry;
+
+      // Step 2: Request the download/stream
+      console.log('[Lucida] Requesting stream...');
+
+      const streamRequest = await fetch('https://lucida.to/api/load?url=%2Fapi%2Ffetch%2Fstream%2Fv2', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': browserHeaders['User-Agent'],
+          'Origin': 'https://lucida.to',
+          'Referer': resolveUrl.toString(),
+        },
+        body: JSON.stringify({
+          account: { id: country, type: 'country' },
+          compat: false,
+          downscale: 'original',
+          handoff: true,
+          metadata: true,
+          private: true,
+          token: {
+            expiry: tokenExpiry || Date.now() + 3600000,
+            primary: trackInfo.csrf,
+            secondary: trackInfo.csrfFallback || null,
+          },
+          upload: { enabled: false },
+          url: trackInfo.url,
+        }),
+      });
+
+      console.log(`[Lucida] Stream request status: ${streamRequest.status}`);
+
+      if (!streamRequest.ok) {
+        const text = await streamRequest.text();
+        console.error('[Lucida] Stream request failed:', text.substring(0, 200));
+        return { error: `Stream request failed: ${streamRequest.status}` };
+      }
+
+      const streamData = await streamRequest.json();
+      console.log('[Lucida] Stream data:', JSON.stringify(streamData).substring(0, 200));
+
+      if (streamData.error) {
+        return { error: streamData.error };
+      }
+
+      const { server, handoff } = streamData;
+
+      if (!server || !handoff) {
+        return { error: 'No server/handoff in response' };
+      }
+
+      // Step 3: Poll for completion
+      console.log(`[Lucida] Polling server ${server} for handoff ${handoff}...`);
+
+      const maxAttempts = 60; // 30 seconds max
+      for (let i = 0; i < maxAttempts; i++) {
+        const statusResponse = await fetch(`https://${server}.lucida.to/api/fetch/request/${handoff}`, {
+          headers: { 'User-Agent': browserHeaders['User-Agent'] },
+        });
+
+        if (!statusResponse.ok) {
+          console.error(`[Lucida] Status check failed: ${statusResponse.status}`);
+          if (statusResponse.status === 500) {
+            return { error: 'Server error while processing track' };
+          }
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+
+        const status = await statusResponse.json();
+        console.log(`[Lucida] Status (attempt ${i + 1}): ${status.status} - ${status.message || ''}`);
+
+        if (status.status === 'completed' || status.status === 'done' || status.status === 'complete') {
+          const streamUrl = `https://${server}.lucida.to/api/fetch/request/${handoff}/download`;
+          console.log('[Lucida] Stream ready:', streamUrl);
+          return { streamUrl };
+        }
+
+        if (status.status === 'error' || status.status === 'failed') {
+          return { error: status.message || 'Download failed' };
+        }
+
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      return { error: 'Timeout waiting for stream' };
     }
 
     let pageData: PageData;
