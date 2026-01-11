@@ -1,11 +1,10 @@
 import React, { forwardRef, useState, useCallback } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudUpload, Loader2, Bug, ListMusic, Youtube, Plus } from 'lucide-react';
+import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudUpload, Loader2, Bug, ListMusic, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
-import { useHasYouTubeMapping } from '@/hooks/useYouTubeMappings';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useTap } from '@/hooks/useTap';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -47,9 +46,8 @@ interface TrackCardProps {
 
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
   ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading, onCreatePlaylist }, ref) => {
-    const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase, isPlayingYouTube } = usePlayer();
-    const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading, isYouTubeSynced: hookIsYouTubeSynced } = useSyncedTracks([track.id]);
-    const hasYouTubeMapping = useHasYouTubeMapping(track.id);
+    const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase } = usePlayer();
+    const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
     const { playlists, addTrackToPlaylist } = usePlaylists();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
@@ -59,9 +57,7 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const isSynced = propIsSynced !== undefined ? propIsSynced : hookIsSynced(track.id);
     const isSyncing = propIsSyncing !== undefined ? propIsSyncing : hookIsSyncing(track.id);
     const isDownloading = propIsDownloading !== undefined ? propIsDownloading : hookIsDownloading(track.id);
-    const isYouTubeSynced = hookIsYouTubeSynced(track.id);
     
-    const isCurrentTrackYouTube = isCurrentTrack && isPlayingYouTube;
     const isCurrentTrackLoading = isCurrentTrack && loadingPhase !== 'idle';
     
     const showSearchingLoader = isCurrentTrack && loadingPhase === 'searching';
@@ -187,11 +183,6 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     // Render status icon
     const renderStatusIcon = () => {
       if (!showSyncStatus) return null;
-      
-      // YouTube synced (from album sync) or current track playing YouTube - show YouTube icon
-      if (isYouTubeSynced || isCurrentTrackYouTube || (hasYouTubeMapping && !isSynced)) {
-        return <Youtube className="w-3.5 h-3.5 flex-shrink-0 text-red-500" />;
-      }
       
       // Loading states for current track
       if (showSearchingLoader) {

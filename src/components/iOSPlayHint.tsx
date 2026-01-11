@@ -5,12 +5,12 @@ import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 
 /**
- * Shows a hint to iPhone users on first app launch when YouTube needs a gesture.
+ * Shows a hint to iPhone users on first app launch when audio needs a gesture.
  * The hint points to the miniplayer with an arrow and a message to press play.
  */
 const IOSPlayHint: React.FC = () => {
   const [show, setShow] = useState(false);
-  const { currentTrack, isPlayingYouTube, youtubeNeedsUserGesture, isPlaying } = usePlayer();
+  const { currentTrack, isPlaying, loadingPhase } = usePlayer();
   const { settings } = useSettings();
   
   useEffect(() => {
@@ -25,19 +25,19 @@ const IOSPlayHint: React.FC = () => {
       return;
     }
     
-    // Show hint when YouTube needs user gesture (first song on app start)
-    if (currentTrack && isPlayingYouTube && youtubeNeedsUserGesture) {
+    // Show hint when there's a track but not playing (first song on app start)
+    if (currentTrack && !isPlaying && loadingPhase === 'idle') {
       setShow(true);
       sessionStorage.setItem('ios_play_hint_shown', 'true');
     }
-  }, [currentTrack, isPlayingYouTube, youtubeNeedsUserGesture]);
+  }, [currentTrack, isPlaying, loadingPhase]);
   
   // Hide when playback actually starts
   useEffect(() => {
-    if (isPlaying && !youtubeNeedsUserGesture) {
+    if (isPlaying) {
       setShow(false);
     }
-  }, [isPlaying, youtubeNeedsUserGesture]);
+  }, [isPlaying]);
   
   // Auto-hide after 10 seconds
   useEffect(() => {
