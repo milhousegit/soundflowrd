@@ -62,44 +62,32 @@ async function searchTrack(query: string): Promise<any[]> {
 /**
  * Get stream URL for a Tidal track
  */
-async function getTrackStream(tidalId: string, quality = 'LOSSLESS'): Promise<{ streamUrl: string; quality: string; bitDepth?: number; sampleRate?: number }> {
-  const target = `https://api.binimum.org/track/?id=${encodeURIComponent(tidalId)}&quality=${encodeURIComponent(quality)}`;
-  const trackUrl = `${SQUIDWTF_PROXY}?url=${encodeURIComponent(target)}`;
-  
-  
-  const response = await fetch(trackUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Accept': 'application/json',
-      'Origin': 'https://tidal.squid.wtf',
-      'Referer': 'https://tidal.squid.wtf/',
-    },
-  });
+async function getTrackStream(
+  tidalId: string,
+  quality = 'LOSSLESS'
+): Promise<{ streamUrl: string; quality: string; bitDepth?: number; sampleRate?: number }> {
+  console.log(`[SquidWTF] Getting stream for Tidal ID: ${tidalId}, quality: ${quality}`);
 
-  if (!response.ok) {
-    const text = await response.text();
-    console.error(`[SquidWTF] Track request failed: ${response.status}, body: ${text.substring(0, 200)}`);
-    throw new Error(`Track request failed: ${response.status}`);
-  }
+  const data = await fetchJsonWithFallback(
+    `/track/?id=${encodeURIComponent(tidalId)}&quality=${encodeURIComponent(quality)}`
+  );
 
-  const data = await response.json();
-  
   if (!data?.data) {
     throw new Error('No track data returned');
   }
 
   const trackData = data.data;
-  
+
   // Decode the manifest to get the stream URL
   if (trackData.manifestMimeType === 'application/vnd.tidal.bts') {
     // Base64 encoded JSON manifest
     const manifestJson = JSON.parse(atob(trackData.manifest));
     console.log(`[SquidWTF] Manifest decoded, codec: ${manifestJson.codecs}`);
-    
+
     if (!manifestJson.urls || manifestJson.urls.length === 0) {
       throw new Error('No stream URLs in manifest');
     }
-    
+
     return {
       streamUrl: manifestJson.urls[0],
       quality: trackData.audioQuality,
@@ -110,7 +98,7 @@ async function getTrackStream(tidalId: string, quality = 'LOSSLESS'): Promise<{ 
     // DASH manifest for Hi-Res - decode and extract first segment URL
     const manifestXml = atob(trackData.manifest);
     console.log(`[SquidWTF] DASH manifest, Hi-Res audio`);
-    
+
     // Extract initialization URL from the manifest
     const initMatch = manifestXml.match(/initialization="([^"]+)"/);
     if (initMatch) {
@@ -122,10 +110,10 @@ async function getTrackStream(tidalId: string, quality = 'LOSSLESS'): Promise<{ 
         sampleRate: trackData.sampleRate,
       };
     }
-    
+
     throw new Error('Could not parse DASH manifest');
   }
-  
+
   throw new Error(`Unknown manifest type: ${trackData.manifestMimeType}`);
 }
 
