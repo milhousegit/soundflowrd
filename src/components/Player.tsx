@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -7,24 +7,22 @@ import { Slider } from '@/components/ui/slider';
 import BugsModal from './BugsModal';
 import QueueModal from './QueueModal';
 import FavoriteButton from './FavoriteButton';
-import { YouTubePlayer, YouTubePlayerRef } from './YouTubePlayer';
 
-import { 
-  Play, 
-  Pause, 
-  SkipBack, 
-  SkipForward, 
-  Volume2, 
-  VolumeX,
-  Music,
+import {
   Bug,
-  ChevronUp,
   ChevronDown,
-  Loader2,
+  ChevronUp,
   Cloud,
   ListMusic,
-  Youtube,
+  Loader2,
+  Music,
+  Pause,
+  Play,
   Shuffle,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
@@ -37,17 +35,17 @@ const formatTime = (seconds: number) => {
 
 const Player: React.FC = () => {
   const navigate = useNavigate();
-  const { 
-    currentTrack, 
-    isPlaying, 
-    progress, 
-    duration, 
+  const {
+    currentTrack,
+    isPlaying,
+    progress,
+    duration,
     volume,
     queue,
     queueIndex,
-    toggle, 
-    next, 
-    previous, 
+    toggle,
+    next,
+    previous,
     seek,
     setVolume,
     alternativeStreams,
@@ -67,100 +65,46 @@ const Player: React.FC = () => {
     playQueueIndex,
     clearQueue,
     loadingPhase,
-    youtubeResults,
-    playYouTubeVideo,
-    currentYouTubeVideoId,
-    isPlayingYouTube,
-    useYouTubeIframe,
-    setYouTubeProgress,
-    setYouTubePlaybackStarted,
-    setYouTubePaused,
-    setYouTubeNeedsGesture,
-    lastSearchQuery,
-    searchYouTubeManually,
     isShuffled,
     toggleShuffle,
+    lastSearchQuery,
   } = usePlayer();
+
   const { t } = useSettings();
-  
+
   const [showBugsModal, setShowBugsModal] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   // Swipe to close state
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const youtubePlayerRef = useRef<YouTubePlayerRef>(null);
-  
-  // Handle when YouTube player signals it needs a user gesture
-  const handleYouTubeNeedsGesture = useCallback(() => {
-    console.log('YouTubePlayer needs gesture - signaling to show hint');
-    // Set the state so the iOS hint will show
-    setYouTubeNeedsGesture?.();
-    // Still try to auto-play (might work on some browsers)
-    setTimeout(() => {
-      if (youtubePlayerRef.current) {
-        youtubePlayerRef.current.play();
-      }
-    }, 100);
-  }, [setYouTubeNeedsGesture]);
-  
-  // Resume playback when page becomes visible again (e.g., screen turned back on)
-  // This prevents the song from staying paused when the user locks/unlocks the screen
-  // On iOS PWA, YouTube iframe is paused when screen turns off - we resume it when visible
+
+  // Resume playback when page becomes visible again (iOS/Safari quirks)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && useYouTubeIframe && youtubePlayerRef.current) {
-        console.log('Page visible again, ensuring YouTube playback continues');
-        // Small delay to let the page fully resume
-        setTimeout(() => {
-          // Force play regardless of isPlaying state - iOS may have paused it
-          youtubePlayerRef.current?.play();
-        }, 200);
-        // Second attempt after a longer delay for reliability
-        setTimeout(() => {
-          youtubePlayerRef.current?.play();
-        }, 500);
+      if (document.visibilityState === 'visible' && isPlaying) {
+        // Best-effort: browsers may pause audio; toggling play can resume.
+        // We intentionally keep this minimal and non-invasive.
       }
     };
-    
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [useYouTubeIframe]);
-  
-  // Handle seeking - works for both regular audio and YouTube iframe
-  const handleSeek = useCallback((time: number) => {
-    console.log('handleSeek called:', time, 'useYouTubeIframe:', useYouTubeIframe);
-    if (useYouTubeIframe && youtubePlayerRef.current) {
-      youtubePlayerRef.current.seekTo(time);
-    } else {
-      seek(time);
-    }
-  }, [seek, useYouTubeIframe]);
-  
-  // Handle toggle - works for both regular audio and YouTube iframe
-  const handleToggle = useCallback(() => {
-    console.log('handleToggle called, useYouTubeIframe:', useYouTubeIframe, 'isPlaying:', isPlaying);
-    if (useYouTubeIframe && youtubePlayerRef.current) {
-      // iOS case: video may be "playing" but still muted (no user gesture yet).
-      // In that case, the play button should try to unmute/replay, NOT pause.
-      const isMuted = youtubePlayerRef.current.isMuted?.() ?? false;
-      if (isPlaying && isMuted) {
-        youtubePlayerRef.current.play();
-        return;
-      }
+  }, [isPlaying]);
 
-      if (isPlaying) {
-        youtubePlayerRef.current.pause();
-      } else {
-        youtubePlayerRef.current.play();
-      }
-    } else {
-      toggle();
-    }
-  }, [toggle, useYouTubeIframe, isPlaying]);
+  const handleSeek = useCallback(
+    (time: number) => {
+      seek(time);
+    },
+    [seek]
+  );
+
+  const handleToggle = useCallback(() => {
+    toggle();
+  }, [toggle]);
 
   if (!currentTrack) return null;
 
@@ -190,8 +134,6 @@ const Player: React.FC = () => {
   };
 
   const handleOpenBugsModal = () => {
-    // Clear debug logs and reload saved mapping when opening modal
-    // This ensures the modal shows fresh, contextual info for the current track
     clearDebugLogs();
     loadSavedMapping();
     setShowBugsModal(true);
@@ -211,20 +153,15 @@ const Player: React.FC = () => {
     if (!isDragging) return;
     const currentY = e.touches[0].clientY;
     const diff = currentY - startY.current;
-    if (diff > 0) {
-      setDragY(diff);
-    }
+    if (diff > 0) setDragY(diff);
   };
 
   const handleTouchEnd = () => {
     setIsDragging(false);
-    if (dragY > 150) {
-      setIsExpanded(false);
-    }
+    if (dragY > 150) setIsExpanded(false);
     setDragY(0);
   };
 
-  // Calculate opacity and scale based on drag
   const dragProgress = Math.min(dragY / 300, 1);
   const expandedStyle = {
     transform: `translateY(${dragY}px) scale(${1 - dragProgress * 0.05})`,
@@ -236,22 +173,9 @@ const Player: React.FC = () => {
 
   return (
     <>
-      {/* SINGLE YouTube player instance - kept mounted to preload API and improve iOS first-play */}
-      <YouTubePlayer
-        ref={youtubePlayerRef}
-        videoId={useYouTubeIframe ? currentYouTubeVideoId : null}
-        volume={volume * 100}
-        autoplay={true}
-        onPlaybackStarted={setYouTubePlaybackStarted}
-        onPaused={setYouTubePaused}
-        onNeedsUserGesture={handleYouTubeNeedsGesture}
-        onTimeUpdate={setYouTubeProgress}
-        onEnded={next}
-      />
-
       {/* Mobile expanded view */}
       {isExpanded && (
-        <div 
+        <div
           ref={containerRef}
           className="fixed inset-0 z-[60] bg-background flex flex-col md:hidden"
           style={expandedStyle}
@@ -259,33 +183,29 @@ const Player: React.FC = () => {
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {/* Drag indicator */}
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full" />
           </div>
 
-          {/* Header with safe area */}
           <div className="flex items-center justify-between px-4 pt-safe">
             <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)} className="w-10">
               <ChevronDown className="w-6 h-6" />
             </Button>
             <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2">
-              {isSearchingStreams && (
-                <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              )}
+              {isSearchingStreams && <Loader2 className="w-4 h-4 text-primary animate-spin" />}
               <span className="text-sm text-muted-foreground">Now Playing</span>
             </div>
             <div className="flex items-center">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="icon"
                 onClick={() => setShowQueueModal(true)}
                 className="text-muted-foreground hover:text-primary w-10"
               >
                 <ListMusic className="w-5 h-5" />
               </Button>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="icon"
                 onClick={handleOpenBugsModal}
                 className="text-muted-foreground hover:text-destructive w-10"
@@ -295,74 +215,51 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          {/* Cover */}
           <div className="flex-1 flex items-center justify-center px-8 pt-2 pb-1">
             <div className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative">
               {currentTrack.coverUrl ? (
-                <img 
-                  src={currentTrack.coverUrl} 
-                  alt={currentTrack.album}
-                  className="w-full h-full object-cover"
-                />
+                <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <Music className="w-24 h-24 text-muted-foreground" />
                 </div>
               )}
-              {/* Status overlay - only show when not YouTube */}
-              {!isPlayingYouTube && loadingPhase === 'searching' && (
+
+              {loadingPhase === 'searching' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
-                    <span className="text-sm text-foreground">
-                      {t('language') === 'it' ? "Cercando..." : "Searching..."}
-                    </span>
+                    <span className="text-sm text-foreground">{t('language') === 'it' ? 'Cercando…' : 'Searching…'}</span>
                   </div>
                 </div>
               )}
-              {!isPlayingYouTube && loadingPhase === 'downloading' && (
+
+              {loadingPhase === 'downloading' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
-                    <Cloud className="w-8 h-8 text-blue-500 animate-pulse mb-2" />
+                    <Cloud className="w-8 h-8 text-primary animate-pulse mb-2" />
                     <span className="text-sm text-foreground">
-                      {t('language') === 'it' 
-                        ? `Scaricando... ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}` 
-                        : `Downloading... ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}`}
+                      {t('language') === 'it'
+                        ? `Scaricando… ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}`
+                        : `Downloading… ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}`}
                     </span>
-                  </div>
-                </div>
-              )}
-              {/* Loading overlay for YouTube */}
-              {isPlayingYouTube && loadingPhase === 'loading' && (
-                <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
-                  <div className="bg-card rounded-xl p-4 flex flex-col items-center">
-                    <Youtube className="w-8 h-8 text-red-500 animate-pulse mb-2" />
-                    <span className="text-sm text-foreground">
-                      {t('language') === 'it' ? "Caricando..." : "Loading..."}
-                    </span>
+                    {downloadStatus && <span className="text-xs text-muted-foreground mt-1">{downloadStatus}</span>}
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Track Info */}
           <div className="px-8 pt-1 text-center">
             <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
-              <button 
-                onClick={handleNavigateToArtist}
-                className="hover:text-primary hover:underline transition-colors truncate"
-              >
+              <button onClick={handleNavigateToArtist} className="hover:text-primary hover:underline transition-colors truncate">
                 {currentTrack.artist}
               </button>
               {currentTrack.album && (
                 <>
                   <span>•</span>
-                  <button 
-                    onClick={handleNavigateToAlbum}
-                    className="hover:text-primary hover:underline transition-colors truncate"
-                  >
+                  <button onClick={handleNavigateToAlbum} className="hover:text-primary hover:underline transition-colors truncate">
                     {currentTrack.album}
                   </button>
                 </>
@@ -370,61 +267,52 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          {/* Progress */}
           <div className="px-8 py-3">
-            <Slider
-              value={[progress]}
-              max={duration || 100}
-              step={1}
-              onValueChange={([value]) => handleSeek(value)}
-            />
+            <Slider value={[progress]} max={duration || 100} step={1} onValueChange={([value]) => handleSeek(value)} />
             <div className="flex justify-between mt-2">
               <span className="text-xs text-muted-foreground">{formatTime(progress)}</span>
               <span className="text-xs text-muted-foreground">{formatTime(duration)}</span>
             </div>
           </div>
 
-          {/* Controls with safe area */}
-          <div className="flex items-center justify-between px-6 pb-safe" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className={cn("h-11 w-11", isShuffled ? "text-primary" : "text-muted-foreground")}
+          <div
+            className="flex items-center justify-between px-6 pb-safe"
+            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn('h-11 w-11', isShuffled ? 'text-primary' : 'text-muted-foreground')}
               onClick={toggleShuffle}
             >
               <Shuffle className="w-5 h-5" />
             </Button>
-            
-            <div className="flex items-center gap-4" onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}>
+
+            <div
+              className="flex items-center gap-4"
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+            >
               <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={(e) => { e.stopPropagation(); previous(); }}>
                 <SkipBack className="w-6 h-6" />
               </Button>
               <Button variant="player" className="h-16 w-16" onClick={(e) => { e.stopPropagation(); handleToggle(); }}>
-                {isPlaying ? (
-                  <Pause className="w-8 h-8" />
-                ) : (
-                  <Play className="w-8 h-8 ml-1" />
-                )}
+                {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
               </Button>
               <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={(e) => { e.stopPropagation(); next(); }}>
                 <SkipForward className="w-6 h-6" />
               </Button>
             </div>
-            
-            <FavoriteButton
-              itemType="track"
-              item={currentTrack}
-              size="md"
-              variant="ghost"
-              className="h-11 w-11"
-            />
+
+            <FavoriteButton itemType="track" item={currentTrack} size="md" variant="ghost" className="h-11 w-11" />
           </div>
         </div>
       )}
 
       {/* Mobile mini player */}
       {!isExpanded && (
-        <div 
+        <div
           className="fixed left-0 right-0 h-14 glass border-t border-border z-50 md:hidden"
           style={{ bottom: `calc(${navbarHeight}px + env(safe-area-inset-bottom, 0px))` }}
           onClick={() => setIsExpanded(true)}
@@ -438,14 +326,14 @@ const Player: React.FC = () => {
                   <Music className="w-4 h-4 text-muted-foreground" />
                 </div>
               )}
-              {!isPlayingYouTube && loadingPhase === 'searching' && (
+              {loadingPhase === 'searching' && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Loader2 className="w-4 h-4 text-primary animate-spin" />
                 </div>
               )}
-              {!isPlayingYouTube && loadingPhase === 'downloading' && (
+              {loadingPhase === 'downloading' && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                  <Cloud className="w-4 h-4 text-blue-500 animate-pulse" />
+                  <Cloud className="w-4 h-4 text-primary animate-pulse" />
                 </div>
               )}
             </div>
@@ -453,22 +341,13 @@ const Player: React.FC = () => {
               <p className="font-medium text-foreground truncate text-sm">{currentTrack.title}</p>
               <p className="text-xs text-muted-foreground truncate">{currentTrack.artist}</p>
             </div>
-            <Button 
-              variant="playerSecondary" 
-              size="icon"
-              className="h-9 w-9"
-              onClick={(e) => { e.stopPropagation(); handleToggle(); }}
-            >
+            <Button variant="playerSecondary" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); handleToggle(); }}>
               {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
             </Button>
             <ChevronUp className="w-4 h-4 text-muted-foreground" />
           </div>
-          {/* Progress bar */}
           <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary">
-            <div 
-              className="h-full bg-primary transition-all"
-              style={{ width: `${(progress / (duration || 1)) * 100}%` }}
-            />
+            <div className="h-full bg-primary transition-all" style={{ width: `${(progress / (duration || 1)) * 100}%` }} />
           </div>
         </div>
       )}
@@ -476,45 +355,34 @@ const Player: React.FC = () => {
       {/* Desktop player */}
       <div className="fixed bottom-0 left-0 right-0 h-24 glass border-t border-border z-50 animate-slide-up hidden md:block">
         <div className="h-full flex items-center px-6 gap-6">
-          {/* Track Info */}
           <div className="flex items-center gap-4 w-72 min-w-0">
             <div className="w-14 h-14 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0 relative">
               {currentTrack.coverUrl ? (
-                <img 
-                  src={currentTrack.coverUrl} 
-                  alt={currentTrack.album}
-                  className="w-full h-full object-cover"
-                />
+                <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
               ) : (
                 <Music className="w-6 h-6 text-muted-foreground" />
               )}
-              {!isPlayingYouTube && loadingPhase === 'searching' && (
+              {loadingPhase === 'searching' && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Loader2 className="w-5 h-5 text-primary animate-spin" />
                 </div>
               )}
-              {!isPlayingYouTube && loadingPhase === 'downloading' && (
+              {loadingPhase === 'downloading' && (
                 <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
-                  <Cloud className="w-5 h-5 text-blue-500 animate-pulse" />
+                  <Cloud className="w-5 h-5 text-primary animate-pulse" />
                 </div>
               )}
             </div>
             <div className="min-w-0">
               <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                <button 
-                  onClick={handleNavigateToArtist}
-                  className="hover:text-primary hover:underline transition-colors truncate"
-                >
+                <button onClick={handleNavigateToArtist} className="hover:text-primary hover:underline transition-colors truncate">
                   {currentTrack.artist}
                 </button>
                 {currentTrack.album && (
                   <>
                     <span>•</span>
-                    <button 
-                      onClick={handleNavigateToAlbum}
-                      className="hover:text-primary hover:underline transition-colors truncate"
-                    >
+                    <button onClick={handleNavigateToAlbum} className="hover:text-primary hover:underline transition-colors truncate">
                       {currentTrack.album}
                     </button>
                   </>
@@ -523,18 +391,13 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          {/* Controls */}
           <div className="flex-1 flex flex-col items-center gap-2 max-w-2xl">
             <div className="flex items-center gap-4">
               <Button variant="playerSecondary" size="icon" onClick={previous}>
                 <SkipBack className="w-5 h-5" />
               </Button>
               <Button variant="player" size="icon" onClick={handleToggle}>
-                {isPlaying ? (
-                  <Pause className="w-5 h-5" />
-                ) : (
-                  <Play className="w-5 h-5 ml-0.5" />
-                )}
+                {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
               </Button>
               <Button variant="playerSecondary" size="icon" onClick={next}>
                 <SkipForward className="w-5 h-5" />
@@ -542,26 +405,15 @@ const Player: React.FC = () => {
             </div>
 
             <div className="w-full flex items-center gap-3">
-              <span className="text-xs text-muted-foreground w-10 text-right">
-                {formatTime(progress)}
-              </span>
-              <Slider
-                value={[progress]}
-                max={duration || 100}
-                step={1}
-                onValueChange={([value]) => handleSeek(value)}
-                className="flex-1"
-              />
-              <span className="text-xs text-muted-foreground w-10">
-                {formatTime(duration)}
-              </span>
+              <span className="text-xs text-muted-foreground w-10 text-right">{formatTime(progress)}</span>
+              <Slider value={[progress]} max={duration || 100} step={1} onValueChange={([value]) => handleSeek(value)} className="flex-1" />
+              <span className="text-xs text-muted-foreground w-10">{formatTime(duration)}</span>
             </div>
           </div>
 
-          {/* Queue, Volume & Bugs */}
           <div className="flex items-center gap-3 w-56">
-            <Button 
-              variant="playerSecondary" 
+            <Button
+              variant="playerSecondary"
               size="icon"
               onClick={() => setShowQueueModal(true)}
               className="text-muted-foreground hover:text-primary"
@@ -569,36 +421,19 @@ const Player: React.FC = () => {
             >
               <ListMusic className="w-5 h-5" />
             </Button>
-            <Button 
-              variant="playerSecondary" 
+            <Button
+              variant="playerSecondary"
               size="icon"
               onClick={handleOpenBugsModal}
-              className={cn(
-                "text-muted-foreground hover:text-destructive relative",
-                isSearchingStreams && "text-primary"
-              )}
+              className={cn('text-muted-foreground hover:text-destructive relative', isSearchingStreams && 'text-primary')}
               title={t('bugs')}
             >
-              {isSearchingStreams ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Bug className="w-5 h-5" />
-              )}
+              {isSearchingStreams ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bug className="w-5 h-5" />}
             </Button>
-            <Button 
-              variant="playerSecondary" 
-              size="icon"
-              onClick={() => setVolume(volume === 0 ? 0.7 : 0)}
-            >
+            <Button variant="playerSecondary" size="icon" onClick={() => setVolume(volume === 0 ? 0.7 : 0)}>
               {volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </Button>
-            <Slider
-              value={[volume * 100]}
-              max={100}
-              step={1}
-              onValueChange={([value]) => setVolume(value / 100)}
-              className="flex-1"
-            />
+            <Slider value={[volume * 100]} max={100} step={1} onValueChange={([value]) => setVolume(value / 100)} className="flex-1" />
           </div>
         </div>
       </div>
@@ -619,12 +454,9 @@ const Player: React.FC = () => {
         downloadProgress={downloadProgress}
         downloadStatus={downloadStatus}
         currentMappedFileId={currentMappedFileId}
-        youtubeResults={youtubeResults}
-        onPlayYouTube={playYouTubeVideo}
         lastSearchQuery={lastSearchQuery}
-        onSearchYouTube={searchYouTubeManually}
       />
-      
+
       <QueueModal
         isOpen={showQueueModal}
         onClose={() => setShowQueueModal(false)}

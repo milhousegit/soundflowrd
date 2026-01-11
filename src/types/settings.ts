@@ -1,4 +1,4 @@
-export type AudioSourceMode = 'deezer_priority' | 'rd_priority' | 'youtube_only';
+export type AudioSourceMode = 'deezer_priority' | 'rd_priority';
 
 export interface AppSettings {
   language: 'en' | 'it';
@@ -12,7 +12,7 @@ export interface AppSettings {
   audioQuality: 'high' | 'medium' | 'low';
   crossfade: number; // seconds, 0 = off
   realDebridApiKey?: string;
-  audioSourceMode: AudioSourceMode; // 'deezer_priority' = Deezer (Lucida), 'rd_priority' = RD + YouTube fallback, 'youtube_only' = YouTube only
+  audioSourceMode: AudioSourceMode; // 'deezer_priority' = Deezer (Lucida), 'rd_priority' = Real-Debrid
 }
 
 export const defaultSettings: AppSettings = {
@@ -88,11 +88,9 @@ export const translations = {
     playFromCloud: 'Play from cloud',
     audioSource: 'Audio Source',
     deezerPriority: 'Deezer (HQ)',
-    deezerPriorityDesc: 'FLAC/320kbps from Deezer, YouTube fallback',
-    rdPriority: 'Real-Debrid + YouTube',
-    rdPriorityDesc: 'High quality (FLAC/320kbps), YouTube fallback',
-    youtubeOnly: 'YouTube Only',
-    youtubeOnlyDesc: 'Instant playback, no external service needed',
+    deezerPriorityDesc: 'FLAC/320kbps from Deezer',
+    rdPriority: 'Real-Debrid',
+    rdPriorityDesc: 'High quality (FLAC/320kbps) when available',
   },
   it: {
     home: 'Home',
@@ -151,11 +149,9 @@ export const translations = {
     playFromCloud: 'Riproduci da cloud',
     audioSource: 'Sorgente Audio',
     deezerPriority: 'Deezer (HQ)',
-    deezerPriorityDesc: 'FLAC/320kbps da Deezer, fallback YouTube',
-    rdPriority: 'Real-Debrid + YouTube',
-    rdPriorityDesc: 'Alta qualità (FLAC/320kbps), fallback YouTube',
-    youtubeOnly: 'Solo YouTube',
-    youtubeOnlyDesc: 'Riproduzione istantanea, senza servizi esterni',
+    deezerPriorityDesc: 'FLAC/320kbps da Deezer',
+    rdPriority: 'Real-Debrid',
+    rdPriorityDesc: 'Alta qualità (FLAC/320kbps) quando disponibile',
   },
 };
 

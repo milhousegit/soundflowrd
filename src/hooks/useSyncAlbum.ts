@@ -3,20 +3,18 @@ import { Track } from '@/types/music';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { searchStreams, selectFilesAndPlay, checkTorrentStatus, TorrentInfo, AudioFile } from '@/lib/realdebrid';
-import { 
-  addSyncingTrack, 
-  removeSyncingTrack, 
+import {
+  addSyncingTrack,
+  removeSyncingTrack,
   addSyncedTrack,
-  addYouTubeSyncedTrack,
   addDownloadingTrack,
-  removeDownloadingTrack 
+  removeDownloadingTrack,
 } from '@/hooks/useSyncedTracks';
-import { toast } from 'sonner';
 
 // Track sync status for album sync operation
 interface TrackSyncStatus {
   trackId: string;
-  status: 'pending' | 'syncing' | 'downloading' | 'synced' | 'failed' | 'youtube';
+  status: 'pending' | 'syncing' | 'downloading' | 'synced' | 'failed';
   progress?: number;
 }
 
@@ -69,56 +67,6 @@ const flexibleMatch = (fileName: string, trackTitle: string): boolean => {
   return false;
 };
 
-// Search YouTube for a track
-const searchYouTubeForTrack = async (track: Track): Promise<{ videoId: string; title: string; duration: number; uploader: string } | null> => {
-  try {
-    const query = `${track.artist} ${track.title}`;
-    const response = await supabase.functions.invoke('youtube-audio', {
-      body: { action: 'search', query }
-    });
-
-    if (response.error) {
-      console.error('YouTube search error:', response.error);
-      return null;
-    }
-
-    // Edge function returns { videos: [...] } with fields: id, title, duration, uploaderName
-    const videos = response.data?.videos || [];
-    if (videos.length > 0) {
-      const video = videos[0];
-      return {
-        videoId: video.id,
-        title: video.title,
-        duration: video.duration || 0,
-        uploader: video.uploaderName || ''
-      };
-    }
-    return null;
-  } catch (error) {
-    console.error('YouTube search failed:', error);
-    return null;
-  }
-};
-
-// Save YouTube mapping to database
-const saveYouTubeMapping = async (trackId: string, videoId: string, title: string, duration: number, uploader: string) => {
-  try {
-    await supabase
-      .from('youtube_track_mappings')
-      .upsert({
-        track_id: trackId,
-        video_id: videoId,
-        video_title: title,
-        video_duration: duration,
-        uploader_name: uploader,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'track_id' });
-    return true;
-  } catch (error) {
-    console.error('Failed to save YouTube mapping:', error);
-    return false;
-  }
-};
 
 // Poll for a single track download completion
 const pollTrackDownload = async (
@@ -170,7 +118,7 @@ const pollTrackDownload = async (
 export const useSyncAlbum = () => {
   const { credentials } = useAuth();
   const [isSyncingAlbum, setIsSyncingAlbum] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<{ synced: number; youtube: number; total: number }>({ synced: 0, youtube: 0, total: 0 });
+  const [syncProgress, setSyncProgress] = useState<{ synced: number; total: number }>({ synced: 0, total: 0 });
 
   const syncAlbum = useCallback(async (tracks: Track[], albumTitle: string, artistName: string) => {
     if (!credentials?.realDebridApiKey || tracks.length === 0) {
@@ -179,52 +127,35 @@ export const useSyncAlbum = () => {
     }
 
     setIsSyncingAlbum(true);
-    setSyncProgress({ synced: 0, youtube: 0, total: tracks.length });
+    setSyncProgress({ synced: 0, total: tracks.length });
 
     // Mark all tracks as syncing
     tracks.forEach(track => addSyncingTrack(track.id));
 
     let syncedCount = 0;
-    let youtubeCount = 0;
     let failedCount = 0;
 
     try {
-      // First, check which tracks already have RD or YouTube mappings
+      // First, check which tracks already have RD mappings
       const trackIds = tracks.map(t => t.id);
-      
-      const [rdMappingsResult, ytMappingsResult] = await Promise.all([
-        supabase
-          .from('track_file_mappings')
-          .select('track_id, direct_link')
-          .in('track_id', trackIds),
-        supabase
-          .from('youtube_track_mappings')
-          .select('track_id')
-          .in('track_id', trackIds)
-      ]);
+
+      const rdMappingsResult = await supabase
+        .from('track_file_mappings')
+        .select('track_id, direct_link')
+        .in('track_id', trackIds);
 
       const alreadySyncedRD = new Set(rdMappingsResult.data?.filter(m => m.direct_link).map(m => m.track_id) || []);
-      const alreadySyncedYT = new Set(ytMappingsResult.data?.map(m => m.track_id) || []);
-      
+
       // Mark already synced tracks
       alreadySyncedRD.forEach(trackId => {
         removeSyncingTrack(trackId);
         addSyncedTrack(trackId);
         syncedCount++;
       });
-      
-      // Also count YouTube mappings for tracks not in RD
-      alreadySyncedYT.forEach(trackId => {
-        if (!alreadySyncedRD.has(trackId)) {
-          removeSyncingTrack(trackId);
-          addYouTubeSyncedTrack(trackId);
-          youtubeCount++;
-        }
-      });
-      
-      setSyncProgress({ synced: syncedCount, youtube: youtubeCount, total: tracks.length });
 
-      if (alreadySyncedRD.size + alreadySyncedYT.size >= tracks.length) {
+      setSyncProgress({ synced: syncedCount, total: tracks.length });
+
+      if (alreadySyncedRD.size >= tracks.length) {
         toast.success('Album già sincronizzato');
         setIsSyncingAlbum(false);
         return;
@@ -284,8 +215,8 @@ export const useSyncAlbum = () => {
 
       console.log('Best torrent:', bestTorrent?.title || 'NONE', 'with', bestTorrent?.files?.length || 0, 'files');
 
-      // Process each track SEQUENTIALLY with fallback to YouTube
-      const tracksToSync = tracks.filter(t => !alreadySyncedRD.has(t.id) && !alreadySyncedYT.has(t.id));
+      // Process each track SEQUENTIALLY
+      const tracksToSync = tracks.filter(t => !alreadySyncedRD.has(t.id));
 
       for (let i = 0; i < tracksToSync.length; i++) {
         const track = tracksToSync[i];
@@ -388,54 +319,23 @@ export const useSyncAlbum = () => {
           }
         }
 
-        // Fallback to YouTube if RD sync failed
-        if (!trackSynced) {
-          console.log('Falling back to YouTube for track:', track.title);
-          removeSyncingTrack(track.id);
-          
-          const ytResult = await searchYouTubeForTrack(track);
-          
-          if (ytResult) {
-            const saved = await saveYouTubeMapping(
-              track.id,
-              ytResult.videoId,
-              ytResult.title,
-              ytResult.duration,
-              ytResult.uploader
-            );
-            
-            if (saved) {
-              addYouTubeSyncedTrack(track.id);
-              youtubeCount++;
-              trackSynced = true;
-              console.log('Track synced via YouTube:', track.title, '->', ytResult.title);
-            }
-          }
-        }
 
         if (!trackSynced) {
           failedCount++;
           console.log('Track sync completely failed:', track.title);
         }
 
-        setSyncProgress({ synced: syncedCount, youtube: youtubeCount, total: tracks.length });
+        setSyncProgress({ synced: syncedCount, total: tracks.length });
       }
 
       // Show results
-      const totalSynced = syncedCount + youtubeCount;
       if (failedCount === 0) {
-        if (youtubeCount > 0) {
-          toast.success(`Album sincronizzato`, {
-            description: `${syncedCount} via Real-Debrid, ${youtubeCount} via YouTube`,
-          });
-        } else {
-          toast.success(`Album sincronizzato`, {
-            description: `${syncedCount} tracce pronte per la riproduzione`,
-          });
-        }
-      } else if (totalSynced > 0) {
+        toast.success(`Album sincronizzato`, {
+          description: `${syncedCount} tracce pronte per la riproduzione`,
+        });
+      } else if (syncedCount > 0) {
         toast.warning(`Sincronizzazione parziale`, {
-          description: `${syncedCount} RD, ${youtubeCount} YT, ${failedCount} non trovate`,
+          description: `${syncedCount} sincronizzate, ${failedCount} non trovate`,
         });
       } else {
         toast.error(`Sincronizzazione fallita`, {

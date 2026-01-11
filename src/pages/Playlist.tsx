@@ -258,7 +258,7 @@ const PlaylistPage: React.FC = () => {
             </Button>
             {isSyncingAlbum && syncProgress.total > 0 && (
               <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] text-primary font-medium whitespace-nowrap">
-                {syncProgress.synced + syncProgress.youtube}/{syncProgress.total}
+                {syncProgress.synced}/{syncProgress.total}
               </span>
             )}
           </div>
