@@ -139,35 +139,48 @@ async function extractTrackInfoViaFirecrawlJson(resolveUrl: string): Promise<{ t
       url: resolveUrl,
       onlyMainContent: false,
       waitFor: 8000,
-      formats: [
-        {
-          type: 'json',
-          prompt:
-            'Extract Lucida pageData needed to request a track stream. Return JSON with: url (string, the lucida track url used in POST /api/load), csrf (string), csrfFallback (string|null), tokenExpiry (number ms). If not present, return null fields.',
+      formats: ['extract'],
+      extract: {
+        schema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+            csrf: { type: 'string' },
+            csrfFallback: { type: ['string', 'null'] },
+            tokenExpiry: { type: 'number' },
+          },
         },
-      ],
+        prompt:
+          'From the Lucida.to page, extract the stream request parameters: url (lucida track url used in POST /api/load), csrf, csrfFallback (or null), and tokenExpiry (ms). If not present, return empty strings.',
+      },
     }),
   });
 
   const json = await res.json();
   if (!res.ok) {
-    console.error('[Lucida] Firecrawl JSON extraction failed:', JSON.stringify(json).substring(0, 300));
+    console.error('[Lucida] Firecrawl extract failed:', JSON.stringify(json).substring(0, 500));
     return null;
   }
 
-  const extracted = json?.data?.json ?? json?.json;
+  // Firecrawl nests into data
+  const extracted = json?.data?.extract ?? json?.extract ?? json?.data?.json ?? json?.json;
   if (!extracted || typeof extracted !== 'object') {
-    console.error('[Lucida] Firecrawl JSON extraction missing json field');
+    console.error('[Lucida] Firecrawl extraction missing extract/json field:', JSON.stringify(json).substring(0, 500));
     return null;
   }
 
-  const url = (extracted as any).url;
-  const csrf = (extracted as any).csrf;
-  const csrfFallback = (extracted as any).csrfFallback ?? null;
+  console.log('[Lucida] Firecrawl extracted keys:', Object.keys(extracted));
+
+  const url = String((extracted as any).url ?? '').trim();
+  const csrf = String((extracted as any).csrf ?? '').trim();
+  const csrfFallbackRaw = (extracted as any).csrfFallback;
+  const csrfFallback = csrfFallbackRaw === null || csrfFallbackRaw === undefined ? undefined : String(csrfFallbackRaw).trim() || undefined;
   const tokenExpiry = Number((extracted as any).tokenExpiry ?? (Date.now() + 3600000));
 
+  console.log('[Lucida] Firecrawl extracted url length:', url.length, 'csrf length:', csrf.length);
+
   if (!url || !csrf) {
-    console.error('[Lucida] Firecrawl JSON extraction did not return url/csrf:', JSON.stringify(extracted).substring(0, 300));
+    console.error('[Lucida] Firecrawl extract did not return url/csrf:', JSON.stringify(extracted).substring(0, 500));
     return null;
   }
 
