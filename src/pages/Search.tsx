@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Search as SearchIcon, X } from 'lucide-react';
+import { Search as SearchIcon, X, Music } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
@@ -8,9 +8,10 @@ import ArtistCard from '@/components/ArtistCard';
 import TapArea from '@/components/TapArea';
 import SearchResultsSkeleton from '@/components/skeletons/SearchResultsSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
-import { searchAll } from '@/lib/deezer';
+import { searchAll, searchPlaylists, DeezerPlaylist } from '@/lib/deezer';
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useNavigate } from 'react-router-dom';
 
 const genres = [
   { name: 'Pop', color: 'from-pink-500 to-rose-500' },
@@ -30,8 +31,10 @@ const Search: React.FC = () => {
     artists: Artist[];
     albums: Album[];
     tracks: Track[];
+    playlists: DeezerPlaylist[];
   } | null>(null);
   const { t } = useSettings();
+  const navigate = useNavigate();
 
   // Normalize string for matching (remove accents, lowercase, trim)
   const normalizeForMatch = (str: string): string => {
@@ -69,7 +72,10 @@ const Search: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const data = await searchAll(searchQuery);
+      const [data, playlists] = await Promise.all([
+        searchAll(searchQuery),
+        searchPlaylists(searchQuery).catch(() => []),
+      ]);
 
       // Filter results (keep API ranking/order)
       const filteredArtists = data.artists.filter((artist) =>
@@ -88,10 +94,11 @@ const Search: React.FC = () => {
         artists: filteredArtists,
         albums: filteredAlbums,
         tracks: filteredTracks,
+        playlists: playlists,
       });
     } catch (error) {
       console.error('Search error:', error);
-      setResults({ artists: [], albums: [], tracks: [] });
+      setResults({ artists: [], albums: [], tracks: [], playlists: [] });
     } finally {
       setIsLoading(false);
     }
@@ -163,6 +170,38 @@ const Search: React.FC = () => {
             </section>
           )}
 
+          {/* Playlists */}
+          {results.playlists.length > 0 && (
+            <section>
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">Playlist</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+                {results.playlists.slice(0, 6).map((playlist) => (
+                  <TapArea
+                    key={playlist.id}
+                    onTap={() => navigate(`/deezer-playlist/${playlist.id}`)}
+                    className="group cursor-pointer"
+                  >
+                    <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-2 relative">
+                      {playlist.coverUrl ? (
+                        <img 
+                          src={playlist.coverUrl} 
+                          alt={playlist.title} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Music className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-foreground truncate">{playlist.title}</p>
+                    <p className="text-xs text-muted-foreground">{playlist.trackCount} brani • {playlist.creator}</p>
+                  </TapArea>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Tracks */}
           {results.tracks.length > 0 && (
             <section>
@@ -181,7 +220,7 @@ const Search: React.FC = () => {
           )}
 
           {/* No results */}
-          {results.tracks.length === 0 && results.albums.length === 0 && results.artists.length === 0 && query && (
+          {results.tracks.length === 0 && results.albums.length === 0 && results.artists.length === 0 && results.playlists.length === 0 && query && (
             <div className="text-center py-12">
               <p className="text-muted-foreground text-base md:text-lg">
                 {t('noResults')} "{query}"

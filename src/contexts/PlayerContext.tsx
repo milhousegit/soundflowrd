@@ -24,6 +24,7 @@ import {
   selectFilesAndPlay,
 } from '@/lib/realdebrid';
 import { getDeezerStream } from '@/lib/lucida';
+import { getTidalStream } from '@/lib/tidal';
 import { addSyncedTrack, addSyncingTrack, removeSyncingTrack } from '@/hooks/useSyncedTracks';
 
 export interface DebugLogEntry {
@@ -417,44 +418,39 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const isDeezerPriorityMode = audioSourceMode === 'deezer_priority';
       const hasRdKey = !!credentials?.realDebridApiKey;
 
-      // =============== DEEZER PRIORITY MODE ===============
+      // =============== DEEZER/TIDAL PRIORITY MODE ===============
       if (isDeezerPriorityMode) {
-        const isValidDeezerId = /^\d+$/.test(track.id);
-        if (!isValidDeezerId) {
-          addDebugLog('❌ ID non Deezer', `"${track.id}" non è un ID Deezer numerico`, 'error');
-          setLoadingPhase('unavailable');
-          toast.error('Traccia non disponibile', {
-            description: 'Questa traccia non proviene da Deezer e non può essere riprodotta in modalità Deezer HQ.',
-          });
-          return;
-        }
-
-        addDebugLog('🎵 Modalità Deezer HQ', `Tentativo stream per ID: ${track.id}`, 'info');
+        addDebugLog('🎵 Modalità HQ', `Ricerca "${track.title}" di ${track.artist} su Tidal`, 'info');
         setLoadingPhase('searching');
 
         try {
-          const deezerResult = await getDeezerStream(track.id);
+          // Use Tidal via SquidWTF - search by title and artist
+          const tidalResult = await getTidalStream(track.title, track.artist);
           if (currentSearchTrackIdRef.current !== track.id) return;
 
-          if ('streamUrl' in deezerResult && deezerResult.streamUrl && audioRef.current) {
+          if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
             setLoadingPhase('loading');
-            audioRef.current.src = deezerResult.streamUrl;
+            audioRef.current.src = tidalResult.streamUrl;
             await audioRef.current.play();
             setState((prev) => ({ ...prev, isPlaying: true }));
             setLoadingPhase('idle');
-            addDebugLog('✅ Riproduzione Deezer', 'Stream HQ avviato', 'success');
+            
+            const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
+              ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
+              : tidalResult.quality || 'LOSSLESS';
+            addDebugLog('✅ Riproduzione Tidal', `Stream ${qualityInfo} avviato`, 'success');
             return;
           }
 
-          const errorMsg = 'error' in deezerResult ? deezerResult.error : 'Stream non disponibile';
-          addDebugLog('❌ Deezer non disponibile', errorMsg, 'error');
+          const errorMsg = 'error' in tidalResult ? tidalResult.error : 'Stream non disponibile';
+          addDebugLog('❌ Tidal non disponibile', errorMsg, 'error');
           setLoadingPhase('unavailable');
-          toast.error('Deezer non disponibile', { description: errorMsg });
+          toast.error('Traccia non trovata su Tidal', { description: errorMsg });
           return;
         } catch (error) {
-          addDebugLog('❌ Errore Deezer', error instanceof Error ? error.message : 'Errore', 'error');
+          addDebugLog('❌ Errore Tidal', error instanceof Error ? error.message : 'Errore', 'error');
           setLoadingPhase('unavailable');
-          toast.error('Errore Deezer', { description: error instanceof Error ? error.message : 'Errore sconosciuto' });
+          toast.error('Errore Tidal', { description: error instanceof Error ? error.message : 'Errore sconosciuto' });
           return;
         }
       }

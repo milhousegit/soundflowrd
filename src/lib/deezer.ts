@@ -28,7 +28,7 @@ export async function searchTracks(query: string): Promise<Track[]> {
   return data || [];
 }
 
-export async function getArtist(id: string): Promise<Artist & { releases: Album[]; topTracks: Track[] }> {
+export async function getArtist(id: string): Promise<Artist & { releases: Album[]; topTracks: Track[]; relatedArtists: Artist[] }> {
   const { data, error } = await supabase.functions.invoke('deezer', {
     body: { action: 'get-artist', id },
   });
@@ -90,4 +90,41 @@ export async function searchAll(query: string) {
   ]);
 
   return { artists, albums, tracks };
+}
+
+export interface DeezerPlaylist {
+  id: string;
+  title: string;
+  description?: string;
+  coverUrl?: string;
+  trackCount: number;
+  creator?: string;
+  isDeezerPlaylist?: boolean;
+}
+
+export async function searchPlaylists(query: string): Promise<DeezerPlaylist[]> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'search-playlists', query, limit: 20 },
+  });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getDeezerPlaylist(id: string): Promise<DeezerPlaylist & { tracks: Track[] }> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-playlist', id },
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getArtistPlaylists(artistName: string): Promise<DeezerPlaylist[]> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-artist-playlists', query: artistName },
+  });
+
+  if (error) throw error;
+  return data || [];
 }
