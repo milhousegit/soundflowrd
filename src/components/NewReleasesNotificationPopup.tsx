@@ -55,6 +55,11 @@ export const NewReleasesNotificationPopup: React.FC = () => {
 
   const handleEnableNotifications = async () => {
     setIsRequesting(true);
+    
+    // Close popup immediately after triggering system prompt
+    localStorage.setItem(POPUP_DISMISSED_KEY, 'true');
+    setShowPopup(false);
+    
     try {
       const permission = await Notification.requestPermission();
       
@@ -78,13 +83,10 @@ export const NewReleasesNotificationPopup: React.FC = () => {
           p256dh: subscriptionJson.keys!.p256dh,
           auth: subscriptionJson.keys!.auth,
           enabled: true,
-        }, { onConflict: 'user_id,endpoint' });
+        }, { onConflict: 'endpoint' });
 
         console.log('Push notification subscription saved');
       }
-      
-      localStorage.setItem(POPUP_DISMISSED_KEY, 'true');
-      setShowPopup(false);
     } catch (error) {
       console.error('Error enabling notifications:', error);
     } finally {
