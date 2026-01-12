@@ -1,8 +1,9 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Search, Library, Settings, Headphones } from 'lucide-react';
+import { Home, Search, Library, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
+import appLogo from '@/assets/logo.png';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
@@ -20,9 +21,11 @@ const Sidebar: React.FC = () => {
       {/* Logo */}
       <div className="p-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-glow">
-            <Headphones className="w-5 h-5 text-primary-foreground" />
-          </div>
+          <img 
+            src={appLogo} 
+            alt="SoundFlow Logo" 
+            className="w-10 h-10 rounded-xl shadow-glow"
+          />
           <span className="text-xl font-bold text-foreground">SoundFlow</span>
         </div>
       </div>
