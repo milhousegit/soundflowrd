@@ -24,6 +24,7 @@ import {
   Trash2,
   Music,
   Smartphone,
+  Bell,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -39,6 +40,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import IOSDiagnostics from '@/components/IOSDiagnostics';
+import AdminNotifications from '@/components/AdminNotifications';
 import { isIOS, isSafari, isPWA } from '@/hooks/useIOSAudioSession';
 
 interface CloudFile {
@@ -51,13 +53,14 @@ interface CloudFile {
 }
 
 const Settings: React.FC = () => {
-  const { profile, updateApiKey, signOut, credentials } = useAuth();
+  const { profile, updateApiKey, signOut, credentials, user } = useAuth();
   const { settings, updateSettings, t, audioSourceMode, setAudioSourceMode } = useSettings();
   const { toast } = useToast();
 
   const [isEditingApiKey, setIsEditingApiKey] = useState(false);
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Cloud files state
   const [cloudFiles, setCloudFiles] = useState<CloudFile[]>([]);
@@ -65,6 +68,24 @@ const Settings: React.FC = () => {
   const [showCloudSection, setShowCloudSection] = useState(false);
 
   const hasRdApiKey = !!credentials?.realDebridApiKey;
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      if (!user?.id) return;
+      
+      const { data } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+      
+      setIsAdmin(!!data);
+    };
+    
+    checkAdminRole();
+  }, [user?.id]);
 
   useEffect(() => {
     if (isEditingApiKey) {
@@ -570,6 +591,27 @@ const Settings: React.FC = () => {
             </div>
           </div>
         </section>
+
+        {/* Admin Notifications Section - Only for admins */}
+        {isAdmin && (
+          <section className="space-y-3 md:space-y-4">
+            <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+              <Bell className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+              <h2 className="text-lg md:text-xl font-semibold text-foreground">
+                {settings.language === 'it' ? 'Notifiche Admin' : 'Admin Notifications'}
+              </h2>
+            </div>
+            
+            <div className="p-3 md:p-4 rounded-xl bg-card">
+              <p className="text-xs text-muted-foreground mb-4">
+                {settings.language === 'it' 
+                  ? 'Invia notifiche push a tutti gli utenti iscritti.'
+                  : 'Send push notifications to all subscribed users.'}
+              </p>
+              <AdminNotifications language={settings.language} />
+            </div>
+          </section>
+        )}
 
         {/* iOS Diagnostics - show on iOS/Safari or PWA */}
         {(isIOS() || isSafari() || isPWA()) && (
