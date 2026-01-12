@@ -1,22 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, Music2, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Bell, Music2, ExternalLink, Trash2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
 import { searchAlbums } from '@/lib/deezer';
 import { useNavigate } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 interface NewRelease {
+  id: string;
   artistName: string;
   artistId: string;
   albumTitle: string;
@@ -24,7 +23,171 @@ interface NewRelease {
   coverUrl: string;
   releaseDate?: string;
   isSingle?: boolean;
+  isWelcome?: boolean;
 }
+
+interface SwipeableNotificationProps {
+  release: NewRelease;
+  onDelete: (id: string) => void;
+  onClick: () => void;
+  isItalian: boolean;
+}
+
+const SwipeableNotification: React.FC<SwipeableNotificationProps> = ({
+  release,
+  onDelete,
+  onClick,
+  isItalian,
+}) => {
+  const [translateX, setTranslateX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startX = useRef(0);
+  const currentX = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    currentX.current = e.touches[0].clientX;
+    const diff = currentX.current - startX.current;
+    // Only allow right swipe
+    if (diff > 0) {
+      setTranslateX(Math.min(diff, 80));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    if (translateX > 60) {
+      // Trigger delete
+      setTranslateX(100);
+      setTimeout(() => onDelete(release.id), 200);
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    startX.current = e.clientX;
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    currentX.current = e.clientX;
+    const diff = currentX.current - startX.current;
+    if (diff > 0) {
+      setTranslateX(Math.min(diff, 80));
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    if (translateX > 60) {
+      setTranslateX(100);
+      setTimeout(() => onDelete(release.id), 200);
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (isDragging) {
+      setIsDragging(false);
+      setTranslateX(0);
+    }
+  };
+
+  return (
+    <div className="relative overflow-hidden">
+      {/* Delete background */}
+      <div 
+        className={cn(
+          "absolute inset-y-0 left-0 w-20 bg-destructive flex items-center justify-center transition-opacity",
+          translateX > 20 ? "opacity-100" : "opacity-0"
+        )}
+      >
+        <Trash2 className="w-5 h-5 text-destructive-foreground" />
+      </div>
+      
+      {/* Notification content */}
+      <div
+        className={cn(
+          "flex items-center gap-3 p-3 cursor-pointer bg-popover hover:bg-accent transition-all",
+          isDragging ? "" : "transition-transform duration-200"
+        )}
+        style={{ transform: `translateX(${translateX}px)` }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        onClick={() => {
+          if (translateX === 0 && !release.isWelcome) {
+            onClick();
+          }
+        }}
+      >
+        <div className="w-12 h-12 rounded overflow-hidden bg-muted flex-shrink-0">
+          {release.isWelcome ? (
+            <div className="w-full h-full flex items-center justify-center bg-primary/20">
+              <Sparkles className="w-5 h-5 text-primary" />
+            </div>
+          ) : release.coverUrl ? (
+            <img
+              src={release.coverUrl}
+              alt={release.albumTitle}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Music2 className="w-5 h-5 text-muted-foreground" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          {release.isWelcome ? (
+            <>
+              <p className="text-sm font-medium">
+                {isItalian ? 'Ehi Soundflower!' : 'Hey Soundflower!'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isItalian 
+                  ? 'Qui riceverai le notifiche delle nuove uscite' 
+                  : "You'll receive new release notifications here"}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium">
+                {isItalian 
+                  ? `È uscito un nuovo ${release.isSingle ? 'singolo' : 'album'} di ${release.artistName}`
+                  : `New ${release.isSingle ? 'single' : 'album'} from ${release.artistName}`}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {release.albumTitle}
+              </p>
+              {release.releaseDate && (
+                <p className="text-xs text-muted-foreground">
+                  {new Date(release.releaseDate).toLocaleDateString()}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+        {!release.isWelcome && (
+          <ExternalLink className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const NotificationsDropdown: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
@@ -33,8 +196,24 @@ export const NotificationsDropdown: React.FC = () => {
   const [newReleases, setNewReleases] = useState<NewRelease[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [dismissedIds, setDismissedIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('dismissed_notifications');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const isItalian = t('language') === 'it';
+  
+  // Welcome notification that's always shown unless dismissed
+  const welcomeNotification: NewRelease = {
+    id: 'welcome',
+    artistName: '',
+    artistId: '',
+    albumTitle: '',
+    albumId: '',
+    coverUrl: '',
+    isWelcome: true,
+  };
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
@@ -80,6 +259,7 @@ export const NotificationsDropdown: React.FC = () => {
                               (album as any).nb_tracks <= 3;
               
               releases.push({
+                id: `${artist.artist_id}-${album.id}`,
                 artistName: artist.artist_name,
                 artistId: artist.artist_id,
                 albumTitle: album.title,
@@ -101,8 +281,13 @@ export const NotificationsDropdown: React.FC = () => {
           return dateB - dateA;
         });
 
-        setNewReleases(releases.slice(0, 10));
-        setHasUnread(releases.length > 0);
+        // Filter out dismissed notifications
+        const filteredReleases = releases.filter(r => !dismissedIds.includes(r.id));
+        setNewReleases(filteredReleases.slice(0, 10));
+        
+        // Check if there are unread notifications (including welcome if not dismissed)
+        const hasWelcome = !dismissedIds.includes('welcome');
+        setHasUnread(filteredReleases.length > 0 || hasWelcome);
       } catch (error) {
         console.error('Error fetching new releases:', error);
       } finally {
@@ -115,80 +300,82 @@ export const NotificationsDropdown: React.FC = () => {
 
   const handleReleaseClick = (release: NewRelease) => {
     navigate(`/album/${release.albumId}`);
-    setHasUnread(false);
+    setIsOpen(false);
   };
+
+  const handleDismiss = (id: string) => {
+    const newDismissedIds = [...dismissedIds, id];
+    setDismissedIds(newDismissedIds);
+    localStorage.setItem('dismissed_notifications', JSON.stringify(newDismissedIds));
+    
+    if (id === 'welcome') {
+      // Just dismiss welcome
+    } else {
+      setNewReleases(prev => prev.filter(r => r.id !== id));
+    }
+    
+    // Update unread status
+    const remainingReleases = newReleases.filter(r => r.id !== id);
+    const hasWelcome = !newDismissedIds.includes('welcome');
+    setHasUnread(remainingReleases.length > 0 || hasWelcome);
+  };
+
+  // Combine notifications: welcome first if not dismissed, then releases
+  const allNotifications: NewRelease[] = [
+    ...(dismissedIds.includes('welcome') ? [] : [welcomeNotification]),
+    ...newReleases,
+  ];
 
   if (!isAuthenticated) return null;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="w-5 h-5" />
           {hasUnread && (
-            <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full animate-pulse" />
           )}
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
-        <DropdownMenuLabel>
-          {isItalian ? 'Notifiche' : 'Notifications'}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+      </PopoverTrigger>
+      <PopoverContent 
+        align="end" 
+        className="w-80 p-0 overflow-hidden animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200"
+        sideOffset={8}
+      >
+        <div className="px-4 py-3 border-b border-border">
+          <h4 className="font-semibold text-sm">
+            {isItalian ? 'Notifiche' : 'Notifications'}
+          </h4>
+        </div>
         
         <ScrollArea className="max-h-80">
           {isLoading ? (
             <div className="p-4 text-center text-muted-foreground text-sm">
               {isItalian ? 'Caricamento...' : 'Loading...'}
             </div>
-          ) : newReleases.length === 0 ? (
+          ) : allNotifications.length === 0 ? (
             <div className="p-4 text-center text-muted-foreground text-sm">
               {isItalian 
-                ? 'Nessuna nuova uscita dai tuoi artisti preferiti' 
-                : 'No new releases from your favorite artists'}
+                ? 'Nessuna notifica' 
+                : 'No notifications'}
             </div>
           ) : (
-            newReleases.map((release, index) => (
-              <DropdownMenuItem
-                key={`${release.albumId}-${index}`}
-                className="flex items-center gap-3 p-3 cursor-pointer"
-                onClick={() => handleReleaseClick(release)}
-              >
-                <div className="w-12 h-12 rounded overflow-hidden bg-muted flex-shrink-0">
-                  {release.coverUrl ? (
-                    <img
-                      src={release.coverUrl}
-                      alt={release.albumTitle}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Music2 className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">
-                    {isItalian 
-                      ? `È uscito un nuovo ${release.isSingle ? 'singolo' : 'album'} di ${release.artistName}`
-                      : `New ${release.isSingle ? 'single' : 'album'} from ${release.artistName}`}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {release.albumTitle}
-                  </p>
-                  {release.releaseDate && (
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(release.releaseDate).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
-                <ExternalLink className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              </DropdownMenuItem>
-            ))
+            <div className="divide-y divide-border">
+              {allNotifications.map((release) => (
+                <SwipeableNotification
+                  key={release.id}
+                  release={release}
+                  onDelete={handleDismiss}
+                  onClick={() => handleReleaseClick(release)}
+                  isItalian={isItalian}
+                />
+              ))}
+            </div>
           )}
         </ScrollArea>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   );
 };
 
