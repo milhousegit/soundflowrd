@@ -87,7 +87,7 @@ const isExternalAudioRouting = (): boolean => {
 /**
  * Hook to manage iOS audio session with robust logging and unlock mechanisms
  * Optimized for CarPlay compatibility - reduces keep-alive aggressiveness when
- * audio is routed externally
+ * audio is routed externally. Uses only refs to avoid React hook ordering issues.
  */
 export const useIOSAudioSession = () => {
   const audioContextRef = useRef<AudioContext | null>(null);

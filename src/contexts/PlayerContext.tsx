@@ -211,9 +211,11 @@ const flexibleMatch = (fileName: string, trackTitle: string): boolean => {
 };
 
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Audio element reference
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials, user } = useAuth();
   const { audioSourceMode } = useSettings();
+  // iOS audio session management (uses only refs internally)
   const iosAudio = useIOSAudioSession();
 
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
