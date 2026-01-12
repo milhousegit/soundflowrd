@@ -323,140 +323,8 @@ const Settings: React.FC = () => {
         </section>
 
 
-        {/* Cloud Files Section */}
-        {hasRdApiKey && (
-          <section className="space-y-3 md:space-y-4">
-            <div className="flex items-center justify-between mb-3 md:mb-4">
-              <div className="flex items-center gap-2 md:gap-3">
-                <Cloud className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-                <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('cloudFiles')}</h2>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setShowCloudSection(!showCloudSection);
-                  if (!showCloudSection && cloudFiles.length === 0) {
-                    loadCloudFiles();
-                  }
-                }}
-              >
-                {showCloudSection ? (
-                  <X className="w-4 h-4 mr-2" />
-                ) : (
-                  <Cloud className="w-4 h-4 mr-2" />
-                )}
-                {showCloudSection ? (settings.language === 'it' ? 'Chiudi' : 'Close') : (settings.language === 'it' ? 'Mostra' : 'Show')}
-              </Button>
-            </div>
 
-            {showCloudSection && (
-              <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-muted-foreground">
-                    {settings.language === 'it' 
-                      ? 'File salvati su Real-Debrid (ultimi 30 giorni)'
-                      : 'Files saved on Real-Debrid (last 30 days)'}
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={loadCloudFiles}
-                    disabled={isLoadingCloud}
-                  >
-                    <RefreshCw className={`w-4 h-4 ${isLoadingCloud ? 'animate-spin' : ''}`} />
-                  </Button>
-                </div>
-
-                {isLoadingCloud ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                    <span className="ml-2 text-sm text-muted-foreground">{t('loadingCloudFiles')}</span>
-                  </div>
-                ) : cloudFiles.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Cloud className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-                    <p className="text-sm text-muted-foreground">{t('noCloudFiles')}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-80 overflow-y-auto">
-                    {cloudFiles.map((file) => (
-                      <div
-                        key={file.id}
-                        className="flex items-center gap-3 p-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
-                      >
-                        <Play className="w-4 h-4 text-primary shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{file.filename}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatFileSize(file.filesize)} • {formatDate(file.generated)}
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => window.open(file.link, '_blank')}
-                          title={t('playFromCloud')}
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* Home Display Section */}
-        <section className="space-y-3 md:space-y-4">
-          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-            <Home className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-            <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('homeDisplay')}</h2>
-          </div>
-          
-          <div className="p-3 md:p-4 rounded-xl bg-card space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm md:text-base text-foreground">{t('recentlyPlayed')}</span>
-              <Switch 
-                checked={settings.homeDisplayOptions.showRecentlyPlayed}
-                onCheckedChange={() => toggleHomeOption('showRecentlyPlayed')}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm md:text-base text-foreground">{t('yourPlaylists')}</span>
-              <Switch 
-                checked={settings.homeDisplayOptions.showPlaylists}
-                onCheckedChange={() => toggleHomeOption('showPlaylists')}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm md:text-base text-foreground">{t('newReleases')}</span>
-              <Switch 
-                checked={settings.homeDisplayOptions.showNewReleases}
-                onCheckedChange={() => toggleHomeOption('showNewReleases')}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm md:text-base text-foreground">{t('popularArtists')}</span>
-              <Switch 
-                checked={settings.homeDisplayOptions.showPopularArtists}
-                onCheckedChange={() => toggleHomeOption('showPopularArtists')}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm md:text-base text-foreground">{t('topCharts')}</span>
-              <Switch 
-                checked={settings.homeDisplayOptions.showTopCharts}
-                onCheckedChange={() => toggleHomeOption('showTopCharts')}
-              />
-            </div>
-          </div>
-        </section>
-
-
-        {/* Playback Section - includes audio source */}
+        {/* Playback Section - includes audio source and cloud files */}
         <section className="space-y-3 md:space-y-4">
           <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
             <Volume2 className="w-4 h-4 md:w-5 md:h-5 text-primary" />
@@ -668,6 +536,92 @@ const Settings: React.FC = () => {
               )}
             </div>
 
+            {/* Cloud Files - inside Playback section */}
+            {hasRdApiKey && (
+              <div className="pt-3 border-t border-border">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="w-4 h-4 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground">{t('cloudFiles')}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowCloudSection(!showCloudSection);
+                      if (!showCloudSection && cloudFiles.length === 0) {
+                        loadCloudFiles();
+                      }
+                    }}
+                  >
+                    {showCloudSection ? (
+                      <X className="w-4 h-4 mr-2" />
+                    ) : (
+                      <Cloud className="w-4 h-4 mr-2" />
+                    )}
+                    {showCloudSection ? (settings.language === 'it' ? 'Chiudi' : 'Close') : (settings.language === 'it' ? 'Mostra' : 'Show')}
+                  </Button>
+                </div>
+
+                {showCloudSection && (
+                  <div className="p-3 rounded-lg bg-secondary/50 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {settings.language === 'it' 
+                          ? 'File salvati su Real-Debrid (ultimi 30 giorni)'
+                          : 'Files saved on Real-Debrid (last 30 days)'}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={loadCloudFiles}
+                        disabled={isLoadingCloud}
+                      >
+                        <RefreshCw className={`w-4 h-4 ${isLoadingCloud ? 'animate-spin' : ''}`} />
+                      </Button>
+                    </div>
+
+                    {isLoadingCloud ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                        <span className="ml-2 text-sm text-muted-foreground">{t('loadingCloudFiles')}</span>
+                      </div>
+                    ) : cloudFiles.length === 0 ? (
+                      <div className="text-center py-6">
+                        <Cloud className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">{t('noCloudFiles')}</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {cloudFiles.map((file) => (
+                          <div
+                            key={file.id}
+                            className="flex items-center gap-3 p-2 rounded-lg bg-background/50 hover:bg-background transition-colors"
+                          >
+                            <Play className="w-4 h-4 text-primary shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">{file.filename}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatFileSize(file.filesize)} • {formatDate(file.generated)}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open(file.link, '_blank')}
+                              title={t('playFromCloud')}
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Audio Quality */}
             <div className="flex items-center justify-between pt-3 border-t border-border">
               <div>
@@ -682,6 +636,52 @@ const Settings: React.FC = () => {
                 <option value="medium">{t('medium')}</option>
                 <option value="low">{t('low')}</option>
               </select>
+            </div>
+          </div>
+        </section>
+
+        {/* Home Display Section */}
+        <section className="space-y-3 md:space-y-4">
+          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+            <Home className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+            <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('homeDisplay')}</h2>
+          </div>
+          
+          <div className="p-3 md:p-4 rounded-xl bg-card space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm md:text-base text-foreground">{t('recentlyPlayed')}</span>
+              <Switch 
+                checked={settings.homeDisplayOptions.showRecentlyPlayed}
+                onCheckedChange={() => toggleHomeOption('showRecentlyPlayed')}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm md:text-base text-foreground">{t('yourPlaylists')}</span>
+              <Switch 
+                checked={settings.homeDisplayOptions.showPlaylists}
+                onCheckedChange={() => toggleHomeOption('showPlaylists')}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm md:text-base text-foreground">{t('newReleases')}</span>
+              <Switch 
+                checked={settings.homeDisplayOptions.showNewReleases}
+                onCheckedChange={() => toggleHomeOption('showNewReleases')}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm md:text-base text-foreground">{t('popularArtists')}</span>
+              <Switch 
+                checked={settings.homeDisplayOptions.showPopularArtists}
+                onCheckedChange={() => toggleHomeOption('showPopularArtists')}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm md:text-base text-foreground">{t('topCharts')}</span>
+              <Switch 
+                checked={settings.homeDisplayOptions.showTopCharts}
+                onCheckedChange={() => toggleHomeOption('showTopCharts')}
+              />
             </div>
           </div>
         </section>
