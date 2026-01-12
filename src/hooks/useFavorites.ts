@@ -90,17 +90,16 @@ export function useFavorites() {
         syncTrackInBackground(item as Track, credentials.realDebridApiKey);
       }
 
-      // Track artist for new release notifications
+      // Track artist for new release notifications (in background, don't block)
       if (itemType === 'artist') {
-        try {
-          await supabase.from('artist_release_tracking').upsert({
-            user_id: user.id,
-            artist_id: item.id,
-            artist_name: 'name' in item ? item.name : (item as any).title || 'Unknown',
-          }, { onConflict: 'user_id,artist_id' });
-        } catch (e) {
-          console.log('Failed to track artist for notifications:', e);
-        }
+        const artistName = 'name' in item ? item.name : (item as any).title || 'Unknown';
+        supabase.from('artist_release_tracking').upsert({
+          user_id: user.id,
+          artist_id: item.id,
+          artist_name: artistName,
+        }, { onConflict: 'user_id,artist_id', ignoreDuplicates: true })
+        .then(() => console.log('Artist tracking saved'))
+        .then(undefined, (e) => console.log('Failed to track artist for notifications:', e));
       }
 
       return true;
