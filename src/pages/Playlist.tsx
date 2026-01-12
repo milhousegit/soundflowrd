@@ -261,6 +261,9 @@ const PlaylistPage: React.FC = () => {
           item={playlistAsAlbum}
           size="lg"
         />
+
+        {/* Edit button */}
+        <Button
           variant="ghost"
           size="icon"
           onClick={() => setIsEditing(true)}
