@@ -4,8 +4,6 @@ import { Home, Search, Library, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 import appLogo from '@/assets/logo.png';
-import NotificationsDropdown from '@/components/NotificationsDropdown';
-import ProfileDropdown from '@/components/ProfileDropdown';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
@@ -20,8 +18,8 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside className="hidden md:flex w-64 h-full bg-sidebar flex-col border-r border-border">
-      {/* Logo + Profile/Notifications */}
-      <div className="p-6 flex items-center justify-between">
+      {/* Logo */}
+      <div className="p-6">
         <div className="flex items-center gap-3">
           <img 
             src={appLogo} 
@@ -29,10 +27,6 @@ const Sidebar: React.FC = () => {
             className="w-10 h-10 rounded-xl shadow-glow"
           />
           <span className="text-xl font-bold text-foreground">SoundFlow</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <NotificationsDropdown />
-          <ProfileDropdown />
         </div>
       </div>
 
