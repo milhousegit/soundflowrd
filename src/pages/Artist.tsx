@@ -243,12 +243,12 @@ const Artist: React.FC = () => {
                   onClick={() => window.location.href = `/deezer-playlist/${playlist.id}`}
                 >
                   <div className="group relative cursor-pointer">
-                    <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-2">
+                    <div className="relative aspect-square rounded-lg overflow-hidden bg-muted mb-2">
                       {playlist.coverUrl ? (
                         <img 
                           src={playlist.coverUrl} 
                           alt={playlist.title} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
