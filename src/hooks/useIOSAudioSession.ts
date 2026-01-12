@@ -188,16 +188,7 @@ export const useIOSAudioSession = () => {
       }
     }
 
-    // 3. Try orientation lock (PWA)
-    if (supportsOrientationLock()) {
-      try {
-        const orientation = screen.orientation as any;
-        await orientation.lock('portrait');
-        addLog('success', 'Screen orientation locked to portrait');
-      } catch (e) {
-        addLog('warning', 'Orientation lock failed (expected on most browsers)', e instanceof Error ? e.message : String(e));
-      }
-    }
+    // 3. Orientation lock removed - allow rotation for Auto Mode
 
     if (success) {
       isUnlockedRef.current = true;
@@ -315,12 +306,6 @@ export const useIOSAudioSession = () => {
       
       if (document.visibilityState === 'visible') {
         keepAlive();
-        
-        // Try orientation lock on return
-        if (supportsOrientationLock()) {
-          const orientation = screen.orientation as any;
-          orientation.lock('portrait').catch(() => {});
-        }
       }
     };
 
