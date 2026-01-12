@@ -6,12 +6,15 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlayerProvider } from "@/contexts/PlayerContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
+import { AutoModeProvider, useAutoMode } from "@/components/auto/AutoModeContext";
 import Login from "@/components/Login";
 import Layout from "@/components/Layout";
 import InstallPrompt from "@/components/InstallPrompt";
 import NewReleasesNotificationPopup from "@/components/NewReleasesNotificationPopup";
 import SilentAudioKeepAlive from "@/components/SilentAudioKeepAlive";
 import LandscapeBlocker from "@/components/LandscapeBlocker";
+import AutoModePrompt from "@/components/auto/AutoModePrompt";
+import AutoModeLayout from "@/components/auto/AutoModeLayout";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Library from "@/pages/Library";
@@ -41,6 +44,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 const AppRoutes = () => {
   const { isAuthenticated, isLoading } = useAuth();
+  const { isAutoMode } = useAutoMode();
 
   if (isLoading) {
     return (
@@ -48,6 +52,11 @@ const AppRoutes = () => {
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
+  }
+
+  // Show Auto Mode layout when active
+  if (isAutoMode && isAuthenticated) {
+    return <AutoModeLayout />;
   }
 
   return (
@@ -83,17 +92,20 @@ const App = () => (
     <AuthProvider>
       <SettingsProvider>
         <PlayerProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner position="top-center" />
-            <InstallPrompt />
-            <NewReleasesNotificationPopup />
-            <LandscapeBlocker />
-            <SilentAudioKeepAlive />
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          </TooltipProvider>
+          <AutoModeProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner position="top-center" />
+              <InstallPrompt />
+              <NewReleasesNotificationPopup />
+              <LandscapeBlocker />
+              <AutoModePrompt />
+              <SilentAudioKeepAlive />
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+            </TooltipProvider>
+          </AutoModeProvider>
         </PlayerProvider>
       </SettingsProvider>
     </AuthProvider>

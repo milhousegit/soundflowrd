@@ -1,17 +1,18 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Cloud, Loader2, Trash2, Pencil } from 'lucide-react';
+import { Play, Clock, Music, Cloud, Loader2, Trash2, Pencil, Shuffle, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
+import FavoriteButton from '@/components/FavoriteButton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlaylists, PlaylistTrack, Playlist as PlaylistType } from '@/hooks/usePlaylists';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
 import { useSyncAlbum } from '@/hooks/useSyncAlbum';
-import { Track } from '@/types/music';
+import { Track, Album } from '@/types/music';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
@@ -155,6 +156,22 @@ const PlaylistPage: React.FC = () => {
     }
   };
 
+  const handleShuffle = () => {
+    if (tracks.length > 0) {
+      const shuffled = [...tracks].sort(() => Math.random() - 0.5);
+      playTrack(shuffled[0], shuffled);
+    }
+  };
+
+  // Create a fake album object for the favorite button
+  const playlistAsAlbum: Album = {
+    id: playlist.id,
+    title: playlist.name,
+    artist: 'Playlist',
+    coverUrl: playlist.cover_url || '',
+    artistId: '',
+  };
+
   return (
     <div className="pb-32 animate-fade-in relative">
       {/* Back button mobile */}
@@ -226,9 +243,24 @@ const PlaylistPage: React.FC = () => {
         >
           <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
         </Button>
-        
-        {/* Edit button */}
+
+        {/* Shuffle button */}
         <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleShuffle}
+          disabled={tracks.length === 0}
+          className="w-12 h-12"
+        >
+          <Shuffle className="w-5 h-5 text-muted-foreground" />
+        </Button>
+
+        {/* Favorite button - cuoricino */}
+        <FavoriteButton
+          itemType="album"
+          item={playlistAsAlbum}
+          size="lg"
+        />
           variant="ghost"
           size="icon"
           onClick={() => setIsEditing(true)}

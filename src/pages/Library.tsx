@@ -4,14 +4,16 @@ import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useFavorites } from '@/hooks/useFavorites';
+import { usePlaylists } from '@/hooks/usePlaylists';
 import { useAuth } from '@/contexts/AuthContext';
 import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
+import PlaylistCard from '@/components/PlaylistCard';
 import { Track, Album, Artist } from '@/types/music';
 import { useNavigate } from 'react-router-dom';
 
-type Tab = 'tracks' | 'albums' | 'artists';
+type Tab = 'tracks' | 'albums' | 'artists' | 'playlists';
 
 const Library: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('tracks');
@@ -19,12 +21,14 @@ const Library: React.FC = () => {
   const { playTrack } = usePlayer();
   const { isAuthenticated } = useAuth();
   const { getFavoritesByType, isLoading } = useFavorites();
+  const { playlists, isLoading: isPlaylistsLoading } = usePlaylists();
   const navigate = useNavigate();
 
   const tabs = [
     { id: 'tracks' as Tab, label: t('likedSongs'), icon: Heart },
     { id: 'albums' as Tab, label: t('albums'), icon: Disc },
     { id: 'artists' as Tab, label: t('artists'), icon: User },
+    { id: 'playlists' as Tab, label: 'Playlist', icon: ListMusic },
   ];
 
   const favoriteTracks = getFavoritesByType('track');
@@ -69,7 +73,7 @@ const Library: React.FC = () => {
         ))}
       </div>
 
-      {isLoading ? (
+      {isLoading || isPlaylistsLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -151,10 +155,29 @@ const Library: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12 text-muted-foreground">
+              <div className="text-center py-12 text-muted-foreground">
                   <User className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>Nessun artista nei preferiti</p>
                   <p className="text-sm">Aggiungi artisti con il cuoricino</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Playlists */}
+          {activeTab === 'playlists' && (
+            <div>
+              {playlists.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+                  {playlists.map((playlist) => (
+                    <PlaylistCard key={playlist.id} playlist={playlist} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <ListMusic className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Nessuna playlist</p>
+                  <p className="text-sm">Crea playlist dal menu su qualsiasi brano</p>
                 </div>
               )}
             </div>
