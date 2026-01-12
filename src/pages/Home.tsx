@@ -29,6 +29,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import NotificationsDropdown from '@/components/NotificationsDropdown';
+import ProfileDropdown from '@/components/ProfileDropdown';
 
 const Home: React.FC = () => {
   const [newReleases, setNewReleases] = useState<Album[]>([]);
@@ -184,9 +186,18 @@ const Home: React.FC = () => {
   return (
     <div className="p-4 md:p-8 pb-32 space-y-8 md:space-y-10 animate-fade-in">
       {/* Welcome Header */}
-      <div>
-        <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-1 md:mb-2">{getGreeting()}</h1>
-        <p className="text-sm md:text-base text-muted-foreground">{t('whatToListen')}</p>
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-1 md:mb-2">{getGreeting()}</h1>
+          <p className="text-sm md:text-base text-muted-foreground">{t('whatToListen')}</p>
+        </div>
+        {/* Mobile profile and notifications */}
+        {isMobile && (
+          <div className="flex items-center gap-1 ml-2">
+            <NotificationsDropdown />
+            <ProfileDropdown />
+          </div>
+        )}
       </div>
 
       {/* Recently Played Grid - 2 columns on mobile */}
