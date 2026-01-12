@@ -32,9 +32,6 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist }) => {
       <h3 className="font-semibold text-sm md:text-base text-foreground truncate w-full">
         {playlist.name}
       </h3>
-      <p className="text-xs md:text-sm text-muted-foreground">
-        {playlist.track_count} {playlist.track_count === 1 ? 'brano' : 'brani'}
-      </p>
     </TapArea>
   );
 };
