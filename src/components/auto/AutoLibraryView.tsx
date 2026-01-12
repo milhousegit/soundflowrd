@@ -4,19 +4,25 @@ import { Button } from '@/components/ui/button';
 import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { useNavigate } from 'react-router-dom';
-import { useAutoMode } from './AutoModeContext';
 import { Track, Album, Artist } from '@/types/music';
+import AutoDetailView, { DetailType } from './AutoDetailView';
 
 type LibraryTab = 'tracks' | 'albums' | 'artists' | 'playlists';
 
+interface DetailData {
+  type: DetailType;
+  id: string;
+  title: string;
+  subtitle?: string;
+  coverUrl?: string;
+}
+
 const AutoLibraryView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<LibraryTab>('tracks');
+  const [selectedDetail, setSelectedDetail] = useState<DetailData | null>(null);
   const { getFavoritesByType, isLoading: isFavoritesLoading } = useFavorites();
   const { playlists, isLoading: isPlaylistsLoading } = usePlaylists();
   const { playTrack } = usePlayer();
-  const navigate = useNavigate();
-  const { setAutoMode } = useAutoMode();
 
   const tabs = [
     { id: 'tracks' as LibraryTab, label: 'Brani', icon: Heart },
@@ -38,21 +44,45 @@ const AutoLibraryView: React.FC = () => {
   };
 
   const handleAlbumClick = (album: Album) => {
-    setAutoMode(false);
-    navigate(`/album/${album.id}`);
+    setSelectedDetail({
+      type: 'album',
+      id: album.id,
+      title: album.title,
+      subtitle: album.artist,
+      coverUrl: album.coverUrl
+    });
   };
 
   const handleArtistClick = (artist: Artist) => {
-    setAutoMode(false);
-    navigate(`/artist/${artist.id}`);
+    setSelectedDetail({
+      type: 'artist',
+      id: artist.id,
+      title: artist.name,
+      coverUrl: artist.imageUrl
+    });
   };
 
-  const handlePlaylistClick = (playlistId: string) => {
-    setAutoMode(false);
-    navigate(`/playlist/${playlistId}`);
+  const handlePlaylistClick = (playlistId: string, playlistName: string, coverUrl?: string | null, trackCount?: number | null) => {
+    setSelectedDetail({
+      type: 'playlist',
+      id: playlistId,
+      title: playlistName,
+      subtitle: `${trackCount || 0} brani`,
+      coverUrl: coverUrl || undefined
+    });
   };
 
   const isLoading = isFavoritesLoading || isPlaylistsLoading;
+
+  // Show detail view if selected
+  if (selectedDetail) {
+    return (
+      <AutoDetailView 
+        detail={selectedDetail} 
+        onBack={() => setSelectedDetail(null)} 
+      />
+    );
+  }
 
   return (
     <div className="h-full flex flex-col p-4 overflow-hidden">
@@ -180,7 +210,7 @@ const AutoLibraryView: React.FC = () => {
                   playlists.slice(0, 12).map((playlist) => (
                     <button
                       key={playlist.id}
-                      onClick={() => handlePlaylistClick(playlist.id)}
+                      onClick={() => handlePlaylistClick(playlist.id, playlist.name, playlist.cover_url, playlist.track_count)}
                       className="flex flex-col items-center p-2 rounded-lg bg-card hover:bg-secondary transition-colors text-center"
                     >
                       <div className="w-full aspect-square rounded-md overflow-hidden bg-muted mb-2">

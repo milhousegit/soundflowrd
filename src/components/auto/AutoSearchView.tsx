@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/button';
 import { searchTracks, searchAlbums, searchArtists, searchPlaylists, DeezerPlaylist } from '@/lib/deezer';
 import { Track, Album, Artist } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { useNavigate } from 'react-router-dom';
-import { useAutoMode } from './AutoModeContext';
+import AutoDetailView, { DetailType } from './AutoDetailView';
 
 type SearchTab = 'tracks' | 'albums' | 'artists' | 'playlists';
 
@@ -17,15 +16,22 @@ interface SearchResults {
   playlists: DeezerPlaylist[];
 }
 
+interface DetailData {
+  type: DetailType;
+  id: string;
+  title: string;
+  subtitle?: string;
+  coverUrl?: string;
+}
+
 const AutoSearchView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [activeTab, setActiveTab] = useState<SearchTab>('tracks');
   const [results, setResults] = useState<SearchResults>({ tracks: [], albums: [], artists: [], playlists: [] });
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState<DetailData | null>(null);
   const { playTrack } = usePlayer();
-  const navigate = useNavigate();
-  const { setAutoMode } = useAutoMode();
   const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounce the query
@@ -81,19 +87,43 @@ const AutoSearchView: React.FC = () => {
   };
 
   const handleAlbumClick = (album: Album) => {
-    setAutoMode(false);
-    navigate(`/album/${album.id}`);
+    setSelectedDetail({
+      type: 'album',
+      id: album.id,
+      title: album.title,
+      subtitle: album.artist,
+      coverUrl: album.coverUrl
+    });
   };
 
   const handleArtistClick = (artist: Artist) => {
-    setAutoMode(false);
-    navigate(`/artist/${artist.id}`);
+    setSelectedDetail({
+      type: 'artist',
+      id: artist.id,
+      title: artist.name,
+      coverUrl: artist.imageUrl
+    });
   };
 
   const handlePlaylistClick = (playlist: DeezerPlaylist) => {
-    setAutoMode(false);
-    navigate(`/deezer-playlist/${playlist.id}`);
+    setSelectedDetail({
+      type: 'playlist',
+      id: `deezer-${playlist.id}`,
+      title: playlist.title,
+      subtitle: `${playlist.trackCount} brani`,
+      coverUrl: playlist.coverUrl
+    });
   };
+
+  // Show detail view if selected
+  if (selectedDetail) {
+    return (
+      <AutoDetailView 
+        detail={selectedDetail} 
+        onBack={() => setSelectedDetail(null)} 
+      />
+    );
+  }
 
   return (
     <div className="h-full flex flex-col p-4 overflow-hidden">

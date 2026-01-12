@@ -41,9 +41,9 @@ const AutoPlaybackView: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-row items-center justify-center px-8 py-4 gap-8">
+    <div className="h-full flex flex-row items-center justify-center px-12 py-6 gap-12">
       {/* Album Art - Left side */}
-      <div className="h-[70vh] aspect-square max-h-[300px] rounded-2xl overflow-hidden shadow-2xl shrink-0">
+      <div className="h-[75vh] aspect-square max-h-[280px] rounded-2xl overflow-hidden shadow-2xl shrink-0">
         {currentTrack.coverUrl ? (
           <img 
             src={currentTrack.coverUrl} 
@@ -52,49 +52,49 @@ const AutoPlaybackView: React.FC = () => {
           />
         ) : (
           <div className="w-full h-full bg-muted flex items-center justify-center">
-            <Music className="w-20 h-20 text-muted-foreground" />
+            <Music className="w-24 h-24 text-muted-foreground" />
           </div>
         )}
       </div>
 
-      {/* Track Info & Controls - Right side */}
-      <div className="flex flex-col justify-center flex-1 max-w-md">
+      {/* Track Info & Controls - Right side - Centered */}
+      <div className="flex flex-col justify-center items-center flex-1 max-w-lg">
         {/* Track Info */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-foreground mb-1 line-clamp-1">
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl font-bold text-foreground mb-2 line-clamp-1">
             {currentTrack.title}
           </h1>
-          <p className="text-lg text-muted-foreground line-clamp-1">
+          <p className="text-xl text-muted-foreground line-clamp-1">
             {currentTrack.artist}
           </p>
           {currentTrack.album && (
-            <p className="text-sm text-muted-foreground/70 line-clamp-1">
+            <p className="text-base text-muted-foreground/70 line-clamp-1 mt-1">
               {currentTrack.album}
             </p>
           )}
         </div>
 
-        {/* Main Controls */}
-        <div className="flex items-center gap-4 mb-6">
+        {/* Main Controls - Bigger buttons */}
+        <div className="flex items-center justify-center gap-6 mb-8">
           <Button
             variant="ghost"
             size="icon"
             onClick={previous}
-            className="w-14 h-14"
+            className="w-20 h-20 rounded-full"
           >
-            <SkipBack className="w-8 h-8" />
+            <SkipBack className="w-10 h-10" />
           </Button>
           
           <Button
             variant="player"
             size="icon"
             onClick={toggle}
-            className="w-18 h-18"
+            className="w-24 h-24 rounded-full"
           >
             {isPlaying ? (
-              <Pause className="w-10 h-10" />
+              <Pause className="w-14 h-14" />
             ) : (
-              <Play className="w-10 h-10 ml-1" />
+              <Play className="w-14 h-14 ml-2" />
             )}
           </Button>
           
@@ -102,23 +102,23 @@ const AutoPlaybackView: React.FC = () => {
             variant="ghost"
             size="icon"
             onClick={next}
-            className="w-14 h-14"
+            className="w-20 h-20 rounded-full"
           >
-            <SkipForward className="w-8 h-8" />
+            <SkipForward className="w-10 h-10" />
           </Button>
         </div>
 
-        {/* Secondary Controls */}
-        <div className="flex items-center gap-3">
+        {/* Secondary Controls - Centered */}
+        <div className="flex items-center justify-center gap-4">
           <Button
             variant="ghost"
             size="icon"
             onClick={handleToggleFavorite}
-            className="w-11 h-11"
+            className="w-14 h-14 rounded-full"
           >
             <Heart 
               className={cn(
-                "w-6 h-6",
+                "w-7 h-7",
                 isLiked ? "fill-primary text-primary" : "text-muted-foreground"
               )} 
             />
@@ -128,14 +128,14 @@ const AutoPlaybackView: React.FC = () => {
             variant="ghost"
             size="icon"
             onClick={toggleShuffle}
-            className={cn("w-11 h-11", isShuffled && "text-primary")}
+            className={cn("w-14 h-14 rounded-full", isShuffled && "text-primary")}
           >
-            <Shuffle className="w-6 h-6" />
+            <Shuffle className="w-7 h-7" />
           </Button>
           
-          <div className="flex items-center gap-2 px-3 py-2 bg-secondary rounded-lg ml-2">
-            <ListMusic className="w-4 h-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">{queue.length}</span>
+          <div className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-full ml-2">
+            <ListMusic className="w-5 h-5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground font-medium">{queue.length}</span>
           </div>
         </div>
       </div>
