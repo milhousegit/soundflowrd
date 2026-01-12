@@ -17,9 +17,9 @@ const AutoModeLayout: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-[150] bg-background flex flex-row h-screen w-screen overflow-hidden">
+    <div className="fixed inset-0 z-[150] bg-background flex flex-row h-screen w-screen overflow-hidden pl-[env(safe-area-inset-left)]">
       {/* Left Menu - Horizontal in landscape */}
-      <div className="w-28 min-w-[112px] bg-card border-r border-border flex flex-col justify-center py-2 shrink-0">
+      <div className="w-28 min-w-[112px] bg-card border-r border-border flex flex-col justify-center py-2 shrink-0 ml-[env(safe-area-inset-left)]">
         {tabs.map((tab) => (
           <button
             key={tab.id}
