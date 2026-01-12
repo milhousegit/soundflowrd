@@ -18,7 +18,7 @@ import AutoModeLayout from "@/components/auto/AutoModeLayout";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Library from "@/pages/Library";
-import Settings from "@/pages/Settings";
+import Profile from "@/pages/Profile";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
@@ -76,7 +76,7 @@ const AppRoutes = () => {
         <Route index element={<Home />} />
         <Route path="search" element={<Search />} />
         <Route path="library" element={<Library />} />
-        <Route path="settings" element={<Settings />} />
+        <Route path="profile" element={<Profile />} />
         <Route path="artist/:id" element={<Artist />} />
         <Route path="album/:id" element={<Album />} />
         <Route path="playlist/:id" element={<Playlist />} />
