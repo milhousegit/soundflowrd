@@ -117,8 +117,8 @@ const Info: React.FC = () => {
           <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
             <p className="text-sm text-muted-foreground">
               {isItalian 
-                ? 'SoundFlow utilizza le seguenti librerie open source:'
-                : 'SoundFlow uses the following open source libraries:'}
+                ? 'SoundFlow utilizza le seguenti librerie e servizi:'
+                : 'SoundFlow uses the following libraries and services:'}
             </p>
             <ul className="text-sm text-muted-foreground space-y-1.5">
               <li className="flex items-center gap-2">
@@ -144,6 +144,14 @@ const Info: React.FC = () => {
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
                 WebTorrent - MIT License
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                Deezer API - {isItalian ? 'Servizio di terze parti' : 'Third-party service'}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                SquidWTF/Tidal - {isItalian ? 'Servizio di terze parti' : 'Third-party service'}
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
