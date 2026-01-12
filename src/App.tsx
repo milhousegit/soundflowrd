@@ -89,8 +89,8 @@ const App = () => (
             <InstallPrompt />
             <NewReleasesNotificationPopup />
             <LandscapeBlocker />
+            <SilentAudioKeepAlive />
             <BrowserRouter>
-              <SilentAudioKeepAlive />
               <AppRoutes />
             </BrowserRouter>
           </TooltipProvider>
