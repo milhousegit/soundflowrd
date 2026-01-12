@@ -1,8 +1,8 @@
-// Service Worker for Push Notifications - v0.8.5
-const CACHE_NAME = 'soundflow-v0.8.5';
+// Service Worker for Push Notifications - v0.8.6
+const CACHE_NAME = 'soundflow-v0.8.6';
 
 self.addEventListener('install', (event) => {
-  console.log('[SW] Service Worker v0.8.5 installed');
+  console.log('[SW] Service Worker v0.8.6 installed');
   // Clear old caches on install
   event.waitUntil(
     caches.keys().then((cacheNames) => {
