@@ -4,6 +4,7 @@ import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
+import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getNewReleases, getPopularArtists, searchAlbums } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,7 +31,6 @@ import {
 } from '@/components/ui/context-menu';
 
 const Home: React.FC = () => {
-  const [recentlyPlayed, setRecentlyPlayed] = useState<Track[]>([]);
   const [newReleases, setNewReleases] = useState<Album[]>([]);
   const [popularArtists, setPopularArtists] = useState<Artist[]>([]);
   const [isLoadingReleases, setIsLoadingReleases] = useState(true);
@@ -42,6 +42,7 @@ const Home: React.FC = () => {
   const { currentTrack, isPlaying, playTrack, toggle, addToQueue } = usePlayer();
   const { favorites, getFavoritesByType } = useFavorites();
   const { playlists, isLoading: isLoadingPlaylists, addTrackToPlaylist } = usePlaylists();
+  const { recentTracks, isLoading: isLoadingRecent } = useRecentlyPlayed();
   const isMobile = useIsMobile();
 
   // Get country code from language
@@ -86,12 +87,7 @@ const Home: React.FC = () => {
     return Array.from(artistSet);
   };
 
-  useEffect(() => {
-    const stored = localStorage.getItem('recentlyPlayed');
-    if (stored) {
-      setRecentlyPlayed(JSON.parse(stored));
-    }
-  }, []);
+  // recentTracks now comes from useRecentlyPlayed hook (synced with database)
 
   useEffect(() => {
     const fetchNewReleases = async () => {
@@ -181,7 +177,7 @@ const Home: React.FC = () => {
     return t('goodEvening');
   };
 
-  const displayRecent = recentlyPlayed.slice(0, 6);
+  const displayRecent = recentTracks.slice(0, 6);
   const { homeDisplayOptions } = settings;
   const hasAnyFavorites = favorites.length > 0;
 

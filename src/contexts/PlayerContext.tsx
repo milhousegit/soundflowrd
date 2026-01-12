@@ -25,6 +25,7 @@ import {
 } from '@/lib/realdebrid';
 import { getDeezerStream } from '@/lib/lucida';
 import { getTidalStream } from '@/lib/tidal';
+import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
 import { addSyncedTrack, addSyncingTrack, removeSyncingTrack } from '@/hooks/useSyncedTracks';
 
 export interface DebugLogEntry {
@@ -211,7 +212,7 @@ const flexibleMatch = (fileName: string, trackTitle: string): boolean => {
 
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const { credentials } = useAuth();
+  const { credentials, user } = useAuth();
   const { audioSourceMode } = useSettings();
   const iosAudio = useIOSAudioSession();
 
@@ -542,12 +543,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const isDeezerPriorityMode = audioSourceMode === 'deezer_priority';
       const hasRdKey = !!credentials?.realDebridApiKey;
 
-      // Helper to save recently played
+      // Helper to save recently played (uses database if user is logged in)
       const saveRecentlyPlayed = () => {
-        const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
-        const filtered = recent.filter((t: Track) => t.id !== track.id);
-        const updated = [track, ...filtered].slice(0, 20);
-        localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+        saveRecentlyPlayedTrack(track, user?.id);
       };
 
       // =============== DEEZER/TIDAL PRIORITY MODE ===============

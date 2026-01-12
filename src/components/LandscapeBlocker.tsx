@@ -45,16 +45,19 @@ const LandscapeBlocker: React.FC = () => {
     const isLandscapeNow = window.innerWidth > window.innerHeight;
     lastOrientationRef.current = isLandscapeNow ? 'landscape' : 'portrait';
 
-    // Listen for orientation changes
-    window.addEventListener('resize', checkOrientation);
-    window.addEventListener('orientationchange', () => {
+    // Create named handler for orientationchange so we can remove it properly
+    const handleOrientationChange = () => {
       // Delay check for orientationchange to let dimensions update
       setTimeout(checkOrientation, 100);
-    });
+    };
+
+    // Listen for orientation changes
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', handleOrientationChange);
 
     return () => {
       window.removeEventListener('resize', checkOrientation);
-      window.removeEventListener('orientationchange', checkOrientation);
+      window.removeEventListener('orientationchange', handleOrientationChange);
     };
   }, [isAutoMode, showAutoModePrompt, setShowAutoModePrompt, setPendingOrientation]);
 
