@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { Search as SearchIcon, X, Music } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Search as SearchIcon, X, Music, Clock, History, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
@@ -24,17 +24,80 @@ const genres = [
   { name: 'Country', color: 'from-lime-500 to-green-500' },
 ];
 
+const RECENT_SEARCHES_KEY = 'recentSearches';
+const RECENT_ITEMS_KEY = 'recentSearchItems';
+const MAX_RECENT = 5;
+
+interface RecentItem {
+  type: 'track' | 'artist' | 'album' | 'playlist';
+  id: string;
+  title: string;
+  subtitle?: string;
+  coverUrl?: string;
+  timestamp: number;
+}
+
 const Search: React.FC = () => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [results, setResults] = useState<{
     artists: Artist[];
     albums: Album[];
     tracks: Track[];
     playlists: DeezerPlaylist[];
   } | null>(null);
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
   const navigate = useNavigate();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Load recent searches and items from localStorage
+  useEffect(() => {
+    const storedSearches = localStorage.getItem(RECENT_SEARCHES_KEY);
+    if (storedSearches) {
+      setRecentSearches(JSON.parse(storedSearches));
+    }
+    const storedItems = localStorage.getItem(RECENT_ITEMS_KEY);
+    if (storedItems) {
+      setRecentItems(JSON.parse(storedItems));
+    }
+  }, []);
+
+  // Save a search query to recent searches
+  const saveRecentSearch = useCallback((searchQuery: string) => {
+    if (!searchQuery.trim()) return;
+    
+    setRecentSearches((prev) => {
+      const filtered = prev.filter((s) => s.toLowerCase() !== searchQuery.toLowerCase());
+      const updated = [searchQuery, ...filtered].slice(0, MAX_RECENT);
+      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  // Save a recent item (track, artist, album, playlist)
+  const saveRecentItem = useCallback((item: Omit<RecentItem, 'timestamp'>) => {
+    setRecentItems((prev) => {
+      const filtered = prev.filter((i) => !(i.type === item.type && i.id === item.id));
+      const updated = [{ ...item, timestamp: Date.now() }, ...filtered].slice(0, MAX_RECENT);
+      localStorage.setItem(RECENT_ITEMS_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  // Clear recent searches
+  const clearRecentSearches = useCallback(() => {
+    setRecentSearches([]);
+    localStorage.removeItem(RECENT_SEARCHES_KEY);
+  }, []);
+
+  // Clear recent items
+  const clearRecentItems = useCallback(() => {
+    setRecentItems([]);
+    localStorage.removeItem(RECENT_ITEMS_KEY);
+  }, []);
 
   // Normalize string for matching (remove accents, lowercase, trim)
   const normalizeForMatch = (str: string): string => {
@@ -96,13 +159,18 @@ const Search: React.FC = () => {
         tracks: filteredTracks,
         playlists: playlists,
       });
+
+      // Save to recent searches when we get results
+      if (filteredArtists.length > 0 || filteredAlbums.length > 0 || filteredTracks.length > 0 || playlists.length > 0) {
+        saveRecentSearch(searchQuery);
+      }
     } catch (error) {
       console.error('Search error:', error);
       setResults({ artists: [], albums: [], tracks: [], playlists: [] });
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [saveRecentSearch]);
 
   const debouncedSearch = useDebounce(performSearch, 500);
 
@@ -110,6 +178,39 @@ const Search: React.FC = () => {
     setQuery(value);
     debouncedSearch(value);
   };
+
+  const handleRecentSearchClick = (search: string) => {
+    setQuery(search);
+    performSearch(search);
+  };
+
+  const handleRecentItemClick = (item: RecentItem) => {
+    switch (item.type) {
+      case 'artist':
+        navigate(`/artist/${item.id}`);
+        break;
+      case 'album':
+        navigate(`/album/${item.id}`);
+        break;
+      case 'playlist':
+        navigate(`/deezer-playlist/${item.id}`);
+        break;
+      case 'track':
+        // For tracks, we just update the item as "opened" but stay on search
+        break;
+    }
+  };
+
+  // Expose save function globally for other components to use
+  useEffect(() => {
+    (window as any).__saveRecentSearchItem = saveRecentItem;
+    return () => {
+      delete (window as any).__saveRecentSearchItem;
+    };
+  }, [saveRecentItem]);
+
+  const showRecentSection = isFocused && !query && !results && !isLoading;
+  const showGenres = !isFocused && !query && !results && !isLoading;
 
   return (
     <div className="p-4 md:p-8 pb-32 animate-fade-in">
@@ -119,10 +220,13 @@ const Search: React.FC = () => {
         <div className="relative">
           <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
+            ref={inputRef}
             type="text"
             placeholder={t('searchPlaceholder')}
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setTimeout(() => setIsFocused(false), 200)}
             className="pl-12 pr-12 h-12 md:h-14 text-base md:text-lg rounded-full bg-secondary"
           />
           {query && (
@@ -143,6 +247,110 @@ const Search: React.FC = () => {
         <SearchResultsSkeleton />
       )}
 
+      {/* Recent Searches & Items (when focused on empty search) */}
+      {showRecentSection && (
+        <div className="space-y-6">
+          {/* Recent Searches */}
+          {recentSearches.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <History className="w-4 h-4 text-muted-foreground" />
+                  <h2 className="text-sm font-medium text-muted-foreground">
+                    {settings.language === 'it' ? 'Ricerche recenti' : 'Recent searches'}
+                  </h2>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={clearRecentSearches}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  {settings.language === 'it' ? 'Cancella' : 'Clear'}
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {recentSearches.map((search, index) => (
+                  <TapArea
+                    key={`${search}-${index}`}
+                    onTap={() => handleRecentSearchClick(search)}
+                    className="px-3 py-2 rounded-full bg-secondary hover:bg-secondary/80 text-sm text-foreground cursor-pointer transition-colors"
+                  >
+                    {search}
+                  </TapArea>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Recent Items */}
+          {recentItems.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <h2 className="text-sm font-medium text-muted-foreground">
+                    {settings.language === 'it' ? 'Aperti di recente' : 'Recently opened'}
+                  </h2>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={clearRecentItems}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  {settings.language === 'it' ? 'Cancella' : 'Clear'}
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {recentItems.map((item) => (
+                  <TapArea
+                    key={`${item.type}-${item.id}`}
+                    onTap={() => handleRecentItemClick(item)}
+                    className="flex items-center gap-3 p-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors cursor-pointer"
+                  >
+                    <div className={`w-12 h-12 rounded${item.type === 'artist' ? '-full' : '-lg'} overflow-hidden bg-muted flex-shrink-0`}>
+                      {item.coverUrl ? (
+                        <img src={item.coverUrl} alt={item.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Music className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {item.subtitle || (
+                          item.type === 'artist' ? (settings.language === 'it' ? 'Artista' : 'Artist') :
+                          item.type === 'album' ? 'Album' :
+                          item.type === 'playlist' ? 'Playlist' :
+                          (settings.language === 'it' ? 'Brano' : 'Track')
+                        )}
+                      </p>
+                    </div>
+                  </TapArea>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Empty state */}
+          {recentSearches.length === 0 && recentItems.length === 0 && (
+            <div className="text-center py-8">
+              <History className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+              <p className="text-muted-foreground text-sm">
+                {settings.language === 'it' 
+                  ? 'Nessuna ricerca recente' 
+                  : 'No recent searches'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Results */}
       {!isLoading && results && (
         <div className="space-y-8 md:space-y-10">
@@ -152,7 +360,17 @@ const Search: React.FC = () => {
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">{t('artists')}</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
                 {results.artists.slice(0, 6).map((artist) => (
-                  <ArtistCard key={artist.id} artist={artist} />
+                  <div 
+                    key={artist.id}
+                    onClick={() => saveRecentItem({ 
+                      type: 'artist', 
+                      id: artist.id, 
+                      title: artist.name,
+                      coverUrl: artist.imageUrl 
+                    })}
+                  >
+                    <ArtistCard artist={artist} />
+                  </div>
                 ))}
               </div>
             </section>
@@ -164,7 +382,18 @@ const Search: React.FC = () => {
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">{t('albums')}</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
                 {results.albums.slice(0, 6).map((album) => (
-                  <AlbumCard key={album.id} album={album} />
+                  <div 
+                    key={album.id}
+                    onClick={() => saveRecentItem({ 
+                      type: 'album', 
+                      id: album.id, 
+                      title: album.title,
+                      subtitle: album.artist,
+                      coverUrl: album.coverUrl 
+                    })}
+                  >
+                    <AlbumCard album={album} />
+                  </div>
                 ))}
               </div>
             </section>
@@ -178,7 +407,16 @@ const Search: React.FC = () => {
                 {results.playlists.slice(0, 6).map((playlist) => (
                   <TapArea
                     key={playlist.id}
-                    onTap={() => navigate(`/deezer-playlist/${playlist.id}`)}
+                    onTap={() => {
+                      saveRecentItem({ 
+                        type: 'playlist', 
+                        id: String(playlist.id), 
+                        title: playlist.title,
+                        subtitle: `${playlist.trackCount} brani • ${playlist.creator}`,
+                        coverUrl: playlist.coverUrl 
+                      });
+                      navigate(`/deezer-playlist/${playlist.id}`);
+                    }}
                     className="group cursor-pointer"
                   >
                     <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-2 relative">
@@ -208,12 +446,22 @@ const Search: React.FC = () => {
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">{t('tracks')}</h2>
               <div className="space-y-1">
                 {results.tracks.slice(0, 10).map((track, index) => (
-                  <TrackCard 
-                    key={track.id} 
-                    track={track} 
-                    queue={results.tracks}
-                    index={index}
-                  />
+                  <div
+                    key={track.id}
+                    onClick={() => saveRecentItem({ 
+                      type: 'track', 
+                      id: track.id, 
+                      title: track.title,
+                      subtitle: track.artist,
+                      coverUrl: track.coverUrl 
+                    })}
+                  >
+                    <TrackCard 
+                      track={track} 
+                      queue={results.tracks}
+                      index={index}
+                    />
+                  </div>
                 ))}
               </div>
             </section>
@@ -230,8 +478,8 @@ const Search: React.FC = () => {
         </div>
       )}
 
-      {/* Browse Genres */}
-      {!isLoading && !results && (
+      {/* Browse Genres (only when not focused) */}
+      {showGenres && (
         <div>
           <h2 className="text-lg md:text-xl font-bold text-foreground mb-4 md:mb-6">{t('exploreByGenre')}</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
