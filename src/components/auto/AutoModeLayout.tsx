@@ -17,28 +17,28 @@ const AutoModeLayout: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-[150] bg-background flex">
-      {/* Left Menu */}
-      <div className="w-24 md:w-32 bg-card border-r border-border flex flex-col py-4">
+    <div className="fixed inset-0 z-[150] bg-background flex flex-row h-screen w-screen overflow-hidden">
+      {/* Left Menu - Horizontal in landscape */}
+      <div className="w-28 min-w-[112px] bg-card border-r border-border flex flex-col justify-center py-2 shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "flex flex-col items-center justify-center py-6 gap-2 transition-all",
+              "flex flex-col items-center justify-center py-5 gap-2 transition-all mx-2 my-1 rounded-xl",
               activeTab === tab.id 
-                ? "bg-primary/20 text-primary border-r-2 border-primary" 
+                ? "bg-primary text-primary-foreground" 
                 : "text-muted-foreground hover:bg-secondary"
             )}
           >
-            <tab.icon className="w-8 h-8" />
-            <span className="text-xs font-medium">{tab.label}</span>
+            <tab.icon className="w-7 h-7" />
+            <span className="text-[10px] font-medium leading-tight">{tab.label}</span>
           </button>
         ))}
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
+      {/* Main Content - Takes remaining space */}
+      <div className="flex-1 overflow-hidden h-full">
         {activeTab === 'playback' && <AutoPlaybackView />}
         {activeTab === 'search' && <AutoSearchView />}
         {activeTab === 'library' && <AutoLibraryView />}

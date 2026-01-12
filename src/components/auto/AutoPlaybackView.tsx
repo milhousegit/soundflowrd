@@ -28,20 +28,22 @@ const AutoPlaybackView: React.FC = () => {
 
   if (!currentTrack) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-32 h-32 rounded-2xl bg-muted flex items-center justify-center mb-6">
-          <Music className="w-16 h-16 text-muted-foreground" />
+      <div className="h-full flex flex-row items-center justify-center p-6 gap-8">
+        <div className="w-40 h-40 rounded-2xl bg-muted flex items-center justify-center">
+          <Music className="w-20 h-20 text-muted-foreground" />
         </div>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Nessuna riproduzione</h2>
-        <p className="text-muted-foreground">Cerca o seleziona un brano per iniziare</p>
+        <div className="text-left">
+          <h2 className="text-2xl font-bold text-foreground mb-2">Nessuna riproduzione</h2>
+          <p className="text-muted-foreground">Cerca o seleziona un brano</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col md:flex-row items-center justify-center p-6 md:p-12 gap-8">
-      {/* Album Art */}
-      <div className="w-48 h-48 md:w-64 md:h-64 lg:w-80 lg:h-80 rounded-2xl overflow-hidden shadow-2xl flex-shrink-0">
+    <div className="h-full flex flex-row items-center justify-center px-8 py-4 gap-8">
+      {/* Album Art - Left side */}
+      <div className="h-[70vh] aspect-square max-h-[300px] rounded-2xl overflow-hidden shadow-2xl shrink-0">
         {currentTrack.coverUrl ? (
           <img 
             src={currentTrack.coverUrl} 
@@ -50,49 +52,49 @@ const AutoPlaybackView: React.FC = () => {
           />
         ) : (
           <div className="w-full h-full bg-muted flex items-center justify-center">
-            <Music className="w-24 h-24 text-muted-foreground" />
+            <Music className="w-20 h-20 text-muted-foreground" />
           </div>
         )}
       </div>
 
-      {/* Track Info & Controls */}
-      <div className="flex flex-col items-center md:items-start flex-1 max-w-lg">
+      {/* Track Info & Controls - Right side */}
+      <div className="flex flex-col justify-center flex-1 max-w-md">
         {/* Track Info */}
-        <div className="text-center md:text-left mb-8">
-          <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-2 line-clamp-2">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-foreground mb-1 line-clamp-1">
             {currentTrack.title}
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground mb-1">
+          <p className="text-lg text-muted-foreground line-clamp-1">
             {currentTrack.artist}
           </p>
           {currentTrack.album && (
-            <p className="text-sm md:text-base text-muted-foreground/70">
+            <p className="text-sm text-muted-foreground/70 line-clamp-1">
               {currentTrack.album}
             </p>
           )}
         </div>
 
         {/* Main Controls */}
-        <div className="flex items-center gap-6 mb-8">
+        <div className="flex items-center gap-4 mb-6">
           <Button
             variant="ghost"
             size="icon"
             onClick={previous}
-            className="w-16 h-16"
+            className="w-14 h-14"
           >
-            <SkipBack className="w-10 h-10" />
+            <SkipBack className="w-8 h-8" />
           </Button>
           
           <Button
             variant="player"
             size="icon"
             onClick={toggle}
-            className="w-20 h-20"
+            className="w-18 h-18"
           >
             {isPlaying ? (
-              <Pause className="w-12 h-12" />
+              <Pause className="w-10 h-10" />
             ) : (
-              <Play className="w-12 h-12 ml-1" />
+              <Play className="w-10 h-10 ml-1" />
             )}
           </Button>
           
@@ -100,23 +102,23 @@ const AutoPlaybackView: React.FC = () => {
             variant="ghost"
             size="icon"
             onClick={next}
-            className="w-16 h-16"
+            className="w-14 h-14"
           >
-            <SkipForward className="w-10 h-10" />
+            <SkipForward className="w-8 h-8" />
           </Button>
         </div>
 
         {/* Secondary Controls */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
             onClick={handleToggleFavorite}
-            className="w-12 h-12"
+            className="w-11 h-11"
           >
             <Heart 
               className={cn(
-                "w-7 h-7",
+                "w-6 h-6",
                 isLiked ? "fill-primary text-primary" : "text-muted-foreground"
               )} 
             />
@@ -126,14 +128,14 @@ const AutoPlaybackView: React.FC = () => {
             variant="ghost"
             size="icon"
             onClick={toggleShuffle}
-            className={cn("w-12 h-12", isShuffled && "text-primary")}
+            className={cn("w-11 h-11", isShuffled && "text-primary")}
           >
-            <Shuffle className="w-7 h-7" />
+            <Shuffle className="w-6 h-6" />
           </Button>
           
-          <div className="flex items-center gap-2 px-3 py-2 bg-secondary rounded-lg">
-            <ListMusic className="w-5 h-5 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">{queue.length} in coda</span>
+          <div className="flex items-center gap-2 px-3 py-2 bg-secondary rounded-lg ml-2">
+            <ListMusic className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">{queue.length}</span>
           </div>
         </div>
       </div>
