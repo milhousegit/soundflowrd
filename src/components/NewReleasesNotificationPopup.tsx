@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Bell, X } from 'lucide-react';
 
 const POPUP_DISMISSED_KEY = 'newReleasesNotificationDismissed';
-const VAPID_PUBLIC_KEY = 'BNbxGYNMhEIi9zrneh7mqBH0Hc-g5Y2hLGYC4HPb5uDz1RJdwMNgPpY-4O4wQ9y9LcWPb4IjK6O8YHu7o6FJfhM';
 
 export const NewReleasesNotificationPopup: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
@@ -64,6 +63,14 @@ export const NewReleasesNotificationPopup: React.FC = () => {
       const permission = await Notification.requestPermission();
       
       if (permission === 'granted') {
+        // Get VAPID public key from edge function
+        const { data: vapidData, error: vapidError } = await supabase.functions.invoke('get-vapid-key');
+        
+        if (vapidError || !vapidData?.publicKey) {
+          console.error('Failed to get VAPID key:', vapidError);
+          return;
+        }
+
         // Register service worker if not already registered
         const registration = await navigator.serviceWorker.register('/sw.js');
         await navigator.serviceWorker.ready;
@@ -71,7 +78,7 @@ export const NewReleasesNotificationPopup: React.FC = () => {
         // Subscribe to push notifications
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: VAPID_PUBLIC_KEY,
+          applicationServerKey: vapidData.publicKey,
         });
 
         const subscriptionJson = subscription.toJSON();

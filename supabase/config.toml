@@ -15,3 +15,9 @@ verify_jwt = false
 [functions.check-new-releases]
 verify_jwt = false
 schedule = "0 8 * * *"
+
+[functions.get-vapid-key]
+verify_jwt = false
+
+[functions.send-broadcast-notification]
+verify_jwt = false
