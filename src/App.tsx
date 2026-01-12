@@ -10,7 +10,7 @@ import { AutoModeProvider, useAutoMode } from "@/components/auto/AutoModeContext
 import Login from "@/components/Login";
 import Layout from "@/components/Layout";
 import InstallPrompt from "@/components/InstallPrompt";
-import NewReleasesNotificationPopup from "@/components/NewReleasesNotificationPopup";
+
 import LandscapeBlocker from "@/components/LandscapeBlocker";
 import AutoModePrompt from "@/components/auto/AutoModePrompt";
 import AutoModeLayout from "@/components/auto/AutoModeLayout";
@@ -92,7 +92,6 @@ const AppContent = () => {
       <Toaster />
       <Sonner position="top-center" />
       <InstallPrompt />
-      <NewReleasesNotificationPopup />
       <LandscapeBlocker />
       <AutoModePrompt />
       <BrowserRouter>
