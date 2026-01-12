@@ -63,12 +63,45 @@ const Info: React.FC = () => {
             </h2>
           </div>
           
-          <div className="p-3 md:p-4 rounded-xl bg-card">
+          <div className="p-3 md:p-4 rounded-xl bg-card space-y-4">
             <p className="text-sm text-muted-foreground leading-relaxed">
               {isItalian 
-                ? 'SoundFlow rispetta la tua privacy. I tuoi dati personali (email, preferenze, cronologia di ascolto) vengono memorizzati in modo sicuro e non vengono mai condivisi con terze parti. Le API key che inserisci sono crittografate e accessibili solo a te.'
-                : 'SoundFlow respects your privacy. Your personal data (email, preferences, listening history) is stored securely and never shared with third parties. API keys you enter are encrypted and accessible only to you.'}
+                ? "SoundFlow rispetta pienamente la tua privacy e si impegna a proteggere i tuoi dati personali. Le informazioni fornite, come email, preferenze e cronologia di ascolto, vengono conservate in modo sicuro e non vengono mai condivise con terze parti."
+                : "SoundFlow fully respects your privacy and is committed to protecting your personal data. Information provided, such as email, preferences, and listening history, is stored securely and never shared with third parties."}
             </p>
+            
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-1">
+                {isItalian ? "Sicurezza dei dati e delle chiavi API" : "Data and API Key Security"}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {isItalian 
+                  ? "Eventuali API key inserite all'interno dell'app sono crittografate e accessibili esclusivamente a te. SoundFlow non visualizza né memorizza le tue credenziali in forma leggibile."
+                  : "Any API keys entered within the app are encrypted and accessible only to you. SoundFlow does not view or store your credentials in readable form."}
+              </p>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-1">
+                {isItalian ? "Personalizzazione dell'esperienza" : "Experience Personalization"}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {isItalian 
+                  ? "Quando metti \"Mi piace\" a artisti, brani o album, accetti che questi dati vengano utilizzati unicamente per migliorare la tua esperienza d'uso, attraverso suggerimenti e raccomandazioni personalizzate gestite da un algoritmo interno. Puoi interrompere questa raccolta dati in qualsiasi momento semplicemente non utilizzando la funzione \"Mi piace\" o rimuovendo i \"Mi piace\" già assegnati."
+                  : "When you \"like\" artists, tracks, or albums, you agree that this data will be used solely to improve your experience through personalized suggestions and recommendations managed by an internal algorithm. You can stop this data collection at any time by simply not using the \"like\" feature or removing existing likes."}
+              </p>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-1">
+                {isItalian ? "Richiesta di accesso o cancellazione dei dati" : "Data Access or Deletion Request"}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {isItalian 
+                  ? "Hai sempre il diritto di chiedere l'accesso, la modifica o la cancellazione di tutti i dati in nostro possesso. Per esercitare questo diritto, puoi contattarci all'indirizzo email: milhousedhl@proton.me."
+                  : "You always have the right to request access, modification, or deletion of all data we hold. To exercise this right, you can contact us at: milhousedhl@proton.me."}
+              </p>
+            </div>
           </div>
         </section>
 
