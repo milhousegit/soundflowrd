@@ -87,6 +87,23 @@ const AppRoutes = () => {
   );
 };
 
+const AppContent = () => {
+  return (
+    <>
+      <Toaster />
+      <Sonner position="top-center" />
+      <InstallPrompt />
+      <NewReleasesNotificationPopup />
+      <LandscapeBlocker />
+      <AutoModePrompt />
+      <SilentAudioKeepAlive />
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -94,16 +111,7 @@ const App = () => (
         <PlayerProvider>
           <AutoModeProvider>
             <TooltipProvider>
-              <Toaster />
-              <Sonner position="top-center" />
-              <InstallPrompt />
-              <NewReleasesNotificationPopup />
-              <LandscapeBlocker />
-              <AutoModePrompt />
-              <SilentAudioKeepAlive />
-              <BrowserRouter>
-                <AppRoutes />
-              </BrowserRouter>
+              <AppContent />
             </TooltipProvider>
           </AutoModeProvider>
         </PlayerProvider>
