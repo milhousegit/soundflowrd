@@ -3,9 +3,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { verifyApiKey } from '@/lib/realdebrid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Music2, Mail, Lock, Key, Headphones, Loader2, AlertCircle, UserPlus, LogIn, CheckCircle } from 'lucide-react';
+import { Music2, Mail, Lock, Key, Loader2, AlertCircle, UserPlus, LogIn, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
+import appLogo from '@/assets/logo.png';
 
 const loginSchema = z.object({
   email: z.string().email('Email non valida'),
@@ -134,9 +135,11 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="text-center mb-6 md:mb-8 animate-fade-in">
-          <div className="inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-2xl gradient-primary shadow-glow mb-4 md:mb-6">
-            <Headphones className="w-8 h-8 md:w-10 md:h-10 text-primary-foreground" />
-          </div>
+          <img 
+            src={appLogo} 
+            alt="SoundFlow Logo" 
+            className="w-20 h-20 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 rounded-2xl shadow-glow"
+          />
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">SoundFlow</h1>
           <p className="text-sm md:text-base text-muted-foreground">Il tuo player musicale personale</p>
         </div>
