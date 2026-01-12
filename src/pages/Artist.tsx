@@ -198,12 +198,34 @@ const Artist: React.FC = () => {
         </section>
       )}
 
-      {/* Latest Release */}
+      {/* Latest Release - Horizontal banner */}
       {latestRelease && (
         <section className="px-4 md:px-8 mb-8 md:mb-10">
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-3 md:mb-4">Ultima uscita</h2>
-          <div className="max-w-xs">
-            <AlbumCard album={{ ...latestRelease, artist: artist.name, artistId: artist.id }} />
+          <div 
+            className="flex items-center gap-4 p-3 rounded-xl bg-card hover:bg-card/80 transition-colors cursor-pointer group"
+            onClick={() => window.location.href = `/album/${latestRelease.id}`}
+          >
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+              {latestRelease.coverUrl ? (
+                <img 
+                  src={latestRelease.coverUrl} 
+                  alt={latestRelease.title} 
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Disc className="w-8 h-8 text-muted-foreground" />
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-foreground truncate">{latestRelease.title}</p>
+              <p className="text-sm text-muted-foreground truncate">{artist.name}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {latestRelease.releaseDate ? new Date(latestRelease.releaseDate).getFullYear() : ''} • {(latestRelease as any).recordType === 'single' ? 'Singolo' : (latestRelease as any).recordType === 'ep' ? 'EP' : 'Album'}
+              </p>
+            </div>
           </div>
         </section>
       )}
@@ -215,7 +237,11 @@ const Artist: React.FC = () => {
           <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex gap-3 md:gap-4 pb-4">
               {artistPlaylists.map((playlist) => (
-                <div key={playlist.id} className="flex-shrink-0 w-36 md:w-44">
+                <div 
+                  key={playlist.id} 
+                  className="flex-shrink-0 w-32 md:w-40"
+                  onClick={() => window.location.href = `/deezer-playlist/${playlist.id}`}
+                >
                   <div className="group relative cursor-pointer">
                     <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-2">
                       {playlist.coverUrl ? (
@@ -251,7 +277,7 @@ const Artist: React.FC = () => {
           <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex gap-3 md:gap-4 pb-4">
               {albums.map((album) => (
-                <div key={album.id} className="flex-shrink-0 w-36 md:w-44">
+                <div key={album.id} className="flex-shrink-0 w-32 md:w-40">
                   <AlbumCard album={{ ...album, artist: artist.name, artistId: artist.id }} />
                 </div>
               ))}
@@ -268,7 +294,7 @@ const Artist: React.FC = () => {
           <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex gap-3 md:gap-4 pb-4">
               {singlesAndEps.map((album) => (
-                <div key={album.id} className="flex-shrink-0 w-36 md:w-44">
+                <div key={album.id} className="flex-shrink-0 w-32 md:w-40">
                   <AlbumCard album={{ ...album, artist: artist.name, artistId: artist.id }} />
                 </div>
               ))}
