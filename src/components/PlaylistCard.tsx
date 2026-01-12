@@ -21,7 +21,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist }) => {
           <img
             src={playlist.cover_url}
             alt={playlist.name}
-            className="w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">

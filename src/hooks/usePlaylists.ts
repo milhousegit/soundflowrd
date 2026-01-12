@@ -10,6 +10,7 @@ export interface Playlist {
   description: string | null;
   cover_url: string | null;
   spotify_url: string | null;
+  deezer_id: string | null;
   is_synced: boolean;
   track_count: number;
   created_at: string;
@@ -66,7 +67,8 @@ export const usePlaylists = () => {
     name: string,
     coverUrl?: string,
     description?: string,
-    spotifyUrl?: string
+    spotifyUrl?: string,
+    deezerId?: string
   ): Promise<Playlist | null> => {
     if (!user) {
       toast.error('Devi essere loggato per creare una playlist');
@@ -82,6 +84,7 @@ export const usePlaylists = () => {
           cover_url: coverUrl || null,
           description: description || null,
           spotify_url: spotifyUrl || null,
+          deezer_id: deezerId || null,
         })
         .select()
         .single();

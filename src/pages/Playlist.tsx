@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePlaylists, PlaylistTrack, Playlist as PlaylistType } from '@/hooks/usePlaylists';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
 import { useSyncAlbum } from '@/hooks/useSyncAlbum';
+import { getDeezerPlaylist } from '@/lib/deezer';
 import { Track, Album } from '@/types/music';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -73,26 +74,40 @@ const PlaylistPage: React.FC = () => {
 
         if (playlistError) throw playlistError;
         
-        setPlaylist(playlistData as PlaylistType);
-        setEditedName(playlistData.name);
-        setEditedCoverUrl(playlistData.cover_url || '');
+        const fetchedPlaylist = playlistData as PlaylistType;
+        setPlaylist(fetchedPlaylist);
+        setEditedName(fetchedPlaylist.name);
+        setEditedCoverUrl(fetchedPlaylist.cover_url || '');
 
-        // Fetch tracks
-        const playlistTracks = await getPlaylistTracks(id);
-        
-        // Convert to Track format
-        const convertedTracks: Track[] = playlistTracks.map((pt: PlaylistTrack) => ({
-          id: pt.track_id,
-          title: pt.track_title,
-          artist: pt.track_artist,
-          album: pt.track_album || '',
-          albumId: pt.track_album_id || '',
-          coverUrl: pt.track_cover_url || '',
-          duration: pt.track_duration,
-          artistId: '',
-        }));
-        
-        setTracks(convertedTracks);
+        // Check if this is a Deezer playlist (has deezer_id)
+        if (fetchedPlaylist.deezer_id) {
+          // Load tracks from Deezer API
+          try {
+            const deezerPlaylist = await getDeezerPlaylist(fetchedPlaylist.deezer_id);
+            setTracks(deezerPlaylist.tracks);
+          } catch (deezerError) {
+            console.error('Failed to fetch Deezer playlist tracks:', deezerError);
+            toast.error('Errore nel caricamento dei brani da Deezer');
+            setTracks([]);
+          }
+        } else {
+          // Load tracks from local database
+          const playlistTracks = await getPlaylistTracks(id);
+          
+          // Convert to Track format
+          const convertedTracks: Track[] = playlistTracks.map((pt: PlaylistTrack) => ({
+            id: pt.track_id,
+            title: pt.track_title,
+            artist: pt.track_artist,
+            album: pt.track_album || '',
+            albumId: pt.track_album_id || '',
+            coverUrl: pt.track_cover_url || '',
+            duration: pt.track_duration,
+            artistId: '',
+          }));
+          
+          setTracks(convertedTracks);
+        }
       } catch (error) {
         console.error('Failed to fetch playlist:', error);
         toast.error('Playlist non trovata');
@@ -194,7 +209,7 @@ const PlaylistPage: React.FC = () => {
 
         {/* Info */}
         <div className="flex-1 min-w-0 text-center md:text-left">
-          <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">Playlist</p>
+          <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">{playlist.deezer_id ? 'Playlist Deezer' : 'Playlist'}</p>
           
           {isEditing ? (
             <div className="space-y-2 max-w-md">
@@ -262,15 +277,17 @@ const PlaylistPage: React.FC = () => {
           size="lg"
         />
 
-        {/* Edit button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsEditing(true)}
-          className="w-12 h-12"
-        >
-          <Pencil className="w-5 h-5 text-muted-foreground" />
-        </Button>
+        {/* Edit button - only for non-Deezer playlists */}
+        {!playlist.deezer_id && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsEditing(true)}
+            className="w-12 h-12"
+          >
+            <Pencil className="w-5 h-5 text-muted-foreground" />
+          </Button>
+        )}
 
         {/* Sync playlist button */}
         {credentials?.realDebridApiKey && tracks.length > 0 && (

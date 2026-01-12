@@ -30,7 +30,7 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
           <img 
             src={album.coverUrl} 
             alt={album.title} 
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
