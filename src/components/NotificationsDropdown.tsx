@@ -23,6 +23,7 @@ interface NewRelease {
   albumId: string;
   coverUrl: string;
   releaseDate?: string;
+  isSingle?: boolean;
 }
 
 export const NotificationsDropdown: React.FC = () => {
@@ -41,10 +42,10 @@ export const NotificationsDropdown: React.FC = () => {
     const fetchNewReleases = async () => {
       setIsLoading(true);
       try {
-        // Get tracked artists for this user
+        // Get tracked artists for this user with their tracking start date
         const { data: trackedArtists, error } = await supabase
           .from('artist_release_tracking')
-          .select('artist_id, artist_name, last_album_id')
+          .select('artist_id, artist_name, last_album_id, created_at')
           .eq('user_id', user.id);
 
         if (error || !trackedArtists?.length) {
@@ -64,21 +65,29 @@ export const NotificationsDropdown: React.FC = () => {
                 album.artist?.toLowerCase().includes(artist.artist_name.toLowerCase())
             );
 
-            if (artistAlbums.length > 0) {
-              // Get newest album
-              const newestAlbum = artistAlbums[0];
+            // Filter only albums released AFTER the user started tracking this artist
+            const trackingStartDate = new Date(artist.created_at);
+            const newAlbums = artistAlbums.filter((album) => {
+              if (!album.releaseDate) return false;
+              const releaseDate = new Date(album.releaseDate);
+              return releaseDate >= trackingStartDate;
+            });
+
+            // Add each new album as a notification
+            for (const album of newAlbums) {
+              // Determine if it's a single (typically 1-3 tracks) based on record_type if available
+              const isSingle = (album as any).record_type === 'single' || 
+                              (album as any).nb_tracks <= 3;
               
-              // If we have a last_album_id and it's different, or we don't have one yet
-              if (newestAlbum.id !== artist.last_album_id) {
-                releases.push({
-                  artistName: artist.artist_name,
-                  artistId: artist.artist_id,
-                  albumTitle: newestAlbum.title,
-                  albumId: newestAlbum.id,
-                  coverUrl: newestAlbum.coverUrl || '',
-                  releaseDate: newestAlbum.releaseDate,
-                });
-              }
+              releases.push({
+                artistName: artist.artist_name,
+                artistId: artist.artist_id,
+                albumTitle: album.title,
+                albumId: album.id,
+                coverUrl: album.coverUrl || '',
+                releaseDate: album.releaseDate,
+                isSingle,
+              });
             }
           } catch (e) {
             console.error('Error checking artist releases:', e);
@@ -159,9 +168,13 @@ export const NotificationsDropdown: React.FC = () => {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{release.albumTitle}</p>
+                  <p className="text-sm font-medium">
+                    {isItalian 
+                      ? `È uscito un nuovo ${release.isSingle ? 'singolo' : 'album'} di ${release.artistName}`
+                      : `New ${release.isSingle ? 'single' : 'album'} from ${release.artistName}`}
+                  </p>
                   <p className="text-xs text-muted-foreground truncate">
-                    {release.artistName}
+                    {release.albumTitle}
                   </p>
                   {release.releaseDate && (
                     <p className="text-xs text-muted-foreground">
