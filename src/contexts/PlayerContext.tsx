@@ -301,6 +301,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [state.progress, state.duration, state.currentTrack]);
 
+  // Store iosAudio in a ref to avoid dependency issues
+  const iosAudioRef = useRef(iosAudio);
+  iosAudioRef.current = iosAudio;
+
   useEffect(() => {
     audioRef.current = new Audio();
     audioRef.current.volume = state.volume;
@@ -317,7 +321,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const handleEnded = () => {
       console.log('[PlayerContext] Track ended, triggering next');
       // On iOS, we need to keep the audio context alive before switching tracks
-      iosAudio.keepAlive();
+      iosAudioRef.current.keepAlive();
       // Small delay to ensure iOS audio session doesn't get interrupted
       setTimeout(() => {
         nextRef.current();
@@ -340,13 +344,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const handleError = (e: Event) => {
       console.error('[PlayerContext] Audio error:', e);
       // Try to recover by keeping audio session alive
-      iosAudio.keepAlive();
+      iosAudioRef.current.keepAlive();
     };
 
     // Handle stalled/waiting - iOS sometimes stalls between tracks
     const handleStalled = () => {
       console.log('[PlayerContext] Audio stalled, attempting recovery');
-      iosAudio.keepAlive();
+      iosAudioRef.current.keepAlive();
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -401,7 +405,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       audio.pause();
       audio.src = '';
     };
-  }, [iosAudio]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const tryUnlockAudioFromUserGesture = useCallback(() => {
     iosAudio.quickUnlock();
