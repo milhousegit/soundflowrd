@@ -298,6 +298,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         audio.pause();
         setState((prev) => ({ ...prev, isPlaying: false }));
       });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        previousRef.current();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        nextRef.current();
+      });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (details.seekTime !== undefined && audio.duration) {
           audio.currentTime = details.seekTime;
@@ -933,12 +939,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     previousRef.current = previous;
   }, [next, previous]);
 
-  // Set up Media Session next/previous handlers once (using refs)
-  useEffect(() => {
-    if (!('mediaSession' in navigator)) return;
-    navigator.mediaSession.setActionHandler('previoustrack', () => previousRef.current());
-    navigator.mediaSession.setActionHandler('nexttrack', () => nextRef.current());
-  }, []);
+  // Note: Media Session next/previous handlers are set up in the audio initialization useEffect
 
   // Auto-poll downloading torrents (kept, without YouTube interplay)
   useEffect(() => {
