@@ -542,6 +542,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const isDeezerPriorityMode = audioSourceMode === 'deezer_priority';
       const hasRdKey = !!credentials?.realDebridApiKey;
 
+      // Helper to save recently played
+      const saveRecentlyPlayed = () => {
+        const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
+        const filtered = recent.filter((t: Track) => t.id !== track.id);
+        const updated = [track, ...filtered].slice(0, 20);
+        localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
+      };
+
       // =============== DEEZER/TIDAL PRIORITY MODE ===============
       if (isDeezerPriorityMode) {
         addDebugLog('🎵 Modalità HQ', `Ricerca "${track.title}" di ${track.artist} su Tidal`, 'info');
@@ -572,6 +580,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setLoadingPhase('idle');
               setCurrentAudioSource('tidal');
               
+              // Save to recently played for Deezer/Tidal mode
+              saveRecentlyPlayed();
+              
               const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
                 ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
                 : tidalResult.quality || 'LOSSLESS';
@@ -589,6 +600,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 setState((prev) => ({ ...prev, isPlaying: false }));
                 setLoadingPhase('idle');
                 setCurrentAudioSource('tidal');
+                saveRecentlyPlayed();
                 return;
               }
               throw playError;
@@ -616,13 +628,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         });
         return;
       }
-
-      const saveRecentlyPlayed = () => {
-        const recent = JSON.parse(localStorage.getItem('recentlyPlayed') || '[]');
-        const filtered = recent.filter((t: Track) => t.id !== track.id);
-        const updated = [track, ...filtered].slice(0, 20);
-        localStorage.setItem('recentlyPlayed', JSON.stringify(updated));
-      };
 
       addDebugLog('🎵 Inizio riproduzione', `"${track.title}" di ${track.artist}`, 'info');
 

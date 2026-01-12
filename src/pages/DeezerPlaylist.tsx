@@ -17,7 +17,7 @@ const DeezerPlaylistPage: React.FC = () => {
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { t } = useSettings();
-  const { createPlaylist, addTracksToPlaylist } = usePlaylists();
+  const { createPlaylist } = usePlaylists();
   const [playlist, setPlaylist] = useState<(DeezerPlaylist & { tracks: Track[] }) | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -66,19 +66,20 @@ const DeezerPlaylistPage: React.FC = () => {
   };
 
   const handleSaveToLibrary = async () => {
-    if (!playlist || isSaving) return;
+    if (!playlist || !id || isSaving) return;
     
     setIsSaving(true);
     try {
-      // Create a new playlist with the same name
+      // Save the Deezer playlist as a reference (not a copy)
       const newPlaylist = await createPlaylist(
         playlist.title,
-        playlist.description || `Importata da Deezer`,
-        playlist.coverUrl
+        playlist.coverUrl,
+        playlist.description || `Playlist Deezer • ${playlist.creator}`,
+        undefined, // spotifyUrl
+        id // deezerId - save the reference
       );
       
-      if (newPlaylist && playlist.tracks.length > 0) {
-        await addTracksToPlaylist(newPlaylist.id, playlist.tracks);
+      if (newPlaylist) {
         toast.success('Playlist salvata!', {
           description: `"${playlist.title}" è stata aggiunta alla tua libreria`,
         });

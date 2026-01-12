@@ -230,6 +230,7 @@ export type Database = {
         Row: {
           cover_url: string | null
           created_at: string
+          deezer_id: string | null
           description: string | null
           id: string
           is_synced: boolean | null
@@ -242,6 +243,7 @@ export type Database = {
         Insert: {
           cover_url?: string | null
           created_at?: string
+          deezer_id?: string | null
           description?: string | null
           id?: string
           is_synced?: boolean | null
@@ -254,6 +256,7 @@ export type Database = {
         Update: {
           cover_url?: string | null
           created_at?: string
+          deezer_id?: string | null
           description?: string | null
           id?: string
           is_synced?: boolean | null
