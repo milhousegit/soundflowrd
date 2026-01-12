@@ -125,12 +125,67 @@ const Info: React.FC = () => {
             </h2>
           </div>
           
-          <div className="p-3 md:p-4 rounded-xl bg-card">
+          <div className="p-3 md:p-4 rounded-xl bg-card space-y-4">
             <p className="text-sm text-muted-foreground leading-relaxed">
               {isItalian 
-                ? "Utilizzando SoundFlow accetti che l'applicazione è fornita \"così com'è\" senza garanzie. L'utente è responsabile del rispetto delle leggi sul copyright nel proprio paese. SoundFlow non ospita contenuti multimediali e si limita a fornire un'interfaccia per servizi di terze parti."
-                : 'By using SoundFlow you agree that the application is provided "as is" without warranties. Users are responsible for compliance with copyright laws in their country. SoundFlow does not host media content and only provides an interface to third-party services.'}
+                ? "Utilizzando SoundFlow, accetti integralmente i presenti Termini d'Uso. L'applicazione è fornita \"così com'è\" (as is), senza alcuna garanzia espressa o implicita riguardo a funzionalità, disponibilità o risultati attesi."
+                : 'By using SoundFlow, you fully accept these Terms of Use. The application is provided "as is", without any express or implied warranty regarding functionality, availability, or expected results.'}
             </p>
+            
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-1">
+                {isItalian ? "Responsabilità dell'utente" : "User Responsibility"}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {isItalian 
+                  ? "L'utente è l'unico responsabile del rispetto delle leggi sul copyright e dei diritti di proprietà intellettuale vigenti nel proprio Paese. Qualsiasi utilizzo di contenuti protetti deve avvenire in conformità con tali normative."
+                  : "Users are solely responsible for compliance with copyright laws and intellectual property rights in their country. Any use of protected content must comply with such regulations."}
+              </p>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-1">
+                {isItalian ? "Servizi di terze parti" : "Third-Party Services"}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {isItalian 
+                  ? "SoundFlow non ospita né distribuisce direttamente contenuti multimediali. L'applicazione fornisce unicamente un'interfaccia che consente di accedere a servizi di terze parti, i cui termini e condizioni si applicano separatamente."
+                  : "SoundFlow does not host or directly distribute multimedia content. The application only provides an interface to access third-party services, whose terms and conditions apply separately."}
+              </p>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-1">
+                {isItalian ? "Uso personale" : "Personal Use"}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {isItalian 
+                  ? "Tutti i contenuti accessibili tramite SoundFlow possono essere utilizzati esclusivamente per fini personali e non commerciali. È vietata qualsiasi forma di rivendita, copia, condivisione o redistribuzione non autorizzata."
+                  : "All content accessible through SoundFlow may only be used for personal and non-commercial purposes. Any form of resale, copying, sharing, or unauthorized redistribution is prohibited."}
+              </p>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-1">
+                {isItalian ? "Limitazione di responsabilità" : "Limitation of Liability"}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {isItalian 
+                  ? "Essendo nata come progetto sperimentale ed esercizio di stile, SoundFlow non garantisce la disponibilità continua del servizio né l'assenza di errori. Gli sviluppatori non sono responsabili per eventuali utilizzi impropri dell'app o per danni derivanti dal suo uso."
+                  : "As an experimental project and style exercise, SoundFlow does not guarantee continuous service availability or absence of errors. Developers are not responsible for any improper use of the app or damages arising from its use."}
+              </p>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-1">
+                {isItalian ? "Conformità legale" : "Legal Compliance"}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {isItalian 
+                  ? "L'uso dell'applicazione implica che l'utente si assuma ogni responsabilità per eventuali attività contrarie alle norme del proprio Paese."
+                  : "Using the application implies that users assume all responsibility for any activities contrary to the laws of their country."}
+              </p>
+            </div>
           </div>
         </section>
       </div>
