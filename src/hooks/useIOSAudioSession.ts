@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 export interface IOSAudioLog {
   timestamp: Date;
@@ -97,8 +97,7 @@ export const useIOSAudioSession = () => {
   const keepAliveIntervalRef = useRef<number | null>(null);
   const lastKeepAliveRef = useRef<number>(0);
   
-  // Track external audio routing state
-  const [isExternalDevice, setIsExternalDevice] = useState(false);
+  // Track external audio routing state with ref (no useState to avoid React issues)
   const isExternalDeviceRef = useRef(false);
 
   const addLog = useCallback((type: IOSAudioLog['type'], message: string, details?: string) => {
@@ -136,7 +135,6 @@ export const useIOSAudioSession = () => {
       const external = isExternalAudioRouting();
       if (external !== isExternalDeviceRef.current) {
         isExternalDeviceRef.current = external;
-        setIsExternalDevice(external);
         addLog('info', `External audio routing: ${external ? 'detected' : 'not detected'}`);
       }
     };
@@ -427,7 +425,7 @@ export const useIOSAudioSession = () => {
     clearLogs,
     addLog,
     isUnlocked: () => isUnlockedRef.current,
-    isExternalDevice,
+    isExternalDevice: () => isExternalDeviceRef.current,
     silentAudioRef,
     audioContextRef,
   };
