@@ -39,6 +39,7 @@ const SwipeableNotification: React.FC<SwipeableNotificationProps> = ({
   onClick,
   isItalian,
 }) => {
+  const [isRevealed, setIsRevealed] = useState(false);
   const [translateX, setTranslateX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startX = useRef(0);
@@ -53,20 +54,38 @@ const SwipeableNotification: React.FC<SwipeableNotificationProps> = ({
     if (!isDragging) return;
     currentX.current = e.touches[0].clientX;
     const diff = currentX.current - startX.current;
-    // Only allow right swipe
-    if (diff > 0) {
-      setTranslateX(Math.min(diff, 80));
+    
+    if (isRevealed) {
+      // Allow swiping left to close
+      if (diff < 0) {
+        setTranslateX(Math.max(60 + diff, 0));
+      }
+    } else {
+      // Only allow right swipe to reveal
+      if (diff > 0) {
+        setTranslateX(Math.min(diff, 60));
+      }
     }
   };
 
   const handleTouchEnd = () => {
     setIsDragging(false);
-    if (translateX > 60) {
-      // Trigger delete
-      setTranslateX(100);
-      setTimeout(() => onDelete(release.id), 200);
+    if (isRevealed) {
+      // If was revealed and swiped back
+      if (translateX < 30) {
+        setTranslateX(0);
+        setIsRevealed(false);
+      } else {
+        setTranslateX(60);
+      }
     } else {
-      setTranslateX(0);
+      // If swiping to reveal
+      if (translateX > 30) {
+        setTranslateX(60);
+        setIsRevealed(true);
+      } else {
+        setTranslateX(0);
+      }
     }
   };
 
@@ -79,40 +98,66 @@ const SwipeableNotification: React.FC<SwipeableNotificationProps> = ({
     if (!isDragging) return;
     currentX.current = e.clientX;
     const diff = currentX.current - startX.current;
-    if (diff > 0) {
-      setTranslateX(Math.min(diff, 80));
+    
+    if (isRevealed) {
+      if (diff < 0) {
+        setTranslateX(Math.max(60 + diff, 0));
+      }
+    } else {
+      if (diff > 0) {
+        setTranslateX(Math.min(diff, 60));
+      }
     }
   };
 
   const handleMouseUp = () => {
     if (!isDragging) return;
     setIsDragging(false);
-    if (translateX > 60) {
-      setTranslateX(100);
-      setTimeout(() => onDelete(release.id), 200);
+    if (isRevealed) {
+      if (translateX < 30) {
+        setTranslateX(0);
+        setIsRevealed(false);
+      } else {
+        setTranslateX(60);
+      }
     } else {
-      setTranslateX(0);
+      if (translateX > 30) {
+        setTranslateX(60);
+        setIsRevealed(true);
+      } else {
+        setTranslateX(0);
+      }
     }
   };
 
   const handleMouseLeave = () => {
     if (isDragging) {
       setIsDragging(false);
-      setTranslateX(0);
+      if (isRevealed) {
+        setTranslateX(60);
+      } else {
+        setTranslateX(0);
+      }
     }
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete(release.id);
   };
 
   return (
     <div className="relative overflow-hidden">
-      {/* Delete background */}
-      <div 
+      {/* Delete button background */}
+      <button
+        onClick={handleDeleteClick}
         className={cn(
-          "absolute inset-y-0 left-0 w-20 bg-destructive flex items-center justify-center transition-opacity",
-          translateX > 20 ? "opacity-100" : "opacity-0"
+          "absolute inset-y-0 left-0 w-[60px] bg-destructive flex items-center justify-center transition-opacity",
+          translateX > 10 ? "opacity-100" : "opacity-0"
         )}
       >
         <Trash2 className="w-5 h-5 text-destructive-foreground" />
-      </div>
+      </button>
       
       {/* Notification content */}
       <div
