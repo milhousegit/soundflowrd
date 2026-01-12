@@ -298,6 +298,51 @@ export type Database = {
         }
         Relationships: []
       }
+      recently_played: {
+        Row: {
+          artist_id: string | null
+          created_at: string | null
+          id: string
+          played_at: string | null
+          track_album: string | null
+          track_album_id: string | null
+          track_artist: string
+          track_cover_url: string | null
+          track_duration: number | null
+          track_id: string
+          track_title: string
+          user_id: string
+        }
+        Insert: {
+          artist_id?: string | null
+          created_at?: string | null
+          id?: string
+          played_at?: string | null
+          track_album?: string | null
+          track_album_id?: string | null
+          track_artist: string
+          track_cover_url?: string | null
+          track_duration?: number | null
+          track_id: string
+          track_title: string
+          user_id: string
+        }
+        Update: {
+          artist_id?: string | null
+          created_at?: string | null
+          id?: string
+          played_at?: string | null
+          track_album?: string | null
+          track_album_id?: string | null
+          track_artist?: string
+          track_cover_url?: string | null
+          track_duration?: number | null
+          track_id?: string
+          track_title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       track_file_mappings: {
         Row: {
           album_mapping_id: string
