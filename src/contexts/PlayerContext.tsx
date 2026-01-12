@@ -393,27 +393,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       });
       
-      // On iOS, DON'T register seekbackward/seekforward handlers
-      // This forces iOS to show previoustrack/nexttrack buttons instead
-      if (!isIOS) {
-        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-          const skipTime = details.seekOffset || 10;
-          audio.currentTime = Math.max(0, audio.currentTime - skipTime);
-          setState((prev) => ({ ...prev, progress: audio.currentTime }));
-        });
-        navigator.mediaSession.setActionHandler('seekforward', (details) => {
-          const skipTime = details.seekOffset || 10;
-          audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + skipTime);
-          setState((prev) => ({ ...prev, progress: audio.currentTime }));
-        });
-      } else {
-        // Explicitly set to null on iOS to ensure track buttons are shown
-        try {
-          navigator.mediaSession.setActionHandler('seekbackward', null);
-          navigator.mediaSession.setActionHandler('seekforward', null);
-        } catch (e) {
-          // Some browsers don't support setting to null
-        }
+      // Remove seek handlers to force track navigation buttons on all platforms
+      try {
+        navigator.mediaSession.setActionHandler('seekbackward', null);
+        navigator.mediaSession.setActionHandler('seekforward', null);
+      } catch (e) {
+        // Some browsers don't support setting to null
       }
     }
 
