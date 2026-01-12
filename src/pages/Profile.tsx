@@ -163,7 +163,7 @@ const Settings: React.FC = () => {
 
   return (
     <div className="p-4 md:p-8 pb-32 max-w-2xl animate-fade-in">
-      <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-6 md:mb-8">{t('settings')}</h1>
+      <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-6 md:mb-8">{t('profile')}</h1>
 
       <div className="space-y-6 md:space-y-8">
         {/* Account Section */}
