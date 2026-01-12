@@ -49,7 +49,7 @@ const Sidebar: React.FC = () => {
       {/* Footer */}
       <div className="p-4 border-t border-border">
         <p className="text-xs text-muted-foreground text-center">
-          Powered by MusicBrainz & Real-Debrid
+          Powered by Milhouse
         </p>
       </div>
     </aside>

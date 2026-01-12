@@ -652,7 +652,7 @@ const Settings: React.FC = () => {
             {settings.language === 'it' ? 'Aggiorna App' : 'Refresh App'}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            SoundFlow 0.8.1
+            SoundFlow 0.8.2
           </p>
         </div>
       </div>
