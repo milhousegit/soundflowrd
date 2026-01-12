@@ -278,16 +278,58 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     audioRef.current = new Audio();
     audioRef.current.volume = state.volume;
+    // iOS Safari requires these attributes for better background playback
+    audioRef.current.setAttribute('playsinline', '');
+    audioRef.current.setAttribute('webkit-playsinline', '');
 
     const audio = audioRef.current;
 
     const handleTimeUpdate = () => setState((prev) => ({ ...prev, progress: audio.currentTime }));
     const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
-    const handleEnded = () => nextRef.current();
+    
+    // Enhanced ended handler for iOS - ensure audio session stays alive
+    const handleEnded = () => {
+      console.log('[PlayerContext] Track ended, triggering next');
+      // On iOS, we need to keep the audio context alive before switching tracks
+      iosAudio.keepAlive();
+      // Small delay to ensure iOS audio session doesn't get interrupted
+      setTimeout(() => {
+        nextRef.current();
+      }, 50);
+    };
+
+    // Handle iOS interruptions (phone calls, Siri, etc.)
+    const handlePause = () => {
+      // Only update state if we didn't intentionally pause
+      if (!audio.ended) {
+        setState((prev) => ({ ...prev, isPlaying: false }));
+      }
+    };
+
+    const handlePlay = () => {
+      setState((prev) => ({ ...prev, isPlaying: true }));
+    };
+
+    // Handle errors - important for iOS which can have audio interruptions
+    const handleError = (e: Event) => {
+      console.error('[PlayerContext] Audio error:', e);
+      // Try to recover by keeping audio session alive
+      iosAudio.keepAlive();
+    };
+
+    // Handle stalled/waiting - iOS sometimes stalls between tracks
+    const handleStalled = () => {
+      console.log('[PlayerContext] Audio stalled, attempting recovery');
+      iosAudio.keepAlive();
+    };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('error', handleError);
+    audio.addEventListener('stalled', handleStalled);
 
     if ('mediaSession' in navigator) {
       navigator.mediaSession.setActionHandler('play', () => {
@@ -326,10 +368,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('stalled', handleStalled);
       audio.pause();
       audio.src = '';
     };
-  }, []);
+  }, [iosAudio]);
 
   const tryUnlockAudioFromUserGesture = useCallback(() => {
     iosAudio.quickUnlock();
