@@ -112,6 +112,10 @@ const Info: React.FC = () => {
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
                 WebTorrent - MIT License
               </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                Real-Debrid ({isItalian ? 'opzionale' : 'optional'}) - {isItalian ? 'Servizio di terze parti' : 'Third-party service'}
+              </li>
             </ul>
           </div>
         </section>
