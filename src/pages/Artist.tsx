@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Play, Shuffle, User, ChevronDown, ChevronUp, Disc, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ArtistPageSkeleton from '@/components/skeletons/ArtistPageSkeleton';
@@ -16,6 +16,7 @@ import { Artist as ArtistType, Album, Track } from '@/types/music';
 
 const Artist: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { t } = useSettings();
   const [artist, setArtist] = useState<ArtistType | null>(null);
@@ -204,7 +205,7 @@ const Artist: React.FC = () => {
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-3 md:mb-4">Ultima uscita</h2>
           <div 
             className="flex items-center gap-4 p-3 rounded-xl bg-card hover:bg-card/80 transition-colors cursor-pointer group"
-            onClick={() => window.location.href = `/album/${latestRelease.id}`}
+            onClick={() => navigate(`/album/${latestRelease.id}`)}
           >
             <div className="w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden bg-muted flex-shrink-0">
               {latestRelease.coverUrl ? (
@@ -240,7 +241,7 @@ const Artist: React.FC = () => {
                 <div 
                   key={playlist.id} 
                   className="flex-shrink-0 w-32 md:w-40"
-                  onClick={() => window.location.href = `/deezer-playlist/${playlist.id}`}
+                  onClick={() => navigate(`/deezer-playlist/${playlist.id}`)}
                 >
                   <div className="group relative cursor-pointer">
                     <div className="relative aspect-square rounded-lg overflow-hidden bg-muted mb-2">
