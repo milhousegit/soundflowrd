@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,6 @@ import {
   User,
   Key,
   Volume2,
-  Monitor,
   LogOut,
   ExternalLink,
   Check,
@@ -25,6 +25,10 @@ import {
   Music,
   Smartphone,
   Bell,
+  ChevronRight,
+  Info,
+  Globe,
+  Lock,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -53,6 +57,7 @@ interface CloudFile {
 }
 
 const Settings: React.FC = () => {
+  const navigate = useNavigate();
   const { profile, updateApiKey, signOut, credentials, user } = useAuth();
   const { settings, updateSettings, t, audioSourceMode, setAudioSourceMode } = useSettings();
   const { toast } = useToast();
@@ -61,6 +66,10 @@ const Settings: React.FC = () => {
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
   
   // Cloud files state
   const [cloudFiles, setCloudFiles] = useState<CloudFile[]>([]);
@@ -100,6 +109,48 @@ const Settings: React.FC = () => {
       title: settings.language === 'it' ? 'Disconnesso' : 'Logged out',
       description: settings.language === 'it' ? 'Hai effettuato il logout con successo.' : 'You have been logged out successfully.',
     });
+  };
+
+  const handlePasswordChange = async () => {
+    if (newPassword.length < 6) {
+      toast({
+        title: settings.language === 'it' ? 'Password troppo corta' : 'Password too short',
+        description: settings.language === 'it' ? 'La password deve avere almeno 6 caratteri.' : 'Password must be at least 6 characters.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: settings.language === 'it' ? 'Password non corrispondono' : 'Passwords do not match',
+        description: settings.language === 'it' ? 'Le password inserite non corrispondono.' : 'The passwords you entered do not match.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSavingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      
+      toast({
+        title: settings.language === 'it' ? 'Password aggiornata' : 'Password updated',
+        description: settings.language === 'it' ? 'La tua password è stata cambiata con successo.' : 'Your password has been changed successfully.',
+      });
+      setIsChangingPassword(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      toast({
+        title: settings.language === 'it' ? 'Errore' : 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingPassword(false);
+    }
   };
 
   const maskApiKey = (key: string) => {
@@ -173,7 +224,8 @@ const Settings: React.FC = () => {
             <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('account')}</h2>
           </div>
           
-          <div className="p-3 md:p-4 rounded-xl bg-card space-y-3 md:space-y-4">
+          <div className="p-3 md:p-4 rounded-xl bg-card space-y-4">
+            {/* Email */}
             <div>
               <label className="text-xs md:text-sm text-muted-foreground block mb-2">{t('email')}</label>
               <Input
@@ -181,6 +233,91 @@ const Settings: React.FC = () => {
                 disabled
                 className="bg-secondary text-sm md:text-base"
               />
+            </div>
+
+            {/* Password Change */}
+            <div>
+              <label className="text-xs md:text-sm text-muted-foreground block mb-2">
+                <Lock className="w-3 h-3 inline mr-1" />
+                {settings.language === 'it' ? 'Password' : 'Password'}
+              </label>
+              
+              {!isChangingPassword ? (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => setIsChangingPassword(true)}
+                >
+                  <Pencil className="w-4 h-4" />
+                  {settings.language === 'it' ? 'Cambia Password' : 'Change Password'}
+                </Button>
+              ) : (
+                <div className="space-y-3">
+                  <Input
+                    type="password"
+                    placeholder={settings.language === 'it' ? 'Nuova password' : 'New password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="bg-secondary"
+                  />
+                  <Input
+                    type="password"
+                    placeholder={settings.language === 'it' ? 'Conferma password' : 'Confirm password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="bg-secondary"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handlePasswordChange}
+                      disabled={isSavingPassword}
+                      className="flex-1 gap-2"
+                    >
+                      {isSavingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      {settings.language === 'it' ? 'Salva' : 'Save'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsChangingPassword(false);
+                        setNewPassword('');
+                        setConfirmPassword('');
+                      }}
+                      disabled={isSavingPassword}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Language */}
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-muted-foreground" />
+                <p className="text-sm md:text-base font-medium text-foreground">{t('language')}</p>
+              </div>
+              <select 
+                className="bg-secondary text-foreground rounded-lg px-3 py-2 border border-border text-sm"
+                value={settings.language}
+                onChange={(e) => updateSettings({ language: e.target.value as 'en' | 'it' })}
+              >
+                <option value="en">English</option>
+                <option value="it">Italiano</option>
+              </select>
+            </div>
+
+            {/* Logout */}
+            <div className="pt-2 border-t border-border">
+              <Button 
+                variant="destructive" 
+                onClick={handleLogout}
+                className="gap-2 w-full"
+              >
+                <LogOut className="w-4 h-4" />
+                {t('logout')}
+              </Button>
             </div>
           </div>
         </section>
@@ -549,46 +686,6 @@ const Settings: React.FC = () => {
                 <option value="low">{t('low')}</option>
               </select>
             </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm md:text-base font-medium text-foreground">{t('crossfade')}</p>
-              </div>
-              <select 
-                className="bg-secondary text-foreground rounded-lg px-3 py-2 border border-border text-sm"
-                value={settings.crossfade}
-                onChange={(e) => updateSettings({ crossfade: parseInt(e.target.value) })}
-              >
-                <option value="0">{t('off')}</option>
-                <option value="3">3 {t('seconds')}</option>
-                <option value="5">5 {t('seconds')}</option>
-                <option value="10">10 {t('seconds')}</option>
-              </select>
-            </div>
-          </div>
-        </section>
-
-        {/* Display Section */}
-        <section className="space-y-3 md:space-y-4">
-          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-            <Monitor className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-            <h2 className="text-lg md:text-xl font-semibold text-foreground">{t('display')}</h2>
-          </div>
-          
-          <div className="p-3 md:p-4 rounded-xl bg-card space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm md:text-base font-medium text-foreground">{t('language')}</p>
-              </div>
-              <select 
-                className="bg-secondary text-foreground rounded-lg px-3 py-2 border border-border text-sm"
-                value={settings.language}
-                onChange={(e) => updateSettings({ language: e.target.value as 'en' | 'it' })}
-              >
-                <option value="en">English</option>
-                <option value="it">Italiano</option>
-              </select>
-            </div>
           </div>
         </section>
 
@@ -605,8 +702,8 @@ const Settings: React.FC = () => {
             <div className="p-3 md:p-4 rounded-xl bg-card">
               <p className="text-xs text-muted-foreground mb-4">
                 {settings.language === 'it' 
-                  ? 'Invia notifiche push a tutti gli utenti iscritti.'
-                  : 'Send push notifications to all subscribed users.'}
+                  ? 'Invia notifiche in-app a tutti gli utenti.'
+                  : 'Send in-app notifications to all users.'}
               </p>
               <AdminNotifications language={settings.language} />
             </div>
@@ -629,31 +726,20 @@ const Settings: React.FC = () => {
           </section>
         )}
 
-        {/* Logout */}
+        {/* Information Link */}
         <div className="pt-4">
-          <Button 
-            variant="destructive" 
-            onClick={handleLogout}
-            className="gap-2 w-full md:w-auto"
+          <button
+            onClick={() => navigate('/info')}
+            className="w-full flex items-center justify-between p-4 rounded-xl bg-card hover:bg-card/80 transition-colors"
           >
-            <LogOut className="w-4 h-4" />
-            {t('logout')}
-          </Button>
-        </div>
-
-        {/* App Version & Refresh */}
-        <div className="pt-6 border-t border-border space-y-3">
-          <Button
-            variant="outline"
-            className="w-full gap-2"
-            onClick={() => window.location.reload()}
-          >
-            <RefreshCw className="w-4 h-4" />
-            {settings.language === 'it' ? 'Aggiorna App' : 'Refresh App'}
-          </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            SoundFlow 0.8.6
-          </p>
+            <div className="flex items-center gap-3">
+              <Info className="w-5 h-5 text-primary" />
+              <span className="font-medium text-foreground">
+                {settings.language === 'it' ? 'Informazioni' : 'Information'}
+              </span>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </button>
         </div>
       </div>
     </div>

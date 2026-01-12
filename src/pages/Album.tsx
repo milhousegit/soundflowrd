@@ -128,9 +128,9 @@ const Album: React.FC = () => {
         </div>
 
         {/* Info */}
-        <div className="flex-1 min-w-0 text-center md:text-left">
+        <div className="flex-1 min-w-0 text-center md:text-left overflow-hidden">
           <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">{t('album')}</p>
-          <h1 className="text-2xl md:text-5xl font-bold text-foreground mb-2 md:mb-4 truncate">{album.title}</h1>
+          <h1 className="text-2xl md:text-5xl font-bold text-foreground mb-2 md:mb-4 line-clamp-2 break-words">{album.title}</h1>
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-1 md:gap-2 text-xs md:text-sm text-muted-foreground">
             <button 
               onClick={() => navigate(`/artist/${album.artistId}`)}

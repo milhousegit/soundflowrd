@@ -19,6 +19,7 @@ import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Library from "@/pages/Library";
 import Profile from "@/pages/Profile";
+import Info from "@/pages/Info";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
@@ -77,6 +78,7 @@ const AppRoutes = () => {
         <Route path="search" element={<Search />} />
         <Route path="library" element={<Library />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="info" element={<Info />} />
         <Route path="artist/:id" element={<Artist />} />
         <Route path="album/:id" element={<Album />} />
         <Route path="playlist/:id" element={<Playlist />} />
