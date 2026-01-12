@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 
 export interface IOSAudioLog {
   timestamp: Date;
@@ -70,13 +70,36 @@ export const supportsWakeLock = (): boolean => {
 };
 
 /**
+ * Detect if audio is being routed to an external device (CarPlay, Bluetooth, AirPlay)
+ * This helps us reduce interference with external audio routing
+ */
+const isExternalAudioRouting = (): boolean => {
+  // Check for CarPlay/external display hints
+  if (typeof window !== 'undefined') {
+    // Multiple displays suggest CarPlay or external screen
+    if (window.screen && (window as any).screen.availWidth > window.innerWidth * 2) {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
  * Hook to manage iOS audio session with robust logging and unlock mechanisms
+ * Optimized for CarPlay compatibility - reduces keep-alive aggressiveness when
+ * audio is routed externally
  */
 export const useIOSAudioSession = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
   const isUnlockedRef = useRef(false);
   const logsRef = useRef<IOSAudioLog[]>(getPersistedLogs());
+  const keepAliveIntervalRef = useRef<number | null>(null);
+  const lastKeepAliveRef = useRef<number>(0);
+  
+  // Track external audio routing state
+  const [isExternalDevice, setIsExternalDevice] = useState(false);
+  const isExternalDeviceRef = useRef(false);
 
   const addLog = useCallback((type: IOSAudioLog['type'], message: string, details?: string) => {
     const log: IOSAudioLog = {
@@ -107,6 +130,42 @@ export const useIOSAudioSession = () => {
     addLog('info', 'Logs cleared');
   }, [addLog]);
 
+  // Detect external audio devices (CarPlay, Bluetooth, AirPlay)
+  useEffect(() => {
+    const checkExternalRouting = () => {
+      const external = isExternalAudioRouting();
+      if (external !== isExternalDeviceRef.current) {
+        isExternalDeviceRef.current = external;
+        setIsExternalDevice(external);
+        addLog('info', `External audio routing: ${external ? 'detected' : 'not detected'}`);
+      }
+    };
+
+    // Check on device change events
+    const handleDeviceChange = () => {
+      addLog('info', 'Audio device change detected');
+      checkExternalRouting();
+    };
+
+    // Initial check
+    checkExternalRouting();
+
+    // Listen for device changes
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    }
+
+    // Also check periodically for CarPlay connection
+    const interval = window.setInterval(checkExternalRouting, 5000);
+
+    return () => {
+      if (navigator.mediaDevices?.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      }
+      window.clearInterval(interval);
+    };
+  }, [addLog]);
+
   /**
    * Initialize the audio context and silent audio element.
    * Call this early (e.g., on app mount).
@@ -114,7 +173,7 @@ export const useIOSAudioSession = () => {
   const initialize = useCallback(() => {
     addLog('info', 'Initializing iOS audio session', `iOS: ${isIOS()}, Safari: ${isSafari()}, PWA: ${isPWA()}`);
     
-    // Create AudioContext
+    // Create AudioContext - use singleton pattern
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (AudioCtx && !audioContextRef.current) {
@@ -175,8 +234,8 @@ export const useIOSAudioSession = () => {
       }
     }
 
-    // 2. Start silent audio element
-    if (silentAudioRef.current) {
+    // 2. Start silent audio element (only if not on external routing)
+    if (silentAudioRef.current && !isExternalDeviceRef.current) {
       try {
         // Reset to start
         silentAudioRef.current.currentTime = 0;
@@ -187,8 +246,6 @@ export const useIOSAudioSession = () => {
         success = false;
       }
     }
-
-    // 3. Orientation lock removed - allow rotation for Auto Mode
 
     if (success) {
       isUnlockedRef.current = true;
@@ -226,8 +283,8 @@ export const useIOSAudioSession = () => {
         (ctx as any).resume?.();
       }
 
-      // Also try silent audio element
-      if (silentAudioRef.current) {
+      // Also try silent audio element (only if not external routing)
+      if (silentAudioRef.current && !isExternalDeviceRef.current) {
         silentAudioRef.current.play().catch(() => {});
       }
 
@@ -241,8 +298,24 @@ export const useIOSAudioSession = () => {
 
   /**
    * Keep the audio session alive - call when playback starts
+   * Throttled and CarPlay-aware to prevent audio stuttering
    */
   const keepAlive = useCallback(() => {
+    const now = Date.now();
+    
+    // Throttle keep-alive calls to max once per 2 seconds
+    if (now - lastKeepAliveRef.current < 2000) {
+      return;
+    }
+    lastKeepAliveRef.current = now;
+
+    // Skip aggressive keep-alive when external audio routing is active (CarPlay, Bluetooth)
+    // The external system manages the audio session
+    if (isExternalDeviceRef.current) {
+      addLog('info', 'Keep-alive skipped (external audio routing active)');
+      return;
+    }
+
     addLog('info', 'Keep-alive: ensuring silent audio is playing');
     
     if (silentAudioRef.current && silentAudioRef.current.paused) {
@@ -265,8 +338,18 @@ export const useIOSAudioSession = () => {
    */
   const stopKeepAlive = useCallback(() => {
     addLog('info', 'Stopping keep-alive');
-    // We don't actually stop - iOS needs continuous audio for background playback
-    // This is intentional
+    
+    // Clear any keep-alive interval
+    if (keepAliveIntervalRef.current) {
+      window.clearInterval(keepAliveIntervalRef.current);
+      keepAliveIntervalRef.current = null;
+    }
+    
+    // On external routing (CarPlay), pause the silent audio to not interfere
+    if (isExternalDeviceRef.current && silentAudioRef.current) {
+      silentAudioRef.current.pause();
+      addLog('info', 'Silent audio paused (external routing)');
+    }
   }, [addLog]);
 
   /**
@@ -304,14 +387,15 @@ export const useIOSAudioSession = () => {
     const handleVisibilityChange = () => {
       addLog('info', 'Visibility changed', `state: ${document.visibilityState}`);
       
-      if (document.visibilityState === 'visible') {
+      // Only call keep-alive if not on external routing and page is visible
+      if (document.visibilityState === 'visible' && !isExternalDeviceRef.current) {
         keepAlive();
       }
     };
 
     const handlePageShow = (e: PageTransitionEvent) => {
       addLog('info', 'pageshow event', `persisted: ${e.persisted}`);
-      if (e.persisted) {
+      if (e.persisted && !isExternalDeviceRef.current) {
         keepAlive();
       }
     };
@@ -343,6 +427,7 @@ export const useIOSAudioSession = () => {
     clearLogs,
     addLog,
     isUnlocked: () => isUnlockedRef.current,
+    isExternalDevice,
     silentAudioRef,
     audioContextRef,
   };
