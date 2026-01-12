@@ -29,6 +29,12 @@ import {
   Info,
   Globe,
   Lock,
+  Crown,
+  Download,
+  Car,
+  Share2,
+  Gift,
+  Sparkles,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -41,6 +47,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import IOSDiagnostics from '@/components/IOSDiagnostics';
@@ -75,6 +88,7 @@ const Settings: React.FC = () => {
   const [cloudFiles, setCloudFiles] = useState<CloudFile[]>([]);
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
   const [showCloudSection, setShowCloudSection] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
 
   const hasRdApiKey = !!credentials?.realDebridApiKey;
 
@@ -319,6 +333,139 @@ const Settings: React.FC = () => {
                 {t('logout')}
               </Button>
             </div>
+
+            {/* Premium Button */}
+            <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
+              <DialogTrigger asChild>
+                <button className="w-full mt-3 p-4 rounded-xl bg-gradient-to-r from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] hover:opacity-90 transition-opacity">
+                  <div className="flex items-center justify-center gap-2">
+                    <Crown className="w-5 h-5 text-white" />
+                    <span className="font-semibold text-white">
+                      {settings.language === 'it' ? 'Sblocca Premium' : 'Unlock Premium'}
+                    </span>
+                    <Sparkles className="w-4 h-4 text-white/80" />
+                  </div>
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md bg-gradient-to-br from-background via-background to-[#8B5CF6]/10 border-[#8B5CF6]/30">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-xl">
+                    <Crown className="w-6 h-6 text-[#8B5CF6]" />
+                    <span className="bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
+                      SoundFlow Premium
+                    </span>
+                  </DialogTitle>
+                </DialogHeader>
+                
+                <div className="space-y-4 py-4">
+                  <p className="text-sm text-muted-foreground">
+                    {settings.language === 'it' 
+                      ? 'Supporta lo sviluppo e sblocca funzionalità esclusive:'
+                      : 'Support development and unlock exclusive features:'}
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-[#8B5CF6]/10 border border-[#8B5CF6]/20">
+                      <Download className="w-5 h-5 text-[#8B5CF6]" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {settings.language === 'it' ? 'Download Offline' : 'Offline Downloads'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {settings.language === 'it' ? 'Scarica i brani in locale' : 'Download tracks locally'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-[#6366F1]/10 border border-[#6366F1]/20">
+                      <Car className="w-5 h-5 text-[#6366F1]" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {settings.language === 'it' ? 'Modalità Auto' : 'Auto Mode'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {settings.language === 'it' ? 'Interfaccia ottimizzata per la guida' : 'Driving-optimized interface'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-[#3B82F6]/10 border border-[#3B82F6]/20">
+                      <Cloud className="w-5 h-5 text-[#3B82F6]" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {settings.language === 'it' ? 'Libreria Real-Debrid' : 'Real-Debrid Library'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {settings.language === 'it' ? 'Gestisci i tuoi file cloud' : 'Manage your cloud files'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-[#8B5CF6]/10 border border-[#8B5CF6]/20">
+                      <Share2 className="w-5 h-5 text-[#8B5CF6]" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {settings.language === 'it' ? 'Condivisione Playlist' : 'Playlist Sharing'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {settings.language === 'it' ? 'Condividi le tue playlist con gli amici' : 'Share playlists with friends'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-[#6366F1]/10 border border-[#6366F1]/20">
+                      <Gift className="w-5 h-5 text-[#6366F1]" />
+                      <div>
+                        <p className="font-medium text-foreground">Wrapper</p>
+                        <p className="text-xs text-muted-foreground">
+                          {settings.language === 'it' ? 'Il tuo anno in musica' : 'Your year in music'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-[#3B82F6]/10 border border-[#3B82F6]/20">
+                      <Sparkles className="w-5 h-5 text-[#3B82F6]" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {settings.language === 'it' ? 'Accesso Anticipato' : 'Early Access'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {settings.language === 'it' ? 'Prova le novità in anteprima' : 'Try new features before anyone else'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-center text-muted-foreground italic">
+                    {settings.language === 'it' 
+                      ? '...e tanto altro nella nostra roadmap!'
+                      : '...and much more in our roadmap!'}
+                  </p>
+                </div>
+                
+                <div className="pt-2">
+                  <Button 
+                    className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] hover:opacity-90 transition-opacity border-0"
+                    onClick={() => {
+                      toast({
+                        title: settings.language === 'it' ? 'Prossimamente!' : 'Coming Soon!',
+                        description: settings.language === 'it' 
+                          ? 'Il Premium sarà disponibile a breve.'
+                          : 'Premium will be available soon.',
+                      });
+                    }}
+                  >
+                    <Crown className="w-5 h-5 mr-2" />
+                    {settings.language === 'it' ? 'Dona 9,90€/anno' : 'Donate €9.90/year'}
+                  </Button>
+                  <p className="text-xs text-center text-muted-foreground mt-2">
+                    {settings.language === 'it' 
+                      ? 'Una donazione per supportare lo sviluppo'
+                      : 'A donation to support development'}
+                  </p>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </section>
 
