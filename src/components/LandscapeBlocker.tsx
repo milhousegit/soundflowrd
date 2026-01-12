@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useAutoMode } from './auto/AutoModeContext';
-import { isIOS, isPWA, supportsOrientationLock } from '@/hooks/useIOSAudioSession';
 
 const LandscapeBlocker: React.FC = () => {
   const { 
@@ -10,7 +9,7 @@ const LandscapeBlocker: React.FC = () => {
     setPendingOrientation 
   } = useAutoMode();
   
-  const [lastOrientation, setLastOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const lastOrientationRef = useRef<'portrait' | 'landscape' | null>(null);
 
   useEffect(() => {
     const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -20,32 +19,44 @@ const LandscapeBlocker: React.FC = () => {
       const isLandscapeNow = window.innerWidth > window.innerHeight;
       const currentOrientation = isLandscapeNow ? 'landscape' : 'portrait';
       
-      if (currentOrientation !== lastOrientation) {
-        setLastOrientation(currentOrientation);
-        
-        // Show prompt when orientation changes
-        if (isLandscapeNow && !isAutoMode) {
-          setPendingOrientation('landscape');
-          setShowAutoModePrompt(true);
-        } else if (!isLandscapeNow && isAutoMode) {
-          setPendingOrientation('portrait');
-          setShowAutoModePrompt(true);
-        }
+      // Skip if orientation hasn't changed
+      if (currentOrientation === lastOrientationRef.current) return;
+      
+      // Skip if prompt is already showing
+      if (showAutoModePrompt) return;
+      
+      const previousOrientation = lastOrientationRef.current;
+      lastOrientationRef.current = currentOrientation;
+      
+      // Don't show prompt on initial load, only on actual rotation
+      if (previousOrientation === null) return;
+      
+      // Show prompt when orientation changes
+      if (isLandscapeNow && !isAutoMode) {
+        setPendingOrientation('landscape');
+        setShowAutoModePrompt(true);
+      } else if (!isLandscapeNow && isAutoMode) {
+        setPendingOrientation('portrait');
+        setShowAutoModePrompt(true);
       }
     };
 
-    // Initial check
+    // Set initial orientation without triggering prompt
     const isLandscapeNow = window.innerWidth > window.innerHeight;
-    setLastOrientation(isLandscapeNow ? 'landscape' : 'portrait');
+    lastOrientationRef.current = isLandscapeNow ? 'landscape' : 'portrait';
 
+    // Listen for orientation changes
     window.addEventListener('resize', checkOrientation);
-    window.addEventListener('orientationchange', checkOrientation);
+    window.addEventListener('orientationchange', () => {
+      // Delay check for orientationchange to let dimensions update
+      setTimeout(checkOrientation, 100);
+    });
 
     return () => {
       window.removeEventListener('resize', checkOrientation);
       window.removeEventListener('orientationchange', checkOrientation);
     };
-  }, [lastOrientation, isAutoMode, setShowAutoModePrompt, setPendingOrientation]);
+  }, [isAutoMode, showAutoModePrompt, setShowAutoModePrompt, setPendingOrientation]);
 
   return null;
 };
