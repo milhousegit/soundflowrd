@@ -22,10 +22,10 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
   return (
     <div
       {...tap}
-      className="group p-3 md:p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer touch-manipulation"
+      className="group cursor-pointer touch-manipulation"
     >
       {/* Cover */}
-      <div className="relative aspect-square rounded-lg overflow-hidden mb-3 md:mb-4 bg-muted">
+      <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted">
         {album.coverUrl ? (
           <img 
             src={album.coverUrl} 
@@ -53,10 +53,10 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
       </div>
 
       {/* Info */}
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-1">
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-sm md:text-base text-foreground truncate mb-1">{album.title}</h3>
-          <p className="text-xs md:text-sm text-muted-foreground truncate">
+          <h3 className="font-medium text-sm text-foreground truncate">{album.title}</h3>
+          <p className="text-xs text-muted-foreground truncate">
             {album.releaseDate?.split('-')[0]} • {album.artist}
           </p>
         </div>
@@ -64,7 +64,7 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
           itemType="album"
           item={album}
           size="sm"
-          className="opacity-0 group-hover:opacity-100 transition-opacity -mt-1"
+          className="opacity-0 group-hover:opacity-100 transition-opacity -mt-0.5 flex-shrink-0"
         />
       </div>
     </div>
