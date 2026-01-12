@@ -277,7 +277,7 @@ const Artist: React.FC = () => {
           <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex gap-3 md:gap-4 pb-4">
               {albums.map((album) => (
-                <div key={album.id} className="flex-shrink-0 w-32 md:w-40">
+                <div key={album.id} className="flex-shrink-0 w-[120px] md:w-[160px]">
                   <AlbumCard album={{ ...album, artist: artist.name, artistId: artist.id }} />
                 </div>
               ))}
@@ -294,7 +294,7 @@ const Artist: React.FC = () => {
           <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex gap-3 md:gap-4 pb-4">
               {singlesAndEps.map((album) => (
-                <div key={album.id} className="flex-shrink-0 w-32 md:w-40">
+                <div key={album.id} className="flex-shrink-0 w-[120px] md:w-[160px]">
                   <AlbumCard album={{ ...album, artist: artist.name, artistId: artist.id }} />
                 </div>
               ))}

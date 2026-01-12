@@ -283,7 +283,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const handleTimeUpdate = () => setState((prev) => ({ ...prev, progress: audio.currentTime }));
     const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
-    const handleEnded = () => next();
+    const handleEnded = () => nextRef.current();
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
