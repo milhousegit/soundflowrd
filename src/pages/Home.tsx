@@ -30,8 +30,6 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import NotificationsDropdown from '@/components/NotificationsDropdown';
-import ProfileDropdown from '@/components/ProfileDropdown';
-
 const Home: React.FC = () => {
   const [newReleases, setNewReleases] = useState<Album[]>([]);
   const [popularArtists, setPopularArtists] = useState<Artist[]>([]);
@@ -191,10 +189,9 @@ const Home: React.FC = () => {
           <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-1 md:mb-2">{getGreeting()}</h1>
           <p className="text-sm md:text-base text-muted-foreground">{t('whatToListen')}</p>
         </div>
-        {/* Profile and notifications */}
-        <div className="flex items-center gap-1 ml-2">
+        {/* Notifications */}
+        <div className="ml-2">
           <NotificationsDropdown />
-          <ProfileDropdown />
         </div>
       </div>
 
