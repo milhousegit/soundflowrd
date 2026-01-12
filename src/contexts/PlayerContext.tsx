@@ -235,6 +235,32 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const nextRef = useRef<() => void>(() => {});
   const previousRef = useRef<() => void>(() => {});
 
+  // Safe play helper that handles interrupted play errors gracefully
+  const safePlay = useCallback(async (audio: HTMLAudioElement): Promise<boolean> => {
+    try {
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        await playPromise;
+      }
+      return true;
+    } catch (error) {
+      if (error instanceof Error) {
+        // AbortError: play() was interrupted (user switched tracks) - this is normal
+        if (error.name === 'AbortError') {
+          console.log('[PlayerContext] Play aborted (track switch)');
+          return false;
+        }
+        // NotAllowedError: Autoplay blocked - user needs to interact first
+        if (error.name === 'NotAllowedError') {
+          console.log('[PlayerContext] Autoplay blocked');
+          return false;
+        }
+      }
+      console.error('[PlayerContext] Play error:', error);
+      return false;
+    }
+  }, []);
+
   const [state, setState] = useState<PlayerState>({
     currentTrack: null,
     isPlaying: false,
@@ -516,16 +542,44 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
             setLoadingPhase('loading');
             audioRef.current.src = tidalResult.streamUrl;
-            await audioRef.current.play();
-            setState((prev) => ({ ...prev, isPlaying: true }));
-            setLoadingPhase('idle');
-            setCurrentAudioSource('tidal');
             
-            const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
-              ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
-              : tidalResult.quality || 'LOSSLESS';
-            addDebugLog('✅ Riproduzione Tidal', `Stream ${qualityInfo} avviato`, 'success');
-            return;
+            try {
+              // Check again if we're still playing this track
+              if (currentSearchTrackIdRef.current !== track.id) return;
+              
+              const playPromise = audioRef.current.play();
+              if (playPromise !== undefined) {
+                await playPromise;
+              }
+              
+              // Final check after play succeeds
+              if (currentSearchTrackIdRef.current !== track.id) return;
+              
+              setState((prev) => ({ ...prev, isPlaying: true }));
+              setLoadingPhase('idle');
+              setCurrentAudioSource('tidal');
+              
+              const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
+                ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
+                : tidalResult.quality || 'LOSSLESS';
+              addDebugLog('✅ Riproduzione Tidal', `Stream ${qualityInfo} avviato`, 'success');
+              return;
+            } catch (playError) {
+              // Ignore "interrupted" errors - this is normal when user switches tracks quickly
+              if (playError instanceof Error && playError.name === 'AbortError') {
+                console.log('[PlayerContext] Play was aborted (user switched tracks)');
+                return;
+              }
+              // For NotAllowedError, the user hasn't interacted yet
+              if (playError instanceof Error && playError.name === 'NotAllowedError') {
+                console.log('[PlayerContext] Autoplay blocked, waiting for user interaction');
+                setState((prev) => ({ ...prev, isPlaying: false }));
+                setLoadingPhase('idle');
+                setCurrentAudioSource('tidal');
+                return;
+              }
+              throw playError;
+            }
           }
 
           const errorMsg = 'error' in tidalResult ? tidalResult.error : 'Stream non disponibile';
@@ -582,8 +636,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               if (directLink && audioRef.current) {
                 setLoadingPhase('loading');
                 audioRef.current.src = directLink;
-                await audioRef.current.play();
-                setState((prev) => ({ ...prev, isPlaying: true }));
+                if (await safePlay(audioRef.current)) {
+                  setState((prev) => ({ ...prev, isPlaying: true }));
+                }
                 setLoadingPhase('idle');
                 setCurrentAudioSource('real-debrid');
                 saveRecentlyPlayed();
@@ -605,8 +660,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
                 if (audioRef.current && streamUrl) {
                   audioRef.current.src = streamUrl;
-                  await audioRef.current.play();
-                  setState((prev) => ({ ...prev, isPlaying: true }));
+                  if (await safePlay(audioRef.current)) {
+                    setState((prev) => ({ ...prev, isPlaying: true }));
+                  }
 
                   await saveFileMapping({
                     track,
@@ -659,8 +715,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           if (audioRef.current && selected.streamUrl) {
             setLoadingPhase('loading');
             audioRef.current.src = selected.streamUrl;
-            await audioRef.current.play();
-            setState((prev) => ({ ...prev, isPlaying: true }));
+            if (await safePlay(audioRef.current)) {
+              setState((prev) => ({ ...prev, isPlaying: true }));
+            }
             setLoadingPhase('idle');
             setCurrentAudioSource('real-debrid');
             addDebugLog('🔊 Riproduzione', selected.title, 'success');
@@ -700,8 +757,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
             if (audioRef.current && streamUrl) {
               audioRef.current.src = streamUrl;
-              await audioRef.current.play();
-              setState((prev) => ({ ...prev, isPlaying: true }));
+              if (await safePlay(audioRef.current)) {
+                setState((prev) => ({ ...prev, isPlaying: true }));
+              }
             }
 
             setLoadingPhase('idle');
@@ -739,6 +797,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       addDebugLog,
       clearDebugLogs,
       credentials,
+      safePlay,
       saveFileMapping,
       tryUnlockAudioFromUserGesture,
     ]
@@ -753,13 +812,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (audioRef.current && stream.streamUrl) {
         audioRef.current.src = stream.streamUrl;
         audioRef.current.currentTime = 0;
-        await audioRef.current.play();
-        setState((prev) => ({ ...prev, isPlaying: true }));
+        if (await safePlay(audioRef.current)) {
+          setState((prev) => ({ ...prev, isPlaying: true }));
+        }
       }
 
       addDebugLog('Stream selezionato', `Riproduco: ${stream.title}`, 'success');
     },
-    [addDebugLog]
+    [addDebugLog, safePlay]
   );
 
   const selectTorrentFile = useCallback(
@@ -782,8 +842,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const streamUrl = result.streams[0].streamUrl;
         if (audioRef.current && streamUrl) {
           audioRef.current.src = streamUrl;
-          await audioRef.current.play();
-          setState((prev) => ({ ...prev, isPlaying: true }));
+          if (await safePlay(audioRef.current)) {
+            setState((prev) => ({ ...prev, isPlaying: true }));
+          }
         }
 
         // Save mapping (best-effort: we don't know exact file name/path here)
@@ -807,7 +868,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setLoadingPhase('idle');
       }
     },
-    [credentials, saveFileMapping, state.currentTrack]
+    [credentials, safePlay, saveFileMapping, state.currentTrack]
   );
 
   const refreshTorrent = useCallback(
@@ -849,8 +910,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           if (audioRef.current && first.streamUrl) {
             setLoadingPhase('loading');
             audioRef.current.src = first.streamUrl;
-            await audioRef.current.play();
-            setState((prev) => ({ ...prev, isPlaying: true }));
+            if (await safePlay(audioRef.current)) {
+              setState((prev) => ({ ...prev, isPlaying: true }));
+            }
             setLoadingPhase('idle');
           }
         } else {
@@ -863,7 +925,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setIsSearchingStreams(false);
       }
     },
-    [addDebugLog, credentials]
+    [addDebugLog, credentials, safePlay]
   );
 
   const play = useCallback(
@@ -871,13 +933,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (track) {
         playTrack(track);
       } else if (audioRef.current) {
-        audioRef.current.play();
-        setState((prev) => ({ ...prev, isPlaying: true }));
+        safePlay(audioRef.current).then((success) => {
+          if (success) setState((prev) => ({ ...prev, isPlaying: true }));
+        });
       } else {
         setState((prev) => ({ ...prev, isPlaying: true }));
       }
     },
-    [playTrack]
+    [playTrack, safePlay]
   );
 
   const pause = useCallback(() => {
@@ -1045,8 +1108,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
             if (audioRef.current && streamUrl) {
               audioRef.current.src = streamUrl;
-              await audioRef.current.play();
-              setState((prev) => ({ ...prev, isPlaying: true }));
+              safePlay(audioRef.current).then((success) => {
+                if (success) setState((prev) => ({ ...prev, isPlaying: true }));
+              });
             }
 
             clearInterval(pollInterval);
