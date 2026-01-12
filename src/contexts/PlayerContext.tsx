@@ -322,6 +322,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.log('[PlayerContext] Track ended, triggering next');
       // On iOS, we need to keep the audio context alive before switching tracks
       iosAudioRef.current.keepAlive();
+      
+      // Keep media session showing "playing" during track transition
+      // This prevents the iOS control center widget from disappearing
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'playing';
+      }
+      
       // Small delay to ensure iOS audio session doesn't get interrupted
       setTimeout(() => {
         nextRef.current();
@@ -362,6 +369,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     audio.addEventListener('stalled', handleStalled);
 
     if ('mediaSession' in navigator) {
+      // Detect iOS to customize media session handlers
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      
       navigator.mediaSession.setActionHandler('play', () => {
         audio.play();
         setState((prev) => ({ ...prev, isPlaying: true }));
@@ -382,16 +392,29 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setState((prev) => ({ ...prev, progress: details.seekTime! }));
         }
       });
-      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-        const skipTime = details.seekOffset || 10;
-        audio.currentTime = Math.max(0, audio.currentTime - skipTime);
-        setState((prev) => ({ ...prev, progress: audio.currentTime }));
-      });
-      navigator.mediaSession.setActionHandler('seekforward', (details) => {
-        const skipTime = details.seekOffset || 10;
-        audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + skipTime);
-        setState((prev) => ({ ...prev, progress: audio.currentTime }));
-      });
+      
+      // On iOS, DON'T register seekbackward/seekforward handlers
+      // This forces iOS to show previoustrack/nexttrack buttons instead
+      if (!isIOS) {
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+          const skipTime = details.seekOffset || 10;
+          audio.currentTime = Math.max(0, audio.currentTime - skipTime);
+          setState((prev) => ({ ...prev, progress: audio.currentTime }));
+        });
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+          const skipTime = details.seekOffset || 10;
+          audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + skipTime);
+          setState((prev) => ({ ...prev, progress: audio.currentTime }));
+        });
+      } else {
+        // Explicitly set to null on iOS to ensure track buttons are shown
+        try {
+          navigator.mediaSession.setActionHandler('seekbackward', null);
+          navigator.mediaSession.setActionHandler('seekforward', null);
+        } catch (e) {
+          // Some browsers don't support setting to null
+        }
+      }
     }
 
     return () => {
