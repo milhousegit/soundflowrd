@@ -29,16 +29,6 @@ const requestWakeLock = async () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     requestWakeLock();
-    
-    // Also try orientation lock on visibility change
-    if ('screen' in window && 'orientation' in window.screen) {
-      const orientation = window.screen.orientation as any;
-      if (typeof orientation?.lock === 'function') {
-        orientation.lock('portrait').catch(() => {
-          // Expected to fail outside user gesture
-        });
-      }
-    }
   }
 });
 
