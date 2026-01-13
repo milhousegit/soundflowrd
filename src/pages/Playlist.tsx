@@ -172,8 +172,8 @@ const PlaylistPage: React.FC = () => {
     }
   };
 
-  // Create a fake album object for the favorite button
-  const playlistAsAlbum: Album = {
+  // Create a playlist object for the favorite button
+  const playlistForFavorite: Album = {
     id: playlist.id,
     title: playlist.name,
     artist: 'Playlist',
@@ -266,8 +266,8 @@ const PlaylistPage: React.FC = () => {
 
         {/* Favorite button - cuoricino */}
         <FavoriteButton
-          itemType="album"
-          item={playlistAsAlbum}
+          itemType="playlist"
+          item={playlistForFavorite}
           size="lg"
         />
 

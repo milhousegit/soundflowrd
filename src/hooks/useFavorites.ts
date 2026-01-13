@@ -50,12 +50,12 @@ export function useFavorites() {
     }
   }, [isAuthenticated, user, fetchFavorites]);
 
-  const isFavorite = useCallback((itemType: 'track' | 'album' | 'artist', itemId: string) => {
+  const isFavorite = useCallback((itemType: 'track' | 'album' | 'artist' | 'playlist', itemId: string) => {
     return favorites.some(f => f.item_type === itemType && f.item_id === itemId);
   }, [favorites]);
 
   const addFavorite = useCallback(async (
-    itemType: 'track' | 'album' | 'artist',
+    itemType: 'track' | 'album' | 'artist' | 'playlist',
     item: Track | Album | Artist
   ) => {
     if (!user) {
@@ -119,7 +119,7 @@ export function useFavorites() {
     }
   }, [user, fetchFavorites, credentials]);
 
-  const removeFavorite = useCallback(async (itemType: 'track' | 'album' | 'artist', itemId: string) => {
+  const removeFavorite = useCallback(async (itemType: 'track' | 'album' | 'artist' | 'playlist', itemId: string) => {
     if (!user) return false;
 
     try {
@@ -143,7 +143,7 @@ export function useFavorites() {
   }, [user, fetchFavorites]);
 
   const toggleFavorite = useCallback(async (
-    itemType: 'track' | 'album' | 'artist',
+    itemType: 'track' | 'album' | 'artist' | 'playlist',
     item: Track | Album | Artist
   ) => {
     if (isFavorite(itemType, item.id)) {
@@ -153,7 +153,7 @@ export function useFavorites() {
     }
   }, [isFavorite, addFavorite, removeFavorite]);
 
-  const getFavoritesByType = useCallback((itemType: 'track' | 'album' | 'artist') => {
+  const getFavoritesByType = useCallback((itemType: 'track' | 'album' | 'artist' | 'playlist') => {
     return favorites.filter(f => f.item_type === itemType);
   }, [favorites]);
 

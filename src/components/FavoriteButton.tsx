@@ -6,7 +6,7 @@ import { Track, Album, Artist } from '@/types/music';
 import { cn } from '@/lib/utils';
 
 interface FavoriteButtonProps {
-  itemType: 'track' | 'album' | 'artist';
+  itemType: 'track' | 'album' | 'artist' | 'playlist';
   item: Track | Album | Artist;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
