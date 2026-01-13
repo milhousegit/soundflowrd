@@ -111,6 +111,7 @@ serve(async (req) => {
     console.log(`Found ${profiles.length} users with Telegram`);
 
     const newReleases: NewRelease[] = [];
+    const seenReleases = new Set<string>(); // Track user_id + album_id combinations
 
     for (const profile of profiles) {
       // Get favorite artists for this user
@@ -164,21 +165,27 @@ serve(async (req) => {
               });
             console.log(`Initialized tracking for ${artistName} (album: ${latestAlbum.title})`);
           } else if (tracking.last_album_id !== String(latestAlbum.id)) {
-            // New album detected!
-            console.log(`NEW RELEASE: ${artistName} - ${latestAlbum.title}`);
-            
-            newReleases.push({
-              user_id: profile.id,
-              telegram_chat_id: profile.telegram_chat_id,
-              email: profile.email,
-              artist_id: artistId,
-              artist_name: artistName,
-              album_id: latestAlbum.id,
-              album_title: latestAlbum.title,
-              album_cover: latestAlbum.cover_medium || latestAlbum.cover,
-              release_date: latestAlbum.release_date,
-              album_url: `https://soundflowrd.lovable.app/album/${latestAlbum.id}`,
-            });
+            // New album detected - check for duplicates
+            const releaseKey = `${profile.id}_${latestAlbum.id}`;
+            if (!seenReleases.has(releaseKey)) {
+              seenReleases.add(releaseKey);
+              console.log(`NEW RELEASE: ${artistName} - ${latestAlbum.title}`);
+              
+              newReleases.push({
+                user_id: profile.id,
+                telegram_chat_id: profile.telegram_chat_id,
+                email: profile.email,
+                artist_id: artistId,
+                artist_name: artistName,
+                album_id: latestAlbum.id,
+                album_title: latestAlbum.title,
+                album_cover: latestAlbum.cover_medium || latestAlbum.cover,
+                release_date: latestAlbum.release_date,
+                album_url: `https://soundflowrd.lovable.app/album/${latestAlbum.id}`,
+              });
+            } else {
+              console.log(`Skipping duplicate: ${artistName} - ${latestAlbum.title} for user ${profile.id}`);
+            }
           }
         } catch (e) {
           console.error(`Error fetching albums for artist ${artistId}:`, e);
