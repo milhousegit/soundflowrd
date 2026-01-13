@@ -45,13 +45,13 @@ const AutoModePrompt: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center p-8">
-      <div className="text-center space-y-6 max-w-sm">
-        <div className="relative w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
+    <div className="fixed inset-0 z-[200] bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+      <div className="text-center space-y-4 max-w-xs w-full">
+        <div className="relative w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
           {isEnteringAuto ? (
-            <Car className="w-12 h-12 text-primary" />
+            <Car className="w-8 h-8 text-primary" />
           ) : (
-            <Smartphone className="w-12 h-12 text-primary" />
+            <Smartphone className="w-8 h-8 text-primary" />
           )}
           {isEnteringAuto && !isPremium && (
             <span className="absolute -top-1 -right-1 px-1.5 py-0.5 text-[10px] font-bold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white rounded">
@@ -60,31 +60,28 @@ const AutoModePrompt: React.FC = () => {
           )}
         </div>
         
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold text-foreground">
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold text-foreground">
             {isEnteringAuto ? 'Modalità Auto' : 'Modalità Standard'}
           </h2>
-          <p className="text-muted-foreground">
-            {isEnteringAuto 
-              ? 'Vuoi entrare in modalità Auto con un\'interfaccia ottimizzata per la guida?' 
-              : 'Vuoi tornare alla modalità standard?'}
-          </p>
+          {(isPremium || !isEnteringAuto) && (
+            <p className="text-sm text-muted-foreground">
+              {isEnteringAuto 
+                ? 'Interfaccia ottimizzata per la guida' 
+                : 'Vuoi tornare alla modalità standard?'}
+            </p>
+          )}
         </div>
 
-        {/* Premium banner for non-premium users entering auto mode */}
+        {/* Simplified Premium banner for non-premium users */}
         {isEnteringAuto && !isPremium && (
-          <div className="p-4 rounded-xl bg-gradient-to-r from-[#8B5CF6]/20 to-[#3B82F6]/20 border border-[#8B5CF6]/30 space-y-3">
-            <div className="flex items-center justify-center gap-2">
-              <Crown className="w-5 h-5 text-[#8B5CF6]" />
-              <span className="font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">
-                Funzione Premium
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              La modalità Auto è disponibile per gli utenti Premium
+          <div className="p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 to-[#3B82F6]/20 border border-[#8B5CF6]/30">
+            <p className="text-sm text-muted-foreground mb-2">
+              Funzione riservata agli utenti Premium
             </p>
             <Button 
               onClick={handleUnlockPremium}
+              size="sm"
               className="w-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0"
             >
               <Crown className="w-4 h-4 mr-2" />
@@ -93,21 +90,21 @@ const AutoModePrompt: React.FC = () => {
           </div>
         )}
 
-        <div className="flex gap-3 justify-center">
-          <Button variant="outline" onClick={handleCancel} className="min-w-[100px]">
-            <X className="w-4 h-4 mr-2" />
+        <div className="flex gap-2 justify-center">
+          <Button variant="outline" size="sm" onClick={handleCancel} className="min-w-[80px]">
+            <X className="w-4 h-4 mr-1" />
             {isEnteringAuto && !isPremium ? 'Chiudi' : 'Annulla'}
           </Button>
           {(isPremium || !isEnteringAuto) && (
-            <Button onClick={handleConfirm} className="min-w-[100px]">
+            <Button size="sm" onClick={handleConfirm} className="min-w-[80px]">
               {isEnteringAuto ? (
                 <>
-                  <Car className="w-4 h-4 mr-2" />
+                  <Car className="w-4 h-4 mr-1" />
                   Entra
                 </>
               ) : (
                 <>
-                  <Smartphone className="w-4 h-4 mr-2" />
+                  <Smartphone className="w-4 h-4 mr-1" />
                   Esci
                 </>
               )}
