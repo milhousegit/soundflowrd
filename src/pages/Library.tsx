@@ -11,6 +11,7 @@ import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import PlaylistCard from '@/components/PlaylistCard';
+import TapArea from '@/components/TapArea';
 import { Track, Album, Artist } from '@/types/music';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -64,11 +65,15 @@ const Library: React.FC = () => {
   const favoriteTracks = getFavoritesByType('track');
   const favoriteAlbums = getFavoritesByType('album');
   const favoriteArtists = getFavoritesByType('artist');
+  const favoritePlaylists = getFavoritesByType('playlist');
 
   // Convert favorites to Track/Album/Artist objects
   const tracks: Track[] = favoriteTracks.map(f => f.item_data as Track);
   const albums: Album[] = favoriteAlbums.map(f => f.item_data as Album);
   const artists: Artist[] = favoriteArtists.map(f => f.item_data as Artist);
+  
+  // Combine user playlists with favorite playlists
+  const favoritePlaylistIds = new Set(favoritePlaylists.map(f => f.item_id));
 
   // Convert offline tracks to Track objects
   const offlineTracksList: Track[] = offlineTracks.map(ot => ot.track);
@@ -234,17 +239,69 @@ const Library: React.FC = () => {
           {/* Playlists */}
           {activeTab === 'playlists' && (
             <div>
-              {playlists.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
-                  {playlists.map((playlist) => (
-                    <PlaylistCard key={playlist.id} playlist={playlist} />
-                  ))}
+              {/* User Created Playlists */}
+              {playlists.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold mb-4 text-foreground">Le tue playlist</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+                    {playlists.map((playlist) => (
+                      <PlaylistCard key={playlist.id} playlist={playlist} />
+                    ))}
+                  </div>
                 </div>
-              ) : (
+              )}
+              
+              {/* Favorite Playlists (Deezer etc.) */}
+              {favoritePlaylists.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
+                    <Heart className="w-4 h-4 text-primary fill-primary" />
+                    Playlist preferite
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+                    {favoritePlaylists.map((fav) => {
+                      const playlistData = fav.item_data as any;
+                      // Check if it's a Deezer playlist
+                      const isDeezerPlaylist = fav.item_id.startsWith('deezer-playlist-');
+                      const deezerId = isDeezerPlaylist ? fav.item_id.replace('deezer-playlist-', '') : null;
+                      
+                      return (
+                        <TapArea
+                          key={fav.id}
+                          onTap={() => navigate(deezerId ? `/deezer-playlist/${deezerId}` : `/playlist/${fav.item_id}`)}
+                          className="group flex flex-col items-center text-center p-3 md:p-4 rounded-xl bg-card hover:bg-secondary transition-all cursor-pointer touch-manipulation"
+                        >
+                          <div className="w-full aspect-square rounded-lg bg-secondary overflow-hidden mb-3 relative">
+                            {fav.item_cover_url ? (
+                              <img
+                                src={fav.item_cover_url}
+                                alt={fav.item_title}
+                                className="absolute inset-0 w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+                                <ListMusic className="w-12 h-12 text-primary/50" />
+                              </div>
+                            )}
+                          </div>
+                          <h3 className="font-semibold text-sm md:text-base text-foreground truncate w-full">
+                            {fav.item_title}
+                          </h3>
+                          <p className="text-xs text-muted-foreground truncate w-full">
+                            {fav.item_artist || 'Playlist'}
+                          </p>
+                        </TapArea>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {playlists.length === 0 && favoritePlaylists.length === 0 && (
                 <div className="text-center py-12 text-muted-foreground">
                   <ListMusic className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>Nessuna playlist</p>
-                  <p className="text-sm">Crea playlist dal menu su qualsiasi brano</p>
+                  <p className="text-sm">Crea playlist dal menu o salva quelle di Deezer con il cuoricino</p>
                 </div>
               )}
             </div>
