@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Cloud, Loader2 } from 'lucide-react';
+import { Play, Clock, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
 import BackButton from '@/components/BackButton';
@@ -8,19 +8,16 @@ import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { useAuth } from '@/contexts/AuthContext';
 import { getAlbum } from '@/lib/deezer';
 import { mockAlbums, mockTracks } from '@/data/mockData';
 import { Album as AlbumType, Track } from '@/types/music';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
-import { useSyncAlbum } from '@/hooks/useSyncAlbum';
 
 const Album: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { t } = useSettings();
-  const { credentials } = useAuth();
   const [album, setAlbum] = useState<AlbumType | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,18 +25,6 @@ const Album: React.FC = () => {
   // Get track IDs for sync status checking
   const trackIds = useMemo(() => tracks.map(t => t.id), [tracks]);
   const { isSynced, isSyncing, isDownloading } = useSyncedTracks(trackIds);
-  const { syncAlbum, isSyncingAlbum, syncProgress } = useSyncAlbum();
-
-  // Check if all tracks are synced
-  const allTracksSynced = useMemo(() => {
-    if (tracks.length === 0) return false;
-    return tracks.every(track => isSynced(track.id));
-  }, [tracks, isSynced]);
-
-  const handleSyncAlbum = () => {
-    if (!album || tracks.length === 0) return;
-    syncAlbum(tracks, album.title, album.artist);
-  };
 
   useEffect(() => {
     const fetchAlbum = async () => {
@@ -163,32 +148,6 @@ const Album: React.FC = () => {
           variant="ghost"
         />
 
-        {/* Sync album button - small like favorite, with animation */}
-        {credentials?.realDebridApiKey && (
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleSyncAlbum}
-              disabled={isSyncingAlbum || allTracksSynced}
-              className="w-12 h-12"
-              title={allTracksSynced ? 'Album sincronizzato' : 'Sincronizza Album'}
-            >
-              {isSyncingAlbum ? (
-                <Loader2 className="w-6 h-6 text-primary animate-spin" />
-              ) : allTracksSynced ? (
-                <Cloud className="w-6 h-6 text-green-500" />
-              ) : (
-                <Cloud className="w-6 h-6 text-muted-foreground hover:text-primary transition-colors" />
-              )}
-            </Button>
-            {isSyncingAlbum && syncProgress.total > 0 && (
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] text-primary font-medium whitespace-nowrap">
-                {syncProgress.synced}/{syncProgress.total}
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Track List */}
