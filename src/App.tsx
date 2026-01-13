@@ -11,6 +11,7 @@ import { AutoModeProvider, useAutoMode } from "@/components/auto/AutoModeContext
 import Login from "@/components/Login";
 import Layout from "@/components/Layout";
 import InstallPrompt from "@/components/InstallPrompt";
+import PremiumWelcomeBanner from "@/components/PremiumWelcomeBanner";
 
 import LandscapeBlocker from "@/components/LandscapeBlocker";
 import AutoModePrompt from "@/components/auto/AutoModePrompt";
@@ -95,6 +96,7 @@ const AppContent = () => {
       <Toaster />
       <Sonner position="top-center" />
       <InstallPrompt />
+      <PremiumWelcomeBanner />
       <LandscapeBlocker />
       <AutoModePrompt />
       <BrowserRouter>
