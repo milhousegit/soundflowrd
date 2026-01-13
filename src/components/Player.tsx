@@ -9,6 +9,7 @@ import BugsModal from './BugsModal';
 import QueueModal from './QueueModal';
 import FavoriteButton from './FavoriteButton';
 import { useToast } from '@/hooks/use-toast';
+import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 import { isPast } from 'date-fns';
 
 import {
@@ -84,6 +85,7 @@ const Player: React.FC = () => {
     (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at))));
   const canDownload = contextIsAdmin || isPremiumActive;
   
+  const { saveTrackOffline } = useOfflineStorage();
   const [isDownloading, setIsDownloading] = useState(false);
   
   // Get current stream URL from alternatives
@@ -172,7 +174,10 @@ const Player: React.FC = () => {
       const blob = await response.blob();
       const filename = `${currentTrack.artist} - ${currentTrack.title}.mp3`;
       
-      // Create download link
+      // Save to IndexedDB for offline playback
+      await saveTrackOffline(currentTrack, blob);
+      
+      // Also trigger browser download
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -183,8 +188,10 @@ const Player: React.FC = () => {
       window.URL.revokeObjectURL(url);
       
       toast({
-        title: settings.language === 'it' ? 'Download completato!' : 'Download complete!',
-        description: filename,
+        title: settings.language === 'it' ? 'Salvato offline!' : 'Saved offline!',
+        description: settings.language === 'it' 
+          ? `"${currentTrack.title}" disponibile anche senza connessione` 
+          : `"${currentTrack.title}" available offline`,
       });
     } catch (error) {
       console.error('Download error:', error);
@@ -326,9 +333,11 @@ const Player: React.FC = () => {
                   "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
                   currentAudioSource === 'tidal' 
                     ? "bg-sky-500/20 text-sky-400" 
-                    : "bg-orange-500/20 text-orange-400"
+                    : currentAudioSource === 'offline'
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-orange-500/20 text-orange-400"
                 )}>
-                  {currentAudioSource === 'tidal' ? '🎵 Tidal HQ' : '📦 Real-Debrid'}
+                  {currentAudioSource === 'tidal' ? '🎵 Tidal HQ' : currentAudioSource === 'offline' ? '📱 Offline' : '📦 Real-Debrid'}
                 </span>
               </div>
             )}
