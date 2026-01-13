@@ -303,6 +303,88 @@ const Settings: React.FC = () => {
                 <option value="it">Italiano</option>
               </select>
             </div>
+
+            {/* Premium CTA */}
+            {!isAdmin && (
+              <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
+                <DialogTrigger asChild>
+                  <button className="w-full p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] hover:opacity-90 transition-opacity shadow-lg">
+                    <div className="flex items-center justify-center gap-2">
+                      <Crown className="w-4 h-4 text-white" />
+                      <span className="text-sm font-semibold text-white">{settings.language === 'it' ? 'Sblocca Premium' : 'Unlock Premium'}</span>
+                      <Sparkles className="w-3.5 h-3.5 text-white/80" />
+                    </div>
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Crown className="w-5 h-5 text-[#8B5CF6]" />
+                      <span className="bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">Premium</span>
+                    </DialogTitle>
+                  </DialogHeader>
+                  
+                  <div className="space-y-3 py-2">
+                    {[
+                      { icon: Download, label: settings.language === 'it' ? 'Download Offline' : 'Offline Downloads', desc: settings.language === 'it' ? 'Scarica brani in locale' : 'Download tracks locally' },
+                      { icon: Car, label: settings.language === 'it' ? 'Modalità Auto' : 'Auto Mode', desc: settings.language === 'it' ? 'UI ottimizzata per guida' : 'Driving-optimized UI' },
+                      { icon: Crown, label: settings.language === 'it' ? 'Riproduzione Ibrida' : 'Hybrid Playback', desc: settings.language === 'it' ? 'Mai interrompere la musica' : 'Never interrupt music' },
+                      { icon: Share2, label: settings.language === 'it' ? 'Condividi Playlist' : 'Share Playlists', desc: settings.language === 'it' ? 'Con i tuoi amici' : 'With friends' },
+                      { icon: Gift, label: 'Wrapper', desc: settings.language === 'it' ? 'Il tuo anno in musica' : 'Your year in music' },
+                      { icon: Sparkles, label: settings.language === 'it' ? 'Accesso Anticipato' : 'Early Access', desc: settings.language === 'it' ? 'Novità in anteprima' : 'New features first' },
+                    ].map(({ icon: Icon, label, desc }) => (
+                      <div key={label} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50">
+                        <Icon className="w-4 h-4 text-[#8B5CF6] shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground">{label}</p>
+                          <p className="text-xs text-muted-foreground truncate">{desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <Button 
+                    className="w-full h-11 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0"
+                    onClick={() => toast({ title: settings.language === 'it' ? 'Prossimamente!' : 'Coming Soon!' })}
+                  >
+                    <Crown className="w-4 h-4 mr-2" />
+                    {settings.language === 'it' ? 'Dona 9,90€/anno' : '€9.90/year'}
+                  </Button>
+                </DialogContent>
+              </Dialog>
+            )}
+
+            {/* Logout */}
+            <div className="pt-2">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full h-9 text-sm gap-2">
+                    <LogOut className="w-3.5 h-3.5" />
+                    {settings.language === 'it' ? 'Esci' : 'Log out'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {settings.language === 'it' ? 'Conferma logout' : 'Confirm logout'}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {settings.language === 'it' 
+                        ? 'Sei sicuro di voler uscire dal tuo account?' 
+                        : 'Are you sure you want to log out?'}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>
+                      {settings.language === 'it' ? 'Annulla' : 'Cancel'}
+                    </AlertDialogCancel>
+                    <AlertDialogAction onClick={handleLogout}>
+                      {settings.language === 'it' ? 'Esci' : 'Log out'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
         </section>
 
@@ -551,54 +633,6 @@ const Settings: React.FC = () => {
             ))}
           </div>
         </section>
-
-        {/* Premium CTA */}
-        <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
-          <DialogTrigger asChild>
-            <button className="w-full p-4 rounded-xl bg-gradient-to-r from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] hover:opacity-90 transition-opacity shadow-lg">
-              <div className="flex items-center justify-center gap-2">
-                <Crown className="w-5 h-5 text-white" />
-                <span className="font-semibold text-white">{settings.language === 'it' ? 'Sblocca Premium' : 'Unlock Premium'}</span>
-                <Sparkles className="w-4 h-4 text-white/80" />
-              </div>
-            </button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Crown className="w-5 h-5 text-[#8B5CF6]" />
-                <span className="bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">Premium</span>
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-3 py-2">
-              {[
-                { icon: Download, label: settings.language === 'it' ? 'Download Offline' : 'Offline Downloads', desc: settings.language === 'it' ? 'Scarica brani in locale' : 'Download tracks locally' },
-                { icon: Car, label: settings.language === 'it' ? 'Modalità Auto' : 'Auto Mode', desc: settings.language === 'it' ? 'UI ottimizzata per guida' : 'Driving-optimized UI' },
-                { icon: Crown, label: settings.language === 'it' ? 'Riproduzione Ibrida' : 'Hybrid Playback', desc: settings.language === 'it' ? 'Mai interrompere la musica' : 'Never interrupt music' },
-                { icon: Share2, label: settings.language === 'it' ? 'Condividi Playlist' : 'Share Playlists', desc: settings.language === 'it' ? 'Con i tuoi amici' : 'With friends' },
-                { icon: Gift, label: 'Wrapper', desc: settings.language === 'it' ? 'Il tuo anno in musica' : 'Your year in music' },
-                { icon: Sparkles, label: settings.language === 'it' ? 'Accesso Anticipato' : 'Early Access', desc: settings.language === 'it' ? 'Novità in anteprima' : 'New features first' },
-              ].map(({ icon: Icon, label, desc }) => (
-                <div key={label} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50">
-                  <Icon className="w-4 h-4 text-[#8B5CF6] shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">{label}</p>
-                    <p className="text-xs text-muted-foreground truncate">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <Button 
-              className="w-full h-11 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0"
-              onClick={() => toast({ title: settings.language === 'it' ? 'Prossimamente!' : 'Coming Soon!' })}
-            >
-              <Crown className="w-4 h-4 mr-2" />
-              {settings.language === 'it' ? 'Dona 9,90€/anno' : '€9.90/year'}
-            </Button>
-          </DialogContent>
-        </Dialog>
 
         {/* Admin Notifications - Only for admins */}
         {isAdmin && (
