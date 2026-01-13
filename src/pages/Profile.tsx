@@ -437,7 +437,9 @@ const Settings: React.FC = () => {
                   variant="outline" 
                   className="w-full h-9 text-sm gap-2 border-[#0088cc]/30 hover:bg-[#0088cc]/10"
                   onClick={() => {
-                    const telegramUrl = `https://t.me/soundflowrdbot?start=${user?.id}`;
+                    const command = settings.language === 'it' ? 'connectit' : 'connecten';
+                    const userEmail = profile?.email || '';
+                    const telegramUrl = `https://t.me/soundflowrdbot?start=${command}_${encodeURIComponent(userEmail)}`;
                     window.open(telegramUrl, '_blank');
                   }}
                 >

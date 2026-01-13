@@ -3,6 +3,9 @@ project_id = "ytkmoujvriqetljjfito"
 [functions.n8n-new-releases-webhook]
 verify_jwt = false
 
+[functions.n8n-update-telegram]
+verify_jwt = false
+
 [functions.musicbrainz]
 verify_jwt = false
 
