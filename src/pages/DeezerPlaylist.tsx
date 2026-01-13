@@ -1,23 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Shuffle, Music, Heart, Plus } from 'lucide-react';
+import { Play, Shuffle, Music, Heart, Plus, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { usePlaylists } from '@/hooks/usePlaylists';
+import { useDownloadAll } from '@/hooks/useDownloadAll';
 import { getDeezerPlaylist, DeezerPlaylist } from '@/lib/deezer';
 import { Track } from '@/types/music';
 import { toast } from 'sonner';
+import { isPast } from 'date-fns';
 
 const DeezerPlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { t } = useSettings();
+  const { profile, isAdmin } = useAuth();
   const { createPlaylist } = usePlaylists();
+  const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
+  
+  // Check if user can download (premium or admin)
+  const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
+  const canDownload = isPremiumActive || isAdmin;
+  
   const [playlist, setPlaylist] = useState<(DeezerPlaylist & { tracks: Track[] }) | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -142,6 +152,24 @@ const DeezerPlaylistPage: React.FC = () => {
         <Button variant="ghost" size="icon" className="w-10 h-10 md:w-12 md:h-12" onClick={handleShuffle} disabled={playlist.tracks.length === 0}>
           <Shuffle className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
+        
+        {/* Download button - Premium only */}
+        {canDownload && playlist.tracks.length > 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => downloadAll(playlist.tracks, playlist.title)}
+            disabled={isDownloadingAll}
+            className="w-10 h-10 md:w-12 md:h-12"
+          >
+            {isDownloadingAll ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Download className="w-5 h-5 text-muted-foreground" />
+            )}
+          </Button>
+        )}
+        
         <Button 
           variant="outline" 
           size="sm" 

@@ -1,14 +1,17 @@
 import React, { forwardRef, useState, useCallback } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, CloudUpload, Loader2, Bug, ListMusic, Plus } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, Loader2, ListMusic, Plus, Download, HardDrive } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
 import { usePlaylists } from '@/hooks/usePlaylists';
+import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 import { useTap } from '@/hooks/useTap';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
+import { isPast } from 'date-fns';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,16 +50,24 @@ interface TrackCardProps {
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
   ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading, onCreatePlaylist }, ref) => {
     const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase } = usePlayer();
+    const { profile, isAdmin } = useAuth();
     const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
     const { playlists, addTrackToPlaylist } = usePlaylists();
+    const { saveTrackOffline, isTrackOffline } = useOfflineStorage();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
+    const [isDownloadingSingle, setIsDownloadingSingle] = useState(false);
     const isMobile = useIsMobile();
     
     const isCurrentTrack = currentTrack?.id === track.id;
     const isSynced = propIsSynced !== undefined ? propIsSynced : hookIsSynced(track.id);
     const isSyncing = propIsSyncing !== undefined ? propIsSyncing : hookIsSyncing(track.id);
     const isDownloading = propIsDownloading !== undefined ? propIsDownloading : hookIsDownloading(track.id);
+    
+    // Check if user can download (premium or admin)
+    const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
+    const canDownload = isPremiumActive || isAdmin;
+    const isOffline = isTrackOffline(track.id);
     
     const isCurrentTrackLoading = isCurrentTrack && loadingPhase !== 'idle';
     
@@ -67,24 +78,76 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       : (isDownloading && !isSynced);
     const showSyncedCloud = isSynced && !isCurrentTrackLoading && !showDownloadingCloud;
 
-    const handleSync = (e: React.MouseEvent) => {
+    const handleDownloadSingle = async (e: React.MouseEvent) => {
       e.stopPropagation();
-      playTrack(track, queue);
-      toast.info('Avvio sincronizzazione...');
+      if (!canDownload || isDownloadingSingle || isOffline) return;
+
+      setIsDownloadingSingle(true);
+      const toastId = toast.loading(`Download di "${track.title}"...`);
+
+      try {
+        const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+        
+        // Try Lucida first
+        const lucidaResponse = await fetch(`${baseUrl}/functions/v1/lucida`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'getTrack',
+            trackId: track.id,
+          }),
+        });
+
+        let streamUrl = null;
+
+        if (lucidaResponse.ok) {
+          const lucidaData = await lucidaResponse.json();
+          streamUrl = lucidaData.streamUrl;
+        }
+
+        // Fallback to squidwtf
+        if (!streamUrl) {
+          const squidResponse = await fetch(`${baseUrl}/functions/v1/squidwtf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'getTrack',
+              trackId: track.id,
+              trackTitle: track.title,
+              artistName: track.artist,
+            }),
+          });
+
+          if (squidResponse.ok) {
+            const squidData = await squidResponse.json();
+            streamUrl = squidData.streamUrl;
+          }
+        }
+
+        if (streamUrl) {
+          const audioResponse = await fetch(streamUrl);
+          if (audioResponse.ok) {
+            const blob = await audioResponse.blob();
+            await saveTrackOffline(track, blob);
+            toast.success('Download completato!', { id: toastId });
+          } else {
+            toast.error('Errore nel download', { id: toastId });
+          }
+        } else {
+          toast.error('Nessuna sorgente disponibile', { id: toastId });
+        }
+      } catch (error) {
+        console.error('Download failed:', error);
+        toast.error('Download fallito', { id: toastId });
+      } finally {
+        setIsDownloadingSingle(false);
+      }
     };
 
     const handleAddToQueue = (e: React.MouseEvent) => {
       e.stopPropagation();
       addToQueue([track]);
       toast.success('Aggiunto alla coda');
-    };
-
-    const handleOpenDebug = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (!isCurrentTrack) {
-        playTrack(track, queue);
-      }
-      toast.info('Apri il pannello debug dal player');
     };
 
     const handleAddToPlaylist = async (e: React.MouseEvent, playlistId: string) => {
@@ -162,16 +225,20 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
               ))}
             </MenuSubContent>
           </MenuSub>
-          {!isSynced && !isDownloading && (
-            <MenuItem onClick={handleSync} className="cursor-pointer">
-              <CloudUpload className="w-4 h-4 mr-2" />
-              Sincronizza
+          {canDownload && !isOffline && (
+            <MenuItem onClick={handleDownloadSingle} className="cursor-pointer" disabled={isDownloadingSingle}>
+              {isDownloadingSingle ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4 mr-2" />
+              )}
+              Scarica offline
             </MenuItem>
           )}
-          {(isSynced || isDownloading) && (
-            <MenuItem onClick={handleOpenDebug} className="cursor-pointer">
-              <Bug className="w-4 h-4 mr-2" />
-              Debug
+          {isOffline && (
+            <MenuItem disabled className="cursor-default">
+              <HardDrive className="w-4 h-4 mr-2 text-green-500" />
+              Disponibile offline
             </MenuItem>
           )}
         </>
