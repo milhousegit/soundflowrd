@@ -11,6 +11,7 @@ interface Profile {
   audio_source_mode: string | null;
   is_premium: boolean | null;
   premium_expires_at: string | null;
+  telegram_chat_id: string | null;
 }
 
 interface AuthContextType {
