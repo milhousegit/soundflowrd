@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Plus, ListMusic, Disc, Heart, User, Music, Loader2, Download, Wifi, WifiOff, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -32,6 +32,9 @@ type Tab = 'tracks' | 'albums' | 'artists' | 'playlists' | 'offline';
 
 const Library: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('tracks');
+  const [animationClass, setAnimationClass] = useState('');
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
   const { t, settings } = useSettings();
   const { playTrack } = usePlayer();
   const { isAuthenticated, profile, isAdmin, simulateFreeUser } = useAuth();
@@ -57,6 +60,9 @@ const Library: React.FC = () => {
   // Show offline tab if: user can access offline features, OR has offline tracks, OR is currently offline
   const showOfflineTab = canAccessOffline || offlineTracks.length > 0 || !isOnline;
 
+  const baseTabs: Tab[] = ['tracks', 'albums', 'artists', 'playlists'];
+  const allTabs: Tab[] = showOfflineTab ? [...baseTabs, 'offline'] : baseTabs;
+  
   const tabs = [
     { id: 'tracks' as Tab, label: t('likedSongs'), icon: Heart },
     { id: 'albums' as Tab, label: t('albums'), icon: Disc },
@@ -64,6 +70,44 @@ const Library: React.FC = () => {
     { id: 'playlists' as Tab, label: 'Playlist', icon: ListMusic },
     ...(showOfflineTab ? [{ id: 'offline' as Tab, label: 'Offline', icon: Download }] : []),
   ];
+
+  // Swipe navigation
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    const threshold = 50;
+    const currentIndex = allTabs.indexOf(activeTab);
+
+    if (Math.abs(diff) > threshold) {
+      if (diff > 0 && currentIndex < allTabs.length - 1) {
+        // Swipe left -> next tab
+        setAnimationClass('animate-slide-out-left');
+        setTimeout(() => {
+          setActiveTab(allTabs[currentIndex + 1]);
+          setAnimationClass('animate-slide-in-left');
+          setTimeout(() => setAnimationClass(''), 200);
+        }, 150);
+      } else if (diff < 0 && currentIndex > 0) {
+        // Swipe right -> previous tab
+        setAnimationClass('animate-slide-out-right');
+        setTimeout(() => {
+          setActiveTab(allTabs[currentIndex - 1]);
+          setAnimationClass('animate-slide-in-right');
+          setTimeout(() => setAnimationClass(''), 200);
+        }, 150);
+      }
+    }
+    
+    touchStartX.current = 0;
+    touchEndX.current = 0;
+  };
 
   const favoriteTracks = getFavoritesByType('track');
   const favoriteAlbums = getFavoritesByType('album');
@@ -153,7 +197,12 @@ const Library: React.FC = () => {
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       ) : (
-        <>
+        <div 
+          className={`${animationClass}`}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
           {/* Tracks */}
           {activeTab === 'tracks' && (
             <div>
@@ -411,7 +460,7 @@ const Library: React.FC = () => {
               )}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
