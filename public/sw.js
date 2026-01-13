@@ -1,6 +1,6 @@
-// Service Worker for Push Notifications and Offline Support - v0.11
-const CACHE_NAME = 'soundflow-v0.11';
-const APP_SHELL_CACHE = 'soundflow-app-shell-v0.11';
+// Service Worker for Push Notifications and Offline Support - v0.12
+const CACHE_NAME = 'soundflow-v0.12';
+const APP_SHELL_CACHE = 'soundflow-app-shell-v0.12';
 
 // App shell files to cache for offline access
 const APP_SHELL_FILES = [
@@ -11,8 +11,11 @@ const APP_SHELL_FILES = [
   '/icon-512.png',
 ];
 
+// Dynamic assets that should be cached when fetched
+const CACHEABLE_EXTENSIONS = ['.js', '.css', '.woff2', '.woff', '.ttf', '.png', '.jpg', '.jpeg', '.svg', '.ico'];
+
 self.addEventListener('install', (event) => {
-  console.log('[SW] Service Worker v0.11 installed');
+  console.log('[SW] Service Worker v0.12 installed');
   
   event.waitUntil(
     Promise.all([
@@ -21,13 +24,18 @@ self.addEventListener('install', (event) => {
         return Promise.all(
           cacheNames
             .filter((name) => name !== CACHE_NAME && name !== APP_SHELL_CACHE)
-            .map((name) => caches.delete(name))
+            .map((name) => {
+              console.log('[SW] Deleting old cache:', name);
+              return caches.delete(name);
+            })
         );
       }),
       // Cache app shell
       caches.open(APP_SHELL_CACHE).then((cache) => {
         console.log('[SW] Caching app shell');
-        return cache.addAll(APP_SHELL_FILES);
+        return cache.addAll(APP_SHELL_FILES).catch((err) => {
+          console.log('[SW] Failed to cache some app shell files:', err);
+        });
       }),
     ])
   );
@@ -36,11 +44,18 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Service Worker activated');
+  console.log('[SW] Service Worker v0.12 activated');
   event.waitUntil(clients.claim());
 });
 
-// Fetch handler with offline fallback
+// Helper to check if URL should be cached
+const shouldCache = (url) => {
+  const pathname = new URL(url).pathname;
+  return CACHEABLE_EXTENSIONS.some(ext => pathname.endsWith(ext)) || 
+         pathname.includes('/assets/');
+};
+
+// Fetch handler with network-first for HTML, cache-first for assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -48,29 +63,71 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return;
   
-  // Skip external requests (API calls, etc.)
+  // Skip external requests
   if (!url.origin.includes(self.location.origin)) return;
   
-  // Skip Supabase and API requests
+  // Skip API and Supabase requests
   if (url.pathname.includes('/functions/') || 
       url.pathname.includes('/rest/') ||
-      url.pathname.includes('/auth/')) return;
+      url.pathname.includes('/auth/') ||
+      url.hostname.includes('supabase')) return;
   
+  // For HTML requests (navigation), try network first, fallback to cache
+  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          // Cache the successful response
+          if (networkResponse.ok) {
+            const responseToCache = networkResponse.clone();
+            caches.open(APP_SHELL_CACHE).then((cache) => {
+              cache.put(request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // Offline - return cached index.html
+          console.log('[SW] Offline, serving cached index.html');
+          return caches.match('/index.html').then((cachedResponse) => {
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            return caches.match('/').then((rootResponse) => {
+              if (rootResponse) {
+                return rootResponse;
+              }
+              return new Response('Offline - App not cached', { 
+                status: 503,
+                headers: { 'Content-Type': 'text/html' }
+              });
+            });
+          });
+        })
+    );
+    return;
+  }
+  
+  // For other assets, try cache first, then network
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
-      // Return cached response if available
       if (cachedResponse) {
+        // Return cached response and update cache in background
+        fetch(request).then((networkResponse) => {
+          if (networkResponse.ok && shouldCache(request.url)) {
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, networkResponse);
+            });
+          }
+        }).catch(() => {});
+        
         return cachedResponse;
       }
       
-      // Try to fetch from network
+      // Not in cache, fetch from network
       return fetch(request).then((networkResponse) => {
         // Cache static assets
-        if (networkResponse.ok && 
-            (request.url.includes('/assets/') || 
-             request.url.endsWith('.js') || 
-             request.url.endsWith('.css') ||
-             request.url.endsWith('.woff2'))) {
+        if (networkResponse.ok && shouldCache(request.url)) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(request, responseToCache);
@@ -78,10 +135,8 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       }).catch(() => {
-        // If offline and requesting HTML, return cached index.html
-        if (request.headers.get('accept')?.includes('text/html')) {
-          return caches.match('/index.html');
-        }
+        // Asset not available offline
+        console.log('[SW] Asset not available offline:', request.url);
         return new Response('Offline', { status: 503 });
       });
     })
