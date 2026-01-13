@@ -53,13 +53,16 @@ const Library: React.FC = () => {
   const isPremiumActive = !simulateFreeUser && (profile?.is_premium && 
     (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at))));
   const canAccessOffline = isAdmin || isPremiumActive;
+  
+  // Show offline tab if: user can access offline features, OR has offline tracks, OR is currently offline
+  const showOfflineTab = canAccessOffline || offlineTracks.length > 0 || !isOnline;
 
   const tabs = [
     { id: 'tracks' as Tab, label: t('likedSongs'), icon: Heart },
     { id: 'albums' as Tab, label: t('albums'), icon: Disc },
     { id: 'artists' as Tab, label: t('artists'), icon: User },
     { id: 'playlists' as Tab, label: 'Playlist', icon: ListMusic },
-    ...(canAccessOffline ? [{ id: 'offline' as Tab, label: 'Offline', icon: Download }] : []),
+    ...(showOfflineTab ? [{ id: 'offline' as Tab, label: 'Offline', icon: Download }] : []),
   ];
 
   const favoriteTracks = getFavoritesByType('track');
@@ -308,7 +311,7 @@ const Library: React.FC = () => {
           )}
 
           {/* Offline */}
-          {activeTab === 'offline' && canAccessOffline && (
+          {activeTab === 'offline' && showOfflineTab && (
             <div>
               {/* Offline Header */}
               <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-6 md:mb-8 p-4 md:p-6 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20">
