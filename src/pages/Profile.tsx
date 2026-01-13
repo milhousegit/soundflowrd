@@ -26,6 +26,7 @@ import {
   Smartphone,
   Bell,
   ChevronRight,
+  ChevronDown,
   Info,
   Globe,
   Lock,
@@ -35,6 +36,9 @@ import {
   Share2,
   Gift,
   Sparkles,
+  Shield,
+  Users,
+  Send,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -639,36 +643,6 @@ const Settings: React.FC = () => {
           </div>
         </section>
 
-        {/* Admin Users Management - Only for admins */}
-        {isAdmin && (
-          <section className="rounded-xl bg-card overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
-              <Crown className="w-4 h-4 text-primary" />
-              <h2 className="text-sm font-semibold text-foreground">
-                {settings.language === 'it' ? 'Gestione Utenti Premium' : 'Premium Users Management'}
-              </h2>
-            </div>
-            <div className="p-4">
-              <AdminUsersManagement language={settings.language} />
-            </div>
-          </section>
-        )}
-
-        {/* Admin Notifications - Only for admins */}
-        {isAdmin && (
-          <section className="rounded-xl bg-card overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
-              <Bell className="w-4 h-4 text-primary" />
-              <h2 className="text-sm font-semibold text-foreground">
-                {settings.language === 'it' ? 'Notifiche Admin' : 'Admin Notifications'}
-              </h2>
-            </div>
-            <div className="p-4">
-              <AdminNotifications language={settings.language} />
-            </div>
-          </section>
-        )}
-
         {/* iOS Diagnostics */}
         {(isIOS() || isSafari() || isPWA()) && (
           <section className="rounded-xl bg-card overflow-hidden">
@@ -697,6 +671,50 @@ const Settings: React.FC = () => {
           </div>
           <ChevronRight className="w-4 h-4 text-muted-foreground" />
         </button>
+
+        {/* Admin Section - Only for admins */}
+        {isAdmin && (
+          <section className="rounded-xl bg-card overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-gradient-to-r from-[#8B5CF6]/10 to-[#3B82F6]/10">
+              <Shield className="w-4 h-4 text-[#8B5CF6]" />
+              <h2 className="text-sm font-semibold text-foreground">Admin</h2>
+            </div>
+            
+            <div className="divide-y divide-border">
+              {/* Users Management */}
+              <details className="group">
+                <summary className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-sm text-foreground">
+                      {settings.language === 'it' ? 'Gestione Utenti Premium' : 'Premium Users Management'}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="px-4 pb-4">
+                  <AdminUsersManagement language={settings.language} />
+                </div>
+              </details>
+
+              {/* Send Notifications */}
+              <details className="group">
+                <summary className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Send className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-sm text-foreground">
+                      {settings.language === 'it' ? 'Invia Notifiche' : 'Send Notifications'}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="px-4 pb-4">
+                  <AdminNotifications language={settings.language} />
+                </div>
+              </details>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

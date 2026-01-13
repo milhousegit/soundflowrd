@@ -16,8 +16,5 @@ verify_jwt = false
 verify_jwt = false
 schedule = "0 8 * * *"
 
-[functions.get-vapid-key]
-verify_jwt = false
-
 [functions.send-broadcast-notification]
 verify_jwt = false
