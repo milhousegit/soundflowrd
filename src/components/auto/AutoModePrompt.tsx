@@ -3,7 +3,6 @@ import { Car, Smartphone, X, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAutoMode } from './AutoModeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { isPast } from 'date-fns';
 
 const AutoModePrompt: React.FC = () => {
@@ -15,7 +14,6 @@ const AutoModePrompt: React.FC = () => {
     setPendingOrientation 
   } = useAutoMode();
   const { profile, isAdmin, simulateFreeUser } = useAuth();
-  const navigate = useNavigate();
 
   // Check if user has active premium (respect simulation mode)
   const isPremium = !simulateFreeUser && (isAdmin || (profile?.is_premium && 
@@ -43,7 +41,7 @@ const AutoModePrompt: React.FC = () => {
   const handleUnlockPremium = () => {
     setShowAutoModePrompt(false);
     setPendingOrientation(null);
-    navigate('/profile');
+    window.location.href = '/profile';
   };
 
   return (
