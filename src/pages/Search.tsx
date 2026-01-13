@@ -176,7 +176,14 @@ const Search: React.FC = () => {
 
   const handleQueryChange = (value: string) => {
     setQuery(value);
-    debouncedSearch(value);
+    // Trim trailing spaces before searching
+    const trimmedValue = value.trimEnd();
+    if (trimmedValue) {
+      debouncedSearch(trimmedValue);
+    } else if (!value) {
+      // Clear results when query is empty
+      setResults(null);
+    }
   };
 
   const handleRecentSearchClick = (search: string) => {
