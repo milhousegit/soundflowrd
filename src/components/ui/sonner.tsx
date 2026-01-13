@@ -10,6 +10,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      style={{
+        // Respect safe area for notch
+        top: 'max(env(safe-area-inset-top, 0px), 16px)',
+      }}
       toastOptions={{
         classNames: {
           toast:
