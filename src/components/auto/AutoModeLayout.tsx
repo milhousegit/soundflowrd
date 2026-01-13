@@ -18,22 +18,27 @@ const AutoModeLayout: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-[150] bg-background flex flex-row h-screen w-screen overflow-hidden">
-      {/* Left Menu - Icons only, no labels */}
-      <div className="w-20 min-w-[80px] bg-card border-r border-border flex flex-col justify-center gap-4 py-4 shrink-0 pl-[env(safe-area-inset-left)]">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              "flex items-center justify-center aspect-square mx-3 rounded-2xl transition-all",
-              activeTab === tab.id 
-                ? "bg-primary text-primary-foreground" 
-                : "text-muted-foreground hover:bg-secondary"
-            )}
-          >
-            <tab.icon className="w-8 h-8" />
-          </button>
-        ))}
+      {/* Left Menu - Large touch targets, well spaced */}
+      <div 
+        className="w-28 min-w-[112px] bg-card border-r border-border flex flex-col items-center justify-center shrink-0"
+        style={{ paddingLeft: 'env(safe-area-inset-left, 0px)' }}
+      >
+        <div className="flex flex-col items-center justify-center gap-6 w-full px-3">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "w-20 h-20 flex items-center justify-center rounded-2xl transition-all touch-manipulation",
+                activeTab === tab.id 
+                  ? "bg-primary text-primary-foreground" 
+                  : "text-muted-foreground hover:bg-secondary active:bg-secondary"
+              )}
+            >
+              <tab.icon className="w-10 h-10" />
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Main Content - Takes remaining space */}
