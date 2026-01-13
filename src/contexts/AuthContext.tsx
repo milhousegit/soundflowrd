@@ -36,11 +36,56 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const CACHE_KEY = 'soundflow_auth_cache';
+
+interface CachedAuthData {
+  isAdmin: boolean;
+  profile: Profile | null;
+  userId: string;
+  timestamp: number;
+}
+
+const getCachedAuthData = (): CachedAuthData | null => {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch (e) {
+    console.error('Error reading auth cache:', e);
+  }
+  return null;
+};
+
+const setCachedAuthData = (data: CachedAuthData) => {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error('Error saving auth cache:', e);
+  }
+};
+
+const clearCachedAuthData = () => {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch (e) {
+    console.error('Error clearing auth cache:', e);
+  }
+};
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(() => {
+    // Initialize from cache if offline
+    const cached = getCachedAuthData();
+    return cached?.profile ?? null;
+  });
+  const [isAdmin, setIsAdmin] = useState(() => {
+    // Initialize from cache if offline
+    const cached = getCachedAuthData();
+    return cached?.isAdmin ?? false;
+  });
   const [simulateFreeUser, setSimulateFreeUser] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -53,10 +98,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .eq('role', 'admin')
         .maybeSingle();
       
-      setIsAdmin(!error && !!data);
+      const adminStatus = !error && !!data;
+      setIsAdmin(adminStatus);
+      return adminStatus;
     } catch (error) {
       console.error('Error checking admin role:', error);
+      // If offline, keep cached value
+      const cached = getCachedAuthData();
+      if (cached?.userId === userId) {
+        setIsAdmin(cached.isAdmin);
+        return cached.isAdmin;
+      }
       setIsAdmin(false);
+      return false;
     }
   };
 
@@ -70,11 +124,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (!error && data) {
         setProfile(data);
+        return data;
       }
+      return null;
     } catch (error) {
       console.error('Error fetching profile:', error);
+      // If offline, keep cached value
+      const cached = getCachedAuthData();
+      if (cached?.userId === userId && cached.profile) {
+        setProfile(cached.profile);
+        return cached.profile;
+      }
+      return null;
     }
   };
+
+  // Update cache whenever profile or admin status changes
+  useEffect(() => {
+    if (user?.id && (profile || isAdmin)) {
+      setCachedAuthData({
+        isAdmin,
+        profile,
+        userId: user.id,
+        timestamp: Date.now(),
+      });
+    }
+  }, [profile, isAdmin, user?.id]);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -85,25 +160,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         if (session?.user) {
           // Defer profile fetch to avoid deadlock
-          setTimeout(() => {
-            fetchProfile(session.user.id);
-            checkAdminRole(session.user.id);
+          setTimeout(async () => {
+            const [profileData, adminStatus] = await Promise.all([
+              fetchProfile(session.user.id),
+              checkAdminRole(session.user.id),
+            ]);
+            
+            // Cache the data
+            setCachedAuthData({
+              isAdmin: adminStatus,
+              profile: profileData,
+              userId: session.user.id,
+              timestamp: Date.now(),
+            });
           }, 0);
         } else {
           setProfile(null);
           setIsAdmin(false);
+          clearCachedAuthData();
         }
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        fetchProfile(session.user.id);
-        checkAdminRole(session.user.id);
+        const [profileData, adminStatus] = await Promise.all([
+          fetchProfile(session.user.id),
+          checkAdminRole(session.user.id),
+        ]);
+        
+        // Cache the data
+        setCachedAuthData({
+          isAdmin: adminStatus,
+          profile: profileData,
+          userId: session.user.id,
+          timestamp: Date.now(),
+        });
       }
       
       setIsLoading(false);
