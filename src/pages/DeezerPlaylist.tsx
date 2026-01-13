@@ -72,9 +72,9 @@ const DeezerPlaylistPage: React.FC = () => {
     }
   };
 
-  // Create a fake album object for the favorite button
-  const playlistAsAlbum: Album = {
-    id: `deezer-${id}`,
+  // Create a playlist object for the favorite button
+  const playlistForFavorite: Album = {
+    id: `deezer-playlist-${id}`,
     title: playlist.title,
     artist: playlist.creator || 'Deezer',
     coverUrl: playlist.coverUrl || '',
@@ -132,8 +132,8 @@ const DeezerPlaylistPage: React.FC = () => {
         
         {/* Favorite button */}
         <FavoriteButton
-          itemType="album"
-          item={playlistAsAlbum}
+          itemType="playlist"
+          item={playlistForFavorite}
           size="lg"
           variant="ghost"
         />
