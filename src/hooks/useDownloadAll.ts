@@ -26,7 +26,7 @@ export const useDownloadAll = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'getTrack',
+          action: 'get-stream',
           trackId: track.id,
         }),
       });
@@ -43,15 +43,14 @@ export const useDownloadAll = () => {
         }
       }
 
-      // Fallback to squidwtf
+      // Fallback to squidwtf (Tidal)
       const squidResponse = await fetch(`${baseUrl}/functions/v1/squidwtf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'getTrack',
-          trackId: track.id,
-          trackTitle: track.title,
-          artistName: track.artist,
+          action: 'search-and-stream',
+          title: track.title,
+          artist: track.artist,
         }),
       });
 
