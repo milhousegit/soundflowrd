@@ -437,12 +437,7 @@ const Settings: React.FC = () => {
                   variant="outline" 
                   className="w-full h-9 text-sm gap-2 border-[#0088cc]/30 hover:bg-[#0088cc]/10"
                   onClick={() => {
-                    const command = settings.language === 'it' ? 'it' : 'en';
-                    const userEmail = profile?.email || '';
-                    // Encode email in base64 (url-safe: replace + with - and / with _)
-                    const encodedEmail = btoa(userEmail).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-                    const telegramUrl = `https://t.me/soundflowrdbot?start=${command}_${encodedEmail}`;
-                    window.open(telegramUrl, '_blank');
+                    window.open('https://t.me/soundflowrdbot', '_blank');
                   }}
                 >
                   <Send className="w-3.5 h-3.5 text-[#0088cc]" />
