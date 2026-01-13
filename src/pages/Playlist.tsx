@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle } from 'lucide-react';
+import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import BackButton from '@/components/BackButton';
@@ -8,12 +8,15 @@ import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { usePlaylists, PlaylistTrack, Playlist as PlaylistType } from '@/hooks/usePlaylists';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
+import { useDownloadAll } from '@/hooks/useDownloadAll';
 import { getDeezerPlaylist } from '@/lib/deezer';
 import { Track, Album } from '@/types/music';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { isPast } from 'date-fns';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +34,9 @@ const PlaylistPage: React.FC = () => {
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { t } = useSettings();
+  const { profile, isAdmin } = useAuth();
   const { getPlaylistTracks, deletePlaylist, updatePlaylist } = usePlaylists();
+  const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
   
   const [playlist, setPlaylist] = useState<PlaylistType | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -39,6 +44,10 @@ const PlaylistPage: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [editedCoverUrl, setEditedCoverUrl] = useState('');
+  
+  // Check if user can download (premium or admin)
+  const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
+  const canDownload = isPremiumActive || isAdmin;
   
   // Get track IDs for sync status checking
   const trackIds = useMemo(() => tracks.map(t => t.id), [tracks]);
@@ -261,6 +270,23 @@ const PlaylistPage: React.FC = () => {
           item={playlistAsAlbum}
           size="lg"
         />
+
+        {/* Download button - Premium only */}
+        {canDownload && tracks.length > 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => downloadAll(tracks, playlist.name)}
+            disabled={isDownloadingAll}
+            className="w-12 h-12"
+          >
+            {isDownloadingAll ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Download className="w-5 h-5 text-muted-foreground" />
+            )}
+          </Button>
+        )}
 
         {/* Edit button - only for non-Deezer playlists */}
         {!playlist.deezer_id && (

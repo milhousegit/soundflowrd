@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music } from 'lucide-react';
+import { Play, Clock, Music, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
 import BackButton from '@/components/BackButton';
@@ -8,19 +8,28 @@ import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { getAlbum } from '@/lib/deezer';
 import { mockAlbums, mockTracks } from '@/data/mockData';
 import { Album as AlbumType, Track } from '@/types/music';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
+import { useDownloadAll } from '@/hooks/useDownloadAll';
+import { isPast } from 'date-fns';
 
 const Album: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { t } = useSettings();
+  const { profile, isAdmin } = useAuth();
+  const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
   const [album, setAlbum] = useState<AlbumType | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Check if user can download (premium or admin)
+  const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
+  const canDownload = isPremiumActive || isAdmin;
   
   // Get track IDs for sync status checking
   const trackIds = useMemo(() => tracks.map(t => t.id), [tracks]);
@@ -148,6 +157,22 @@ const Album: React.FC = () => {
           variant="ghost"
         />
 
+        {/* Download button - Premium only */}
+        {canDownload && displayTracks.length > 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => downloadAll(displayTracks, album.title)}
+            disabled={isDownloadingAll}
+            className="w-12 h-12"
+          >
+            {isDownloadingAll ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Download className="w-5 h-5 text-muted-foreground" />
+            )}
+          </Button>
+        )}
       </div>
 
       {/* Track List */}
