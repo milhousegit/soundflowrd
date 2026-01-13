@@ -44,13 +44,13 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   onPlaylistCreated,
 }) => {
   const { createPlaylist, addTracksToPlaylist } = usePlaylists();
-  const { profile, isAdmin } = useAuth();
+  const { profile, isAdmin, simulateFreeUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'manual' | 'import'>('manual');
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
-  // Check if user has active premium
-  const isPremium = isAdmin || (profile?.is_premium && 
-    (!profile?.premium_expires_at || new Date(profile.premium_expires_at) > new Date()));
+  // Check if user has active premium (respect simulation mode)
+  const isPremium = !simulateFreeUser && (isAdmin || (profile?.is_premium && 
+    (!profile?.premium_expires_at || new Date(profile.premium_expires_at) > new Date())));
   
   // Manual creation state
   const [manualName, setManualName] = useState('');

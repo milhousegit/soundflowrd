@@ -21,6 +21,8 @@ interface AuthContextType {
   credentials: UserCredentials | null;
   isLoading: boolean;
   isAdmin: boolean;
+  simulateFreeUser: boolean;
+  setSimulateFreeUser: (value: boolean) => void;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -38,6 +40,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [simulateFreeUser, setSimulateFreeUser] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const checkAdminRole = async (userId: string) => {
@@ -216,6 +219,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const isAuthenticated = !!user;
 
+  // Effective admin status (disabled when simulating free user)
+  const effectiveIsAdmin = isAdmin && !simulateFreeUser;
+
   return (
     <AuthContext.Provider value={{
       isAuthenticated,
@@ -224,7 +230,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       profile,
       credentials,
       isLoading,
-      isAdmin,
+      isAdmin: effectiveIsAdmin,
+      simulateFreeUser,
+      setSimulateFreeUser,
       signUp,
       signIn,
       signOut,
