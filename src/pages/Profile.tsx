@@ -58,7 +58,9 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import IOSDiagnostics from '@/components/IOSDiagnostics';
 import AdminNotifications from '@/components/AdminNotifications';
+import AdminUsersManagement from '@/components/AdminUsersManagement';
 import { isIOS, isSafari, isPWA } from '@/hooks/useIOSAudioSession';
+import { isPast } from 'date-fns';
 
 interface CloudFile {
   id: string;
@@ -90,6 +92,9 @@ const Settings: React.FC = () => {
   const [showCloudSection, setShowCloudSection] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
+  // Check if user has active premium
+  const isPremiumActive = profile?.is_premium && 
+    (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at)));
   const hasRdApiKey = !!credentials?.realDebridApiKey;
 
   // Check if user is admin
@@ -304,8 +309,8 @@ const Settings: React.FC = () => {
               </select>
             </div>
 
-            {/* Premium CTA */}
-            {!isAdmin && (
+            {/* Premium CTA - Show only for non-admin and non-premium users */}
+            {!isAdmin && !isPremiumActive && (
               <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
                 <DialogTrigger asChild>
                   <button className="w-full p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] hover:opacity-90 transition-opacity shadow-lg">
@@ -440,7 +445,7 @@ const Settings: React.FC = () => {
 
               {/* Hybrid (Premium) */}
               <button
-                onClick={() => isAdmin ? setAudioSourceMode('hybrid_priority') : setShowPremiumModal(true)}
+                onClick={() => (isAdmin || isPremiumActive) ? setAudioSourceMode('hybrid_priority') : setShowPremiumModal(true)}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
                   audioSourceMode === 'hybrid_priority' 
                     ? 'bg-gradient-to-r from-[#8B5CF6]/15 to-[#3B82F6]/15 ring-1 ring-[#8B5CF6]/40' 
@@ -453,7 +458,7 @@ const Settings: React.FC = () => {
                     <p className={`text-sm font-medium ${audioSourceMode === 'hybrid_priority' ? 'text-[#8B5CF6]' : 'text-foreground'}`}>
                       {t('hybridPriority')}
                     </p>
-                    {!isAdmin && (
+                    {!isAdmin && !isPremiumActive && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white font-semibold">
                         PRO
                       </span>
@@ -633,6 +638,21 @@ const Settings: React.FC = () => {
             ))}
           </div>
         </section>
+
+        {/* Admin Users Management - Only for admins */}
+        {isAdmin && (
+          <section className="rounded-xl bg-card overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
+              <Crown className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-semibold text-foreground">
+                {settings.language === 'it' ? 'Gestione Utenti Premium' : 'Premium Users Management'}
+              </h2>
+            </div>
+            <div className="p-4">
+              <AdminUsersManagement language={settings.language} />
+            </div>
+          </section>
+        )}
 
         {/* Admin Notifications - Only for admins */}
         {isAdmin && (
