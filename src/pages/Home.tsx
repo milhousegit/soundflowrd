@@ -318,39 +318,90 @@ const Home: React.FC = () => {
             </Button>
           </div>
           
-          {isLoadingPlaylists ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex-shrink-0 w-32">
-                  <AlbumCardSkeleton />
+          {(() => {
+            const favoritePlaylists = getFavoritesByType('playlist');
+            const allPlaylistsEmpty = playlists.length === 0 && favoritePlaylists.length === 0;
+            
+            if (isLoadingPlaylists) {
+              return (
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex-shrink-0 w-32">
+                      <AlbumCardSkeleton />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : playlists.length === 0 ? (
-            <div 
-              className="text-center py-8 bg-secondary/30 rounded-xl cursor-pointer hover:bg-secondary/50 transition-colors"
-              onClick={() => setShowCreatePlaylist(true)}
-            >
-              <ListMusic className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-muted-foreground">
-                {t('language') === 'it' 
-                  ? "Crea la tua prima playlist" 
-                  : "Create your first playlist"}
-              </p>
-              <Button variant="outline" size="sm" className="mt-3">
-                <Plus className="w-4 h-4 mr-1" />
-                Nuova Playlist
-              </Button>
-            </div>
-          ) : (
-            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
-              {playlists.map((playlist) => (
-                <div key={playlist.id} className="flex-shrink-0 w-32 md:w-auto">
-                  <PlaylistCard playlist={playlist} />
+              );
+            }
+            
+            if (allPlaylistsEmpty) {
+              return (
+                <div 
+                  className="text-center py-8 bg-secondary/30 rounded-xl cursor-pointer hover:bg-secondary/50 transition-colors"
+                  onClick={() => setShowCreatePlaylist(true)}
+                >
+                  <ListMusic className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-muted-foreground">
+                    {t('language') === 'it' 
+                      ? "Crea la tua prima playlist o salva quelle Deezer" 
+                      : "Create your first playlist or save Deezer ones"}
+                  </p>
+                  <Button variant="outline" size="sm" className="mt-3">
+                    <Plus className="w-4 h-4 mr-1" />
+                    Nuova Playlist
+                  </Button>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            }
+            
+            return (
+              <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
+                {/* User created playlists */}
+                {playlists.map((playlist) => (
+                  <div key={playlist.id} className="flex-shrink-0 w-32 md:w-auto">
+                    <PlaylistCard playlist={playlist} />
+                  </div>
+                ))}
+                {/* Deezer favorite playlists */}
+                {favoritePlaylists.map((fav) => {
+                  const isDeezerPlaylist = fav.item_id.startsWith('deezer-playlist-');
+                  const deezerId = isDeezerPlaylist ? fav.item_id.replace('deezer-playlist-', '') : null;
+                  
+                  return (
+                    <TapArea
+                      key={fav.id}
+                      onTap={() => {
+                        if (deezerId) {
+                          window.location.href = `/deezer-playlist/${deezerId}`;
+                        }
+                      }}
+                      className="flex-shrink-0 w-32 md:w-auto group cursor-pointer touch-manipulation"
+                    >
+                      <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted">
+                        {fav.item_cover_url ? (
+                          <img
+                            src={fav.item_cover_url}
+                            alt={fav.item_title}
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <ListMusic className="w-8 md:w-12 h-8 md:h-12 text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
+                      <h3 className="font-medium text-sm text-foreground truncate">
+                        {fav.item_title}
+                      </h3>
+                      <p className="text-xs text-muted-foreground truncate">
+                        Playlist
+                      </p>
+                    </TapArea>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </section>
       )}
 
