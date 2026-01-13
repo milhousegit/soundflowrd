@@ -513,39 +513,59 @@ const Settings: React.FC = () => {
 
               {/* Real-Debrid */}
               <button
-                onClick={() => setAudioSourceMode('rd_priority')}
+                onClick={() => hasRdApiKey ? setAudioSourceMode('rd_priority') : null}
+                disabled={!hasRdApiKey}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
-                  audioSourceMode === 'rd_priority' 
-                    ? 'bg-primary/15 ring-1 ring-primary/40' 
-                    : 'bg-secondary/50 hover:bg-secondary'
+                  !hasRdApiKey 
+                    ? 'opacity-50 cursor-not-allowed bg-secondary/30' 
+                    : audioSourceMode === 'rd_priority' 
+                      ? 'bg-primary/15 ring-1 ring-primary/40' 
+                      : 'bg-secondary/50 hover:bg-secondary'
                 }`}
               >
-                <Cloud className={`w-4 h-4 ${audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-muted-foreground'}`} />
+                <Cloud className={`w-4 h-4 ${audioSourceMode === 'rd_priority' && hasRdApiKey ? 'text-primary' : 'text-muted-foreground'}`} />
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium ${audioSourceMode === 'rd_priority' ? 'text-primary' : 'text-foreground'}`}>
-                    {t('rdPriority')}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className={`text-sm font-medium ${audioSourceMode === 'rd_priority' && hasRdApiKey ? 'text-primary' : 'text-foreground'}`}>
+                      {t('rdPriority')}
+                    </p>
+                    {!hasRdApiKey && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                        {settings.language === 'it' ? 'Richiede API' : 'Requires API'}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground truncate">{t('rdPriorityDesc')}</p>
                 </div>
-                {audioSourceMode === 'rd_priority' && <Check className="w-4 h-4 text-primary shrink-0" />}
+                {audioSourceMode === 'rd_priority' && hasRdApiKey && <Check className="w-4 h-4 text-primary shrink-0" />}
               </button>
 
               {/* Hybrid (Premium) */}
               <button
-                onClick={() => (isAdmin || isPremiumActive) ? setAudioSourceMode('hybrid_priority') : setShowPremiumModal(true)}
+                onClick={() => {
+                  if (!hasRdApiKey) return;
+                  (isAdmin || isPremiumActive) ? setAudioSourceMode('hybrid_priority') : setShowPremiumModal(true);
+                }}
+                disabled={!hasRdApiKey}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
-                  audioSourceMode === 'hybrid_priority' 
-                    ? 'bg-gradient-to-r from-[#8B5CF6]/15 to-[#3B82F6]/15 ring-1 ring-[#8B5CF6]/40' 
-                    : 'bg-secondary/50 hover:bg-secondary'
+                  !hasRdApiKey 
+                    ? 'opacity-50 cursor-not-allowed bg-secondary/30' 
+                    : audioSourceMode === 'hybrid_priority' 
+                      ? 'bg-gradient-to-r from-[#8B5CF6]/15 to-[#3B82F6]/15 ring-1 ring-[#8B5CF6]/40' 
+                      : 'bg-secondary/50 hover:bg-secondary'
                 }`}
               >
-                <Crown className={`w-4 h-4 ${audioSourceMode === 'hybrid_priority' ? 'text-[#8B5CF6]' : 'text-muted-foreground'}`} />
+                <Crown className={`w-4 h-4 ${audioSourceMode === 'hybrid_priority' && hasRdApiKey ? 'text-[#8B5CF6]' : 'text-muted-foreground'}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <p className={`text-sm font-medium ${audioSourceMode === 'hybrid_priority' ? 'text-[#8B5CF6]' : 'text-foreground'}`}>
+                    <p className={`text-sm font-medium ${audioSourceMode === 'hybrid_priority' && hasRdApiKey ? 'text-[#8B5CF6]' : 'text-foreground'}`}>
                       {t('hybridPriority')}
                     </p>
-                    {!isAdmin && !isPremiumActive && (
+                    {!hasRdApiKey ? (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                        {settings.language === 'it' ? 'Richiede API' : 'Requires API'}
+                      </span>
+                    ) : !isAdmin && !isPremiumActive && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white font-semibold">
                         PRO
                       </span>
@@ -553,7 +573,7 @@ const Settings: React.FC = () => {
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{t('hybridPriorityDesc')}</p>
                 </div>
-                {audioSourceMode === 'hybrid_priority' && <Check className="w-4 h-4 text-[#8B5CF6] shrink-0" />}
+                {audioSourceMode === 'hybrid_priority' && hasRdApiKey && <Check className="w-4 h-4 text-[#8B5CF6] shrink-0" />}
               </button>
             </div>
 

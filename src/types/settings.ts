@@ -27,7 +27,7 @@ export const defaultSettings: AppSettings = {
   audioQuality: 'high',
   crossfade: 0,
   realDebridApiKey: undefined,
-  audioSourceMode: 'deezer_priority',
+  audioSourceMode: 'deezer_priority', // Default to Scraping Ponte (no RD API key required)
 };
 
 export const translations = {

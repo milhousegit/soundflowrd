@@ -2,17 +2,21 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import BugsModal from './BugsModal';
 import QueueModal from './QueueModal';
 import FavoriteButton from './FavoriteButton';
+import { useToast } from '@/hooks/use-toast';
+import { isPast } from 'date-fns';
 
 import {
   Bug,
   ChevronDown,
   ChevronUp,
   Cloud,
+  Download,
   ListMusic,
   Loader2,
   Music,
@@ -35,6 +39,8 @@ const formatTime = (seconds: number) => {
 
 const Player: React.FC = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { profile, isAdmin: contextIsAdmin, simulateFreeUser } = useAuth();
   const {
     currentTrack,
     isPlaying,
@@ -71,7 +77,17 @@ const Player: React.FC = () => {
     currentAudioSource,
   } = usePlayer();
 
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
+  
+  // Check if user has active premium
+  const isPremiumActive = !simulateFreeUser && (profile?.is_premium && 
+    (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at))));
+  const canDownload = contextIsAdmin || isPremiumActive;
+  
+  const [isDownloading, setIsDownloading] = useState(false);
+  
+  // Get current stream URL from alternatives
+  const currentStreamUrl = alternativeStreams.find(s => s.id === currentStreamId)?.streamUrl;
 
   const [showBugsModal, setShowBugsModal] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
@@ -142,6 +158,44 @@ const Player: React.FC = () => {
 
   const handleSelectFile = async (torrentId: string, fileIds: number[]) => {
     await selectTorrentFile(torrentId, fileIds);
+  };
+
+  // Download handler for premium users
+  const handleDownload = async () => {
+    if (!currentTrack || !currentStreamUrl || isDownloading) return;
+    
+    setIsDownloading(true);
+    try {
+      const response = await fetch(currentStreamUrl);
+      if (!response.ok) throw new Error('Download failed');
+      
+      const blob = await response.blob();
+      const filename = `${currentTrack.artist} - ${currentTrack.title}.mp3`;
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast({
+        title: settings.language === 'it' ? 'Download completato!' : 'Download complete!',
+        description: filename,
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: settings.language === 'it' ? 'Errore download' : 'Download error',
+        description: settings.language === 'it' ? 'Impossibile scaricare il brano' : 'Could not download track',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   // Touch handlers for swipe to close
@@ -318,7 +372,20 @@ const Player: React.FC = () => {
               </Button>
             </div>
 
-            <FavoriteButton itemType="track" item={currentTrack} size="md" variant="ghost" className="h-11 w-11" />
+            <div className="flex items-center gap-1">
+              {canDownload && currentStreamUrl && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 text-muted-foreground hover:text-primary"
+                  onClick={handleDownload}
+                  disabled={isDownloading}
+                >
+                  {isDownloading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                </Button>
+              )}
+              <FavoriteButton itemType="track" item={currentTrack} size="md" variant="ghost" className="h-11 w-11" />
+            </div>
           </div>
         </div>
       )}
@@ -443,6 +510,18 @@ const Player: React.FC = () => {
             >
               {isSearchingStreams ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bug className="w-5 h-5" />}
             </Button>
+            {canDownload && currentStreamUrl && (
+              <Button
+                variant="playerSecondary"
+                size="icon"
+                onClick={handleDownload}
+                disabled={isDownloading}
+                className="text-muted-foreground hover:text-primary"
+                title={settings.language === 'it' ? 'Scarica' : 'Download'}
+              >
+                {isDownloading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+              </Button>
+            )}
             <Button variant="playerSecondary" size="icon" onClick={() => setVolume(volume === 0 ? 0.7 : 0)}>
               {volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </Button>
