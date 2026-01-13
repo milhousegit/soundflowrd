@@ -40,7 +40,7 @@ const Info: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">SoundFlow</p>
-                <p className="text-sm text-muted-foreground">v0.8.6</p>
+                <p className="text-sm text-muted-foreground">v0.9</p>
               </div>
               <Button
                 variant="outline"
