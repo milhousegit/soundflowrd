@@ -45,24 +45,42 @@ serve(async (req) => {
 
     // Action: mark_sent - Update tracking after notification sent
     if (action === "mark_sent" && req.method === "POST") {
-      const { user_id, artist_id, album_id } = await req.json();
+      const { user_id, artist_id, album_id, artist_name } = await req.json();
       
       console.log(`Marking album ${album_id} as sent for user ${user_id}, artist ${artist_id}`);
       
-      const { error } = await supabase
+      // Try update first (record should exist from check phase)
+      const { data: updateResult, error: updateError } = await supabase
         .from("artist_release_tracking")
-        .upsert({
-          user_id,
-          artist_id,
+        .update({
           last_album_id: String(album_id),
           last_check_at: new Date().toISOString(),
-        }, {
-          onConflict: "user_id,artist_id"
-        });
+        })
+        .eq("user_id", user_id)
+        .eq("artist_id", artist_id)
+        .select("id");
 
-      if (error) {
-        console.error("Error updating tracking:", error);
-        throw error;
+      if (updateError) {
+        console.error("Error updating tracking:", updateError);
+        throw updateError;
+      }
+
+      // If no record was updated and artist_name is provided, insert new record
+      if ((!updateResult || updateResult.length === 0) && artist_name) {
+        const { error: insertError } = await supabase
+          .from("artist_release_tracking")
+          .insert({
+            user_id,
+            artist_id,
+            artist_name,
+            last_album_id: String(album_id),
+            last_check_at: new Date().toISOString(),
+          });
+
+        if (insertError) {
+          console.error("Error inserting tracking:", insertError);
+          throw insertError;
+        }
       }
 
       return new Response(JSON.stringify({ success: true }), {
