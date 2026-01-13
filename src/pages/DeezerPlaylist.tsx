@@ -1,18 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Shuffle, Music, Heart, Plus, Download, Loader2 } from 'lucide-react';
+import { Play, Shuffle, Music, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
+import FavoriteButton from '@/components/FavoriteButton';
 import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePlaylists } from '@/hooks/usePlaylists';
 import { useDownloadAll } from '@/hooks/useDownloadAll';
 import { getDeezerPlaylist, DeezerPlaylist } from '@/lib/deezer';
-import { Track } from '@/types/music';
-import { toast } from 'sonner';
+import { Track, Album } from '@/types/music';
 import { isPast } from 'date-fns';
 
 const DeezerPlaylistPage: React.FC = () => {
@@ -21,7 +20,6 @@ const DeezerPlaylistPage: React.FC = () => {
   const { playTrack } = usePlayer();
   const { t } = useSettings();
   const { profile, isAdmin } = useAuth();
-  const { createPlaylist } = usePlaylists();
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
   
   // Check if user can download (premium or admin)
@@ -30,7 +28,6 @@ const DeezerPlaylistPage: React.FC = () => {
   
   const [playlist, setPlaylist] = useState<(DeezerPlaylist & { tracks: Track[] }) | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const fetchPlaylist = async () => {
@@ -75,33 +72,13 @@ const DeezerPlaylistPage: React.FC = () => {
     }
   };
 
-  const handleSaveToLibrary = async () => {
-    if (!playlist || !id || isSaving) return;
-    
-    setIsSaving(true);
-    try {
-      // Save the Deezer playlist as a reference (not a copy)
-      const newPlaylist = await createPlaylist(
-        playlist.title,
-        playlist.coverUrl,
-        playlist.description || `Playlist Deezer • ${playlist.creator}`,
-        undefined, // spotifyUrl
-        id // deezerId - save the reference
-      );
-      
-      if (newPlaylist) {
-        toast.success('Playlist salvata!', {
-          description: `"${playlist.title}" è stata aggiunta alla tua libreria`,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to save playlist:', error);
-      toast.error('Errore nel salvataggio', {
-        description: 'Non è stato possibile salvare la playlist',
-      });
-    } finally {
-      setIsSaving(false);
-    }
+  // Create a fake album object for the favorite button
+  const playlistAsAlbum: Album = {
+    id: `deezer-${id}`,
+    title: playlist.title,
+    artist: playlist.creator || 'Deezer',
+    coverUrl: playlist.coverUrl || '',
+    artistId: '',
   };
 
   return (
@@ -145,13 +122,21 @@ const DeezerPlaylistPage: React.FC = () => {
       </div>
 
       {/* Actions */}
-      <div className="px-4 md:px-8 py-4 md:py-6 flex items-center gap-3 md:gap-4">
+      <div className="px-4 md:px-8 py-4 md:py-6 flex items-center gap-3">
         <Button variant="player" size="player" onClick={handlePlayAll} disabled={playlist.tracks.length === 0}>
           <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
         </Button>
         <Button variant="ghost" size="icon" className="w-10 h-10 md:w-12 md:h-12" onClick={handleShuffle} disabled={playlist.tracks.length === 0}>
           <Shuffle className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
+        
+        {/* Favorite button */}
+        <FavoriteButton
+          itemType="album"
+          item={playlistAsAlbum}
+          size="lg"
+          variant="ghost"
+        />
         
         {/* Download button - Premium only */}
         {canDownload && playlist.tracks.length > 0 && (
@@ -169,17 +154,6 @@ const DeezerPlaylistPage: React.FC = () => {
             )}
           </Button>
         )}
-        
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleSaveToLibrary}
-          disabled={isSaving}
-          className="ml-auto"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          {isSaving ? 'Salvataggio...' : 'Salva in libreria'}
-        </Button>
       </div>
 
       {/* Tracks */}
