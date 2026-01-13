@@ -30,18 +30,22 @@ serve(async (req) => {
     // Find user by email and update telegram_chat_id
     const { data, error } = await supabase
       .from("profiles")
-      .update({ telegram_chat_id })
+      .update({ telegram_chat_id: String(telegram_chat_id) })
       .eq("email", email)
       .select("id, email, telegram_chat_id")
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("Error updating profile:", error);
-      throw error;
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (!data) {
-      return new Response(JSON.stringify({ error: "User not found" }), {
+      console.log(`User not found with email: ${email}`);
+      return new Response(JSON.stringify({ error: "User not found", email }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
