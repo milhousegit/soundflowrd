@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Track, Album, Artist } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -44,6 +45,7 @@ const Home: React.FC = () => {
   const { playlists, isLoading: isLoadingPlaylists, addTrackToPlaylist } = usePlaylists();
   const { recentTracks, isLoading: isLoadingRecent } = useRecentlyPlayed();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
 
   // Get country code from language
   const getCountryFromLanguage = (lang: string): string => {
@@ -372,7 +374,7 @@ const Home: React.FC = () => {
                       key={fav.id}
                       onTap={() => {
                         if (deezerId) {
-                          window.location.href = `/deezer-playlist/${deezerId}`;
+                          navigate(`/deezer-playlist/${deezerId}`);
                         }
                       }}
                       className="flex-shrink-0 w-32 md:w-auto group cursor-pointer touch-manipulation"

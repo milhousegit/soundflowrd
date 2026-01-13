@@ -72,21 +72,29 @@ const Library: React.FC = () => {
   ];
 
   // Swipe navigation
+  const touchStartY = useRef(0);
+  const touchEndY = useRef(0);
+  
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     touchEndX.current = e.touches[0].clientX;
+    touchEndY.current = e.touches[0].clientY;
   };
 
   const handleTouchEnd = () => {
-    const diff = touchStartX.current - touchEndX.current;
+    const diffX = touchStartX.current - touchEndX.current;
+    const diffY = touchStartY.current - touchEndY.current;
     const threshold = 50;
     const currentIndex = allTabs.indexOf(activeTab);
 
-    if (Math.abs(diff) > threshold) {
-      if (diff > 0 && currentIndex < allTabs.length - 1) {
+    // Only trigger horizontal swipe if horizontal movement is greater than vertical
+    // This prevents interference with normal scrolling and track tapping
+    if (Math.abs(diffX) > threshold && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+      if (diffX > 0 && currentIndex < allTabs.length - 1) {
         // Swipe left -> next tab
         setAnimationClass('animate-slide-out-left');
         setTimeout(() => {
@@ -94,7 +102,7 @@ const Library: React.FC = () => {
           setAnimationClass('animate-slide-in-left');
           setTimeout(() => setAnimationClass(''), 200);
         }, 150);
-      } else if (diff < 0 && currentIndex > 0) {
+      } else if (diffX < 0 && currentIndex > 0) {
         // Swipe right -> previous tab
         setAnimationClass('animate-slide-out-right');
         setTimeout(() => {
@@ -107,6 +115,8 @@ const Library: React.FC = () => {
     
     touchStartX.current = 0;
     touchEndX.current = 0;
+    touchStartY.current = 0;
+    touchEndY.current = 0;
   };
 
   const favoriteTracks = getFavoritesByType('track');
