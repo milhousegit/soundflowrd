@@ -45,7 +45,23 @@ const Info: React.FC = () => {
               <Button
                 variant="outline"
                 className="gap-2"
-                onClick={() => window.location.reload()}
+                onClick={async () => {
+                  try {
+                    // Clear all caches
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map(name => caches.delete(name)));
+                    
+                    // Unregister all service workers
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map(reg => reg.unregister()));
+                    
+                    // Force reload from server
+                    window.location.reload();
+                  } catch (error) {
+                    console.error('Failed to clear cache:', error);
+                    window.location.reload();
+                  }
+                }}
               >
                 <RefreshCw className="w-4 h-4" />
                 {isItalian ? 'Aggiorna' : 'Update'}
