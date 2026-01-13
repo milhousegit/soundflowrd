@@ -39,6 +39,8 @@ import {
   Shield,
   Users,
   Send,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -77,14 +79,14 @@ interface CloudFile {
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
-  const { profile, updateApiKey, signOut, credentials, user } = useAuth();
+  const { profile, updateApiKey, signOut, credentials, user, isAdmin: contextIsAdmin, simulateFreeUser, setSimulateFreeUser } = useAuth();
   const { settings, updateSettings, t, audioSourceMode, setAudioSourceMode } = useSettings();
   const { toast } = useToast();
 
   const [isEditingApiKey, setIsEditingApiKey] = useState(false);
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isActualAdmin, setIsActualAdmin] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -96,12 +98,15 @@ const Settings: React.FC = () => {
   const [showCloudSection, setShowCloudSection] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
-  // Check if user has active premium
-  const isPremiumActive = profile?.is_premium && 
-    (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at)));
+  // Check if user has active premium (respect simulation mode)
+  const isPremiumActive = !simulateFreeUser && (profile?.is_premium && 
+    (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at))));
   const hasRdApiKey = !!credentials?.realDebridApiKey;
+  
+  // Use context isAdmin for most UI, but track actual admin for showing admin section
+  const isAdmin = contextIsAdmin;
 
-  // Check if user is admin
+  // Check if user is actually admin (for showing admin section even in simulation)
   useEffect(() => {
     const checkAdminRole = async () => {
       if (!user?.id) return;
@@ -113,7 +118,7 @@ const Settings: React.FC = () => {
         .eq('role', 'admin')
         .maybeSingle();
       
-      setIsAdmin(!!data);
+      setIsActualAdmin(!!data);
     };
     
     checkAdminRole();
@@ -314,7 +319,7 @@ const Settings: React.FC = () => {
             </div>
 
             {/* Premium CTA - Show only for non-admin and non-premium users */}
-            {!isAdmin && !isPremiumActive && (
+            {!isActualAdmin && !isPremiumActive && (
               <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
                 <DialogTrigger asChild>
                   <button className="w-full p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] hover:opacity-90 transition-opacity shadow-lg">
@@ -672,8 +677,8 @@ const Settings: React.FC = () => {
           <ChevronRight className="w-4 h-4 text-muted-foreground" />
         </button>
 
-        {/* Admin Section - Only for admins */}
-        {isAdmin && (
+        {/* Admin Section - Only for actual admins (shown even in simulation mode) */}
+        {isActualAdmin && (
           <section className="rounded-xl bg-card overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-gradient-to-r from-[#8B5CF6]/10 to-[#3B82F6]/10">
               <Shield className="w-4 h-4 text-[#8B5CF6]" />
@@ -681,6 +686,31 @@ const Settings: React.FC = () => {
             </div>
             
             <div className="divide-y divide-border">
+              {/* Simulate Free User Toggle */}
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-2">
+                  {simulateFreeUser ? (
+                    <EyeOff className="w-3.5 h-3.5 text-amber-500" />
+                  ) : (
+                    <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                  )}
+                  <div>
+                    <span className="text-sm text-foreground">
+                      {settings.language === 'it' ? 'Simula Utente Free' : 'Simulate Free User'}
+                    </span>
+                    {simulateFreeUser && (
+                      <p className="text-xs text-amber-500">
+                        {settings.language === 'it' ? 'Modalità attiva' : 'Mode active'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <Switch 
+                  checked={simulateFreeUser}
+                  onCheckedChange={setSimulateFreeUser}
+                />
+              </div>
+
               {/* Users Management */}
               <details className="group">
                 <summary className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors">
