@@ -437,9 +437,11 @@ const Settings: React.FC = () => {
                   variant="outline" 
                   className="w-full h-9 text-sm gap-2 border-[#0088cc]/30 hover:bg-[#0088cc]/10"
                   onClick={() => {
-                    const command = settings.language === 'it' ? 'connectit' : 'connecten';
+                    const command = settings.language === 'it' ? 'it' : 'en';
                     const userEmail = profile?.email || '';
-                    const telegramUrl = `https://t.me/soundflowrdbot?start=${command}_${encodeURIComponent(userEmail)}`;
+                    // Encode email in base64 (url-safe: replace + with - and / with _)
+                    const encodedEmail = btoa(userEmail).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                    const telegramUrl = `https://t.me/soundflowrdbot?start=${command}_${encodedEmail}`;
                     window.open(telegramUrl, '_blank');
                   }}
                 >
