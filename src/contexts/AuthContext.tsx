@@ -9,6 +9,8 @@ interface Profile {
   real_debrid_api_key: string | null;
   preferred_language: string | null;
   audio_source_mode: string | null;
+  is_premium: boolean | null;
+  premium_expires_at: string | null;
 }
 
 interface AuthContextType {

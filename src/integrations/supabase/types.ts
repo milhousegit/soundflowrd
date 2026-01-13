@@ -274,7 +274,9 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          is_premium: boolean | null
           preferred_language: string | null
+          premium_expires_at: string | null
           real_debrid_api_key: string | null
           updated_at: string
         }
@@ -283,7 +285,9 @@ export type Database = {
           created_at?: string
           email?: string | null
           id: string
+          is_premium?: boolean | null
           preferred_language?: string | null
+          premium_expires_at?: string | null
           real_debrid_api_key?: string | null
           updated_at?: string
         }
@@ -292,7 +296,9 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          is_premium?: boolean | null
           preferred_language?: string | null
+          premium_expires_at?: string | null
           real_debrid_api_key?: string | null
           updated_at?: string
         }
