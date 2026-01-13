@@ -70,13 +70,6 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const isOffline = isTrackOffline(track.id);
     
     const isCurrentTrackLoading = isCurrentTrack && loadingPhase !== 'idle';
-    
-    const showSearchingLoader = isCurrentTrack && loadingPhase === 'searching';
-    const showLoadingCloud = isCurrentTrack && loadingPhase === 'loading';
-    const showDownloadingCloud = isCurrentTrack 
-      ? loadingPhase === 'downloading'
-      : (isDownloading && !isSynced);
-    const showSyncedCloud = isSynced && !isCurrentTrackLoading && !showDownloadingCloud;
 
     const handleDownloadSingle = async (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -247,30 +240,24 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
 
     const tap = useTap({ onTap: handleTapClick });
 
-    // Render status icon
+    // Render status icon - simplified:
+    // - Green cloud ONLY if mapped and immediately available on RD
+    // - Green download ONLY if downloaded offline
+    // - Nothing for everything else
     const renderStatusIcon = () => {
       if (!showSyncStatus) return null;
       
-      // Loading states for current track
-      if (showSearchingLoader) {
-        return <Loader2 className="w-3.5 h-3.5 flex-shrink-0 text-primary animate-spin" />;
-      }
-      if (showLoadingCloud) {
-        return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-primary animate-pulse" />;
-      }
-      // Downloading - blue pulsing cloud (not solid!)
-      if (showDownloadingCloud) {
-        return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-blue-500 animate-pulse" />;
-      }
-      // Synced with direct_link (Real-Debrid) - solid green cloud
-      if (showSyncedCloud) {
-        return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />;
-      }
-      // Syncing (not current track) - show spinning loader
-      if (isSyncing && !isCurrentTrack) {
-        return <Loader2 className="w-3.5 h-3.5 flex-shrink-0 text-primary animate-spin" />;
+      // Downloaded offline - green download icon
+      if (isOffline) {
+        return <Download className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />;
       }
       
+      // Synced with direct_link (mapped and available on Real-Debrid) - solid green cloud
+      if (isSynced) {
+        return <Cloud className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />;
+      }
+      
+      // Everything else: no icon
       return null;
     };
 
