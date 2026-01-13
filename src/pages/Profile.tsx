@@ -368,6 +368,21 @@ const Settings: React.FC = () => {
               </Dialog>
             )}
 
+            {/* Connect Telegram */}
+            <div className="pt-2">
+              <Button 
+                variant="outline" 
+                className="w-full h-9 text-sm gap-2 border-[#0088cc]/30 hover:bg-[#0088cc]/10"
+                onClick={() => {
+                  const telegramUrl = `https://t.me/soundflowrdbot?start=${user?.id}`;
+                  window.open(telegramUrl, '_blank');
+                }}
+              >
+                <Send className="w-3.5 h-3.5 text-[#0088cc]" />
+                <span className="text-[#0088cc]">{settings.language === 'it' ? 'Connetti Telegram' : 'Connect Telegram'}</span>
+              </Button>
+            </div>
+
             {/* Logout */}
             <div className="pt-2">
               <AlertDialog>
