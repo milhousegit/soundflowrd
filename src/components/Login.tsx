@@ -16,7 +16,7 @@ const loginSchema = z.object({
 const signupSchema = z.object({
   email: z.string().email('Email non valida'),
   password: z.string().min(6, 'La password deve avere almeno 6 caratteri'),
-  apiKey: z.string().min(10, 'API Key non valida'),
+  apiKey: z.string().optional(),
 });
 
 const Login: React.FC = () => {
@@ -43,21 +43,25 @@ const Login: React.FC = () => {
 
     try {
       if (mode === 'signup') {
-        // Validate signup input (requires API key)
-        const validation = signupSchema.safeParse({ email, password, apiKey });
+        // Validate signup input (API key is optional)
+        const validation = signupSchema.safeParse({ email, password, apiKey: apiKey || undefined });
         if (!validation.success) {
           setError(validation.error.errors[0].message);
           setIsLoading(false);
           return;
         }
 
-        // Verify Real-Debrid API key first
-        const verification = await verifyApiKey(apiKey);
-        
-        if (!verification.valid) {
-          setError('API Key Real-Debrid non valida. Controlla e riprova.');
-          setIsLoading(false);
-          return;
+        // Verify Real-Debrid API key only if provided
+        let verifiedUsername = '';
+        if (apiKey && apiKey.trim().length > 0) {
+          const verification = await verifyApiKey(apiKey);
+          
+          if (!verification.valid) {
+            setError('API Key Real-Debrid non valida. Controlla e riprova.');
+            setIsLoading(false);
+            return;
+          }
+          verifiedUsername = verification.username || '';
         }
 
         const { error: signUpError } = await signUp(email, password);
@@ -72,7 +76,7 @@ const Login: React.FC = () => {
           return;
         }
 
-        // Ensure we have an authenticated session, then save the API key
+        // Ensure we have an authenticated session, then save the API key if provided
         const { error: signInAfterSignUpError } = await signIn(email, password);
         if (signInAfterSignUpError) {
           setError(signInAfterSignUpError.message);
@@ -80,16 +84,19 @@ const Login: React.FC = () => {
           return;
         }
 
-        const { error: apiKeyError } = await updateApiKey(apiKey);
-        if (apiKeyError) {
-          setError('Account creato, ma non sono riuscito a salvare la API Key. Riprova dalle Impostazioni.');
-          setIsLoading(false);
-          return;
+        // Only save API key if provided
+        if (apiKey && apiKey.trim().length > 0) {
+          const { error: apiKeyError } = await updateApiKey(apiKey);
+          if (apiKeyError) {
+            setError('Account creato, ma non sono riuscito a salvare la API Key. Riprova dalle Impostazioni.');
+            setIsLoading(false);
+            return;
+          }
         }
         
         toast({
           title: 'Account creato!',
-          description: `Benvenuto ${verification.username || email}`,
+          description: `Benvenuto ${verifiedUsername || email}`,
         });
       } else {
         // Login mode - only email and password required
@@ -207,11 +214,10 @@ const Login: React.FC = () => {
                 <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   type="password"
-                  placeholder="Real-Debrid API Key"
+                  placeholder="Real-Debrid API Key (opzionale)"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   className="pl-12"
-                  required
                 />
               </div>
             )}
@@ -241,7 +247,7 @@ const Login: React.FC = () => {
 
           {mode === 'signup' && (
             <p className="text-center text-xs md:text-sm text-muted-foreground">
-              Ottieni la tua API Key da{' '}
+              Puoi aggiungere la tua API Key da{' '}
               <a
                 href="https://real-debrid.com/apitoken"
                 target="_blank"
@@ -250,6 +256,7 @@ const Login: React.FC = () => {
               >
                 Real-Debrid
               </a>
+              {' '}in seguito dalle impostazioni
             </p>
           )}
         </form>
