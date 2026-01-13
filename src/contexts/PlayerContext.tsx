@@ -544,11 +544,103 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setCurrentAudioSource(null);
 
       const isDeezerPriorityMode = audioSourceMode === 'deezer_priority';
+      const isHybridMode = audioSourceMode === 'hybrid_priority';
       const hasRdKey = !!credentials?.realDebridApiKey;
 
       // Helper to save recently played (uses database if user is logged in)
       const saveRecentlyPlayed = () => {
         saveRecentlyPlayedTrack(track, user?.id);
+      };
+
+      // Helper function for Tidal fallback (used in hybrid mode)
+      const playWithTidalFallback = async (): Promise<boolean> => {
+        addDebugLog('🎵 Fallback Tidal', `Ricerca "${track.title}" di ${track.artist}`, 'info');
+        try {
+          const tidalResult = await getTidalStream(track.title, track.artist);
+          if (currentSearchTrackIdRef.current !== track.id) return false;
+
+          if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
+            audioRef.current.src = tidalResult.streamUrl;
+            
+            try {
+              if (currentSearchTrackIdRef.current !== track.id) return false;
+              
+              const playPromise = audioRef.current.play();
+              if (playPromise !== undefined) {
+                await playPromise;
+              }
+              
+              if (currentSearchTrackIdRef.current !== track.id) return false;
+              
+              setState((prev) => ({ ...prev, isPlaying: true }));
+              setLoadingPhase('idle');
+              setCurrentAudioSource('tidal');
+              saveRecentlyPlayed();
+              
+              const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
+                ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
+                : tidalResult.quality || 'LOSSLESS';
+              addDebugLog('✅ Fallback Tidal avviato', `Stream ${qualityInfo}`, 'success');
+              return true;
+            } catch (playError) {
+              if (playError instanceof Error && (playError.name === 'AbortError' || playError.name === 'NotAllowedError')) {
+                return false;
+              }
+              throw playError;
+            }
+          }
+          return false;
+        } catch (error) {
+          addDebugLog('❌ Fallback Tidal fallito', error instanceof Error ? error.message : 'Errore', 'error');
+          return false;
+        }
+      };
+
+      // Helper to start background RD download in hybrid mode
+      const startBackgroundRdDownload = async (trackToDownload: Track) => {
+        if (!hasRdKey || !trackToDownload.albumId) return;
+        
+        addDebugLog('📥 Download RD in background', `Avvio ricerca per "${trackToDownload.title}"`, 'info');
+        
+        try {
+          const query = trackToDownload.album?.trim() 
+            ? `${trackToDownload.album} ${trackToDownload.artist}` 
+            : `${trackToDownload.title} ${trackToDownload.artist}`;
+          
+          const result = await searchStreams(credentials!.realDebridApiKey, query);
+          
+          // Try to find matching file in torrents
+          for (const torrent of result.torrents) {
+            if (!torrent.files?.length) continue;
+            const matchingFile = torrent.files.find((file) =>
+              flexibleMatch(file.filename || '', trackToDownload.title) || flexibleMatch(file.path || '', trackToDownload.title)
+            );
+            if (!matchingFile) continue;
+
+            addDebugLog('🎯 Match RD trovato', `${matchingFile.filename} - download avviato`, 'success');
+            
+            // Start download (don't play, just cache for later)
+            const selectResult = await selectFilesAndPlay(credentials!.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
+            
+            if (!selectResult.error && selectResult.streams.length > 0) {
+              // Save mapping for future use
+              await saveFileMapping({
+                track: trackToDownload,
+                torrentId: torrent.torrentId,
+                torrentTitle: torrent.title,
+                fileId: matchingFile.id,
+                fileName: matchingFile.filename,
+                filePath: matchingFile.path,
+                directLink: selectResult.streams[0].streamUrl,
+              });
+              addDebugLog('✅ Mappatura RD salvata', 'Disponibile per riproduzioni future', 'success');
+            }
+            break;
+          }
+        } catch (error) {
+          console.error('Background RD download failed:', error);
+          addDebugLog('⚠️ Download RD fallito', error instanceof Error ? error.message : 'Errore', 'warning');
+        }
       };
 
       // =============== DEEZER/TIDAL PRIORITY MODE ===============
@@ -619,6 +711,148 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           toast.error('Errore Tidal', { description: error instanceof Error ? error.message : 'Errore sconosciuto' });
           return;
         }
+      }
+
+      // =============== HYBRID MODE: RD first, Tidal fallback ===============
+      if (isHybridMode) {
+        addDebugLog('👑 Modalità Ibrida', `RD prima, fallback Tidal`, 'info');
+        
+        // First, check if we have RD key and try RD
+        if (hasRdKey) {
+          // Check for saved RD mapping first
+          if (track.albumId) {
+            try {
+              const { data: trackMapping } = await supabase
+                .from('track_file_mappings')
+                .select('*, album_torrent_mappings!inner(*)')
+                .eq('track_id', track.id)
+                .maybeSingle();
+
+              if (currentSearchTrackIdRef.current !== track.id) return;
+
+              if (trackMapping?.direct_link && audioRef.current) {
+                setLoadingPhase('loading');
+                audioRef.current.src = trackMapping.direct_link;
+                if (await safePlay(audioRef.current)) {
+                  setState((prev) => ({ ...prev, isPlaying: true }));
+                }
+                setLoadingPhase('idle');
+                setCurrentAudioSource('real-debrid');
+                setCurrentMappedFileId(trackMapping.file_id);
+                addDebugLog('✅ Riproduzione RD (cache)', 'Stream da mappatura salvata', 'success');
+                saveRecentlyPlayed();
+                return;
+              }
+            } catch (error) {
+              console.error('Failed to check RD mapping in hybrid mode:', error);
+            }
+          }
+
+          // Try quick RD search
+          setLoadingPhase('searching');
+          addDebugLog('🔎 Ricerca RD', `Query: "${track.album || track.title} ${track.artist}"`, 'info');
+          
+          try {
+            const query = track.album?.trim() 
+              ? `${track.album} ${track.artist}` 
+              : `${track.title} ${track.artist}`;
+            
+            const result = await searchStreams(credentials!.realDebridApiKey, query);
+            if (currentSearchTrackIdRef.current !== track.id) return;
+
+            // Check if we have immediate streams
+            if (result.streams?.length) {
+              setAlternativeStreams(result.streams);
+              const selected = result.streams[0];
+              setCurrentStreamId(selected.id);
+              if (audioRef.current && selected.streamUrl) {
+                setLoadingPhase('loading');
+                audioRef.current.src = selected.streamUrl;
+                if (await safePlay(audioRef.current)) {
+                  setState((prev) => ({ ...prev, isPlaying: true }));
+                }
+                setLoadingPhase('idle');
+                setCurrentAudioSource('real-debrid');
+                addDebugLog('✅ Riproduzione RD', selected.title, 'success');
+                saveRecentlyPlayed();
+                return;
+              }
+            }
+
+            // Try to find matching file in torrents
+            for (const torrent of result.torrents) {
+              if (!torrent.files?.length) continue;
+              const matchingFile = torrent.files.find((file) =>
+                flexibleMatch(file.filename || '', track.title) || flexibleMatch(file.path || '', track.title)
+              );
+              if (!matchingFile) continue;
+
+              addDebugLog('🎯 Match RD trovato', matchingFile.filename || '', 'success');
+              setLoadingPhase('loading');
+
+              const selectResult = await selectFilesAndPlay(credentials!.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
+              if (currentSearchTrackIdRef.current !== track.id) return;
+
+              if (!selectResult.error && selectResult.streams.length > 0) {
+                const streamUrl = selectResult.streams[0].streamUrl;
+                setAlternativeStreams(selectResult.streams);
+                setCurrentStreamId(selectResult.streams[0].id);
+
+                await saveFileMapping({
+                  track,
+                  torrentId: torrent.torrentId,
+                  torrentTitle: torrent.title,
+                  fileId: matchingFile.id,
+                  fileName: matchingFile.filename,
+                  filePath: matchingFile.path,
+                  directLink: streamUrl,
+                });
+
+                if (audioRef.current && streamUrl) {
+                  audioRef.current.src = streamUrl;
+                  if (await safePlay(audioRef.current)) {
+                    setState((prev) => ({ ...prev, isPlaying: true }));
+                  }
+                }
+
+                setLoadingPhase('idle');
+                setCurrentAudioSource('real-debrid');
+                saveRecentlyPlayed();
+                return;
+              }
+
+              // If downloading, fall through to Tidal but start background download
+              if (['downloading', 'queued', 'magnet_conversion'].includes(selectResult.status)) {
+                addDebugLog('⏳ RD in download', `${selectResult.progress}% - uso fallback Tidal`, 'warning');
+                // Don't block - fall through to Tidal fallback
+                break;
+              }
+            }
+          } catch (error) {
+            addDebugLog('⚠️ Errore RD', error instanceof Error ? error.message : 'Errore', 'warning');
+          }
+        }
+
+        // RD not available or downloading - use Tidal fallback
+        addDebugLog('🔄 Fallback a Tidal', 'RD non disponibile, uso SquidWTF', 'info');
+        setLoadingPhase('searching');
+        
+        const tidalSuccess = await playWithTidalFallback();
+        
+        if (tidalSuccess) {
+          // Start background RD download while playing via Tidal
+          if (hasRdKey) {
+            startBackgroundRdDownload(track);
+          }
+          return;
+        }
+        
+        // Both failed
+        setLoadingPhase('unavailable');
+        toast.error('Nessuna sorgente disponibile', {
+          description: 'Né RD né Tidal hanno trovato questa traccia.',
+        });
+        return;
       }
 
       // =============== RD MODE (NO YOUTUBE) ===============
@@ -819,6 +1053,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       safePlay,
       saveFileMapping,
       tryUnlockAudioFromUserGesture,
+      user,
     ]
   );
 

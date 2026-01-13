@@ -1,4 +1,4 @@
-export type AudioSourceMode = 'deezer_priority' | 'rd_priority';
+export type AudioSourceMode = 'deezer_priority' | 'rd_priority' | 'hybrid_priority';
 
 export interface AppSettings {
   language: 'en' | 'it';
@@ -92,6 +92,8 @@ export const translations = {
     deezerPriorityDesc: 'FLAC/320kbps from SquidWTF',
     rdPriority: 'Real-Debrid',
     rdPriorityDesc: 'High quality (FLAC/320kbps) when available',
+    hybridPriority: 'Hybrid',
+    hybridPriorityDesc: 'RD first, fallback to SquidWTF while downloading',
   },
   it: {
     home: 'Home',
@@ -154,6 +156,8 @@ export const translations = {
     deezerPriorityDesc: 'FLAC/320kbps da SquidWTF',
     rdPriority: 'Real-Debrid',
     rdPriorityDesc: 'Alta qualità (FLAC/320kbps) quando disponibile',
+    hybridPriority: 'Ibrida',
+    hybridPriorityDesc: 'RD prima, fallback SquidWTF durante il download',
   },
 };
 
