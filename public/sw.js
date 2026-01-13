@@ -1,6 +1,6 @@
-// Service Worker for Push Notifications and Offline Support - v0.12
-const CACHE_NAME = 'soundflow-v0.12';
-const APP_SHELL_CACHE = 'soundflow-app-shell-v0.12';
+// Service Worker for Push Notifications and Offline Support - v0.13
+const CACHE_NAME = 'soundflow-v0.13';
+const APP_SHELL_CACHE = 'soundflow-app-shell-v0.13';
 
 // App shell files to cache for offline access
 const APP_SHELL_FILES = [
@@ -15,7 +15,7 @@ const APP_SHELL_FILES = [
 const CACHEABLE_EXTENSIONS = ['.js', '.css', '.woff2', '.woff', '.ttf', '.png', '.jpg', '.jpeg', '.svg', '.ico'];
 
 self.addEventListener('install', (event) => {
-  console.log('[SW] Service Worker v0.12 installed');
+  console.log('[SW] Service Worker v0.13 installed');
   
   event.waitUntil(
     Promise.all([
@@ -44,7 +44,7 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Service Worker v0.12 activated');
+  console.log('[SW] Service Worker v0.13 activated');
   event.waitUntil(clients.claim());
 });
 
