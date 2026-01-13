@@ -192,17 +192,18 @@ const Library: React.FC = () => {
         ))}
       </div>
 
-      {isLoading || isPlaylistsLoading || isOfflineLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      ) : (
-        <div 
-          className={`${animationClass}`}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
+      <div 
+        className="min-h-[50vh] touch-pan-y"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {isLoading || isPlaylistsLoading || isOfflineLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className={`${animationClass}`}>
           {/* Tracks */}
           {activeTab === 'tracks' && (
             <div>
@@ -460,8 +461,9 @@ const Library: React.FC = () => {
               )}
             </div>
           )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
