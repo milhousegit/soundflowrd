@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Cloud, Loader2, Trash2, Pencil, Shuffle, Heart } from 'lucide-react';
+import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import BackButton from '@/components/BackButton';
@@ -8,10 +8,8 @@ import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { useAuth } from '@/contexts/AuthContext';
 import { usePlaylists, PlaylistTrack, Playlist as PlaylistType } from '@/hooks/usePlaylists';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
-import { useSyncAlbum } from '@/hooks/useSyncAlbum';
 import { getDeezerPlaylist } from '@/lib/deezer';
 import { Track, Album } from '@/types/music';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,7 +31,6 @@ const PlaylistPage: React.FC = () => {
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { t } = useSettings();
-  const { credentials } = useAuth();
   const { getPlaylistTracks, deletePlaylist, updatePlaylist } = usePlaylists();
   
   const [playlist, setPlaylist] = useState<PlaylistType | null>(null);
@@ -46,18 +43,6 @@ const PlaylistPage: React.FC = () => {
   // Get track IDs for sync status checking
   const trackIds = useMemo(() => tracks.map(t => t.id), [tracks]);
   const { isSynced, isSyncing, isDownloading } = useSyncedTracks(trackIds);
-  const { syncAlbum, isSyncingAlbum, syncProgress } = useSyncAlbum();
-
-  // Check if all tracks are synced
-  const allTracksSynced = useMemo(() => {
-    if (tracks.length === 0) return false;
-    return tracks.every(track => isSynced(track.id));
-  }, [tracks, isSynced]);
-
-  const handleSyncPlaylist = () => {
-    if (!playlist || tracks.length === 0) return;
-    syncAlbum(tracks, playlist.name, 'Playlist');
-  };
 
   useEffect(() => {
     const fetchPlaylist = async () => {
@@ -287,33 +272,6 @@ const PlaylistPage: React.FC = () => {
           >
             <Pencil className="w-5 h-5 text-muted-foreground" />
           </Button>
-        )}
-
-        {/* Sync playlist button */}
-        {credentials?.realDebridApiKey && tracks.length > 0 && (
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleSyncPlaylist}
-              disabled={isSyncingAlbum || allTracksSynced}
-              className="w-12 h-12"
-              title={allTracksSynced ? 'Playlist sincronizzata' : 'Sincronizza Playlist'}
-            >
-              {isSyncingAlbum ? (
-                <Loader2 className="w-6 h-6 text-primary animate-spin" />
-              ) : allTracksSynced ? (
-                <Cloud className="w-6 h-6 text-green-500" />
-              ) : (
-                <Cloud className="w-6 h-6 text-muted-foreground hover:text-primary transition-colors" />
-              )}
-            </Button>
-            {isSyncingAlbum && syncProgress.total > 0 && (
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] text-primary font-medium whitespace-nowrap">
-                {syncProgress.synced}/{syncProgress.total}
-              </span>
-            )}
-          </div>
         )}
 
         {/* Delete button */}
