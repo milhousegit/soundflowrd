@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePlaylists } from '@/hooks/usePlaylists';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, Music, Upload, Link, Plus, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Music, Upload, Link, Plus, Image as ImageIcon, Crown, Lock } from 'lucide-react';
 import { Track } from '@/types/music';
 
 interface SpotifyTrack {
@@ -43,7 +44,13 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   onPlaylistCreated,
 }) => {
   const { createPlaylist, addTracksToPlaylist } = usePlaylists();
+  const { profile, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<'manual' | 'import'>('manual');
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  // Check if user has active premium
+  const isPremium = isAdmin || (profile?.is_premium && 
+    (!profile?.premium_expires_at || new Date(profile.premium_expires_at) > new Date()));
   
   // Manual creation state
   const [manualName, setManualName] = useState('');
@@ -167,15 +174,22 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
           <DialogTitle>Crea Playlist</DialogTitle>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'manual' | 'import')}>
+        <Tabs value={activeTab} onValueChange={(v) => {
+          if (v === 'import' && !isPremium) {
+            setShowPremiumModal(true);
+            return;
+          }
+          setActiveTab(v as 'manual' | 'import');
+        }}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="manual" className="flex items-center gap-2">
               <Plus className="w-4 h-4" />
               Nuova
             </TabsTrigger>
-            <TabsTrigger value="import" className="flex items-center gap-2">
+            <TabsTrigger value="import" className="flex items-center gap-2 relative">
               <Upload className="w-4 h-4" />
               Importa
+              {!isPremium && <Crown className="w-3 h-3 text-amber-400 absolute -top-1 -right-1" />}
             </TabsTrigger>
           </TabsList>
 
@@ -346,6 +360,43 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
             )}
           </TabsContent>
         </Tabs>
+
+        {/* Premium Modal */}
+        <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Crown className="w-5 h-5 text-amber-400" />
+                Funzione Premium
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50">
+                <Lock className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Importa Playlist</p>
+                  <p className="text-sm text-muted-foreground">
+                    Importa le tue playlist da Spotify direttamente nell'app
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground text-center">
+                Sblocca questa e altre funzionalità esclusive con Premium
+              </p>
+              <Button
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                onClick={() => {
+                  setShowPremiumModal(false);
+                  handleClose();
+                  window.location.href = '/profile';
+                }}
+              >
+                <Crown className="w-4 h-4 mr-2" />
+                Sblocca Premium
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );
