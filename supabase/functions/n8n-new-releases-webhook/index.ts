@@ -28,6 +28,7 @@ interface NewRelease {
   album_title: string;
   album_cover: string;
   release_date: string;
+  album_url: string;
 }
 
 serve(async (req) => {
@@ -176,6 +177,7 @@ serve(async (req) => {
               album_title: latestAlbum.title,
               album_cover: latestAlbum.cover_medium || latestAlbum.cover,
               release_date: latestAlbum.release_date,
+              album_url: `https://soundflowr.lovable.app/album/${latestAlbum.id}`,
             });
           }
         } catch (e) {
