@@ -26,7 +26,7 @@ const ArtistCard: React.FC<ArtistCardProps> = ({ artist, showFavorite = false, f
   return (
     <div
       {...tap}
-      className="group p-3 md:p-4 rounded-xl bg-card hover:bg-secondary/80 transition-all duration-300 cursor-pointer touch-manipulation"
+      className="group cursor-pointer touch-manipulation"
     >
       {/* Image */}
       <div className="relative aspect-square rounded-full overflow-hidden mb-3 md:mb-4 bg-muted">

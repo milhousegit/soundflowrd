@@ -269,25 +269,25 @@ const Library: React.FC = () => {
                         <TapArea
                           key={fav.id}
                           onTap={() => navigate(deezerId ? `/deezer-playlist/${deezerId}` : `/playlist/${fav.item_id}`)}
-                          className="group flex flex-col items-center text-center p-3 md:p-4 rounded-xl bg-card hover:bg-secondary transition-all cursor-pointer touch-manipulation"
+                          className="group cursor-pointer touch-manipulation"
                         >
-                          <div className="w-full aspect-square rounded-lg bg-secondary overflow-hidden mb-3 relative">
+                          <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted">
                             {fav.item_cover_url ? (
                               <img
                                 src={fav.item_cover_url}
                                 alt={fav.item_title}
-                                className="absolute inset-0 w-full h-full object-cover"
+                                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-                                <ListMusic className="w-12 h-12 text-primary/50" />
+                              <div className="w-full h-full flex items-center justify-center">
+                                <ListMusic className="w-8 md:w-12 h-8 md:h-12 text-muted-foreground" />
                               </div>
                             )}
                           </div>
-                          <h3 className="font-semibold text-sm md:text-base text-foreground truncate w-full">
+                          <h3 className="font-medium text-sm text-foreground truncate">
                             {fav.item_title}
                           </h3>
-                          <p className="text-xs text-muted-foreground truncate w-full">
+                          <p className="text-xs text-muted-foreground truncate">
                             {fav.item_artist || 'Playlist'}
                           </p>
                         </TapArea>
