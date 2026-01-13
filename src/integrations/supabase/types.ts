@@ -311,6 +311,7 @@ export type Database = {
           preferred_language: string | null
           premium_expires_at: string | null
           real_debrid_api_key: string | null
+          telegram_chat_id: string | null
           updated_at: string
         }
         Insert: {
@@ -322,6 +323,7 @@ export type Database = {
           preferred_language?: string | null
           premium_expires_at?: string | null
           real_debrid_api_key?: string | null
+          telegram_chat_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -333,6 +335,7 @@ export type Database = {
           preferred_language?: string | null
           premium_expires_at?: string | null
           real_debrid_api_key?: string | null
+          telegram_chat_id?: string | null
           updated_at?: string
         }
         Relationships: []
