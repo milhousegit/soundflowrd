@@ -152,27 +152,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [profile, isAdmin, user?.id]);
 
   useEffect(() => {
+    let isSubscribed = true;
+    let loadingTimeout: NodeJS.Timeout;
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!isSubscribed) return;
+        
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
           // Defer profile fetch to avoid deadlock
           setTimeout(async () => {
+            if (!isSubscribed) return;
+            
             const [profileData, adminStatus] = await Promise.all([
               fetchProfile(session.user.id),
               checkAdminRole(session.user.id),
             ]);
             
             // Cache the data
-            setCachedAuthData({
-              isAdmin: adminStatus,
-              profile: profileData,
-              userId: session.user.id,
-              timestamp: Date.now(),
-            });
+            if (profileData || adminStatus) {
+              setCachedAuthData({
+                isAdmin: adminStatus,
+                profile: profileData,
+                userId: session.user.id,
+                timestamp: Date.now(),
+              });
+            }
           }, 0);
         } else {
           setProfile(null);
@@ -182,30 +191,79 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        const [profileData, adminStatus] = await Promise.all([
-          fetchProfile(session.user.id),
-          checkAdminRole(session.user.id),
-        ]);
-        
-        // Cache the data
-        setCachedAuthData({
-          isAdmin: adminStatus,
-          profile: profileData,
-          userId: session.user.id,
-          timestamp: Date.now(),
-        });
+    // Timeout to handle offline startup - use cache after 3 seconds
+    loadingTimeout = setTimeout(() => {
+      if (isSubscribed && isLoading) {
+        console.log('[Auth] Timeout reached, checking offline cache...');
+        const cached = getCachedAuthData();
+        if (cached) {
+          console.log('[Auth] Using cached auth data for offline mode');
+          setProfile(cached.profile);
+          setIsAdmin(cached.isAdmin);
+          // Create a minimal "offline" authenticated state
+          setUser({ id: cached.userId } as User);
+        }
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
-    });
+    }, 3000);
 
-    return () => subscription.unsubscribe();
+    // THEN check for existing session
+    const initSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!isSubscribed) return;
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          const [profileData, adminStatus] = await Promise.all([
+            fetchProfile(session.user.id),
+            checkAdminRole(session.user.id),
+          ]);
+          
+          // Cache the data
+          if (profileData || adminStatus) {
+            setCachedAuthData({
+              isAdmin: adminStatus,
+              profile: profileData,
+              userId: session.user.id,
+              timestamp: Date.now(),
+            });
+          }
+        }
+        
+        if (isSubscribed) {
+          clearTimeout(loadingTimeout);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.log('[Auth] Network error, using cached data for offline mode');
+        
+        if (!isSubscribed) return;
+        
+        // Network error - we're offline, use cached data
+        const cached = getCachedAuthData();
+        if (cached) {
+          setProfile(cached.profile);
+          setIsAdmin(cached.isAdmin);
+          // Create a minimal "offline" authenticated state
+          setUser({ id: cached.userId } as User);
+        }
+        
+        clearTimeout(loadingTimeout);
+        setIsLoading(false);
+      }
+    };
+    
+    initSession();
+
+    return () => {
+      isSubscribed = false;
+      clearTimeout(loadingTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string) => {
