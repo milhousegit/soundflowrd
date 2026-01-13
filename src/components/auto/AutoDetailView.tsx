@@ -6,7 +6,7 @@ import { usePlayer } from '@/contexts/PlayerContext';
 import { getAlbum, getArtistTopTracks, getArtist, getDeezerPlaylist } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
 
-export type DetailType = 'album' | 'artist' | 'playlist';
+export type DetailType = 'album' | 'artist' | 'playlist' | 'deezer-playlist';
 
 interface DetailData {
   type: DetailType;
@@ -42,32 +42,29 @@ const AutoDetailView: React.FC<AutoDetailViewProps> = ({ detail, onBack }) => {
           setTracks(topTracks.slice(0, 5));
           setAlbums((artistData.releases || []).slice(0, 10));
         } else if (detail.type === 'playlist') {
-          // Check if it's a Deezer playlist or local playlist
-          if (detail.id.startsWith('deezer-')) {
-            const deezerId = detail.id.replace('deezer-', '');
-            const playlistData = await getDeezerPlaylist(deezerId);
-            setTracks(playlistData.tracks || []);
-          } else {
-            // Load from local database
-            const { data } = await supabase
-              .from('playlist_tracks')
-              .select('*')
-              .eq('playlist_id', detail.id)
-              .order('position');
-            
-            if (data) {
-              const mappedTracks: Track[] = data.map(t => ({
-                id: t.track_id,
-                title: t.track_title,
-                artist: t.track_artist,
-                album: t.track_album || undefined,
-                albumId: t.track_album_id || undefined,
-                coverUrl: t.track_cover_url || undefined,
-                duration: t.track_duration || undefined
-              }));
-              setTracks(mappedTracks);
-            }
+          // Load from local database
+          const { data } = await supabase
+            .from('playlist_tracks')
+            .select('*')
+            .eq('playlist_id', detail.id)
+            .order('position');
+          
+          if (data) {
+            const mappedTracks: Track[] = data.map(t => ({
+              id: t.track_id,
+              title: t.track_title,
+              artist: t.track_artist,
+              album: t.track_album || undefined,
+              albumId: t.track_album_id || undefined,
+              coverUrl: t.track_cover_url || undefined,
+              duration: t.track_duration || undefined
+            }));
+            setTracks(mappedTracks);
           }
+        } else if (detail.type === 'deezer-playlist') {
+          // Load from Deezer API
+          const playlistData = await getDeezerPlaylist(detail.id);
+          setTracks(playlistData.tracks || []);
         }
       } catch (error) {
         console.error('Error loading detail:', error);

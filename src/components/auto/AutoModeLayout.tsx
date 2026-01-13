@@ -17,22 +17,22 @@ const AutoModeLayout: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-[150] bg-background flex flex-row h-screen w-screen overflow-hidden pl-[env(safe-area-inset-left)]">
+    <div className="fixed inset-0 z-[150] bg-background flex flex-row h-screen w-screen overflow-hidden">
       {/* Left Menu - Horizontal in landscape */}
-      <div className="w-20 min-w-[80px] bg-card border-r border-border flex flex-col justify-center py-1 shrink-0 ml-[env(safe-area-inset-left)]">
+      <div className="w-24 min-w-[96px] bg-card border-r border-border flex flex-col justify-center py-1 shrink-0 pl-[env(safe-area-inset-left)]">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "flex flex-col items-center justify-center py-5 gap-2 transition-all mx-2 my-1 rounded-xl",
+              "flex flex-col items-center justify-center py-6 gap-2 transition-all mx-2 my-1 rounded-xl",
               activeTab === tab.id 
                 ? "bg-primary text-primary-foreground" 
                 : "text-muted-foreground hover:bg-secondary"
             )}
           >
-            <tab.icon className="w-7 h-7" />
-            <span className="text-[10px] font-medium leading-tight">{tab.label}</span>
+            <tab.icon className="w-8 h-8" />
+            <span className="text-xs font-medium leading-tight">{tab.label}</span>
           </button>
         ))}
       </div>
