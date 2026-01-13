@@ -14,9 +14,9 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist }) => {
   return (
     <TapArea
       onTap={() => navigate(`/playlist/${playlist.id}`)}
-      className="group flex flex-col items-center text-center p-3 md:p-4 rounded-xl bg-card hover:bg-secondary transition-all cursor-pointer touch-manipulation"
+      className="group cursor-pointer touch-manipulation"
     >
-      <div className="w-full aspect-square rounded-lg bg-secondary overflow-hidden mb-3 relative">
+      <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted">
         {playlist.cover_url ? (
           <img
             src={playlist.cover_url}
@@ -29,9 +29,12 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist }) => {
           </div>
         )}
       </div>
-      <h3 className="font-semibold text-sm md:text-base text-foreground truncate w-full">
+      <h3 className="font-medium text-sm text-foreground truncate">
         {playlist.name}
       </h3>
+      <p className="text-xs text-muted-foreground truncate">
+        {playlist.track_count || 0} brani
+      </p>
     </TapArea>
   );
 };
