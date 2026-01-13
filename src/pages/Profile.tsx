@@ -390,13 +390,13 @@ const Settings: React.FC = () => {
                     </div>
                     
                     <div className="flex items-center gap-3 p-3 rounded-lg bg-[#3B82F6]/10 border border-[#3B82F6]/20">
-                      <Cloud className="w-5 h-5 text-[#3B82F6]" />
+                      <Crown className="w-5 h-5 text-[#3B82F6]" />
                       <div>
                         <p className="font-medium text-foreground">
-                          {settings.language === 'it' ? 'Libreria Real-Debrid' : 'Real-Debrid Library'}
+                          {settings.language === 'it' ? 'Riproduzione Ibrida RealDebrid + Scraping' : 'Hybrid RealDebrid + Scraping Playback'}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {settings.language === 'it' ? 'Gestisci i tuoi file cloud' : 'Manage your cloud files'}
+                          {settings.language === 'it' ? 'Non interrompere mai la tua musica' : 'Never interrupt your music'}
                         </p>
                       </div>
                     </div>
@@ -519,6 +519,38 @@ const Settings: React.FC = () => {
                     <p className="text-xs text-muted-foreground mt-0.5">{t('rdPriorityDesc')}</p>
                   </div>
                   {audioSourceMode === 'rd_priority' && <Check className="w-5 h-5 text-primary" />}
+                </button>
+
+                {/* Hybrid Priority Option (Premium) */}
+                <button
+                  onClick={() => {
+                    if (isAdmin) {
+                      setAudioSourceMode('hybrid_priority');
+                    } else {
+                      setShowPremiumModal(true);
+                    }
+                  }}
+                  className={`w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
+                    audioSourceMode === 'hybrid_priority' 
+                      ? 'bg-gradient-to-r from-[#8B5CF6]/20 to-[#3B82F6]/20 border border-[#8B5CF6]/50' 
+                      : 'bg-secondary hover:bg-secondary/80'
+                  }`}
+                >
+                  <Crown className={`w-5 h-5 mt-0.5 ${audioSourceMode === 'hybrid_priority' ? 'text-[#8B5CF6]' : 'text-muted-foreground'}`} />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className={`font-medium ${audioSourceMode === 'hybrid_priority' ? 'text-[#8B5CF6]' : 'text-foreground'}`}>
+                        {t('hybridPriority')}
+                      </p>
+                      {!isAdmin && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white font-medium">
+                          PREMIUM
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t('hybridPriorityDesc')}</p>
+                  </div>
+                  {audioSourceMode === 'hybrid_priority' && <Check className="w-5 h-5 text-[#8B5CF6]" />}
                 </button>
               </div>
 
