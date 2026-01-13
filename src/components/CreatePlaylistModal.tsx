@@ -189,7 +189,11 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
             <TabsTrigger value="import" className="flex items-center gap-2 relative">
               <Upload className="w-4 h-4" />
               Importa
-              {!isPremium && <Crown className="w-3 h-3 text-amber-400 absolute -top-1 -right-1" />}
+              {!isPremium && (
+                <span className="absolute -top-1.5 -right-1.5 px-1 py-0.5 text-[8px] font-bold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white rounded">
+                  PRO
+                </span>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -366,13 +370,13 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Crown className="w-5 h-5 text-amber-400" />
-                Funzione Premium
+                <Crown className="w-5 h-5 text-[#8B5CF6]" />
+                <span className="bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">Funzione Premium</span>
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50">
-                <Lock className="w-5 h-5 text-muted-foreground" />
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <Upload className="w-5 h-5 text-[#8B5CF6]" />
                 <div>
                   <p className="font-medium">Importa Playlist</p>
                   <p className="text-sm text-muted-foreground">
@@ -384,7 +388,7 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
                 Sblocca questa e altre funzionalità esclusive con Premium
               </p>
               <Button
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                className="w-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0"
                 onClick={() => {
                   setShowPremiumModal(false);
                   handleClose();
