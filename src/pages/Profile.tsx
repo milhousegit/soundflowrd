@@ -368,19 +368,83 @@ const Settings: React.FC = () => {
               </Dialog>
             )}
 
-            {/* Connect Telegram */}
+            {/* Connect/Disconnect Telegram */}
             <div className="pt-2">
-              <Button 
-                variant="outline" 
-                className="w-full h-9 text-sm gap-2 border-[#0088cc]/30 hover:bg-[#0088cc]/10"
-                onClick={() => {
-                  const telegramUrl = `https://t.me/soundflowrdbot?start=${user?.id}`;
-                  window.open(telegramUrl, '_blank');
-                }}
-              >
-                <Send className="w-3.5 h-3.5 text-[#0088cc]" />
-                <span className="text-[#0088cc]">{settings.language === 'it' ? 'Connetti Telegram' : 'Connect Telegram'}</span>
-              </Button>
+              {profile?.telegram_chat_id ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 flex items-center gap-2 p-2.5 rounded-lg bg-[#0088cc]/10 border border-[#0088cc]/30">
+                    <Send className="w-3.5 h-3.5 text-[#0088cc]" />
+                    <span className="text-sm text-[#0088cc] font-medium">
+                      {settings.language === 'it' ? 'Telegram connesso' : 'Telegram connected'}
+                    </span>
+                    <Check className="w-3.5 h-3.5 text-green-500 ml-auto" />
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 border-destructive/30 hover:bg-destructive/10">
+                        <X className="w-3.5 h-3.5 text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          {settings.language === 'it' ? 'Scollega Telegram' : 'Disconnect Telegram'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {settings.language === 'it' 
+                            ? 'Sei sicuro di voler scollegare Telegram? Non riceverai più notifiche sul bot.' 
+                            : 'Are you sure you want to disconnect Telegram? You will no longer receive notifications on the bot.'}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>
+                          {settings.language === 'it' ? 'Annulla' : 'Cancel'}
+                        </AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={async () => {
+                            try {
+                              const { error } = await supabase
+                                .from('profiles')
+                                .update({ telegram_chat_id: null })
+                                .eq('id', user?.id);
+                              if (error) throw error;
+                              toast({
+                                title: settings.language === 'it' ? 'Telegram scollegato' : 'Telegram disconnected',
+                                description: settings.language === 'it' 
+                                  ? 'Il tuo account Telegram è stato scollegato.' 
+                                  : 'Your Telegram account has been disconnected.',
+                              });
+                              // Refresh profile
+                              window.location.reload();
+                            } catch (error: any) {
+                              toast({
+                                title: settings.language === 'it' ? 'Errore' : 'Error',
+                                description: error.message,
+                                variant: 'destructive',
+                              });
+                            }
+                          }}
+                          className="bg-destructive hover:bg-destructive/90"
+                        >
+                          {settings.language === 'it' ? 'Scollega' : 'Disconnect'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  className="w-full h-9 text-sm gap-2 border-[#0088cc]/30 hover:bg-[#0088cc]/10"
+                  onClick={() => {
+                    const telegramUrl = `https://t.me/soundflowrdbot?start=${user?.id}`;
+                    window.open(telegramUrl, '_blank');
+                  }}
+                >
+                  <Send className="w-3.5 h-3.5 text-[#0088cc]" />
+                  <span className="text-[#0088cc]">{settings.language === 'it' ? 'Connetti Telegram' : 'Connect Telegram'}</span>
+                </Button>
+              )}
             </div>
 
             {/* Logout */}
