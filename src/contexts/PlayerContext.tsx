@@ -29,6 +29,40 @@ import { getTidalStream } from '@/lib/tidal';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
 import { addSyncedTrack, addSyncingTrack, removeSyncingTrack } from '@/hooks/useSyncedTracks';
 
+// IndexedDB helper for offline playback
+const getOfflineTrackUrl = async (trackId: string): Promise<string | null> => {
+  try {
+    const DB_NAME = 'soundflow-offline';
+    const STORE_NAME = 'tracks';
+    
+    return new Promise((resolve) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onerror = () => resolve(null);
+      request.onsuccess = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          resolve(null);
+          return;
+        }
+        const transaction = db.transaction(STORE_NAME, 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const getRequest = store.get(trackId);
+        getRequest.onsuccess = () => {
+          const result = getRequest.result;
+          if (result?.blob) {
+            resolve(URL.createObjectURL(result.blob));
+          } else {
+            resolve(null);
+          }
+        };
+        getRequest.onerror = () => resolve(null);
+      };
+    });
+  } catch {
+    return null;
+  }
+};
+
 export interface DebugLogEntry {
   timestamp: Date;
   step: string;
@@ -37,7 +71,7 @@ export interface DebugLogEntry {
 }
 
 export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading' | 'unavailable';
-export type AudioSource = 'tidal' | 'real-debrid' | null;
+export type AudioSource = 'tidal' | 'real-debrid' | 'offline' | null;
 
 interface PlayerContextType extends PlayerState {
   play: (track?: Track) => void;
@@ -542,6 +576,23 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setDownloadStatus(null);
       setLoadingPhase('idle');
       setCurrentAudioSource(null);
+
+      // PRIORITY 1: Check for offline availability first (works without network)
+      const offlineUrl = await getOfflineTrackUrl(track.id);
+      if (offlineUrl && audioRef.current) {
+        addDebugLog('📱 Brano offline', `Riproduzione da storage locale`, 'info');
+        audioRef.current.src = offlineUrl;
+        
+        if (await safePlay(audioRef.current)) {
+          setState((prev) => ({ ...prev, isPlaying: true }));
+          setLoadingPhase('idle');
+          setCurrentAudioSource('offline');
+          saveRecentlyPlayedTrack(track, user?.id);
+          addDebugLog('✅ Riproduzione offline', `"${track.title}" avviato`, 'success');
+          updateMediaSessionMetadata(track, true);
+          return;
+        }
+      }
 
       const isDeezerPriorityMode = audioSourceMode === 'deezer_priority';
       const isHybridMode = audioSourceMode === 'hybrid_priority';

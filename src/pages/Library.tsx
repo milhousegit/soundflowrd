@@ -1,34 +1,64 @@
 import React, { useState } from 'react';
-import { Plus, ListMusic, Disc, Heart, User, Music, Loader2 } from 'lucide-react';
+import { Plus, ListMusic, Disc, Heart, User, Music, Loader2, Download, Wifi, WifiOff, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import PlaylistCard from '@/components/PlaylistCard';
 import { Track, Album, Artist } from '@/types/music';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
+import { isPast } from 'date-fns';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
-type Tab = 'tracks' | 'albums' | 'artists' | 'playlists';
+type Tab = 'tracks' | 'albums' | 'artists' | 'playlists' | 'offline';
 
 const Library: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('tracks');
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
   const { playTrack } = usePlayer();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, profile, isAdmin, simulateFreeUser } = useAuth();
   const { getFavoritesByType, isLoading } = useFavorites();
   const { playlists, isLoading: isPlaylistsLoading } = usePlaylists();
+  const { 
+    offlineTracks, 
+    isLoading: isOfflineLoading, 
+    isOnline, 
+    totalSize, 
+    formatSize,
+    deleteOfflineTrack,
+    clearAllOfflineTracks,
+  } = useOfflineStorage();
   const navigate = useNavigate();
+  const { toast } = useToast();
+
+  // Check if user has active premium
+  const isPremiumActive = !simulateFreeUser && (profile?.is_premium && 
+    (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at))));
+  const canAccessOffline = isAdmin || isPremiumActive;
 
   const tabs = [
     { id: 'tracks' as Tab, label: t('likedSongs'), icon: Heart },
     { id: 'albums' as Tab, label: t('albums'), icon: Disc },
     { id: 'artists' as Tab, label: t('artists'), icon: User },
     { id: 'playlists' as Tab, label: 'Playlist', icon: ListMusic },
+    ...(canAccessOffline ? [{ id: 'offline' as Tab, label: 'Offline', icon: Download }] : []),
   ];
 
   const favoriteTracks = getFavoritesByType('track');
@@ -39,6 +69,30 @@ const Library: React.FC = () => {
   const tracks: Track[] = favoriteTracks.map(f => f.item_data as Track);
   const albums: Album[] = favoriteAlbums.map(f => f.item_data as Album);
   const artists: Artist[] = favoriteArtists.map(f => f.item_data as Artist);
+
+  // Convert offline tracks to Track objects
+  const offlineTracksList: Track[] = offlineTracks.map(ot => ot.track);
+
+  const handleDeleteOfflineTrack = async (trackId: string, trackTitle: string) => {
+    const success = await deleteOfflineTrack(trackId);
+    if (success) {
+      toast({
+        title: settings.language === 'it' ? 'Rimosso' : 'Removed',
+        description: settings.language === 'it' 
+          ? `"${trackTitle}" rimosso dalla libreria offline` 
+          : `"${trackTitle}" removed from offline library`,
+      });
+    }
+  };
+
+  const handleClearAllOffline = async () => {
+    const success = await clearAllOfflineTracks();
+    if (success) {
+      toast({
+        title: settings.language === 'it' ? 'Libreria offline svuotata' : 'Offline library cleared',
+      });
+    }
+  };
 
   if (!isAuthenticated) {
     return (
@@ -54,7 +108,15 @@ const Library: React.FC = () => {
   return (
     <div className="p-4 md:p-8 pb-32 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-4xl font-bold text-foreground">{t('library')}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl md:text-4xl font-bold text-foreground">{t('library')}</h1>
+          {!isOnline && (
+            <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-500/20 text-orange-400 text-xs font-medium">
+              <WifiOff className="w-3 h-3" />
+              Offline
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -69,11 +131,16 @@ const Library: React.FC = () => {
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
+            {tab.id === 'offline' && offlineTracks.length > 0 && (
+              <span className="ml-1 text-xs bg-primary/20 px-1.5 rounded-full">
+                {offlineTracks.length}
+              </span>
+            )}
           </Button>
         ))}
       </div>
 
-      {isLoading || isPlaylistsLoading ? (
+      {isLoading || isPlaylistsLoading || isOfflineLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -178,6 +245,108 @@ const Library: React.FC = () => {
                   <ListMusic className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>Nessuna playlist</p>
                   <p className="text-sm">Crea playlist dal menu su qualsiasi brano</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Offline */}
+          {activeTab === 'offline' && canAccessOffline && (
+            <div>
+              {/* Offline Header */}
+              <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-6 md:mb-8 p-4 md:p-6 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20">
+                <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0">
+                  <Download className="w-12 md:w-16 h-12 md:h-16 text-white" />
+                </div>
+                <div className="text-center sm:text-left flex-1">
+                  <p className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">
+                    {settings.language === 'it' ? 'Libreria Locale' : 'Local Library'}
+                  </p>
+                  <h2 className="text-2xl md:text-4xl font-bold text-foreground mb-1 md:mb-2">
+                    {settings.language === 'it' ? 'Brani Offline' : 'Offline Tracks'}
+                  </h2>
+                  <p className="text-sm md:text-base text-muted-foreground">
+                    {offlineTracks.length} {t('tracks').toLowerCase()} • {formatSize(totalSize)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {offlineTracksList.length > 0 && (
+                    <>
+                      <Button
+                        variant="player"
+                        size="player"
+                        onClick={() => playTrack(offlineTracksList[0], offlineTracksList)}
+                      >
+                        <Music className="w-6 h-6" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-12 w-12 text-destructive hover:text-destructive">
+                            <Trash2 className="w-5 h-5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              {settings.language === 'it' ? 'Svuota libreria offline?' : 'Clear offline library?'}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {settings.language === 'it' 
+                                ? `Verranno eliminati ${offlineTracks.length} brani (${formatSize(totalSize)}).` 
+                                : `This will delete ${offlineTracks.length} tracks (${formatSize(totalSize)}).`}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>{settings.language === 'it' ? 'Annulla' : 'Cancel'}</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleClearAllOffline} className="bg-destructive hover:bg-destructive/90">
+                              {settings.language === 'it' ? 'Elimina tutto' : 'Delete all'}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Offline Tracks List */}
+              {offlineTracksList.length > 0 ? (
+                <div className="space-y-1">
+                  {offlineTracks.map((offlineTrack, index) => (
+                    <div key={offlineTrack.id} className="group relative">
+                      <TrackCard 
+                        track={offlineTrack.track} 
+                        queue={offlineTracksList}
+                        index={index}
+                      />
+                      <div className="absolute right-12 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteOfflineTrack(offlineTrack.id, offlineTrack.track.title);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <div className="absolute right-2 bottom-1 text-[10px] text-muted-foreground">
+                        {formatSize(offlineTrack.fileSize)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Download className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>{settings.language === 'it' ? 'Nessun brano offline' : 'No offline tracks'}</p>
+                  <p className="text-sm">
+                    {settings.language === 'it' 
+                      ? 'Scarica brani dal player per ascoltarli senza connessione' 
+                      : 'Download tracks from the player to listen offline'}
+                  </p>
                 </div>
               )}
             </div>
