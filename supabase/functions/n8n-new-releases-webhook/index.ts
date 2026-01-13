@@ -177,7 +177,7 @@ serve(async (req) => {
               album_title: latestAlbum.title,
               album_cover: latestAlbum.cover_medium || latestAlbum.cover,
               release_date: latestAlbum.release_date,
-              album_url: `https://soundflowr.lovable.app/album/${latestAlbum.id}`,
+              album_url: `https://soundflowrd.lovable.app/album/${latestAlbum.id}`,
             });
           }
         } catch (e) {
