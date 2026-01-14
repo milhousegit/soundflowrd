@@ -278,6 +278,8 @@ export const NotificationsDropdown: React.FC = () => {
         }
 
         const releases: NewRelease[] = [];
+        const now = new Date();
+        const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
         // Check each artist for new releases
         for (const artist of trackedArtists.slice(0, 10)) {
@@ -289,16 +291,15 @@ export const NotificationsDropdown: React.FC = () => {
                 album.artist?.toLowerCase().includes(artist.artist_name.toLowerCase())
             );
 
-            // Filter only albums released AFTER the user started tracking this artist
-            const trackingStartDate = new Date(artist.created_at);
-            const newAlbums = artistAlbums.filter((album) => {
+            // Filter albums released in the last 3 months (regardless of when user added artist)
+            const recentAlbums = artistAlbums.filter((album) => {
               if (!album.releaseDate) return false;
               const releaseDate = new Date(album.releaseDate);
-              return releaseDate >= trackingStartDate;
+              return releaseDate >= threeMonthsAgo && releaseDate <= now;
             });
 
-            // Add each new album as a notification
-            for (const album of newAlbums) {
+            // Add each recent album as a notification
+            for (const album of recentAlbums) {
               // Determine if it's a single (typically 1-3 tracks) based on record_type if available
               const isSingle = (album as any).record_type === 'single' || 
                               (album as any).nb_tracks <= 3;
