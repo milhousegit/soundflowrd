@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle, Download } from 'lucide-react';
+import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle, Download, GripVertical, X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import BackButton from '@/components/BackButton';
@@ -35,15 +35,18 @@ const PlaylistPage: React.FC = () => {
   const { playTrack } = usePlayer();
   const { t } = useSettings();
   const { profile, isAdmin } = useAuth();
-  const { getPlaylistTracks, deletePlaylist, updatePlaylist } = usePlaylists();
+  const { getPlaylistTracks, deletePlaylist, updatePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } = usePlaylists();
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
   
   const [playlist, setPlaylist] = useState<PlaylistType | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [isEditingTracks, setIsEditingTracks] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [editedCoverUrl, setEditedCoverUrl] = useState('');
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   
   // Check if user can download (premium or admin)
   const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
@@ -131,6 +134,51 @@ const PlaylistPage: React.FC = () => {
     if (!playlist) return;
     await deletePlaylist(playlist.id);
     navigate('/library');
+  };
+
+  const handleRemoveTrack = async (trackId: string) => {
+    if (!playlist) return;
+    const success = await removeTrackFromPlaylist(playlist.id, trackId);
+    if (success) {
+      setTracks(prev => prev.filter(t => t.id !== trackId));
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragEnd = async () => {
+    if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex && playlist) {
+      const newTracks = [...tracks];
+      const [draggedTrack] = newTracks.splice(draggedIndex, 1);
+      newTracks.splice(dragOverIndex, 0, draggedTrack);
+      setTracks(newTracks);
+      
+      // Save new order to database
+      const trackIds = newTracks.map(t => t.id);
+      await reorderPlaylistTracks(playlist.id, trackIds);
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleExitEditMode = () => {
+    setIsEditingTracks(false);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   if (isLoading) {
@@ -244,86 +292,120 @@ const PlaylistPage: React.FC = () => {
 
       {/* Actions */}
       <div className="px-4 md:px-8 py-4 md:py-6 flex items-center gap-3">
-        <Button 
-          variant="player" 
-          size="player" 
-          onClick={handlePlayAll}
-          disabled={tracks.length === 0}
-        >
-          <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
-        </Button>
+        {isEditingTracks ? (
+          // Edit mode actions
+          <>
+            <Button 
+              variant="default" 
+              size="sm"
+              onClick={handleExitEditMode}
+              className="gap-2"
+            >
+              <Check className="w-4 h-4" />
+              Fatto
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Trascina per riordinare, clicca X per rimuovere
+            </p>
+          </>
+        ) : (
+          // Normal mode actions
+          <>
+            <Button 
+              variant="player" 
+              size="player" 
+              onClick={handlePlayAll}
+              disabled={tracks.length === 0}
+            >
+              <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
+            </Button>
 
-        {/* Shuffle button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleShuffle}
-          disabled={tracks.length === 0}
-          className="w-12 h-12"
-        >
-          <Shuffle className="w-5 h-5 text-muted-foreground" />
-        </Button>
-
-        {/* Favorite button - cuoricino */}
-        <FavoriteButton
-          itemType="playlist"
-          item={playlistForFavorite}
-          size="lg"
-        />
-
-        {/* Download button - Premium only */}
-        {canDownload && tracks.length > 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => downloadAll(tracks, playlist.name)}
-            disabled={isDownloadingAll}
-            className="w-12 h-12"
-          >
-            {isDownloadingAll ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Download className="w-5 h-5 text-muted-foreground" />
-            )}
-          </Button>
-        )}
-
-        {/* Edit button - only for non-Deezer playlists */}
-        {!playlist.deezer_id && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsEditing(true)}
-            className="w-12 h-12"
-          >
-            <Pencil className="w-5 h-5 text-muted-foreground" />
-          </Button>
-        )}
-
-        {/* Delete button */}
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
+            {/* Shuffle button */}
             <Button
               variant="ghost"
               size="icon"
-              className="w-12 h-12 text-destructive hover:text-destructive"
+              onClick={handleShuffle}
+              disabled={tracks.length === 0}
+              className="w-12 h-12"
             >
-              <Trash2 className="w-5 h-5" />
+              <Shuffle className="w-5 h-5 text-muted-foreground" />
             </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Eliminare playlist?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Questa azione non può essere annullata. La playlist "{playlist.name}" verrà eliminata definitivamente.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Annulla</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete}>Elimina</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+
+            {/* Favorite button - cuoricino */}
+            <FavoriteButton
+              itemType="playlist"
+              item={playlistForFavorite}
+              size="lg"
+            />
+
+            {/* Download button - Premium only */}
+            {canDownload && tracks.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => downloadAll(tracks, playlist.name)}
+                disabled={isDownloadingAll}
+                className="w-12 h-12"
+              >
+                {isDownloadingAll ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Download className="w-5 h-5 text-muted-foreground" />
+                )}
+              </Button>
+            )}
+
+            {/* Edit tracks button - only for non-Deezer playlists with tracks */}
+            {!playlist.deezer_id && tracks.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsEditingTracks(true)}
+                className="w-12 h-12"
+                title="Modifica ordine brani"
+              >
+                <Pencil className="w-5 h-5 text-muted-foreground" />
+              </Button>
+            )}
+
+            {/* Edit playlist info button - only for non-Deezer playlists */}
+            {!playlist.deezer_id && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+                className="text-muted-foreground"
+              >
+                Modifica info
+              </Button>
+            )}
+
+            {/* Delete button */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-12 h-12 text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Eliminare playlist?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Questa azione non può essere annullata. La playlist "{playlist.name}" verrà eliminata definitivamente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Annulla</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete}>Elimina</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        )}
       </div>
 
       {/* Track List */}
@@ -338,27 +420,76 @@ const PlaylistPage: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Header - Hidden on mobile */}
-            <div className="hidden md:grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 text-sm text-muted-foreground border-b border-border mb-2">
-              <span className="w-8 text-center">#</span>
-              <span>Titolo</span>
-              <Clock className="w-4 h-4" />
-            </div>
+            {/* Header - Hidden on mobile and in edit mode */}
+            {!isEditingTracks && (
+              <div className="hidden md:grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 text-sm text-muted-foreground border-b border-border mb-2">
+                <span className="w-8 text-center">#</span>
+                <span>Titolo</span>
+                <Clock className="w-4 h-4" />
+              </div>
+            )}
 
             {/* Tracks */}
             <div className="space-y-1">
               {tracks.map((track, index) => (
-                <TrackCard 
-                  key={`${track.id}-${index}`} 
-                  track={track}
-                  queue={tracks}
-                  index={index}
-                  showArtist={true}
-                  showSyncStatus={true}
-                  isSynced={isSynced(track.id)}
-                  isSyncing={isSyncing(track.id)}
-                  isDownloading={isDownloading(track.id)}
-                />
+                isEditingTracks ? (
+                  // Edit mode track row
+                  <div
+                    key={`${track.id}-${index}`}
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnd={handleDragEnd}
+                    onDragLeave={handleDragLeave}
+                    className={`
+                      flex items-center gap-3 p-3 rounded-lg bg-card/50 border border-border
+                      cursor-grab active:cursor-grabbing transition-all
+                      ${draggedIndex === index ? 'opacity-50 scale-95' : ''}
+                      ${dragOverIndex === index ? 'border-primary border-2' : ''}
+                    `}
+                  >
+                    {/* Drag handle */}
+                    <GripVertical className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                    
+                    {/* Track info */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {track.coverUrl && (
+                        <img 
+                          src={track.coverUrl} 
+                          alt={track.title}
+                          className="w-10 h-10 rounded object-cover flex-shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{track.title}</p>
+                        <p className="text-sm text-muted-foreground truncate">{track.artist}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Remove button */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveTrack(track.id)}
+                      className="w-8 h-8 text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  // Normal mode track row
+                  <TrackCard 
+                    key={`${track.id}-${index}`} 
+                    track={track}
+                    queue={tracks}
+                    index={index}
+                    showArtist={true}
+                    showSyncStatus={true}
+                    isSynced={isSynced(track.id)}
+                    isSyncing={isSyncing(track.id)}
+                    isDownloading={isDownloading(track.id)}
+                  />
+                )
               ))}
             </div>
           </>
