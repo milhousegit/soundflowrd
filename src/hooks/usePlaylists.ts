@@ -6,6 +6,7 @@ import { Track } from '@/types/music';
 
 export interface Playlist {
   id: string;
+  user_id: string;
   name: string;
   description: string | null;
   cover_url: string | null;

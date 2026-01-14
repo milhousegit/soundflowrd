@@ -41,7 +41,7 @@ const PlaylistPage: React.FC = () => {
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { t } = useSettings();
-  const { profile, isAdmin } = useAuth();
+  const { profile, isAdmin, user } = useAuth();
   const { getPlaylistTracks, deletePlaylist, updatePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } = usePlaylists();
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
   
@@ -59,6 +59,9 @@ const PlaylistPage: React.FC = () => {
   // Check if user can download (premium or admin)
   const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
   const canDownload = isPremiumActive || isAdmin;
+  
+  // Check if current user is the owner of the playlist
+  const isOwner = user?.id === playlist?.user_id;
   
   // Get track IDs for sync status checking
   const trackIds = useMemo(() => tracks.map(t => t.id), [tracks]);
@@ -456,10 +459,12 @@ const PlaylistPage: React.FC = () => {
                         {playlist.is_public ? 'Pubblica' : 'Privata'}
                       </span>
                     </div>
-                    <Switch
-                      checked={playlist.is_public}
-                      onCheckedChange={handleTogglePublic}
-                    />
+                    {isOwner && (
+                      <Switch
+                        checked={playlist.is_public}
+                        onCheckedChange={handleTogglePublic}
+                      />
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {playlist.is_public 
@@ -508,8 +513,8 @@ const PlaylistPage: React.FC = () => {
               </Button>
             )}
 
-            {/* Edit button - only for non-Deezer playlists */}
-            {!playlist.deezer_id && (
+            {/* Edit button - only for non-Deezer playlists and owner only */}
+            {!playlist.deezer_id && isOwner && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -521,30 +526,32 @@ const PlaylistPage: React.FC = () => {
               </Button>
             )}
 
-            {/* Delete button */}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="w-12 h-12 text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Eliminare playlist?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Questa azione non può essere annullata. La playlist "{playlist.name}" verrà eliminata definitivamente.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Annulla</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete}>Elimina</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            {/* Delete button - owner only */}
+            {isOwner && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="w-12 h-12 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Eliminare playlist?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Questa azione non può essere annullata. La playlist "{playlist.name}" verrà eliminata definitivamente.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annulla</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete}>Elimina</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </>
         )}
       </div>
