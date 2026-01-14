@@ -2,7 +2,7 @@ import React, { forwardRef, useState, useCallback } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, Loader2, ListMusic, Plus, Download, HardDrive } from 'lucide-react';
+import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, Loader2, ListMusic, Plus, Download, HardDrive, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
@@ -173,6 +173,13 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       }
     }, [isMenuOpen, isCurrentTrack, toggle, playTrack, track, queue]);
 
+    // Handle copy ID
+    const handleCopyId = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(track.id);
+      toast.success(`ID copiato: ${track.id}`);
+    };
+
     // Menu content (shared between DropdownMenu and ContextMenu)
     const renderMenuItems = (isContext: boolean = false) => {
       const MenuItem = isContext ? ContextMenuItem : DropdownMenuItem;
@@ -234,6 +241,11 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
               Disponibile offline
             </MenuItem>
           )}
+          <MenuSeparator />
+          <MenuItem onClick={handleCopyId} className="cursor-pointer">
+            <Copy className="w-4 h-4 mr-2" />
+            Copia ID
+          </MenuItem>
         </>
       );
     };
