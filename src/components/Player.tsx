@@ -269,9 +269,11 @@ const Player: React.FC = () => {
                     setShowPremiumModal(true);
                   }
                 }}
-                className="text-muted-foreground hover:text-primary w-10"
+                className="relative w-10 text-purple-400 hover:text-purple-300 overflow-visible"
               >
-                <Mic2 className="w-5 h-5" />
+                <div className="absolute inset-0 rounded-md bg-gradient-to-r from-purple-500/30 to-blue-500/30 blur-sm animate-pulse" />
+                <div className="absolute inset-0 rounded-md bg-gradient-to-r from-purple-500/20 to-blue-500/20" />
+                <Mic2 className="w-5 h-5 relative z-10 drop-shadow-[0_0_6px_rgba(168,85,247,0.8)]" />
               </Button>
             </div>
             <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2">
