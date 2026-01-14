@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Shuffle, Music, Download, Loader2 } from 'lucide-react';
+import { Play, Shuffle, Music, Download, Loader2, Share2, Copy, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
@@ -13,6 +15,7 @@ import { useDownloadAll } from '@/hooks/useDownloadAll';
 import { getDeezerPlaylist, DeezerPlaylist } from '@/lib/deezer';
 import { Track, Album } from '@/types/music';
 import { isPast } from 'date-fns';
+import { toast } from 'sonner';
 
 const DeezerPlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +31,20 @@ const DeezerPlaylistPage: React.FC = () => {
   
   const [playlist, setPlaylist] = useState<(DeezerPlaylist & { tracks: Track[] }) | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const shareUrl = `${window.location.origin}/deezer-playlist/${id}`;
+
+  const handleCopyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setLinkCopied(true);
+      toast.success('Link copiato!');
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      toast.error('Impossibile copiare il link');
+    }
+  };
 
   useEffect(() => {
     const fetchPlaylist = async () => {
@@ -139,6 +156,37 @@ const DeezerPlaylistPage: React.FC = () => {
         />
         
         {/* Download button - Premium only */}
+        {/* Share button */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="w-10 h-10 md:w-12 md:h-12">
+              <Share2 className="w-5 h-5 text-muted-foreground" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80" align="start">
+            <div className="space-y-3">
+              <h4 className="font-medium">Condividi playlist</h4>
+              <p className="text-sm text-muted-foreground">
+                Condividi questa playlist Deezer con altri utenti
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={shareUrl}
+                  readOnly
+                  className="text-xs"
+                />
+                <Button size="sm" onClick={handleCopyShareLink}>
+                  {linkCopied ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+        
         {canDownload && playlist.tracks.length > 0 && (
           <Button
             variant="ghost"

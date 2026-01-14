@@ -8,6 +8,11 @@
   "orientation": "any",
   "scope": "/",
   "start_url": "/",
+  "id": "/",
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "icons": [
     {
       "src": "/icon-192.png",
@@ -21,5 +26,12 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "url": "shared_url"
+    }
+  }
 }
