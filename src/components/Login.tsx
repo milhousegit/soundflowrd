@@ -223,12 +223,6 @@ const Login: React.FC = () => {
             )}
           </div>
 
-          {mode === 'login' && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 text-primary text-sm">
-              <CheckCircle className="w-4 h-4 flex-shrink-0" />
-              <span>La tua API Key Real-Debrid è già salvata nel profilo</span>
-            </div>
-          )}
 
           <Button
             type="submit"
