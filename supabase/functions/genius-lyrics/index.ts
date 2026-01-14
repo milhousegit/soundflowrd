@@ -7,101 +7,68 @@ const corsHeaders = {
 };
 
 const GENIUS_API = 'https://api.genius.com';
+const LYRICS_OVH_API = 'https://api.lyrics.ovh/v1';
 
-async function searchSong(query: string, accessToken: string): Promise<any | null> {
-  const url = `${GENIUS_API}/search?q=${encodeURIComponent(query)}`;
-  
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    console.error('Genius search error:', response.status);
-    return null;
-  }
-
-  const data = await response.json();
-  const hits = data.response?.hits || [];
-  
-  if (hits.length === 0) return null;
-  
-  // Return the first song result
-  return hits[0].result;
-}
-
-async function getSongDetails(songId: number, accessToken: string): Promise<any | null> {
-  const url = `${GENIUS_API}/songs/${songId}`;
-  
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    console.error('Genius song details error:', response.status);
-    return null;
-  }
-
-  const data = await response.json();
-  return data.response?.song || null;
-}
-
-async function scrapeLyrics(geniusUrl: string): Promise<string | null> {
+// Try Lyrics.ovh first (free, no scraping needed)
+async function getLyricsFromLyricsOvh(artist: string, title: string): Promise<string | null> {
   try {
-    const response = await fetch(geniusUrl, {
+    // Clean up artist and title for better matching
+    const cleanArtist = artist.split(/[,&]/)[0].trim(); // Take first artist if multiple
+    const cleanTitle = title
+      .replace(/\s*\(.*?\)\s*/g, '') // Remove parentheses content
+      .replace(/\s*\[.*?\]\s*/g, '') // Remove brackets content
+      .replace(/\s*-\s*.*$/, '') // Remove everything after dash
+      .trim();
+
+    console.log('Trying Lyrics.ovh with:', cleanArtist, '-', cleanTitle);
+    
+    const url = `${LYRICS_OVH_API}/${encodeURIComponent(cleanArtist)}/${encodeURIComponent(cleanTitle)}`;
+    const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
       },
     });
 
     if (!response.ok) {
-      console.error('Genius page fetch error:', response.status);
+      console.log('Lyrics.ovh returned:', response.status);
       return null;
     }
 
-    const html = await response.text();
-    
-    // Try to extract lyrics from the page
-    // Genius uses data-lyrics-container attribute for lyrics
-    const lyricsMatch = html.match(/data-lyrics-container="true"[^>]*>([\s\S]*?)<\/div>/gi);
-    
-    if (lyricsMatch && lyricsMatch.length > 0) {
-      let lyrics = lyricsMatch
-        .map(match => {
-          // Extract content between > and </div>
-          const content = match.replace(/data-lyrics-container="true"[^>]*>/, '').replace(/<\/div>$/, '');
-          return content;
-        })
-        .join('\n');
-
-      // Clean up HTML tags but preserve line breaks
-      lyrics = lyrics
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&nbsp;/g, ' ')
-        .replace(/\n\s*\n\s*\n/g, '\n\n')
-        .trim();
-
-      return lyrics;
+    const data = await response.json();
+    if (data.lyrics) {
+      return data.lyrics.trim();
     }
-
-    // Fallback: try to find lyrics in script tags (JSON)
-    const scriptMatch = html.match(/"lyrics":\s*\{[^}]*"plain":\s*"([^"]+)"/);
-    if (scriptMatch) {
-      return scriptMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-    }
-
     return null;
   } catch (error) {
-    console.error('Scraping error:', error);
+    console.error('Lyrics.ovh error:', error);
+    return null;
+  }
+}
+
+// Search Genius for song info (metadata only)
+async function searchGeniusSong(query: string, accessToken: string): Promise<any | null> {
+  try {
+    const url = `${GENIUS_API}/search?q=${encodeURIComponent(query)}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Genius search error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const hits = data.response?.hits || [];
+    
+    if (hits.length === 0) return null;
+    
+    return hits[0].result;
+  } catch (error) {
+    console.error('Genius search error:', error);
     return null;
   }
 }
@@ -121,41 +88,39 @@ serve(async (req) => {
       );
     }
 
+    console.log('Fetching lyrics for:', artist, '-', title);
+
+    // Try Lyrics.ovh first
+    let lyrics = await getLyricsFromLyricsOvh(artist, title);
+    
+    // If first attempt fails, try with original title
+    if (!lyrics) {
+      console.log('Retrying with original title...');
+      lyrics = await getLyricsFromLyricsOvh(artist, title.split(/[(-]/)[0].trim());
+    }
+
+    // Get song info from Genius for metadata (optional, for link)
     const accessToken = Deno.env.get('GENIUS_ACCESS_TOKEN');
-    if (!accessToken) {
-      return new Response(
-        JSON.stringify({ error: 'Genius API not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Search for the song
-    const query = `${artist} ${title}`;
-    console.log('Searching for:', query);
+    let songInfo = null;
     
-    const song = await searchSong(query, accessToken);
-    
-    if (!song) {
-      return new Response(
-        JSON.stringify({ error: 'Song not found', lyrics: null }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (accessToken) {
+      const query = `${artist} ${title}`;
+      const geniusSong = await searchGeniusSong(query, accessToken);
+      if (geniusSong) {
+        songInfo = {
+          title: geniusSong.title,
+          artist: geniusSong.primary_artist?.name,
+          url: geniusSong.url,
+          thumbnailUrl: geniusSong.song_art_image_thumbnail_url,
+        };
+      }
     }
-
-    console.log('Found song:', song.full_title, 'URL:', song.url);
-
-    // Scrape lyrics from the Genius page
-    const lyrics = await scrapeLyrics(song.url);
 
     if (!lyrics) {
       return new Response(
         JSON.stringify({ 
-          error: 'Lyrics not available',
-          songInfo: {
-            title: song.title,
-            artist: song.primary_artist?.name,
-            url: song.url,
-          }
+          error: 'Lyrics not found',
+          songInfo 
         }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -164,11 +129,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         lyrics,
-        songInfo: {
-          title: song.title,
-          artist: song.primary_artist?.name,
-          url: song.url,
-          thumbnailUrl: song.song_art_image_thumbnail_url,
+        songInfo: songInfo || {
+          title,
+          artist,
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
