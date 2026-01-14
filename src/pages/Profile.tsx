@@ -619,8 +619,8 @@ const Settings: React.FC = () => {
               </button>
             </div>
 
-            {/* Real-Debrid API Key */}
-            {(audioSourceMode === 'rd_priority' || audioSourceMode === 'hybrid_priority' || hasRdApiKey) && (
+            {/* Real-Debrid API Key - Always show */}
+            <div className="pt-3 border-t border-border space-y-3">
               <div className="pt-3 border-t border-border space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -744,7 +744,7 @@ const Settings: React.FC = () => {
                   </div>
                 )}
               </div>
-            )}
+            </div>
 
             {/* Audio Quality */}
             <div className="flex items-center justify-between pt-3 border-t border-border">
