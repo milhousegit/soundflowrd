@@ -20,7 +20,7 @@ const AutoModeLayout: React.FC = () => {
     <div className="fixed inset-0 z-[150] bg-background flex flex-row h-screen w-screen overflow-hidden">
       {/* Left Menu - Large touch targets, well spaced */}
       <div 
-        className="w-32 min-w-[128px] bg-card border-r border-border flex flex-col items-center justify-center shrink-0"
+        className="w-[138px] min-w-[138px] bg-card border-r border-border flex flex-col items-center justify-center shrink-0"
         style={{ paddingLeft: 'env(safe-area-inset-left, 0px)' }}
       >
         <div className="flex flex-col items-center justify-center gap-6 w-full px-4">
