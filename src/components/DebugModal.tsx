@@ -100,7 +100,7 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
     ref
   ) => {
     const { t } = useSettings();
-    const { credentials } = useAuth();
+    const { credentials, isAdmin, user } = useAuth();
     const isItalian = t('language') === 'it';
     
     const [activeTab, setActiveTab] = useState<DebugTab>('realdebrid');
@@ -120,9 +120,13 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
     const [metadataLoading, setMetadataLoading] = useState(false);
     const [metadataQuery, setMetadataQuery] = useState('');
     const [savingMetadata, setSavingMetadata] = useState<string | null>(null);
+    const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
     // Check if user has RD API key
     const hasRdKey = !!credentials?.realDebridApiKey;
+
+    // Check if current track has existing metadata (i.e. Deezer ID is numeric)
+    const hasExistingMetadata = currentTrack?.id ? /^\d+$/.test(currentTrack.id) : false;
 
     useEffect(() => {
       if (isOpen && torrents.length > 0 && currentMappedFileId !== undefined) {
@@ -331,9 +335,77 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       }
     };
 
+    // Send metadata update request to admin
+    const handleSendMetadataRequest = async (result: DeezerResult) => {
+      if (!currentTrack || !user) {
+        toast.error(isItalian ? 'Devi essere loggato' : 'You must be logged in');
+        return;
+      }
+      
+      setSendingRequest(result.id);
+      
+      try {
+        // Insert request into metadata_update_requests table
+        const { error } = await supabase
+          .from('metadata_update_requests')
+          .insert({
+            track_id: currentTrack.id,
+            track_title: currentTrack.title,
+            track_artist: currentTrack.artist,
+            requested_deezer_id: result.id,
+            requested_title: result.title,
+            requested_artist: result.artist,
+            requested_album: result.album || null,
+            requested_cover_url: result.coverUrl || null,
+            requested_duration: result.duration || null,
+            request_type: 'metadata',
+            user_id: user.id,
+          });
+
+        if (error) throw error;
+
+        // Also send notification to admins
+        const { data: admins } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'admin');
+
+        if (admins && admins.length > 0) {
+          const notifications = admins.map(admin => ({
+            user_id: admin.user_id,
+            title: 'Richiesta modifica metadati',
+            message: `Richiesta di aggiornamento metadati per "${currentTrack.title}" → "${result.title}" di ${result.artist}`,
+            type: 'metadata_request',
+            data: {
+              trackId: currentTrack.id,
+              requestedDeezerId: result.id,
+              requestedTitle: result.title,
+              requestedArtist: result.artist,
+            },
+          }));
+
+          await supabase.from('in_app_notifications').insert(notifications);
+        }
+
+        toast.success(isItalian ? 'Richiesta inviata all\'admin!' : 'Request sent to admin!');
+        onClose();
+      } catch (error) {
+        console.error('Error sending metadata request:', error);
+        toast.error(isItalian ? 'Errore invio richiesta' : 'Request error');
+      } finally {
+        setSendingRequest(null);
+      }
+    };
+
     const handleSaveMetadataMapping = async (result: DeezerResult) => {
       if (!currentTrack) {
         toast.error(isItalian ? 'Nessun brano corrente' : 'No current track');
+        return;
+      }
+      
+      // If not admin and track already has metadata, send request instead
+      if (!isAdmin && hasExistingMetadata) {
+        await handleSendMetadataRequest(result);
         return;
       }
       
@@ -828,42 +900,68 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
 
                 {metadataResults.length > 0 && (
                   <div className="space-y-2">
-                    {metadataResults.map((result) => (
-                      <div
-                        key={result.id}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
-                      >
-                        <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden flex-shrink-0">
-                          {result.coverUrl ? (
-                            <img src={result.coverUrl} alt={result.album} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Music className="w-5 h-5 text-muted-foreground" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-foreground truncate">{result.title}</p>
-                          <p className="text-sm text-muted-foreground truncate">{result.artist}</p>
-                          {result.album && (
-                            <p className="text-xs text-muted-foreground truncate">{result.album}</p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleSaveMetadataMapping(result)}
-                          disabled={savingMetadata === result.id}
-                          className="flex-shrink-0"
-                        >
-                          {savingMetadata === result.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Save className="w-4 h-4" />
-                          )}
-                        </Button>
+                    {/* Info banner for non-admins when track has existing metadata */}
+                    {!isAdmin && hasExistingMetadata && (
+                      <div className="flex items-center gap-2 p-3 mb-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        <p className="text-sm">
+                          {isItalian 
+                            ? 'Questo brano ha già metadati. La modifica richiede approvazione admin.' 
+                            : 'This track already has metadata. Changes require admin approval.'}
+                        </p>
                       </div>
-                    ))}
+                    )}
+                    
+                    {metadataResults.map((result) => {
+                      const isSaving = savingMetadata === result.id;
+                      const isSendingReq = sendingRequest === result.id;
+                      const showRequestButton = !isAdmin && hasExistingMetadata;
+                      
+                      return (
+                        <div
+                          key={result.id}
+                          className="flex items-center gap-3 p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden flex-shrink-0">
+                            {result.coverUrl ? (
+                              <img src={result.coverUrl} alt={result.album} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Music className="w-5 h-5 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-foreground truncate">{result.title}</p>
+                            <p className="text-sm text-muted-foreground truncate">{result.artist}</p>
+                            {result.album && (
+                              <p className="text-xs text-muted-foreground truncate">{result.album}</p>
+                            )}
+                          </div>
+                          <Button
+                            variant={showRequestButton ? "outline" : "ghost"}
+                            size="sm"
+                            onClick={() => handleSaveMetadataMapping(result)}
+                            disabled={isSaving || isSendingReq}
+                            className="flex-shrink-0 gap-1"
+                          >
+                            {isSaving || isSendingReq ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : showRequestButton ? (
+                              <>
+                                <AlertCircle className="w-4 h-4" />
+                                <span className="hidden sm:inline">{isItalian ? 'Richiedi' : 'Request'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Save className="w-4 h-4" />
+                                <span className="hidden sm:inline">{isItalian ? 'Salva' : 'Save'}</span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </>

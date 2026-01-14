@@ -176,6 +176,63 @@ export type Database = {
         }
         Relationships: []
       }
+      metadata_update_requests: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          id: string
+          request_type: string
+          requested_album: string | null
+          requested_artist: string
+          requested_cover_url: string | null
+          requested_deezer_id: string
+          requested_duration: number | null
+          requested_title: string
+          status: string
+          track_artist: string
+          track_id: string
+          track_title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          id?: string
+          request_type?: string
+          requested_album?: string | null
+          requested_artist: string
+          requested_cover_url?: string | null
+          requested_deezer_id: string
+          requested_duration?: number | null
+          requested_title: string
+          status?: string
+          track_artist: string
+          track_id: string
+          track_title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          id?: string
+          request_type?: string
+          requested_album?: string | null
+          requested_artist?: string
+          requested_cover_url?: string | null
+          requested_deezer_id?: string
+          requested_duration?: number | null
+          requested_title?: string
+          status?: string
+          track_artist?: string
+          track_id?: string
+          track_title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notification_subscriptions: {
         Row: {
           auth: string
@@ -266,6 +323,7 @@ export type Database = {
           deezer_id: string | null
           description: string | null
           id: string
+          is_public: boolean
           is_synced: boolean | null
           name: string
           spotify_url: string | null
@@ -279,6 +337,7 @@ export type Database = {
           deezer_id?: string | null
           description?: string | null
           id?: string
+          is_public?: boolean
           is_synced?: boolean | null
           name: string
           spotify_url?: string | null
@@ -292,6 +351,7 @@ export type Database = {
           deezer_id?: string | null
           description?: string | null
           id?: string
+          is_public?: boolean
           is_synced?: boolean | null
           name?: string
           spotify_url?: string | null

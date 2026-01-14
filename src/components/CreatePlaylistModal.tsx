@@ -8,11 +8,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, Music, Upload, Link, Plus, Image as ImageIcon, Crown, Lock } from 'lucide-react';
+import { Loader2, Music, Upload, Link, Plus, Crown, Globe, Lock } from 'lucide-react';
 import { Track } from '@/types/music';
 
 interface SpotifyTrack {
@@ -55,6 +57,7 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   // Manual creation state
   const [manualName, setManualName] = useState('');
   const [manualCoverUrl, setManualCoverUrl] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   
   // Import state
@@ -63,14 +66,17 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   const [importedPlaylist, setImportedPlaylist] = useState<ImportedPlaylist | null>(null);
   const [editedName, setEditedName] = useState('');
   const [editedCoverUrl, setEditedCoverUrl] = useState('');
+  const [importIsPublic, setImportIsPublic] = useState(false);
 
   const resetState = () => {
     setManualName('');
     setManualCoverUrl('');
+    setIsPublic(false);
     setSpotifyUrl('');
     setImportedPlaylist(null);
     setEditedName('');
     setEditedCoverUrl('');
+    setImportIsPublic(false);
     setActiveTab('manual');
   };
 
@@ -87,7 +93,14 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
 
     setIsCreating(true);
     try {
-      const playlist = await createPlaylist(manualName.trim(), manualCoverUrl || undefined);
+      const playlist = await createPlaylist(
+        manualName.trim(), 
+        manualCoverUrl || undefined,
+        undefined,
+        undefined,
+        undefined,
+        isPublic
+      );
       if (playlist) {
         toast.success('Playlist creata!');
         onPlaylistCreated?.(playlist.id);
@@ -141,7 +154,9 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
         editedName.trim(),
         editedCoverUrl || undefined,
         importedPlaylist.description || undefined,
-        spotifyUrl
+        spotifyUrl,
+        undefined,
+        importIsPublic
       );
 
       if (playlist) {
@@ -231,6 +246,32 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
               </div>
             </div>
 
+            {/* Public/Private toggle */}
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3">
+                {isPublic ? (
+                  <Globe className="w-5 h-5 text-primary" />
+                ) : (
+                  <Lock className="w-5 h-5 text-muted-foreground" />
+                )}
+                <div>
+                  <Label htmlFor="public-toggle" className="font-medium">
+                    {isPublic ? 'Pubblica' : 'Privata'}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {isPublic 
+                      ? 'Chiunque può vedere questa playlist' 
+                      : 'Solo tu puoi vedere questa playlist'}
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="public-toggle"
+                checked={isPublic}
+                onCheckedChange={setIsPublic}
+              />
+            </div>
+
             <Button
               className="w-full"
               onClick={handleManualCreate}
@@ -318,6 +359,32 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
                     placeholder="https://..."
                     value={editedCoverUrl}
                     onChange={(e) => setEditedCoverUrl(e.target.value)}
+                  />
+                </div>
+
+                {/* Public/Private toggle for import */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+                  <div className="flex items-center gap-3">
+                    {importIsPublic ? (
+                      <Globe className="w-5 h-5 text-primary" />
+                    ) : (
+                      <Lock className="w-5 h-5 text-muted-foreground" />
+                    )}
+                    <div>
+                      <Label htmlFor="import-public-toggle" className="font-medium">
+                        {importIsPublic ? 'Pubblica' : 'Privata'}
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        {importIsPublic 
+                          ? 'Chiunque può vedere questa playlist' 
+                          : 'Solo tu puoi vedere questa playlist'}
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="import-public-toggle"
+                    checked={importIsPublic}
+                    onCheckedChange={setImportIsPublic}
                   />
                 </div>
 

@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle, Download, GripVertical, X, Check } from 'lucide-react';
+import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle, Download, GripVertical, X, Check, Globe, Lock, Share2, Copy, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
@@ -28,6 +30,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 const PlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -44,8 +51,10 @@ const PlaylistPage: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [editedCoverUrl, setEditedCoverUrl] = useState('');
+  const [editedIsPublic, setEditedIsPublic] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   
   // Check if user can download (premium or admin)
   const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
@@ -74,6 +83,7 @@ const PlaylistPage: React.FC = () => {
         setPlaylist(fetchedPlaylist);
         setEditedName(fetchedPlaylist.name);
         setEditedCoverUrl(fetchedPlaylist.cover_url || '');
+        setEditedIsPublic(fetchedPlaylist.is_public || false);
 
         // Check if this is a Deezer playlist (has deezer_id)
         if (fetchedPlaylist.deezer_id) {
@@ -149,11 +159,29 @@ const PlaylistPage: React.FC = () => {
     await updatePlaylist(playlist.id, {
       name: editedName.trim(),
       cover_url: editedCoverUrl || undefined,
+      is_public: editedIsPublic,
     });
     
-    setPlaylist({ ...playlist, name: editedName.trim(), cover_url: editedCoverUrl || null });
+    setPlaylist({ ...playlist, name: editedName.trim(), cover_url: editedCoverUrl || null, is_public: editedIsPublic });
     setIsEditing(false);
     toast.success('Playlist aggiornata');
+  };
+
+  const handleCopyShareLink = () => {
+    const shareUrl = `${window.location.origin}/playlist/${playlist?.id}`;
+    navigator.clipboard.writeText(shareUrl);
+    setLinkCopied(true);
+    toast.success('Link copiato!');
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
+
+  const handleTogglePublic = async () => {
+    if (!playlist) return;
+    const newIsPublic = !playlist.is_public;
+    await updatePlaylist(playlist.id, { is_public: newIsPublic });
+    setPlaylist({ ...playlist, is_public: newIsPublic });
+    setEditedIsPublic(newIsPublic);
+    toast.success(newIsPublic ? 'Playlist ora pubblica' : 'Playlist ora privata');
   };
 
   const handleDelete = async () => {
@@ -280,7 +308,7 @@ const PlaylistPage: React.FC = () => {
           <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">{playlist.deezer_id ? 'Playlist Deezer' : 'Playlist'}</p>
           
           {isEditing && !playlist.deezer_id ? (
-            <div className="space-y-2 max-w-md">
+            <div className="space-y-3 max-w-md">
               <Input
                 value={editedName}
                 onChange={(e) => setEditedName(e.target.value)}
@@ -292,6 +320,33 @@ const PlaylistPage: React.FC = () => {
                 onChange={(e) => setEditedCoverUrl(e.target.value)}
                 placeholder="URL copertina (opzionale)"
               />
+              
+              {/* Public/Private toggle */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+                <div className="flex items-center gap-3">
+                  {editedIsPublic ? (
+                    <Globe className="w-5 h-5 text-primary" />
+                  ) : (
+                    <Lock className="w-5 h-5 text-muted-foreground" />
+                  )}
+                  <div>
+                    <Label htmlFor="edit-public-toggle" className="font-medium">
+                      {editedIsPublic ? 'Pubblica' : 'Privata'}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {editedIsPublic 
+                        ? 'Chiunque può vedere questa playlist' 
+                        : 'Solo tu puoi vedere questa playlist'}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="edit-public-toggle"
+                  checked={editedIsPublic}
+                  onCheckedChange={setEditedIsPublic}
+                />
+              </div>
+              
               <div className="flex gap-2">
                 <Button size="sm" onClick={handleSaveEdit}>Salva Info</Button>
               </div>
@@ -302,6 +357,19 @@ const PlaylistPage: React.FC = () => {
                 {playlist.name}
               </h1>
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-1 md:gap-2 text-xs md:text-sm text-muted-foreground">
+                {/* Public/Private indicator */}
+                {playlist.is_public ? (
+                  <span className="flex items-center gap-1 text-primary">
+                    <Globe className="w-3 h-3" />
+                    Pubblica
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    Privata
+                  </span>
+                )}
+                <span>•</span>
                 <span>{tracks.length} {tracks.length === 1 ? 'brano' : 'brani'}</span>
                 {totalDuration > 0 && (
                   <>
@@ -362,6 +430,66 @@ const PlaylistPage: React.FC = () => {
               item={playlistForFavorite}
               size="lg"
             />
+
+            {/* Share button with popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-12 h-12"
+                  title="Condividi"
+                >
+                  <Share2 className="w-5 h-5 text-muted-foreground" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="start">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {playlist.is_public ? (
+                        <Globe className="w-4 h-4 text-primary" />
+                      ) : (
+                        <Lock className="w-4 h-4 text-muted-foreground" />
+                      )}
+                      <span className="font-medium">
+                        {playlist.is_public ? 'Pubblica' : 'Privata'}
+                      </span>
+                    </div>
+                    <Switch
+                      checked={playlist.is_public}
+                      onCheckedChange={handleTogglePublic}
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {playlist.is_public 
+                      ? 'Chiunque con il link può vedere questa playlist' 
+                      : 'Solo tu puoi vedere questa playlist. Rendila pubblica per condividerla.'}
+                  </p>
+                  {playlist.is_public && (
+                    <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={`${window.location.origin}/playlist/${playlist.id}`}
+                        className="text-sm"
+                      />
+                      <Button 
+                        size="icon" 
+                        variant="outline" 
+                        onClick={handleCopyShareLink}
+                        className="flex-shrink-0"
+                      >
+                        {linkCopied ? (
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {/* Download button - Premium only */}
             {canDownload && tracks.length > 0 && (

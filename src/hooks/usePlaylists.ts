@@ -12,6 +12,7 @@ export interface Playlist {
   spotify_url: string | null;
   deezer_id: string | null;
   is_synced: boolean;
+  is_public: boolean;
   track_count: number;
   created_at: string;
   updated_at: string;
@@ -68,7 +69,8 @@ export const usePlaylists = () => {
     coverUrl?: string,
     description?: string,
     spotifyUrl?: string,
-    deezerId?: string
+    deezerId?: string,
+    isPublic: boolean = false
   ): Promise<Playlist | null> => {
     if (!user) {
       toast.error('Devi essere loggato per creare una playlist');
@@ -85,6 +87,7 @@ export const usePlaylists = () => {
           description: description || null,
           spotify_url: spotifyUrl || null,
           deezer_id: deezerId || null,
+          is_public: isPublic,
         })
         .select()
         .single();
@@ -120,7 +123,7 @@ export const usePlaylists = () => {
 
   const updatePlaylist = async (
     playlistId: string,
-    updates: { name?: string; cover_url?: string; description?: string }
+    updates: { name?: string; cover_url?: string; description?: string; is_public?: boolean }
   ) => {
     try {
       const { error } = await supabase
