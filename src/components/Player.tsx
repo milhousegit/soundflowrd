@@ -444,8 +444,9 @@ const Player: React.FC = () => {
 
       {/* Desktop player */}
       <div className="fixed bottom-0 left-0 right-0 h-24 glass border-t border-border z-50 animate-slide-up hidden md:block">
-        <div className="h-full flex items-center px-6 gap-6">
-          <div className="flex items-center gap-4 w-72 min-w-0">
+        <div className="h-full grid grid-cols-3 items-center px-6 gap-4">
+          {/* Left section - Track info */}
+          <div className="flex items-center gap-4 min-w-0">
             <div className="w-14 h-14 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0 relative">
               {currentTrack.coverUrl ? (
                 <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
@@ -481,7 +482,8 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col items-center gap-2 max-w-2xl">
+          {/* Center section - Controls and progress */}
+          <div className="flex flex-col items-center gap-2 justify-self-center w-full max-w-2xl">
             <div className="flex items-center gap-4">
               <Button variant="playerSecondary" size="icon" onClick={previous}>
                 <SkipBack className="w-5 h-5" />
@@ -501,7 +503,8 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 w-56">
+          {/* Right section - Volume and actions */}
+          <div className="flex items-center gap-3 justify-self-end">
             <Button
               variant="playerSecondary"
               size="icon"
@@ -535,7 +538,7 @@ const Player: React.FC = () => {
             <Button variant="playerSecondary" size="icon" onClick={() => setVolume(volume === 0 ? 0.7 : 0)}>
               {volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </Button>
-            <Slider value={[volume * 100]} max={100} step={1} onValueChange={([value]) => setVolume(value / 100)} className="flex-1" />
+            <Slider value={[volume * 100]} max={100} step={1} onValueChange={([value]) => setVolume(value / 100)} className="w-24" />
           </div>
         </div>
       </div>
