@@ -156,6 +156,22 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       }
     }, [isOpen, currentTrackInfo]);
 
+    // Check if user has RD API key - define tabs before early return for hook consistency
+    const tabs: { id: DebugTab; label: string; icon: React.ReactNode; show: boolean }[] = [
+      { id: 'realdebrid', label: 'RealDebrid', icon: <Database className="w-4 h-4" />, show: hasRdKey },
+      { id: 'scraping', label: 'Scraping', icon: <Headphones className="w-4 h-4" />, show: true },
+      { id: 'metadati', label: 'Metadati', icon: <Tag className="w-4 h-4" />, show: true },
+    ];
+
+    const visibleTabs = tabs.filter(tab => tab.show);
+
+    // Auto-select first visible tab if current is hidden
+    useEffect(() => {
+      if (!visibleTabs.find(t => t.id === activeTab)) {
+        setActiveTab(visibleTabs[0]?.id || 'scraping');
+      }
+    }, [hasRdKey, activeTab, visibleTabs]);
+
     if (!isOpen) return null;
 
     const handleManualSearch = () => {
@@ -383,21 +399,6 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       torrents.some((t) => ['downloading', 'queued', 'magnet_conversion'].includes(t.status));
 
     const hasTorrentResults = alternatives.length > 0 || torrents.length > 0;
-
-    const tabs: { id: DebugTab; label: string; icon: React.ReactNode; show: boolean }[] = [
-      { id: 'realdebrid', label: 'RealDebrid', icon: <Database className="w-4 h-4" />, show: hasRdKey },
-      { id: 'scraping', label: 'Scraping', icon: <Headphones className="w-4 h-4" />, show: true },
-      { id: 'metadati', label: 'Metadati', icon: <Tag className="w-4 h-4" />, show: true },
-    ];
-
-    const visibleTabs = tabs.filter(tab => tab.show);
-
-    // Auto-select first visible tab if current is hidden
-    useEffect(() => {
-      if (!visibleTabs.find(t => t.id === activeTab)) {
-        setActiveTab(visibleTabs[0]?.id || 'scraping');
-      }
-    }, [hasRdKey]);
 
     return (
       <div ref={ref} className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
