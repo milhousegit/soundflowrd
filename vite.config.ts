@@ -17,4 +17,7 @@ export default defineConfig(({ mode }) => ({
     // Prevent multiple React copies in the bundle (fixes invalid hook call / dispatcher null)
     dedupe: ["react", "react-dom"],
   },
+  optimizeDeps: {
+    include: ["react", "react-dom"],
+  },
 }));
