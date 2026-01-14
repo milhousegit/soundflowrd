@@ -113,6 +113,8 @@ interface PlayerContextType extends PlayerState {
   toggleShuffle: () => void;
   
   currentAudioSource: AudioSource;
+  
+  updateTrackMetadata: (oldTrackId: string, newData: { id: string; title: string; artist: string; album?: string; coverUrl?: string; duration?: number }) => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -433,6 +435,52 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   );
 
   const clearDebugLogs = useCallback(() => setDebugLogs([]), []);
+
+  // Update track metadata (used when user manually corrects metadata)
+  const updateTrackMetadata = useCallback((oldTrackId: string, newData: { id: string; title: string; artist: string; album?: string; coverUrl?: string; duration?: number }) => {
+    setState((prev) => {
+      const updateTrack = (track: Track): Track => {
+        if (track.id !== oldTrackId) return track;
+        return {
+          ...track,
+          id: newData.id,
+          title: newData.title,
+          artist: newData.artist,
+          album: newData.album || track.album,
+          coverUrl: newData.coverUrl || track.coverUrl,
+          duration: newData.duration || track.duration,
+        };
+      };
+
+      const updatedQueue = prev.queue.map(updateTrack);
+      const updatedCurrentTrack = prev.currentTrack ? updateTrack(prev.currentTrack) : null;
+
+      // Also update original queue ref for shuffle
+      if (originalQueueRef.current.length > 0) {
+        originalQueueRef.current = originalQueueRef.current.map(updateTrack);
+      }
+
+      return {
+        ...prev,
+        queue: updatedQueue,
+        currentTrack: updatedCurrentTrack,
+      };
+    });
+
+    // Update media session if current track was updated
+    if (state.currentTrack?.id === oldTrackId) {
+      const updatedTrack = {
+        ...state.currentTrack,
+        id: newData.id,
+        title: newData.title,
+        artist: newData.artist,
+        album: newData.album || state.currentTrack.album,
+        coverUrl: newData.coverUrl || state.currentTrack.coverUrl,
+        duration: newData.duration || state.currentTrack.duration,
+      };
+      updateMediaSessionMetadata(updatedTrack, state.isPlaying);
+    }
+  }, [state.currentTrack, state.isPlaying]);
 
   // Update Media Session metadata when track changes
   useEffect(() => {
@@ -1661,6 +1709,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         isShuffled,
         toggleShuffle,
         currentAudioSource,
+        updateTrackMetadata,
       }}
     >
       {children}

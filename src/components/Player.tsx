@@ -76,6 +76,7 @@ const Player: React.FC = () => {
     toggleShuffle,
     lastSearchQuery,
     currentAudioSource,
+    updateTrackMetadata,
   } = usePlayer();
 
   const { t, settings } = useSettings();
@@ -557,6 +558,7 @@ const Player: React.FC = () => {
         downloadStatus={downloadStatus}
         currentMappedFileId={currentMappedFileId}
         lastSearchQuery={lastSearchQuery}
+        onMetadataSaved={updateTrackMetadata}
       />
 
       <QueueModal
