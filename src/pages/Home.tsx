@@ -7,7 +7,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getNewReleases, getPopularArtists, searchAlbums } from '@/lib/deezer';
+import { getNewReleases, getPopularArtists, searchAlbums, getArtist } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
@@ -150,26 +150,62 @@ const Home: React.FC = () => {
   }, [favorites.length]);
 
   useEffect(() => {
-    const fetchPopularArtists = async () => {
+    const fetchArtistsForYou = async () => {
       setIsLoadingArtists(true);
       try {
-        const uniqueArtistNames = getUniqueArtistNames();
-        const favoriteNamesLower = uniqueArtistNames.map(n => n.toLowerCase());
+        // Get favorite artists (up to 3)
+        const favoriteArtistItems = getFavoritesByType('artist').slice(0, 3);
         
-        // Use Deezer API directly for popular artists
-        const artists = await getPopularArtists();
-        const filteredArtists = artists.filter(
-          a => !favoriteNamesLower.includes(a.name.toLowerCase())
-        );
-        setPopularArtists(filteredArtists.slice(0, 12));
+        if (favoriteArtistItems.length > 0) {
+          // We have favorite artists - show them + their related artists
+          const favoriteArtistsData: Artist[] = [];
+          const relatedArtistsData: Artist[] = [];
+          const seenArtistIds = new Set<string>();
+          
+          // Get full data for favorite artists and their related artists
+          for (const fav of favoriteArtistItems) {
+            try {
+              const artistData = await getArtist(fav.item_id);
+              
+              // Add favorite artist
+              if (!seenArtistIds.has(artistData.id)) {
+                favoriteArtistsData.push({
+                  id: artistData.id,
+                  name: artistData.name,
+                  imageUrl: artistData.imageUrl,
+                  popularity: artistData.popularity,
+                });
+                seenArtistIds.add(artistData.id);
+              }
+              
+              // Add related artists
+              for (const related of (artistData.relatedArtists || []).slice(0, 3)) {
+                if (!seenArtistIds.has(related.id)) {
+                  relatedArtistsData.push(related);
+                  seenArtistIds.add(related.id);
+                }
+              }
+            } catch (e) {
+              console.error('Error fetching artist data:', e);
+            }
+          }
+          
+          // Combine: favorite artists first, then related artists
+          const combined = [...favoriteArtistsData, ...relatedArtistsData];
+          setPopularArtists(combined.slice(0, 12));
+        } else {
+          // No favorite artists - fall back to popular artists
+          const artists = await getPopularArtists();
+          setPopularArtists(artists.slice(0, 12));
+        }
       } catch (error) {
-        console.error('Failed to fetch popular artists:', error);
+        console.error('Failed to fetch artists for you:', error);
       } finally {
         setIsLoadingArtists(false);
       }
     };
 
-    fetchPopularArtists();
+    fetchArtistsForYou();
   }, [favorites.length]);
 
   const getGreeting = () => {
@@ -456,7 +492,9 @@ const Home: React.FC = () => {
       {/* Popular Artists - Horizontal scroll on mobile */}
       {homeDisplayOptions.showPopularArtists && (
         <section>
-          <h2 className="text-lg md:text-2xl font-bold text-foreground mb-4 md:mb-6">{t('popularArtists')}</h2>
+          <h2 className="text-lg md:text-2xl font-bold text-foreground mb-4 md:mb-6">
+            {t('language') === 'it' ? 'Artisti per te' : 'Artists for you'}
+          </h2>
           {isLoadingArtists ? (
             <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
               {Array.from({ length: 6 }).map((_, i) => (
