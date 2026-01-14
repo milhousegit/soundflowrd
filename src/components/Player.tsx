@@ -97,6 +97,7 @@ const Player: React.FC = () => {
   const [showDebugModal, setShowDebugModal] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
   const [showLyricsModal, setShowLyricsModal] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Swipe to close state
@@ -254,9 +255,25 @@ const Player: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-between px-4 pt-safe">
-            <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)} className="w-10">
-              <ChevronDown className="w-6 h-6" />
-            </Button>
+            <div className="flex items-center">
+              <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)} className="w-10">
+                <ChevronDown className="w-6 h-6" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  if (contextIsAdmin || isPremiumActive) {
+                    setShowLyricsModal(true);
+                  } else {
+                    setShowPremiumModal(true);
+                  }
+                }}
+                className="text-muted-foreground hover:text-primary w-10"
+              >
+                <Mic2 className="w-5 h-5" />
+              </Button>
+            </div>
             <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2">
               {isSearchingStreams && <Loader2 className="w-4 h-4 text-primary animate-spin" />}
               <span className="text-sm text-muted-foreground">Now Playing</span>
@@ -386,16 +403,6 @@ const Player: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1">
-              {(contextIsAdmin || isPremiumActive) && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 text-muted-foreground hover:text-primary"
-                  onClick={() => setShowLyricsModal(true)}
-                >
-                  <Mic2 className="w-5 h-5" />
-                </Button>
-              )}
               {canDownload && currentStreamUrl && (
                 <Button
                   variant="ghost"
@@ -518,17 +525,21 @@ const Player: React.FC = () => {
 
           {/* Right section - Volume and actions */}
           <div className="flex items-center gap-3 justify-self-end">
-            {(contextIsAdmin || isPremiumActive) && (
-              <Button
-                variant="playerSecondary"
-                size="icon"
-                onClick={() => setShowLyricsModal(true)}
-                className="text-muted-foreground hover:text-primary"
-                title={settings.language === 'it' ? 'Testo' : 'Lyrics'}
-              >
-                <Mic2 className="w-5 h-5" />
-              </Button>
-            )}
+            <Button
+              variant="playerSecondary"
+              size="icon"
+              onClick={() => {
+                if (contextIsAdmin || isPremiumActive) {
+                  setShowLyricsModal(true);
+                } else {
+                  setShowPremiumModal(true);
+                }
+              }}
+              className="text-muted-foreground hover:text-primary"
+              title={settings.language === 'it' ? 'Testo' : 'Lyrics'}
+            >
+              <Mic2 className="w-5 h-5" />
+            </Button>
             <Button
               variant="playerSecondary"
               size="icon"
@@ -602,6 +613,37 @@ const Player: React.FC = () => {
         onClose={() => setShowLyricsModal(false)}
         track={currentTrack}
       />
+
+      {/* Premium Modal for Lyrics */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 z-[70] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPremiumModal(false)}>
+          <div className="bg-card rounded-2xl p-6 max-w-sm w-full shadow-xl border border-border" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center">
+                <Mic2 className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Testi Sincronizzati</h3>
+              <p className="text-muted-foreground text-sm mb-4">
+                Sblocca i testi karaoke con scorrimento automatico sincronizzato con la musica.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
+                  onClick={() => {
+                    setShowPremiumModal(false);
+                    navigate('/profile');
+                  }}
+                >
+                  Sblocca Premium
+                </Button>
+                <Button variant="ghost" onClick={() => setShowPremiumModal(false)}>
+                  Chiudi
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
