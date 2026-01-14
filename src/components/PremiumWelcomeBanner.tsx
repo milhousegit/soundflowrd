@@ -52,7 +52,7 @@ const PremiumWelcomeBanner: React.FC = () => {
       />
       
       {/* Banner */}
-      <div className="relative z-10 w-full max-w-md bg-gradient-to-br from-amber-500/20 via-yellow-500/10 to-orange-500/20 border border-amber-500/30 rounded-2xl p-6 shadow-2xl animate-scale-in">
+      <div className="relative z-10 w-full max-w-md bg-gradient-to-br from-[#8B5CF6]/20 via-[#6366F1]/10 to-[#3B82F6]/20 border border-[#8B5CF6]/30 rounded-2xl p-6 shadow-2xl animate-scale-in">
         {/* Close button */}
         <button 
           onClick={handleDismiss}
@@ -64,10 +64,10 @@ const PremiumWelcomeBanner: React.FC = () => {
         {/* Crown icon */}
         <div className="flex justify-center mb-4">
           <div className="relative">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#3B82F6] flex items-center justify-center shadow-lg">
               <Crown className="w-10 h-10 text-white" />
             </div>
-            <Sparkles className="absolute -top-1 -right-1 w-6 h-6 text-amber-400 animate-pulse" />
+            <Sparkles className="absolute -top-1 -right-1 w-6 h-6 text-[#8B5CF6] animate-pulse" />
           </div>
         </div>
 
@@ -117,7 +117,7 @@ const PremiumWelcomeBanner: React.FC = () => {
         {/* CTA Button */}
         <Button 
           onClick={handleDismiss}
-          className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
+          className="w-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 text-white font-semibold"
         >
           {isItalian ? 'Inizia a esplorare' : 'Start exploring'}
         </Button>
