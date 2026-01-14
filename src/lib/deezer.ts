@@ -128,3 +128,12 @@ export async function getArtistPlaylists(artistName: string): Promise<DeezerPlay
   if (error) throw error;
   return data || [];
 }
+
+export async function getCountryChart(country: string): Promise<Track[]> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-country-chart', country, limit: 20 },
+  });
+
+  if (error) throw error;
+  return data || [];
+}

@@ -412,6 +412,43 @@ serve(async (req) => {
         });
       }
 
+      case 'get-country-chart': {
+        // Country codes to Deezer chart IDs mapping
+        // Deezer uses editorial IDs for country charts
+        const countryToEditorial: Record<string, number> = {
+          'IT': 116, // Italy
+          'US': 0,   // United States (global/US)
+          'ES': 134, // Spain
+          'FR': 52,  // France
+          'DE': 56,  // Germany
+          'PT': 131, // Portugal
+          'GB': 104, // UK
+          'BR': 91,  // Brazil
+        };
+        
+        const editorialId = countryToEditorial[country?.toUpperCase()] ?? 0;
+        console.log(`Getting chart for country: ${country}, editorial ID: ${editorialId}`);
+        
+        const data = await fetchWithRetry(`${DEEZER_API}/chart/${editorialId}/tracks?limit=${limit}`);
+        
+        const tracks = (data.data || []).map((track: any, index: number) => ({
+          id: String(track.id),
+          title: track.title,
+          artist: track.artist?.name || 'Unknown Artist',
+          artistId: String(track.artist?.id || ''),
+          album: track.album?.title || 'Unknown Album',
+          albumId: String(track.album?.id || ''),
+          duration: track.duration || 0,
+          coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+          previewUrl: track.preview || undefined,
+          position: index + 1,
+        }));
+
+        return new Response(JSON.stringify(tracks), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       default:
         return new Response(JSON.stringify({ error: 'Unknown action' }), {
           status: 400,
