@@ -109,17 +109,37 @@ async function fetchPlaylistWithApi(playlistId: string, token: string): Promise<
 // Use Firecrawl to scrape playlist page - try embed URL first (less protection)
 async function fetchPlaylistWithScraping(playlistId: string): Promise<PlaylistData | null> {
   const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
-  
+
   if (!firecrawlKey) {
     console.log('No Firecrawl API key available');
     return null;
   }
-  
+
+  const regularUrl = `https://open.spotify.com/playlist/${playlistId}`;
+  const embedUrl = `https://open.spotify.com/embed/playlist/${playlistId}`;
+
+  // Grab best-effort metadata first (often works even when tracks are blocked)
+  let fallbackName = 'Imported Playlist';
+  let fallbackCoverUrl = '';
   try {
-    // Try embed URL first - it has less protection
-    const embedUrl = `https://open.spotify.com/embed/playlist/${playlistId}`;
+    const oEmbedRes = await fetch(
+      `https://open.spotify.com/oembed?url=${encodeURIComponent(regularUrl)}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    if (oEmbedRes.ok) {
+      const oEmbed = await oEmbedRes.json();
+      if (typeof oEmbed?.title === 'string' && oEmbed.title.trim()) fallbackName = oEmbed.title.trim();
+      if (typeof oEmbed?.thumbnail_url === 'string') fallbackCoverUrl = oEmbed.thumbnail_url;
+    }
+  } catch (e) {
+    console.log('oEmbed metadata fetch failed:', e);
+  }
+
+  try {
     console.log('Trying Spotify embed URL:', embedUrl);
-    
+
+    // 1) Firecrawl scrape embed page + JSON extraction
+    // IMPORTANT: Firecrawl v1 expects formats to be strings, and json extraction is configured via jsonOptions
     const embedResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -128,90 +148,64 @@ async function fetchPlaylistWithScraping(playlistId: string): Promise<PlaylistDa
       },
       body: JSON.stringify({
         url: embedUrl,
-        formats: ['html'],
-        waitFor: 2000,
+        formats: ['html', 'json'],
+        onlyMainContent: false,
+        waitFor: 2500,
+        jsonOptions: {
+          // Keep the prompt small & strict, Firecrawl will do the extraction
+          prompt: `Extract Spotify playlist data from this page.
+Return JSON:
+{
+  "playlistName": string,
+  "coverImageUrl": string,
+  "tracks": [{"title": string, "artist": string}]
+}
+Tracks must be actual song titles (e.g. "Push It (feat. ANNA)") and artists (e.g. "Kid Yugi").`,
+        },
       }),
     });
-    
+
     if (embedResponse.ok) {
       const embedData = await embedResponse.json();
       const embedHtml = embedData.data?.html || embedData.html || '';
-      
-      console.log('Embed HTML length:', embedHtml.length);
-      
-      // Look for __NEXT_DATA__ or similar JSON data embedded in the page
-      const nextDataMatch = embedHtml.match(/<script id="__NEXT_DATA__"[^>]*>([^<]+)<\/script>/);
-      if (nextDataMatch) {
-        try {
-          const nextData = JSON.parse(nextDataMatch[1]);
-          console.log('Found __NEXT_DATA__');
-          
-          const playlist = nextData?.props?.pageProps?.state?.data?.entity;
-          if (playlist) {
-            const tracks: SpotifyTrack[] = (playlist.trackList || []).map((track: any, index: number) => ({
-              id: `spotify-${playlistId}-${index}`,
-              title: track.title || track.name || 'Unknown Title',
-              artist: track.subtitle || track.artists?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
-              album: track.album?.name || '',
-              albumId: track.album?.uri?.split(':').pop() || '',
-              coverUrl: track.images?.[0]?.url || '',
-              duration: Math.floor((track.duration || 0) / 1000),
-            }));
-            
-            return {
-              name: playlist.name || playlist.title || 'Imported Playlist',
-              description: playlist.description || '',
-              coverUrl: playlist.images?.[0]?.url || playlist.coverArt?.sources?.[0]?.url || '',
-              tracks,
-            };
-          }
-        } catch (e) {
-          console.log('Failed to parse __NEXT_DATA__:', e);
-        }
+      const jsonData = embedData.data?.json || embedData.json;
+
+      if (jsonData && Array.isArray(jsonData.tracks) && jsonData.tracks.length > 0) {
+        const tracks: SpotifyTrack[] = jsonData.tracks.map((t: any, index: number) => ({
+          id: `spotify-${playlistId}-${index}`,
+          title: String(t?.title || '').trim() || 'Unknown Title',
+          artist: String(t?.artist || '').trim() || 'Unknown Artist',
+          album: '',
+          albumId: '',
+          coverUrl: '',
+          duration: 0,
+        }));
+
+        return {
+          name: (String(jsonData.playlistName || '').trim() || fallbackName),
+          description: '',
+          coverUrl: (String(jsonData.coverImageUrl || '').trim() || fallbackCoverUrl),
+          tracks,
+        };
       }
-      
-      // Try to find resource data in script tags
-      const resourceMatch = embedHtml.match(/Spotify\.Entity\s*=\s*(\{[\s\S]*?\});/);
-      if (resourceMatch) {
-        try {
-          const entityData = JSON.parse(resourceMatch[1]);
-          console.log('Found Spotify.Entity data');
-          
-          const tracks: SpotifyTrack[] = (entityData.tracks?.items || []).map((item: any, index: number) => {
-            const track = item.track || item;
-            return {
-              id: `spotify-${playlistId}-${index}`,
-              title: track.name || 'Unknown Title',
-              artist: track.artists?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
-              album: track.album?.name || '',
-              albumId: track.album?.id || '',
-              coverUrl: track.album?.images?.[0]?.url || '',
-              duration: Math.floor((track.duration_ms || 0) / 1000),
-            };
-          });
-          
-          return {
-            name: entityData.name || 'Imported Playlist',
-            description: entityData.description || '',
-            coverUrl: entityData.images?.[0]?.url || '',
-            tracks,
-          };
-        } catch (e) {
-          console.log('Failed to parse Spotify.Entity:', e);
-        }
+
+      // If JSON extraction didn’t return tracks, try parsing the embed HTML
+      const parsed = parseEmbedHtml(embedHtml, playlistId);
+      if (parsed && parsed.tracks.length > 0) {
+        return {
+          ...parsed,
+          name: parsed.name || fallbackName,
+          coverUrl: parsed.coverUrl || fallbackCoverUrl,
+        };
       }
-      
-      // Parse from embed HTML structure
-      const result = parseEmbedHtml(embedHtml, playlistId);
-      if (result && result.tracks.length > 0) {
-        return result;
-      }
+    } else {
+      const errorText = await embedResponse.text();
+      console.error('Firecrawl embed scrape error:', embedResponse.status, errorText);
     }
-    
-    // Fallback: try the regular playlist page
+
+    // 2) Fallback: try the regular playlist page (may be blocked by reCAPTCHA)
     console.log('Trying regular playlist page...');
-    const regularUrl = `https://open.spotify.com/playlist/${playlistId}`;
-    
+
     const regularResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -220,30 +214,61 @@ async function fetchPlaylistWithScraping(playlistId: string): Promise<PlaylistDa
       },
       body: JSON.stringify({
         url: regularUrl,
-        formats: ['html'],
-        waitFor: 3000,
+        formats: ['html', 'json'],
+        onlyMainContent: false,
+        waitFor: 3500,
+        jsonOptions: {
+          prompt: `Extract Spotify playlist data from this page.
+Return JSON:
+{
+  "playlistName": string,
+  "coverImageUrl": string,
+  "tracks": [{"title": string, "artist": string}]
+}
+Tracks must be song titles and artists.`
+        },
       }),
     });
-    
+
     if (regularResponse.ok) {
       const regularData = await regularResponse.json();
       const html = regularData.data?.html || regularData.html || '';
-      
-      // Check for reCAPTCHA
-      if (html.toLowerCase().includes('recaptcha') || 
-          html.toLowerCase().includes('verify you are human') ||
-          html.toLowerCase().includes('challenge')) {
+      const jsonData = regularData.data?.json || regularData.json;
+
+      if (
+        html.toLowerCase().includes('recaptcha') ||
+        html.toLowerCase().includes('verify you are human') ||
+        html.toLowerCase().includes('challenge')
+      ) {
         console.error('Got reCAPTCHA page');
         return null;
       }
-      
-      // Try to extract from meta tags at minimum
-      let playlistName = 'Imported Playlist';
-      let coverUrl = '';
-      
-      // Extract from og tags
+
+      if (jsonData && Array.isArray(jsonData.tracks) && jsonData.tracks.length > 0) {
+        const tracks: SpotifyTrack[] = jsonData.tracks.map((t: any, index: number) => ({
+          id: `spotify-${playlistId}-${index}`,
+          title: String(t?.title || '').trim() || 'Unknown Title',
+          artist: String(t?.artist || '').trim() || 'Unknown Artist',
+          album: '',
+          albumId: '',
+          coverUrl: '',
+          duration: 0,
+        }));
+
+        return {
+          name: (String(jsonData.playlistName || '').trim() || fallbackName),
+          description: '',
+          coverUrl: (String(jsonData.coverImageUrl || '').trim() || fallbackCoverUrl),
+          tracks,
+        };
+      }
+
+      // Last-resort: pull name + cover from og tags and accept empty tracklist
+      let playlistName = fallbackName;
+      let coverUrl = fallbackCoverUrl;
+
       const ogTitleMatch = html.match(/property="og:title"\s+content="([^"]+)"/i) ||
-                           html.match(/content="([^"]+)"\s+property="og:title"/i);
+        html.match(/content="([^"]+)"\s+property="og:title"/i);
       if (ogTitleMatch) {
         playlistName = ogTitleMatch[1]
           .replace(/\s*\|\s*Spotify\s*$/i, '')
@@ -251,47 +276,23 @@ async function fetchPlaylistWithScraping(playlistId: string): Promise<PlaylistDa
           .replace(/\s*on Spotify.*$/i, '')
           .trim();
       }
-      
+
       const ogImageMatch = html.match(/property="og:image"\s+content="([^"]+)"/i) ||
-                           html.match(/content="([^"]+)"\s+property="og:image"/i);
+        html.match(/content="([^"]+)"\s+property="og:image"/i);
       if (ogImageMatch) {
         coverUrl = ogImageMatch[1];
       }
-      
-      // Look for structured data in the page
-      const ldJsonMatch = html.match(/<script type="application\/ld\+json">([^<]+)<\/script>/);
-      if (ldJsonMatch) {
-        try {
-          const ldData = JSON.parse(ldJsonMatch[1]);
-          console.log('Found LD+JSON data');
-          
-          if (ldData.track) {
-            const tracks: SpotifyTrack[] = ldData.track.map((track: any, index: number) => ({
-              id: `spotify-${playlistId}-${index}`,
-              title: track.name || 'Unknown Title',
-              artist: track.byArtist?.name || 'Unknown Artist',
-              album: track.inAlbum?.name || '',
-              albumId: '',
-              coverUrl: '',
-              duration: parseDurationISO(track.duration),
-            }));
-            
-            return {
-              name: ldData.name || playlistName,
-              description: ldData.description || '',
-              coverUrl: ldData.image || coverUrl,
-              tracks,
-            };
-          }
-        } catch (e) {
-          console.log('Failed to parse LD+JSON:', e);
-        }
-      }
+
+      // If we got metadata but no tracks, still treat as failure (UI expects tracks)
+      console.log('Metadata extracted but no tracks found:', { playlistName, coverUrl });
+      return null;
+    } else {
+      const errorText = await regularResponse.text();
+      console.error('Firecrawl regular scrape error:', regularResponse.status, errorText);
     }
-    
+
     console.log('Could not extract playlist data from any source');
     return null;
-    
   } catch (error) {
     console.error('Scraping error:', error);
     return null;
@@ -301,9 +302,9 @@ async function fetchPlaylistWithScraping(playlistId: string): Promise<PlaylistDa
 // Parse HTML from Spotify embed page
 function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
   const tracks: SpotifyTrack[] = [];
-  
+
   // Extract playlist name from title
-  let playlistName = 'Imported Playlist';
+  let playlistName = '';
   const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
   if (titleMatch) {
     playlistName = titleMatch[1]
@@ -311,23 +312,21 @@ function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
       .replace(/\s*-\s*Spotify.*$/i, '')
       .trim();
   }
-  
+
   // Extract cover from og:image
   let coverUrl = '';
   const ogImageMatch = html.match(/property="og:image"\s+content="([^"]+)"/i) ||
-                       html.match(/content="([^"]+)"\s+property="og:image"/i);
+    html.match(/content="([^"]+)"\s+property="og:image"/i);
   if (ogImageMatch) {
     coverUrl = ogImageMatch[1];
   }
-  
-  // Look for track data in various formats
-  // Pattern 1: data-testid track rows
+
+  // data-testid track rows (best effort)
   const trackRowRegex = /data-testid="tracklist-row"[\s\S]*?aria-label="([^"]+)"/gi;
   let match;
   while ((match = trackRowRegex.exec(html)) !== null) {
     const ariaLabel = match[1];
-    // Aria label format: "Song Name, Artist Name, Album Name"
-    const parts = ariaLabel.split(',').map(s => s.trim());
+    const parts = ariaLabel.split(',').map((s) => s.trim());
     if (parts.length >= 2) {
       tracks.push({
         id: `spotify-${playlistId}-${tracks.length}`,
@@ -340,23 +339,18 @@ function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
       });
     }
   }
-  
-  // Pattern 2: Look for track links with specific patterns
+
+  // Fallback pairing track/artist links
   if (tracks.length === 0) {
-    const trackLinkRegex = /<a[^>]+href="\/track\/[^"]+">([^<]+)<\/a>/gi;
-    const artistLinkRegex = /<a[^>]+href="\/artist\/[^"]+">([^<]+)<\/a>/gi;
-    
+    const trackLinkRegex = /<a[^>]+href="\/track\/[^\"]+"[^>]*>([^<]+)<\/a>/gi;
+    const artistLinkRegex = /<a[^>]+href="\/artist\/[^\"]+"[^>]*>([^<]+)<\/a>/gi;
+
     const trackNames: string[] = [];
     const artistNames: string[] = [];
-    
-    while ((match = trackLinkRegex.exec(html)) !== null) {
-      trackNames.push(match[1].trim());
-    }
-    while ((match = artistLinkRegex.exec(html)) !== null) {
-      artistNames.push(match[1].trim());
-    }
-    
-    // Pair them up
+
+    while ((match = trackLinkRegex.exec(html)) !== null) trackNames.push(match[1].trim());
+    while ((match = artistLinkRegex.exec(html)) !== null) artistNames.push(match[1].trim());
+
     for (let i = 0; i < trackNames.length; i++) {
       tracks.push({
         id: `spotify-${playlistId}-${i}`,
@@ -369,15 +363,13 @@ function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
       });
     }
   }
-  
+
   console.log(`Parsed ${tracks.length} tracks from embed HTML`);
-  
-  if (tracks.length === 0) {
-    return null;
-  }
-  
+
+  if (tracks.length === 0) return null;
+
   return {
-    name: playlistName,
+    name: playlistName || 'Imported Playlist',
     description: '',
     coverUrl,
     tracks,
@@ -388,9 +380,7 @@ function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
 function parseDuration(duration: string | undefined): number {
   if (!duration) return 0;
   const parts = duration.split(':');
-  if (parts.length === 2) {
-    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
-  }
+  if (parts.length === 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]);
   return 0;
 }
 
@@ -398,13 +388,11 @@ function parseDuration(duration: string | undefined): number {
 function parseDurationISO(duration: string | undefined): number {
   if (!duration) return 0;
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  if (match) {
-    const hours = parseInt(match[1] || '0');
-    const minutes = parseInt(match[2] || '0');
-    const seconds = parseInt(match[3] || '0');
-    return hours * 3600 + minutes * 60 + seconds;
-  }
-  return 0;
+  if (!match) return 0;
+  const hours = parseInt(match[1] || '0');
+  const minutes = parseInt(match[2] || '0');
+  const seconds = parseInt(match[3] || '0');
+  return hours * 3600 + minutes * 60 + seconds;
 }
 
 serve(async (req) => {
