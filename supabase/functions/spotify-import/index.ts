@@ -5,10 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const DEEZER_API = 'https://api.deezer.com';
+
 interface SpotifyTrack {
   id: string;
   title: string;
   artist: string;
+  artistId: string;
   album: string;
   albumId: string;
   coverUrl: string;
@@ -88,6 +91,7 @@ async function fetchPlaylistWithApi(playlistId: string, token: string): Promise<
         id: item.track.id,
         title: item.track.name,
         artist: item.track.artists?.map((a: any) => a.name).join(', ') || 'Unknown',
+        artistId: String(item.track.artists?.[0]?.id || ''),
         album: item.track.album?.name || '',
         albumId: item.track.album?.id || '',
         coverUrl: item.track.album?.images?.[0]?.url || '',
@@ -175,6 +179,7 @@ Tracks must be actual song titles (e.g. "Push It (feat. ANNA)") and artists (e.g
           id: `spotify-${playlistId}-${index}`,
           title: String(t?.title || '').trim() || 'Unknown Title',
           artist: String(t?.artist || '').trim() || 'Unknown Artist',
+          artistId: '',
           album: '',
           albumId: '',
           coverUrl: '',
@@ -249,6 +254,7 @@ Tracks must be song titles and artists.`
           id: `spotify-${playlistId}-${index}`,
           title: String(t?.title || '').trim() || 'Unknown Title',
           artist: String(t?.artist || '').trim() || 'Unknown Artist',
+          artistId: '',
           album: '',
           albumId: '',
           coverUrl: '',
@@ -365,6 +371,7 @@ function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
         id: `spotify-${playlistId}-${tracks.length}`,
         title: parts[0],
         artist: parts[1],
+        artistId: '',
         album: parts[2] || '',
         albumId: '',
         coverUrl: '',
@@ -389,6 +396,7 @@ function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
         id: `spotify-${playlistId}-${i}`,
         title: trackNames[i],
         artist: artistNames[i] || 'Unknown Artist',
+        artistId: '',
         album: '',
         albumId: '',
         coverUrl: '',
@@ -426,6 +434,135 @@ function parseDurationISO(duration: string | undefined): number {
   const minutes = parseInt(match[2] || '0');
   const seconds = parseInt(match[3] || '0');
   return hours * 3600 + minutes * 60 + seconds;
+}
+
+// Normalize string for comparison (remove accents, lowercase, trim)
+function normalizeString(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, '')
+    .trim();
+}
+
+// Search track on Deezer and return matched data
+async function searchTrackOnDeezer(title: string, artist: string): Promise<SpotifyTrack | null> {
+  try {
+    // Search with title + artist
+    const query = `${title} ${artist}`;
+    const response = await fetch(
+      `${DEEZER_API}/search/track?q=${encodeURIComponent(query)}&limit=5`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.log(`Deezer search failed for "${title}" by "${artist}"`);
+      return null;
+    }
+
+    const data = await response.json();
+    const tracks = data.data || [];
+
+    if (tracks.length === 0) {
+      console.log(`No Deezer results for "${title}" by "${artist}"`);
+      return null;
+    }
+
+    // Find best match by comparing normalized title and artist
+    const normalizedTitle = normalizeString(title);
+    const normalizedArtist = normalizeString(artist);
+
+    let bestMatch = tracks[0];
+    let bestScore = 0;
+
+    for (const track of tracks) {
+      const trackTitle = normalizeString(track.title || '');
+      const trackArtist = normalizeString(track.artist?.name || '');
+
+      let score = 0;
+
+      // Title similarity
+      if (trackTitle === normalizedTitle) {
+        score += 50;
+      } else if (trackTitle.includes(normalizedTitle) || normalizedTitle.includes(trackTitle)) {
+        score += 30;
+      }
+
+      // Artist similarity
+      if (trackArtist === normalizedArtist) {
+        score += 50;
+      } else if (trackArtist.includes(normalizedArtist) || normalizedArtist.includes(trackArtist)) {
+        score += 30;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = track;
+      }
+    }
+
+    console.log(`Matched "${title}" -> Deezer: "${bestMatch.title}" by "${bestMatch.artist?.name}" (score: ${bestScore})`);
+
+    return {
+      id: String(bestMatch.id),
+      title: bestMatch.title,
+      artist: bestMatch.artist?.name || artist,
+      artistId: String(bestMatch.artist?.id || ''),
+      album: bestMatch.album?.title || '',
+      albumId: String(bestMatch.album?.id || ''),
+      coverUrl: bestMatch.album?.cover_medium || bestMatch.album?.cover || '',
+      duration: bestMatch.duration || 0,
+    };
+  } catch (error) {
+    console.error(`Error searching Deezer for "${title}":`, error);
+    return null;
+  }
+}
+
+// Match all tracks with Deezer database
+async function matchTracksWithDeezer(tracks: SpotifyTrack[]): Promise<SpotifyTrack[]> {
+  console.log(`Matching ${tracks.length} tracks with Deezer...`);
+  
+  const matchedTracks: SpotifyTrack[] = [];
+  
+  // Process in batches of 5 to avoid rate limiting
+  const batchSize = 5;
+  for (let i = 0; i < tracks.length; i += batchSize) {
+    const batch = tracks.slice(i, i + batchSize);
+    
+    const batchPromises = batch.map(async (track) => {
+      const deezerTrack = await searchTrackOnDeezer(track.title, track.artist);
+      
+      if (deezerTrack) {
+        return deezerTrack;
+      }
+      
+      // If no match found, keep original track with spotify- prefix ID
+      return {
+        ...track,
+        id: track.id.startsWith('spotify-') ? track.id : `spotify-${track.id}`,
+      };
+    });
+    
+    const batchResults = await Promise.all(batchPromises);
+    matchedTracks.push(...batchResults);
+    
+    // Small delay between batches to be nice to Deezer API
+    if (i + batchSize < tracks.length) {
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+  
+  const matchedCount = matchedTracks.filter(t => !t.id.startsWith('spotify-')).length;
+  console.log(`Matched ${matchedCount}/${tracks.length} tracks with Deezer`);
+  
+  return matchedTracks;
 }
 
 serve(async (req) => {
@@ -475,6 +612,11 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    // Match tracks with Deezer database to get proper IDs, covers, durations, etc.
+    console.log('Matching tracks with Deezer...');
+    const matchedTracks = await matchTracksWithDeezer(playlistData.tracks);
+    playlistData.tracks = matchedTracks;
     
     return new Response(
       JSON.stringify(playlistData),
