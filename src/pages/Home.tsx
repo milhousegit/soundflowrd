@@ -7,7 +7,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getNewReleases, getPopularArtists, searchAlbums, getArtist } from '@/lib/deezer';
+import { getNewReleases, getPopularArtists, searchAlbums, getArtist, getCountryChart } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
@@ -34,8 +34,10 @@ import NotificationsDropdown from '@/components/NotificationsDropdown';
 const Home: React.FC = () => {
   const [newReleases, setNewReleases] = useState<Album[]>([]);
   const [popularArtists, setPopularArtists] = useState<Artist[]>([]);
+  const [countryChartTracks, setCountryChartTracks] = useState<Track[]>([]);
   const [isLoadingReleases, setIsLoadingReleases] = useState(true);
   const [isLoadingArtists, setIsLoadingArtists] = useState(true);
+  const [isLoadingCountryChart, setIsLoadingCountryChart] = useState(true);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
   
@@ -207,6 +209,23 @@ const Home: React.FC = () => {
 
     fetchArtistsForYou();
   }, [favorites.length]);
+
+  // Fetch country chart
+  useEffect(() => {
+    const fetchCountryChart = async () => {
+      setIsLoadingCountryChart(true);
+      try {
+        const tracks = await getCountryChart(country);
+        setCountryChartTracks(tracks.slice(0, 10));
+      } catch (error) {
+        console.error('Failed to fetch country chart:', error);
+      } finally {
+        setIsLoadingCountryChart(false);
+      }
+    };
+
+    fetchCountryChart();
+  }, [country]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -513,6 +532,73 @@ const Home: React.FC = () => {
             </div>
           ) : (
             <p className="text-muted-foreground text-center py-8">Nessun artista disponibile</p>
+          )}
+        </section>
+      )}
+
+      {/* Country Chart - Top tracks for user's country */}
+      {homeDisplayOptions.showTopCharts && (
+        <section>
+          <h2 className="text-lg md:text-2xl font-bold text-foreground mb-4 md:mb-6">
+            {settings.language === 'it' 
+              ? `Top ${country === 'IT' ? 'Italia' : country === 'US' ? 'USA' : country}` 
+              : `Top ${country === 'IT' ? 'Italy' : country === 'US' ? 'USA' : country}`}
+          </h2>
+          {isLoadingCountryChart ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 animate-pulse">
+                  <div className="w-6 h-4 bg-muted rounded" />
+                  <div className="w-12 h-12 bg-muted rounded" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-muted rounded w-2/3" />
+                    <div className="h-3 bg-muted rounded w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : countryChartTracks.length > 0 ? (
+            <div className="space-y-1">
+              {countryChartTracks.map((track, index) => {
+                const isCurrentTrack = currentTrack?.id === track.id;
+                
+                return (
+                  <TapArea
+                    key={track.id}
+                    onTap={() => (isCurrentTrack ? toggle() : playTrack(track, countryChartTracks))}
+                    className="group flex items-center gap-3 p-2 md:p-3 rounded-lg hover:bg-secondary/70 transition-all cursor-pointer touch-manipulation"
+                  >
+                    <span className={`w-6 text-center font-bold text-sm ${index < 3 ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {index + 1}
+                    </span>
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded overflow-hidden flex-shrink-0 bg-muted relative">
+                      {track.coverUrl ? (
+                        <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Music className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        {isCurrentTrack && isPlaying ? (
+                          <Pause className="w-4 h-4 text-primary" />
+                        ) : (
+                          <Play className="w-4 h-4 text-foreground ml-0.5" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm md:text-base text-foreground truncate">{track.title}</p>
+                      <p className="text-xs md:text-sm text-muted-foreground truncate">{track.artist}</p>
+                    </div>
+                  </TapArea>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-center py-8">
+              {settings.language === 'it' ? 'Classifica non disponibile' : 'Chart not available'}
+            </p>
           )}
         </section>
       )}
