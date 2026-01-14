@@ -446,35 +446,25 @@ function normalizeString(str: string): string {
     .trim();
 }
 
-// Clean artist name - some scraped names have "E" prefix (e.g., "EGeolier" -> "Geolier")
-function cleanArtistName(artist: string): string[] {
-  const names = [artist];
+// Get artist search variations - use only first artist, with E prefix removal fallback
+function getArtistSearchVariations(artist: string): string[] {
+  // Get only the first artist (before comma)
+  const firstArtist = artist.split(',')[0].trim();
   
-  // Split by comma and check each artist
-  const artists = artist.split(',').map(a => a.trim());
-  const cleanedArtists: string[] = [];
+  const variations = [firstArtist];
   
-  for (const a of artists) {
-    // If artist starts with "E" followed by uppercase, try without the E
-    if (a.length > 1 && a.startsWith('E') && a[1] === a[1].toUpperCase() && a[1] !== 'E') {
-      cleanedArtists.push(a.substring(1));
-    } else {
-      cleanedArtists.push(a);
-    }
+  // If artist starts with "E" followed by uppercase letter (not another E), try without the E
+  if (firstArtist.length > 1 && firstArtist.startsWith('E') && firstArtist[1] === firstArtist[1].toUpperCase() && firstArtist[1] !== 'E') {
+    variations.push(firstArtist.substring(1));
   }
   
-  const cleanedArtist = cleanedArtists.join(', ');
-  if (cleanedArtist !== artist) {
-    names.push(cleanedArtist);
-  }
-  
-  return names;
+  return variations;
 }
 
 // Search track on Deezer and return matched data
 async function searchTrackOnDeezer(title: string, artist: string): Promise<SpotifyTrack | null> {
   // Get possible artist name variations (original + without E prefix)
-  const artistVariations = cleanArtistName(artist);
+  const artistVariations = getArtistSearchVariations(artist);
   
   for (const artistName of artistVariations) {
     try {
