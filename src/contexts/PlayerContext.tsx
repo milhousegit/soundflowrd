@@ -1,4 +1,4 @@
-// PlayerContext - Audio playback state management
+// PlayerContext - Audio playback state management (v2)
 import React, {
   createContext,
   useCallback,
