@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Track } from '@/types/music';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 interface LyricsModalProps {
@@ -54,6 +55,7 @@ function parseSyncedLyrics(syncedLyrics: string): SyncedLine[] {
 const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => {
   const { settings } = useSettings();
   const { progress, seek } = usePlayer();
+  const { user } = useAuth();
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [songInfo, setSongInfo] = useState<LyricsData['songInfo'] | null>(null);
@@ -63,6 +65,68 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
   const [offset, setOffset] = useState(0); // offset in seconds
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load saved offset for this track
+  useEffect(() => {
+    const loadOffset = async () => {
+      if (!user?.id || !track?.id) return;
+      
+      const { data } = await supabase
+        .from('lyrics_offsets')
+        .select('offset_seconds')
+        .eq('user_id', user.id)
+        .eq('track_id', track.id)
+        .maybeSingle();
+      
+      if (data) {
+        setOffset(Number(data.offset_seconds));
+      }
+    };
+
+    if (isOpen && track) {
+      loadOffset();
+    }
+  }, [isOpen, track?.id, user?.id]);
+
+  // Save offset when it changes (debounced)
+  const saveOffset = useCallback(async (newOffset: number) => {
+    if (!user?.id || !track?.id) return;
+    
+    // Clear previous timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    // Debounce save by 1 second
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (newOffset === 0) {
+        // Delete if offset is 0
+        await supabase
+          .from('lyrics_offsets')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('track_id', track.id);
+      } else {
+        await supabase
+          .from('lyrics_offsets')
+          .upsert({
+            user_id: user.id,
+            track_id: track.id,
+            offset_seconds: newOffset,
+          }, {
+            onConflict: 'user_id,track_id',
+          });
+      }
+    }, 1000);
+  }, [user?.id, track?.id]);
+
+  // Handle offset change
+  const handleOffsetChange = (delta: number) => {
+    const newOffset = offset + delta;
+    setOffset(newOffset);
+    saveOffset(newOffset);
+  };
 
   const fetchLyrics = useCallback(async () => {
     if (!track) return;
@@ -72,7 +136,6 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
     setSyncedLines([]);
     setSongInfo(null);
     setCurrentLineIndex(-1);
-    setOffset(0);
 
     try {
       const response = await supabase.functions.invoke('genius-lyrics', {
@@ -152,8 +215,11 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
 
   return (
     <div className="fixed inset-0 z-[70] bg-background/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-200">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border">
+      {/* Header with safe-area */}
+      <div 
+        className="flex items-center justify-between p-4 border-b border-border"
+        style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}
+      >
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">
             {track?.coverUrl ? (
@@ -196,7 +262,7 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setOffset(o => o - 0.5)}
+              onClick={() => handleOffsetChange(-0.5)}
             >
               <Minus className="w-3 h-3" />
             </Button>
@@ -207,7 +273,7 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setOffset(o => o + 0.5)}
+              onClick={() => handleOffsetChange(0.5)}
             >
               <Plus className="w-3 h-3" />
             </Button>

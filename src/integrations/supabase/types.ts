@@ -176,6 +176,33 @@ export type Database = {
         }
         Relationships: []
       }
+      lyrics_offsets: {
+        Row: {
+          created_at: string
+          id: string
+          offset_seconds: number
+          track_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          offset_seconds?: number
+          track_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          offset_seconds?: number
+          track_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       metadata_update_requests: {
         Row: {
           admin_notes: string | null
