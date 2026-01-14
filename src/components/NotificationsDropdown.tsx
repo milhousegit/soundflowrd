@@ -162,7 +162,7 @@ const SwipeableNotification: React.FC<SwipeableNotificationProps> = ({
       {/* Notification content */}
       <div
         className={cn(
-          "flex items-center gap-3 p-3 cursor-pointer bg-popover hover:bg-accent transition-all",
+          "flex items-center gap-3 p-3 cursor-pointer bg-popover hover:bg-muted/50 transition-all",
           isDragging ? "" : "transition-transform duration-200"
         )}
         style={{ transform: `translateX(${translateX}px)` }}
