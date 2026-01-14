@@ -23,11 +23,19 @@ async function getLyricsFromLyricsOvh(artist: string, title: string): Promise<st
     console.log('Trying Lyrics.ovh with:', cleanArtist, '-', cleanTitle);
     
     const url = `${LYRICS_OVH_API}/${encodeURIComponent(cleanArtist)}/${encodeURIComponent(cleanTitle)}`;
+    
+    // Add timeout to prevent infinite loading
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+    
     const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
       },
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.log('Lyrics.ovh returned:', response.status);
@@ -40,7 +48,11 @@ async function getLyricsFromLyricsOvh(artist: string, title: string): Promise<st
     }
     return null;
   } catch (error) {
-    console.error('Lyrics.ovh error:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('Lyrics.ovh request timed out');
+    } else {
+      console.error('Lyrics.ovh error:', error);
+    }
     return null;
   }
 }
