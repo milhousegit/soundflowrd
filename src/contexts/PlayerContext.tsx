@@ -272,6 +272,21 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const currentSearchTrackIdRef = useRef<string | null>(null);
   const nextRef = useRef<() => void>(() => {});
   const previousRef = useRef<() => void>(() => {});
+  const autoSkipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-skip to next track when current track is unavailable
+  const autoSkipToNext = useCallback(() => {
+    // Clear any existing timeout
+    if (autoSkipTimeoutRef.current) {
+      clearTimeout(autoSkipTimeoutRef.current);
+    }
+    
+    // Wait 2 seconds then skip to next track
+    autoSkipTimeoutRef.current = setTimeout(() => {
+      console.log('[PlayerContext] Auto-skipping to next track after error');
+      nextRef.current();
+    }, 2000);
+  }, []);
 
   // Safe play helper that handles interrupted play errors gracefully
   const safePlay = useCallback(async (audio: HTMLAudioElement): Promise<boolean> => {
@@ -754,12 +769,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           const errorMsg = 'error' in tidalResult ? tidalResult.error : 'Stream non disponibile';
           addDebugLog('❌ Tidal non disponibile', errorMsg, 'error');
           setLoadingPhase('unavailable');
-          toast.error('Traccia non trovata su Tidal', { description: errorMsg });
+          toast.error('Traccia non trovata su Tidal', { description: 'Passo alla prossima...' });
+          autoSkipToNext();
           return;
         } catch (error) {
           addDebugLog('❌ Errore Tidal', error instanceof Error ? error.message : 'Errore', 'error');
           setLoadingPhase('unavailable');
-          toast.error('Errore Tidal', { description: error instanceof Error ? error.message : 'Errore sconosciuto' });
+          toast.error('Errore Tidal', { description: 'Passo alla prossima...' });
+          autoSkipToNext();
           return;
         }
       }
@@ -901,8 +918,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // Both failed
         setLoadingPhase('unavailable');
         toast.error('Nessuna sorgente disponibile', {
-          description: 'Né RD né Tidal hanno trovato questa traccia.',
+          description: 'Passo alla prossima...',
         });
+        autoSkipToNext();
         return;
       }
 
@@ -1086,12 +1104,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setLoadingPhase('unavailable');
         setIsSearchingStreams(false);
         toast.error('Nessuna sorgente trovata', {
-          description: 'Nessun torrent/stream compatibile disponibile al momento.',
+          description: 'Passo alla prossima...',
         });
+        autoSkipToNext();
       } catch (error) {
         setLoadingPhase('unavailable');
         setIsSearchingStreams(false);
         addDebugLog('❌ Errore ricerca', error instanceof Error ? error.message : 'Errore', 'error');
+        autoSkipToNext();
       } finally {
         setIsSearchingStreams(false);
       }
