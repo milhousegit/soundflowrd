@@ -671,33 +671,56 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         audioRef.current.src = '';
       }
 
-      // Fetch metadata if track is missing cover/duration (e.g., imported from Spotify without Deezer match)
-      let enrichedTrack = track;
-      const needsMetadata = !track.coverUrl || track.id.startsWith('spotify-') || track.duration === 0;
-      
-      if (needsMetadata) {
-        addDebugLog('🔍 Recupero metadati', `Ricerca su Deezer per "${track.title}"`, 'info');
-        enrichedTrack = await fetchTrackMetadata(track);
-        
-        if (enrichedTrack.coverUrl && enrichedTrack.coverUrl !== track.coverUrl) {
-          addDebugLog('✅ Metadati trovati', `"${enrichedTrack.title}" di ${enrichedTrack.artist}`, 'success');
-        }
-      }
+      // Start with original track - fetch metadata in background while playing
+      currentSearchTrackIdRef.current = track.id;
 
-      currentSearchTrackIdRef.current = enrichedTrack.id;
-
-      // Update queue with enriched track if metadata was found
-      const updatedQueue = queue ? queue.map(t => t.id === track.id ? enrichedTrack : t) : [enrichedTrack];
+      // Initialize queue with original track
+      const initialQueue = queue ? [...queue] : [track];
 
       setState((prev) => ({
         ...prev,
-        currentTrack: enrichedTrack,
+        currentTrack: track,
         isPlaying: true,
-        queue: updatedQueue,
-        queueIndex: updatedQueue.findIndex((t) => t.id === enrichedTrack.id),
-        duration: enrichedTrack.duration,
+        queue: initialQueue,
+        queueIndex: initialQueue.findIndex((t) => t.id === track.id),
+        duration: track.duration,
         progress: 0,
       }));
+
+      // Fetch metadata in background (don't block playback)
+      const needsMetadata = !track.coverUrl || track.id.startsWith('spotify-') || track.duration === 0;
+      if (needsMetadata) {
+        addDebugLog('🔍 Recupero metadati', `Ricerca in background per "${track.title}"`, 'info');
+        
+        // Run metadata fetch in background - don't await it
+        fetchTrackMetadata(track).then((enrichedTrack) => {
+          // Only update if we're still playing this track
+          if (currentSearchTrackIdRef.current === track.id && enrichedTrack !== track) {
+            if (enrichedTrack.coverUrl && enrichedTrack.coverUrl !== track.coverUrl) {
+              addDebugLog('✅ Metadati trovati', `"${enrichedTrack.title}" di ${enrichedTrack.artist}`, 'success');
+            }
+            
+            // Update current track and queue with enriched data
+            setState((prev) => {
+              const updatedQueue = prev.queue.map(t => t.id === track.id ? enrichedTrack : t);
+              return {
+                ...prev,
+                currentTrack: prev.currentTrack?.id === track.id ? enrichedTrack : prev.currentTrack,
+                queue: updatedQueue,
+                duration: enrichedTrack.duration || prev.duration,
+              };
+            });
+            
+            // Update media session with new metadata
+            updateMediaSessionMetadata(enrichedTrack, true);
+          }
+        }).catch((error) => {
+          console.error('[Metadata] Background fetch failed:', error);
+        });
+      }
+
+      // Use original track for playback - don't wait for metadata
+      const enrichedTrack = track;
 
       clearDebugLogs();
       setAlternativeStreams([]);
