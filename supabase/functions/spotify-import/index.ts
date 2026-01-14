@@ -175,16 +175,19 @@ Tracks must be actual song titles (e.g. "Push It (feat. ANNA)") and artists (e.g
       const jsonData = embedData.data?.json || embedData.json;
 
       if (jsonData && Array.isArray(jsonData.tracks) && jsonData.tracks.length > 0) {
-        const tracks: SpotifyTrack[] = jsonData.tracks.map((t: any, index: number) => ({
-          id: `spotify-${playlistId}-${index}`,
-          title: String(t?.title || '').trim() || 'Unknown Title',
-          artist: String(t?.artist || '').trim() || 'Unknown Artist',
-          artistId: '',
-          album: '',
-          albumId: '',
-          coverUrl: '',
-          duration: 0,
-        }));
+        const tracks: SpotifyTrack[] = jsonData.tracks.map((t: any, index: number) => {
+          const rawArtist = String(t?.artist || '').trim() || 'Unknown Artist';
+          return {
+            id: `spotify-${playlistId}-${index}`,
+            title: String(t?.title || '').trim() || 'Unknown Title',
+            artist: cleanScrapedArtist(rawArtist),
+            artistId: '',
+            album: '',
+            albumId: '',
+            coverUrl: '',
+            duration: 0,
+          };
+        });
 
         return {
           name: (String(jsonData.playlistName || '').trim() || fallbackName),
@@ -250,16 +253,19 @@ Tracks must be song titles and artists.`
       }
 
       if (jsonData && Array.isArray(jsonData.tracks) && jsonData.tracks.length > 0) {
-        const tracks: SpotifyTrack[] = jsonData.tracks.map((t: any, index: number) => ({
-          id: `spotify-${playlistId}-${index}`,
-          title: String(t?.title || '').trim() || 'Unknown Title',
-          artist: String(t?.artist || '').trim() || 'Unknown Artist',
-          artistId: '',
-          album: '',
-          albumId: '',
-          coverUrl: '',
-          duration: 0,
-        }));
+        const tracks: SpotifyTrack[] = jsonData.tracks.map((t: any, index: number) => {
+          const rawArtist = String(t?.artist || '').trim() || 'Unknown Artist';
+          return {
+            id: `spotify-${playlistId}-${index}`,
+            title: String(t?.title || '').trim() || 'Unknown Title',
+            artist: cleanScrapedArtist(rawArtist),
+            artistId: '',
+            album: '',
+            albumId: '',
+            coverUrl: '',
+            duration: 0,
+          };
+        });
 
         return {
           name: (String(jsonData.playlistName || '').trim() || fallbackName),
@@ -367,10 +373,11 @@ function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
     const ariaLabel = match[1];
     const parts = ariaLabel.split(',').map((s) => s.trim());
     if (parts.length >= 2) {
+      const rawArtist = parts[1];
       tracks.push({
         id: `spotify-${playlistId}-${tracks.length}`,
         title: parts[0],
-        artist: parts[1],
+        artist: cleanScrapedArtist(rawArtist),
         artistId: '',
         album: parts[2] || '',
         albumId: '',
@@ -392,10 +399,11 @@ function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
     while ((match = artistLinkRegex.exec(html)) !== null) artistNames.push(match[1].trim());
 
     for (let i = 0; i < trackNames.length; i++) {
+      const rawArtist = artistNames[i] || 'Unknown Artist';
       tracks.push({
         id: `spotify-${playlistId}-${i}`,
         title: trackNames[i],
-        artist: artistNames[i] || 'Unknown Artist',
+        artist: cleanScrapedArtist(rawArtist),
         artistId: '',
         album: '',
         albumId: '',
@@ -434,6 +442,16 @@ function parseDurationISO(duration: string | undefined): number {
   const minutes = parseInt(match[2] || '0');
   const seconds = parseInt(match[3] || '0');
   return hours * 3600 + minutes * 60 + seconds;
+}
+
+// Clean artist name from Spotify "E" (Explicit) badge that gets scraped
+function cleanScrapedArtist(artist: string): string {
+  // The "E" explicit badge is often scraped as prefix before artist name
+  // Check if starts with "E" followed by an uppercase letter (not EE, not lowercase)
+  if (artist.length > 1 && artist.startsWith('E') && /[A-Z]/.test(artist[1]) && artist[1] !== 'E') {
+    return artist.substring(1);
+  }
+  return artist;
 }
 
 // Normalize string for comparison (remove accents, lowercase, trim)
@@ -544,10 +562,29 @@ async function searchTrackOnDeezer(title: string, artist: string): Promise<Spoti
           }
         }
 
-        // If we have a good match (score > 30), return it
-        if (bestScore > 30) {
+        // Accept match if:
+        // - Perfect or near-perfect match (score >= 50)
+        // - OR we have any result with partial match (score > 0) when searching exact title+artist
+        // This is more lenient because the search query already contains exact title+artist
+        if (bestScore >= 30 || (bestScore > 0 && tracks.length > 0)) {
           console.log(`Matched "${title}" by "${artist}" -> Deezer: "${bestMatch.title}" by "${bestMatch.artist?.name}" (score: ${bestScore}, searched: "${artistName}")`);
 
+          return {
+            id: String(bestMatch.id),
+            title: bestMatch.title,
+            artist: bestMatch.artist?.name || artist,
+            artistId: String(bestMatch.artist?.id || ''),
+            album: bestMatch.album?.title || '',
+            albumId: String(bestMatch.album?.id || ''),
+            coverUrl: bestMatch.album?.cover_medium || bestMatch.album?.cover || '',
+            duration: bestMatch.duration || 0,
+          };
+        }
+        
+        // If score is 0 but we have results, use the first result as fallback
+        // The Deezer search is usually accurate with the query we provide
+        if (tracks.length > 0) {
+          console.log(`Low-confidence match "${title}" by "${artist}" -> Deezer: "${bestMatch.title}" by "${bestMatch.artist?.name}" (using first result)`);
           return {
             id: String(bestMatch.id),
             title: bestMatch.title,
