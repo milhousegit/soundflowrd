@@ -277,11 +277,8 @@ Tracks must be song titles and artists.`
           .trim();
       }
 
-      const ogImageMatch = html.match(/property="og:image"\s+content="([^"]+)"/i) ||
-        html.match(/content="([^"]+)"\s+property="og:image"/i);
-      if (ogImageMatch) {
-        coverUrl = ogImageMatch[1];
-      }
+      // Use enhanced cover extraction
+      coverUrl = extractCoverUrl(html) || fallbackCoverUrl;
 
       // If we got metadata but no tracks, still treat as failure (UI expects tracks)
       console.log('Metadata extracted but no tracks found:', { playlistName, coverUrl });
@@ -299,6 +296,47 @@ Tracks must be song titles and artists.`
   }
 }
 
+// Extract cover image URL from HTML - looks for charts-images.scdn.co, mosaic.scdn.co, or i.scdn.co patterns
+function extractCoverUrl(html: string): string {
+  // Priority 1: charts-images.scdn.co (official playlist covers like Top 50)
+  const chartsImageMatch = html.match(/https?:\/\/charts-images\.scdn\.co\/[^"'\s<>]+/i);
+  if (chartsImageMatch) {
+    console.log('Found charts-images cover:', chartsImageMatch[0]);
+    return chartsImageMatch[0];
+  }
+
+  // Priority 2: mosaic.scdn.co (dynamic mosaic covers)
+  const mosaicMatch = html.match(/https?:\/\/mosaic\.scdn\.co\/[^"'\s<>]+/i);
+  if (mosaicMatch) {
+    console.log('Found mosaic cover:', mosaicMatch[0]);
+    return mosaicMatch[0];
+  }
+
+  // Priority 3: i.scdn.co/image (standard album/playlist images)
+  const iScdnMatch = html.match(/https?:\/\/i\.scdn\.co\/image\/[a-zA-Z0-9]+/i);
+  if (iScdnMatch) {
+    console.log('Found i.scdn.co cover:', iScdnMatch[0]);
+    return iScdnMatch[0];
+  }
+
+  // Priority 4: og:image meta tag
+  const ogImageMatch = html.match(/property="og:image"\s+content="([^"]+)"/i) ||
+    html.match(/content="([^"]+)"\s+property="og:image"/i);
+  if (ogImageMatch) {
+    console.log('Found og:image cover:', ogImageMatch[1]);
+    return ogImageMatch[1];
+  }
+
+  // Priority 5: any image.scdn.co URL
+  const imageScdnMatch = html.match(/https?:\/\/[a-z-]+\.scdn\.co\/[^"'\s<>]+\.(jpg|jpeg|png|webp)/i);
+  if (imageScdnMatch) {
+    console.log('Found scdn.co image:', imageScdnMatch[0]);
+    return imageScdnMatch[0];
+  }
+
+  return '';
+}
+
 // Parse HTML from Spotify embed page
 function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
   const tracks: SpotifyTrack[] = [];
@@ -313,13 +351,8 @@ function parseEmbedHtml(html: string, playlistId: string): PlaylistData | null {
       .trim();
   }
 
-  // Extract cover from og:image
-  let coverUrl = '';
-  const ogImageMatch = html.match(/property="og:image"\s+content="([^"]+)"/i) ||
-    html.match(/content="([^"]+)"\s+property="og:image"/i);
-  if (ogImageMatch) {
-    coverUrl = ogImageMatch[1];
-  }
+  // Extract cover using enhanced function
+  const coverUrl = extractCoverUrl(html);
 
   // data-testid track rows (best effort)
   const trackRowRegex = /data-testid="tracklist-row"[\s\S]*?aria-label="([^"]+)"/gi;
