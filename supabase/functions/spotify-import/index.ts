@@ -562,11 +562,9 @@ async function searchTrackOnDeezer(title: string, artist: string): Promise<Spoti
           }
         }
 
-        // Accept match if:
-        // - Perfect or near-perfect match (score >= 50)
-        // - OR we have any result with partial match (score > 0) when searching exact title+artist
-        // This is more lenient because the search query already contains exact title+artist
-        if (bestScore >= 30 || (bestScore > 0 && tracks.length > 0)) {
+        // Accept match only if score >= 40 (at least partial title AND partial artist match)
+        // This prevents returning completely unrelated songs
+        if (bestScore >= 40) {
           console.log(`Matched "${title}" by "${artist}" -> Deezer: "${bestMatch.title}" by "${bestMatch.artist?.name}" (score: ${bestScore}, searched: "${artistName}")`);
 
           return {
@@ -581,21 +579,7 @@ async function searchTrackOnDeezer(title: string, artist: string): Promise<Spoti
           };
         }
         
-        // If score is 0 but we have results, use the first result as fallback
-        // The Deezer search is usually accurate with the query we provide
-        if (tracks.length > 0) {
-          console.log(`Low-confidence match "${title}" by "${artist}" -> Deezer: "${bestMatch.title}" by "${bestMatch.artist?.name}" (using first result)`);
-          return {
-            id: String(bestMatch.id),
-            title: bestMatch.title,
-            artist: bestMatch.artist?.name || artist,
-            artistId: String(bestMatch.artist?.id || ''),
-            album: bestMatch.album?.title || '',
-            albumId: String(bestMatch.album?.id || ''),
-            coverUrl: bestMatch.album?.cover_medium || bestMatch.album?.cover || '',
-            duration: bestMatch.duration || 0,
-          };
-        }
+        console.log(`No good match for "${title}" by "${artist}" (best score: ${bestScore}, best: "${bestMatch.title}" by "${bestMatch.artist?.name}")`)
       } catch (error) {
         console.error(`Error searching Deezer for "${searchTitle}" by "${artistName}":`, error);
       }
