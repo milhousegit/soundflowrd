@@ -147,12 +147,18 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       return () => clearInterval(interval);
     }, [isOpen, onRefreshTorrent, refreshingIds, torrents]);
 
-    // Auto-populate search queries when modal opens
+    // Auto-populate search queries ONLY when modal opens fresh (empty queries)
     useEffect(() => {
       if (isOpen && currentTrackInfo) {
         const query = `${currentTrackInfo.title} ${currentTrackInfo.artist}`;
-        setScrapingQuery(query);
-        setMetadataQuery(query);
+        // Only set if currently empty - allows user to clear and keep cleared
+        setScrapingQuery(prev => prev === '' ? query : prev);
+        setMetadataQuery(prev => prev === '' ? query : prev);
+      }
+      // Reset queries when modal closes so they can be auto-populated next time
+      if (!isOpen) {
+        setScrapingQuery('');
+        setMetadataQuery('');
       }
     }, [isOpen, currentTrackInfo]);
 
