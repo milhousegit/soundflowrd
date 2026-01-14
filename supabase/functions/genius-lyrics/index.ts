@@ -8,30 +8,79 @@ const corsHeaders = {
 
 const GENIUS_API = 'https://api.genius.com';
 const LYRICS_OVH_API = 'https://api.lyrics.ovh/v1';
+const LRCLIB_API = 'https://lrclib.net/api';
 
-// Try Lyrics.ovh first (free, no scraping needed)
+// Clean up artist and title for better matching
+function cleanForSearch(text: string): string {
+  return text
+    .split(/[,&]/)[0] // Take first artist if multiple
+    .replace(/\s*\(.*?\)\s*/g, '') // Remove parentheses content
+    .replace(/\s*\[.*?\]\s*/g, '') // Remove brackets content
+    .replace(/\s*-\s*.*$/, '') // Remove everything after dash
+    .replace(/\s+/g, ' ') // Normalize spaces
+    .trim();
+}
+
+// Try LRCLIB for synced lyrics (karaoke style)
+async function getLyricsFromLRCLIB(artist: string, title: string): Promise<{ lyrics: string; syncedLyrics: string | null; } | null> {
+  try {
+    const cleanArtist = cleanForSearch(artist);
+    const cleanTitle = cleanForSearch(title);
+    
+    console.log('Trying LRCLIB with:', cleanArtist, '-', cleanTitle);
+    
+    const url = `${LRCLIB_API}/get?artist_name=${encodeURIComponent(cleanArtist)}&track_name=${encodeURIComponent(cleanTitle)}`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.log('LRCLIB returned:', response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    if (data.syncedLyrics || data.plainLyrics) {
+      return {
+        lyrics: data.plainLyrics || data.syncedLyrics?.replace(/\[\d+:\d+\.\d+\]/g, '').trim(),
+        syncedLyrics: data.syncedLyrics || null,
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('LRCLIB request timed out');
+    } else {
+      console.error('LRCLIB error:', error);
+    }
+    return null;
+  }
+}
+
+// Try Lyrics.ovh as fallback
 async function getLyricsFromLyricsOvh(artist: string, title: string): Promise<string | null> {
   try {
-    // Clean up artist and title for better matching
-    const cleanArtist = artist.split(/[,&]/)[0].trim(); // Take first artist if multiple
-    const cleanTitle = title
-      .replace(/\s*\(.*?\)\s*/g, '') // Remove parentheses content
-      .replace(/\s*\[.*?\]\s*/g, '') // Remove brackets content
-      .replace(/\s*-\s*.*$/, '') // Remove everything after dash
-      .trim();
+    const cleanArtist = cleanForSearch(artist);
+    const cleanTitle = cleanForSearch(title);
 
     console.log('Trying Lyrics.ovh with:', cleanArtist, '-', cleanTitle);
     
     const url = `${LYRICS_OVH_API}/${encodeURIComponent(cleanArtist)}/${encodeURIComponent(cleanTitle)}`;
     
-    // Add timeout to prevent infinite loading
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     
     const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-      },
+      headers: { 'Accept': 'application/json' },
       signal: controller.signal,
     });
     
@@ -63,9 +112,7 @@ async function searchGeniusSong(query: string, accessToken: string): Promise<any
     const url = `${GENIUS_API}/search?q=${encodeURIComponent(query)}`;
     
     const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
+      headers: { 'Authorization': `Bearer ${accessToken}` },
     });
 
     if (!response.ok) {
@@ -102,13 +149,35 @@ serve(async (req) => {
 
     console.log('Fetching lyrics for:', artist, '-', title);
 
-    // Try Lyrics.ovh first
-    let lyrics = await getLyricsFromLyricsOvh(artist, title);
+    let lyrics: string | null = null;
+    let syncedLyrics: string | null = null;
+
+    // 1. Try LRCLIB first (has synced lyrics for karaoke)
+    const lrclibResult = await getLyricsFromLRCLIB(artist, title);
+    if (lrclibResult) {
+      lyrics = lrclibResult.lyrics;
+      syncedLyrics = lrclibResult.syncedLyrics;
+      console.log('Got lyrics from LRCLIB', syncedLyrics ? '(with sync)' : '(plain only)');
+    }
     
-    // If first attempt fails, try with original title
+    // 2. Fallback to Lyrics.ovh if LRCLIB fails
+    if (!lyrics) {
+      lyrics = await getLyricsFromLyricsOvh(artist, title);
+      if (lyrics) {
+        console.log('Got lyrics from Lyrics.ovh');
+      }
+    }
+    
+    // 3. Try with original title if still no lyrics
     if (!lyrics) {
       console.log('Retrying with original title...');
-      lyrics = await getLyricsFromLyricsOvh(artist, title.split(/[(-]/)[0].trim());
+      const lrclibRetry = await getLyricsFromLRCLIB(artist, title.split(/[(-]/)[0].trim());
+      if (lrclibRetry) {
+        lyrics = lrclibRetry.lyrics;
+        syncedLyrics = lrclibRetry.syncedLyrics;
+      } else {
+        lyrics = await getLyricsFromLyricsOvh(artist, title.split(/[(-]/)[0].trim());
+      }
     }
 
     // Get song info from Genius for metadata (optional, for link)
@@ -141,10 +210,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         lyrics,
-        songInfo: songInfo || {
-          title,
-          artist,
-        }
+        syncedLyrics,
+        songInfo: songInfo || { title, artist }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

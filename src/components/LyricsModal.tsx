@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Loader2, ExternalLink, Music2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { Track } from '@/types/music';
 import { useSettings } from '@/contexts/SettingsContext';
+import { usePlayer } from '@/contexts/PlayerContext';
 import { cn } from '@/lib/utils';
 
 interface LyricsModalProps {
@@ -15,20 +16,52 @@ interface LyricsModalProps {
 
 interface LyricsData {
   lyrics: string;
+  syncedLyrics: string | null;
   songInfo: {
     title: string;
     artist: string;
-    url: string;
+    url?: string;
     thumbnailUrl?: string;
   };
 }
 
+interface SyncedLine {
+  time: number; // in seconds
+  text: string;
+}
+
+// Parse LRC format synced lyrics
+function parseSyncedLyrics(syncedLyrics: string): SyncedLine[] {
+  const lines: SyncedLine[] = [];
+  const regex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/g;
+  let match;
+
+  while ((match = regex.exec(syncedLyrics)) !== null) {
+    const minutes = parseInt(match[1], 10);
+    const seconds = parseInt(match[2], 10);
+    const milliseconds = parseInt(match[3].padEnd(3, '0'), 10);
+    const time = minutes * 60 + seconds + milliseconds / 1000;
+    const text = match[4].trim();
+    
+    if (text) {
+      lines.push({ time, text });
+    }
+  }
+
+  return lines.sort((a, b) => a.time - b.time);
+}
+
 const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => {
   const { settings } = useSettings();
+  const { progress } = usePlayer();
   const [lyrics, setLyrics] = useState<string | null>(null);
+  const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [songInfo, setSongInfo] = useState<LyricsData['songInfo'] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentLineIndex, setCurrentLineIndex] = useState(-1);
+  const lyricsContainerRef = useRef<HTMLDivElement>(null);
+  const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
 
   const fetchLyrics = useCallback(async () => {
     if (!track) return;
@@ -36,7 +69,9 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
     setIsLoading(true);
     setError(null);
     setLyrics(null);
+    setSyncedLines([]);
     setSongInfo(null);
+    setCurrentLineIndex(-1);
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('genius-lyrics', {
@@ -52,6 +87,13 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
       } else if (data.lyrics) {
         setLyrics(data.lyrics);
         setSongInfo(data.songInfo);
+        
+        // Parse synced lyrics if available
+        if (data.syncedLyrics) {
+          const parsed = parseSyncedLyrics(data.syncedLyrics);
+          setSyncedLines(parsed);
+          lineRefs.current = new Array(parsed.length).fill(null);
+        }
       }
     } catch (err) {
       console.error('Error fetching lyrics:', err);
@@ -67,7 +109,34 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
     }
   }, [isOpen, track?.id, fetchLyrics]);
 
+  // Update current line based on playback progress
+  useEffect(() => {
+    if (syncedLines.length === 0) return;
+
+    let newIndex = -1;
+    for (let i = syncedLines.length - 1; i >= 0; i--) {
+      if (progress >= syncedLines[i].time) {
+        newIndex = i;
+        break;
+      }
+    }
+
+    if (newIndex !== currentLineIndex) {
+      setCurrentLineIndex(newIndex);
+      
+      // Auto-scroll to current line
+      if (newIndex >= 0 && lineRefs.current[newIndex]) {
+        lineRefs.current[newIndex]?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      }
+    }
+  }, [progress, syncedLines, currentLineIndex]);
+
   if (!isOpen) return null;
+
+  const hasSyncedLyrics = syncedLines.length > 0;
 
   return (
     <div className="fixed inset-0 z-[70] bg-background/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-200">
@@ -109,10 +178,33 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
             </Button>
           </div>
         ) : lyrics ? (
-          <div className="max-w-2xl mx-auto">
-            <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-foreground/90">
-              {lyrics}
-            </pre>
+          <div ref={lyricsContainerRef} className="max-w-2xl mx-auto">
+            {hasSyncedLyrics ? (
+              // Karaoke-style synced lyrics
+              <div className="space-y-4 py-8">
+                {syncedLines.map((line, index) => (
+                  <p
+                    key={index}
+                    ref={(el) => (lineRefs.current[index] = el)}
+                    className={cn(
+                      "text-lg md:text-xl text-center transition-all duration-300",
+                      index === currentLineIndex
+                        ? "text-primary font-semibold scale-105"
+                        : index < currentLineIndex
+                        ? "text-muted-foreground/60"
+                        : "text-foreground/70"
+                    )}
+                  >
+                    {line.text}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              // Plain lyrics
+              <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-foreground/90">
+                {lyrics}
+              </pre>
+            )}
             {songInfo?.url && (
               <div className="mt-8 pt-4 border-t border-border">
                 <a
@@ -141,6 +233,15 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
       <div className="p-4 border-t border-border text-center">
         <span className="text-xs text-muted-foreground">
           {settings.language === 'it' ? 'Testi forniti da' : 'Lyrics provided by'}{' '}
+          <a
+            href="https://lrclib.net"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            LRCLIB
+          </a>
+          {' & '}
           <a
             href="https://genius.com"
             target="_blank"
