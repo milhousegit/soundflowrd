@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Loader2, ExternalLink, Music2, AlertCircle } from 'lucide-react';
+import { X, Loader2, Music2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,7 +58,6 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [songInfo, setSongInfo] = useState<LyricsData['songInfo'] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [currentLineIndex, setCurrentLineIndex] = useState(-1);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
@@ -67,23 +66,24 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
     if (!track) return;
     
     setIsLoading(true);
-    setError(null);
+    setLyrics(null);
     setLyrics(null);
     setSyncedLines([]);
     setSongInfo(null);
     setCurrentLineIndex(-1);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('genius-lyrics', {
+      const response = await supabase.functions.invoke('genius-lyrics', {
         body: { artist: track.artist, title: track.title },
       });
 
-      if (fnError) {
-        throw new Error(fnError.message);
-      }
-
-      if (data.error && !data.lyrics) {
-        setError(data.error);
+      const data = response.data;
+      
+      // Handle case where lyrics weren't found (404 returns data with error)
+      if (!data || (data.error && !data.lyrics)) {
+        // Not an error - just no lyrics available
+        setLyrics(null);
+        setSongInfo(data?.songInfo || null);
       } else if (data.lyrics) {
         setLyrics(data.lyrics);
         setSongInfo(data.songInfo);
@@ -97,7 +97,8 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
       }
     } catch (err) {
       console.error('Error fetching lyrics:', err);
-      setError(settings.language === 'it' ? 'Impossibile recuperare il testo' : 'Could not fetch lyrics');
+      // Only show error for actual failures, not "not found"
+      setLyrics(null);
     } finally {
       setIsLoading(false);
     }
@@ -168,14 +169,6 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
             <p className="text-muted-foreground">
               {settings.language === 'it' ? 'Caricamento testo...' : 'Loading lyrics...'}
             </p>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-3 text-center px-4">
-            <AlertCircle className="w-12 h-12 text-muted-foreground" />
-            <p className="text-muted-foreground">{error}</p>
-            <Button variant="outline" onClick={fetchLyrics} className="mt-2">
-              {settings.language === 'it' ? 'Riprova' : 'Retry'}
-            </Button>
           </div>
         ) : lyrics ? (
           <div ref={lyricsContainerRef} className="max-w-2xl mx-auto">
