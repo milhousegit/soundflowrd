@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Loader2, Music2 } from 'lucide-react';
+import { X, Loader2, Music2, LocateFixed, LocateOff, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
@@ -53,12 +53,14 @@ function parseSyncedLyrics(syncedLyrics: string): SyncedLine[] {
 
 const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => {
   const { settings } = useSettings();
-  const { progress } = usePlayer();
+  const { progress, seek } = usePlayer();
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [songInfo, setSongInfo] = useState<LyricsData['songInfo'] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentLineIndex, setCurrentLineIndex] = useState(-1);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [offset, setOffset] = useState(0); // offset in seconds
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
 
@@ -67,10 +69,10 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
     
     setIsLoading(true);
     setLyrics(null);
-    setLyrics(null);
     setSyncedLines([]);
     setSongInfo(null);
     setCurrentLineIndex(-1);
+    setOffset(0);
 
     try {
       const response = await supabase.functions.invoke('genius-lyrics', {
@@ -102,7 +104,7 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
     } finally {
       setIsLoading(false);
     }
-  }, [track, settings.language]);
+  }, [track]);
 
   useEffect(() => {
     if (isOpen && track) {
@@ -110,13 +112,14 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
     }
   }, [isOpen, track?.id, fetchLyrics]);
 
-  // Update current line based on playback progress
+  // Update current line based on playback progress with offset
   useEffect(() => {
     if (syncedLines.length === 0) return;
 
+    const adjustedProgress = progress + offset;
     let newIndex = -1;
     for (let i = syncedLines.length - 1; i >= 0; i--) {
-      if (progress >= syncedLines[i].time) {
+      if (adjustedProgress >= syncedLines[i].time) {
         newIndex = i;
         break;
       }
@@ -126,14 +129,22 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
       setCurrentLineIndex(newIndex);
       
       // Auto-scroll to current line
-      if (newIndex >= 0 && lineRefs.current[newIndex]) {
+      if (autoScroll && newIndex >= 0 && lineRefs.current[newIndex]) {
         lineRefs.current[newIndex]?.scrollIntoView({
           behavior: 'smooth',
           block: 'center',
         });
       }
     }
-  }, [progress, syncedLines, currentLineIndex]);
+  }, [progress, syncedLines, currentLineIndex, autoScroll, offset]);
+
+  // Handle clicking on a lyric line to seek
+  const handleLineClick = (index: number) => {
+    if (syncedLines[index] && seek) {
+      const targetTime = Math.max(0, syncedLines[index].time - offset);
+      seek(targetTime);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -161,6 +172,49 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
         </Button>
       </div>
 
+      {/* Sync controls for synced lyrics */}
+      {hasSyncedLyrics && (
+        <div className="flex items-center justify-center gap-3 py-2 px-4 border-b border-border bg-secondary/30">
+          {/* Auto-scroll toggle */}
+          <Button
+            variant={autoScroll ? "default" : "outline"}
+            size="sm"
+            onClick={() => setAutoScroll(!autoScroll)}
+            className="gap-1.5 h-8"
+          >
+            {autoScroll ? (
+              <LocateFixed className="w-4 h-4" />
+            ) : (
+              <LocateOff className="w-4 h-4" />
+            )}
+            <span className="text-xs">Auto-scroll</span>
+          </Button>
+
+          {/* Offset controls */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setOffset(o => o - 0.5)}
+            >
+              <Minus className="w-3 h-3" />
+            </Button>
+            <span className="text-xs text-muted-foreground w-16 text-center">
+              {offset >= 0 ? '+' : ''}{offset.toFixed(1)}s
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setOffset(o => o + 0.5)}
+            >
+              <Plus className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       <ScrollArea className="flex-1 px-6 py-4">
         {isLoading ? (
@@ -179,8 +233,9 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
                   <p
                     key={index}
                     ref={(el) => (lineRefs.current[index] = el)}
+                    onClick={() => handleLineClick(index)}
                     className={cn(
-                      "text-lg md:text-xl text-center transition-all duration-300",
+                      "text-lg md:text-xl text-center transition-all duration-300 cursor-pointer hover:text-primary/80",
                       index === currentLineIndex
                         ? "text-primary font-semibold scale-105"
                         : index < currentLineIndex
