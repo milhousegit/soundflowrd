@@ -42,7 +42,6 @@ const PlaylistPage: React.FC = () => {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [isEditingTracks, setIsEditingTracks] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [editedCoverUrl, setEditedCoverUrl] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -176,7 +175,7 @@ const PlaylistPage: React.FC = () => {
   };
 
   const handleExitEditMode = () => {
-    setIsEditingTracks(false);
+    setIsEditing(false);
     setDraggedIndex(null);
     setDragOverIndex(null);
   };
@@ -253,7 +252,7 @@ const PlaylistPage: React.FC = () => {
         <div className="flex-1 min-w-0 text-center md:text-left">
           <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">{playlist.deezer_id ? 'Playlist Deezer' : 'Playlist'}</p>
           
-          {isEditing ? (
+          {isEditing && !playlist.deezer_id ? (
             <div className="space-y-2 max-w-md">
               <Input
                 value={editedName}
@@ -267,8 +266,7 @@ const PlaylistPage: React.FC = () => {
                 placeholder="URL copertina (opzionale)"
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleSaveEdit}>Salva</Button>
-                <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>Annulla</Button>
+                <Button size="sm" onClick={handleSaveEdit}>Salva Info</Button>
               </div>
             </div>
           ) : (
@@ -292,7 +290,7 @@ const PlaylistPage: React.FC = () => {
 
       {/* Actions */}
       <div className="px-4 md:px-8 py-4 md:py-6 flex items-center gap-3">
-        {isEditingTracks ? (
+        {isEditing && !playlist.deezer_id ? (
           // Edit mode actions
           <>
             <Button 
@@ -305,7 +303,7 @@ const PlaylistPage: React.FC = () => {
               Fatto
             </Button>
             <p className="text-sm text-muted-foreground">
-              Trascina per riordinare, clicca X per rimuovere
+              Modifica info, trascina per riordinare o clicca X per rimuovere
             </p>
           </>
         ) : (
@@ -355,28 +353,16 @@ const PlaylistPage: React.FC = () => {
               </Button>
             )}
 
-            {/* Edit tracks button - only for non-Deezer playlists with tracks */}
-            {!playlist.deezer_id && tracks.length > 0 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsEditingTracks(true)}
-                className="w-12 h-12"
-                title="Modifica ordine brani"
-              >
-                <Pencil className="w-5 h-5 text-muted-foreground" />
-              </Button>
-            )}
-
-            {/* Edit playlist info button - only for non-Deezer playlists */}
+            {/* Edit button - only for non-Deezer playlists */}
             {!playlist.deezer_id && (
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
                 onClick={() => setIsEditing(true)}
-                className="text-muted-foreground"
+                className="w-12 h-12"
+                title="Modifica playlist"
               >
-                Modifica info
+                <Pencil className="w-5 h-5 text-muted-foreground" />
               </Button>
             )}
 
@@ -421,7 +407,7 @@ const PlaylistPage: React.FC = () => {
         ) : (
           <>
             {/* Header - Hidden on mobile and in edit mode */}
-            {!isEditingTracks && (
+            {!isEditing && (
               <div className="hidden md:grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 text-sm text-muted-foreground border-b border-border mb-2">
                 <span className="w-8 text-center">#</span>
                 <span>Titolo</span>
@@ -432,7 +418,7 @@ const PlaylistPage: React.FC = () => {
             {/* Tracks */}
             <div className="space-y-1">
               {tracks.map((track, index) => (
-                isEditingTracks ? (
+                isEditing && !playlist.deezer_id ? (
                   // Edit mode track row
                   <div
                     key={`${track.id}-${index}`}
