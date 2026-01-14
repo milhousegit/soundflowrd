@@ -67,20 +67,25 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load saved offset for this track
+  // Load saved offset for this track - isolated from playback
   useEffect(() => {
     const loadOffset = async () => {
-      if (!user?.id || !track?.id) return;
-      
-      const { data } = await supabase
-        .from('lyrics_offsets')
-        .select('offset_seconds')
-        .eq('user_id', user.id)
-        .eq('track_id', track.id)
-        .maybeSingle();
-      
-      if (data) {
-        setOffset(Number(data.offset_seconds));
+      try {
+        if (!user?.id || !track?.id) return;
+        
+        const { data } = await supabase
+          .from('lyrics_offsets')
+          .select('offset_seconds')
+          .eq('user_id', user.id)
+          .eq('track_id', track.id)
+          .maybeSingle();
+        
+        if (data) {
+          setOffset(Number(data.offset_seconds));
+        }
+      } catch (err) {
+        // Silently fail - don't affect playback
+        console.warn('Failed to load lyrics offset:', err);
       }
     };
 
@@ -89,36 +94,45 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
     }
   }, [isOpen, track?.id, user?.id]);
 
-  // Save offset when it changes (debounced)
+  // Save offset when it changes (debounced) - isolated from playback
   const saveOffset = useCallback(async (newOffset: number) => {
-    if (!user?.id || !track?.id) return;
-    
-    // Clear previous timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    
-    // Debounce save by 1 second
-    saveTimeoutRef.current = setTimeout(async () => {
-      if (newOffset === 0) {
-        // Delete if offset is 0
-        await supabase
-          .from('lyrics_offsets')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('track_id', track.id);
-      } else {
-        await supabase
-          .from('lyrics_offsets')
-          .upsert({
-            user_id: user.id,
-            track_id: track.id,
-            offset_seconds: newOffset,
-          }, {
-            onConflict: 'user_id,track_id',
-          });
+    try {
+      if (!user?.id || !track?.id) return;
+      
+      // Clear previous timeout
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
-    }, 1000);
+      
+      // Debounce save by 1 second
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          if (newOffset === 0) {
+            // Delete if offset is 0
+            await supabase
+              .from('lyrics_offsets')
+              .delete()
+              .eq('user_id', user.id)
+              .eq('track_id', track.id);
+          } else {
+            await supabase
+              .from('lyrics_offsets')
+              .upsert({
+                user_id: user.id,
+                track_id: track.id,
+                offset_seconds: newOffset,
+              }, {
+                onConflict: 'user_id,track_id',
+              });
+          }
+        } catch (err) {
+          // Silently fail - don't affect playback
+          console.warn('Failed to save lyrics offset:', err);
+        }
+      }, 1000);
+    } catch (err) {
+      console.warn('Failed to save lyrics offset:', err);
+    }
   }, [user?.id, track?.id]);
 
   // Handle offset change
@@ -128,6 +142,7 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
     saveOffset(newOffset);
   };
 
+  // Fetch lyrics - completely isolated from playback
   const fetchLyrics = useCallback(async () => {
     if (!track) return;
     
@@ -155,14 +170,19 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
         
         // Parse synced lyrics if available
         if (data.syncedLyrics) {
-          const parsed = parseSyncedLyrics(data.syncedLyrics);
-          setSyncedLines(parsed);
-          lineRefs.current = new Array(parsed.length).fill(null);
+          try {
+            const parsed = parseSyncedLyrics(data.syncedLyrics);
+            setSyncedLines(parsed);
+            lineRefs.current = new Array(parsed.length).fill(null);
+          } catch (parseErr) {
+            console.warn('Failed to parse synced lyrics:', parseErr);
+            // Continue with plain lyrics
+          }
         }
       }
     } catch (err) {
-      console.error('Error fetching lyrics:', err);
-      // Only show error for actual failures, not "not found"
+      // Silently fail - never affect playback
+      console.warn('Error fetching lyrics:', err);
       setLyrics(null);
     } finally {
       setIsLoading(false);
@@ -171,41 +191,55 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
 
   useEffect(() => {
     if (isOpen && track) {
-      fetchLyrics();
+      // Wrap in try-catch to never crash
+      try {
+        fetchLyrics();
+      } catch (err) {
+        console.warn('Lyrics fetch failed:', err);
+      }
     }
   }, [isOpen, track?.id, fetchLyrics]);
 
-  // Update current line based on playback progress with offset
+  // Update current line based on playback progress with offset - never throws
   useEffect(() => {
-    if (syncedLines.length === 0) return;
+    try {
+      if (syncedLines.length === 0) return;
 
-    const adjustedProgress = progress + offset;
-    let newIndex = -1;
-    for (let i = syncedLines.length - 1; i >= 0; i--) {
-      if (adjustedProgress >= syncedLines[i].time) {
-        newIndex = i;
-        break;
+      const adjustedProgress = progress + offset;
+      let newIndex = -1;
+      for (let i = syncedLines.length - 1; i >= 0; i--) {
+        if (adjustedProgress >= syncedLines[i].time) {
+          newIndex = i;
+          break;
+        }
       }
-    }
 
-    if (newIndex !== currentLineIndex) {
-      setCurrentLineIndex(newIndex);
-      
-      // Auto-scroll to current line
-      if (autoScroll && newIndex >= 0 && lineRefs.current[newIndex]) {
-        lineRefs.current[newIndex]?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        });
+      if (newIndex !== currentLineIndex) {
+        setCurrentLineIndex(newIndex);
+        
+        // Auto-scroll to current line
+        if (autoScroll && newIndex >= 0 && lineRefs.current[newIndex]) {
+          lineRefs.current[newIndex]?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }
       }
+    } catch (err) {
+      // Never affect playback
+      console.warn('Lyrics sync error:', err);
     }
   }, [progress, syncedLines, currentLineIndex, autoScroll, offset]);
 
-  // Handle clicking on a lyric line to seek
+  // Handle clicking on a lyric line to seek - wrapped in try-catch
   const handleLineClick = (index: number) => {
-    if (syncedLines[index] && seek) {
-      const targetTime = Math.max(0, syncedLines[index].time - offset);
-      seek(targetTime);
+    try {
+      if (syncedLines[index] && seek) {
+        const targetTime = Math.max(0, syncedLines[index].time - offset);
+        seek(targetTime);
+      }
+    } catch (err) {
+      console.warn('Seek failed:', err);
     }
   };
 
