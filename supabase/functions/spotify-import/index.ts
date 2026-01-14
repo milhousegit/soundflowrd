@@ -504,7 +504,7 @@ async function searchTrackOnDeezer(title: string, artist: string): Promise<Spoti
       try {
         // Search with title + artist
         const query = `${searchTitle} ${artistName}`;
-        console.log(`Searching Deezer: "${query}"`);
+        console.log(`Searching Deezer tracks: "${query}"`);
         
         const response = await fetch(
           `${DEEZER_API}/search/track?q=${encodeURIComponent(query)}&limit=5`,
@@ -525,7 +525,7 @@ async function searchTrackOnDeezer(title: string, artist: string): Promise<Spoti
         const tracks = data.data || [];
 
         if (tracks.length === 0) {
-          console.log(`No Deezer results for "${searchTitle}" by "${artistName}"`);
+          console.log(`No Deezer track results for "${searchTitle}" by "${artistName}"`);
           continue;
         }
 
@@ -579,10 +579,99 @@ async function searchTrackOnDeezer(title: string, artist: string): Promise<Spoti
           };
         }
         
-        console.log(`No good match for "${title}" by "${artist}" (best score: ${bestScore}, best: "${bestMatch.title}" by "${bestMatch.artist?.name}")`)
+        console.log(`No good track match for "${title}" by "${artist}" (best score: ${bestScore}, best: "${bestMatch.title}" by "${bestMatch.artist?.name}")`)
       } catch (error) {
         console.error(`Error searching Deezer for "${searchTitle}" by "${artistName}":`, error);
       }
+    }
+  }
+  
+  // FALLBACK: Search in albums/singles - useful for new releases not indexed in track search
+  console.log(`Trying album search fallback for "${cleanedTitle}" by "${artist}"...`);
+  
+  for (const artistName of artistVariations) {
+    try {
+      // Search for albums by the artist with the track title
+      const albumQuery = `${cleanedTitle} ${artistName}`;
+      console.log(`Searching Deezer albums: "${albumQuery}"`);
+      
+      const albumResponse = await fetch(
+        `${DEEZER_API}/search/album?q=${encodeURIComponent(albumQuery)}&limit=5`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
+          },
+        }
+      );
+      
+      if (!albumResponse.ok) continue;
+      
+      const albumData = await albumResponse.json();
+      const albums = albumData.data || [];
+      
+      const normalizedTitle = normalizeString(cleanedTitle);
+      const normalizedArtist = normalizeString(artistName);
+      
+      // Find albums that match both title and artist
+      for (const album of albums) {
+        const albumTitle = normalizeString(album.title || '');
+        const albumArtist = normalizeString(album.artist?.name || '');
+        
+        // Check if album title matches the track title (for singles)
+        const titleMatches = albumTitle === normalizedTitle || 
+          albumTitle.includes(normalizedTitle) || 
+          normalizedTitle.includes(albumTitle);
+        
+        // Check if artist matches
+        const artistMatches = albumArtist === normalizedArtist || 
+          albumArtist.includes(normalizedArtist) || 
+          normalizedArtist.includes(albumArtist);
+        
+        if (titleMatches && artistMatches) {
+          // Get album tracks
+          console.log(`Found matching album/single: "${album.title}" by "${album.artist?.name}", fetching tracks...`);
+          
+          const tracksResponse = await fetch(
+            `${DEEZER_API}/album/${album.id}/tracks`,
+            {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json',
+              },
+            }
+          );
+          
+          if (!tracksResponse.ok) continue;
+          
+          const tracksData = await tracksResponse.json();
+          const albumTracks = tracksData.data || [];
+          
+          // Find the matching track in the album
+          for (const track of albumTracks) {
+            const trackTitle = normalizeString(track.title || '');
+            
+            if (trackTitle === normalizedTitle || 
+                trackTitle.includes(normalizedTitle) || 
+                normalizedTitle.includes(trackTitle)) {
+              console.log(`Album fallback matched "${title}" by "${artist}" -> Deezer: "${track.title}" by "${album.artist?.name}" from album "${album.title}"`);
+              
+              return {
+                id: String(track.id),
+                title: track.title,
+                artist: album.artist?.name || artist,
+                artistId: String(album.artist?.id || ''),
+                album: album.title || '',
+                albumId: String(album.id || ''),
+                coverUrl: album.cover_medium || album.cover || '',
+                duration: track.duration || 0,
+              };
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error in album search fallback for "${cleanedTitle}" by "${artistName}":`, error);
     }
   }
   
