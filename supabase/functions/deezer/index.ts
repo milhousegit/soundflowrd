@@ -88,14 +88,33 @@ serve(async (req) => {
           `${DEEZER_API}/search/album?q=${encodeURIComponent(query)}&limit=${limit}`
         );
         
-        const albums = (data.data || []).map((album: any) => ({
-          id: String(album.id),
-          title: album.title,
-          artist: album.artist?.name || 'Unknown Artist',
-          artistId: String(album.artist?.id || ''),
-          coverUrl: album.cover_medium || album.cover_big || album.cover || undefined,
-          trackCount: album.nb_tracks || undefined,
-        }));
+        // Fetch full album details to get release_date for each album
+        const albumIds = (data.data || []).slice(0, 10).map((a: any) => a.id);
+        const albumDetailsPromises = albumIds.map((albumId: number) =>
+          fetchWithRetry(`${DEEZER_API}/album/${albumId}`).catch(() => null)
+        );
+        
+        const albumDetails = await Promise.all(albumDetailsPromises);
+        const detailsMap = new Map<string, any>();
+        albumDetails.forEach((detail) => {
+          if (detail && detail.id) {
+            detailsMap.set(String(detail.id), detail);
+          }
+        });
+        
+        const albums = (data.data || []).map((album: any) => {
+          const detail = detailsMap.get(String(album.id));
+          return {
+            id: String(album.id),
+            title: album.title,
+            artist: album.artist?.name || 'Unknown Artist',
+            artistId: String(album.artist?.id || ''),
+            coverUrl: album.cover_medium || album.cover_big || album.cover || undefined,
+            trackCount: album.nb_tracks || undefined,
+            releaseDate: detail?.release_date || undefined,
+            recordType: detail?.record_type || album.record_type || undefined,
+          };
+        });
 
         return new Response(JSON.stringify(albums), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
