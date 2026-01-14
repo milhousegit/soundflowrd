@@ -687,39 +687,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         progress: 0,
       }));
 
-      // Fetch metadata in background (don't block playback)
-      const needsMetadata = !track.coverUrl || track.id.startsWith('spotify-') || track.duration === 0;
-      if (needsMetadata) {
-        addDebugLog('🔍 Recupero metadati', `Ricerca in background per "${track.title}"`, 'info');
-        
-        // Run metadata fetch in background - don't await it
-        fetchTrackMetadata(track).then((enrichedTrack) => {
-          // Only update if we're still playing this track
-          if (currentSearchTrackIdRef.current === track.id && enrichedTrack !== track) {
-            if (enrichedTrack.coverUrl && enrichedTrack.coverUrl !== track.coverUrl) {
-              addDebugLog('✅ Metadati trovati', `"${enrichedTrack.title}" di ${enrichedTrack.artist}`, 'success');
-            }
-            
-            // Update current track and queue with enriched data
-            setState((prev) => {
-              const updatedQueue = prev.queue.map(t => t.id === track.id ? enrichedTrack : t);
-              return {
-                ...prev,
-                currentTrack: prev.currentTrack?.id === track.id ? enrichedTrack : prev.currentTrack,
-                queue: updatedQueue,
-                duration: enrichedTrack.duration || prev.duration,
-              };
-            });
-            
-            // Update media session with new metadata
-            updateMediaSessionMetadata(enrichedTrack, true);
-          }
-        }).catch((error) => {
-          console.error('[Metadata] Background fetch failed:', error);
-        });
-      }
-
-      // Use original track for playback - don't wait for metadata
+      // REMOVED: Automatic metadata fetch - user can manually fix metadata via Debug Modal if needed
+      // Use original track for playback
       const enrichedTrack = track;
 
       clearDebugLogs();
