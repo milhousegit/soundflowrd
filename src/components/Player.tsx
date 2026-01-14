@@ -8,6 +8,7 @@ import { Slider } from '@/components/ui/slider';
 import DebugModal from './DebugModal';
 import QueueModal from './QueueModal';
 import FavoriteButton from './FavoriteButton';
+import LyricsModal from './LyricsModal';
 import { useToast } from '@/hooks/use-toast';
 import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 import { isPast } from 'date-fns';
@@ -21,6 +22,7 @@ import {
   ListMusic,
   Loader2,
   Music,
+  Mic2,
   Pause,
   Play,
   Shuffle,
@@ -94,6 +96,7 @@ const Player: React.FC = () => {
 
   const [showDebugModal, setShowDebugModal] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
+  const [showLyricsModal, setShowLyricsModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Swipe to close state
@@ -383,6 +386,16 @@ const Player: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1">
+              {(contextIsAdmin || isPremiumActive) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 text-muted-foreground hover:text-primary"
+                  onClick={() => setShowLyricsModal(true)}
+                >
+                  <Mic2 className="w-5 h-5" />
+                </Button>
+              )}
               {canDownload && currentStreamUrl && (
                 <Button
                   variant="ghost"
@@ -505,6 +518,17 @@ const Player: React.FC = () => {
 
           {/* Right section - Volume and actions */}
           <div className="flex items-center gap-3 justify-self-end">
+            {(contextIsAdmin || isPremiumActive) && (
+              <Button
+                variant="playerSecondary"
+                size="icon"
+                onClick={() => setShowLyricsModal(true)}
+                className="text-muted-foreground hover:text-primary"
+                title={settings.language === 'it' ? 'Testo' : 'Lyrics'}
+              >
+                <Mic2 className="w-5 h-5" />
+              </Button>
+            )}
             <Button
               variant="playerSecondary"
               size="icon"
@@ -571,6 +595,12 @@ const Player: React.FC = () => {
         currentIndex={queueIndex}
         onPlayTrack={playQueueIndex}
         onClearQueue={clearQueue}
+      />
+
+      <LyricsModal
+        isOpen={showLyricsModal}
+        onClose={() => setShowLyricsModal(false)}
+        track={currentTrack}
       />
     </>
   );
