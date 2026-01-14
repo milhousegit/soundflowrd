@@ -62,10 +62,9 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import IOSDiagnostics from '@/components/IOSDiagnostics';
+import AppLogs from '@/components/AppLogs';
 import AdminNotifications from '@/components/AdminNotifications';
 import AdminUsersManagement from '@/components/AdminUsersManagement';
-import { isIOS, isSafari, isPWA } from '@/hooks/useIOSAudioSession';
 import { isPast } from 'date-fns';
 
 interface CloudFile {
@@ -789,20 +788,18 @@ const Settings: React.FC = () => {
           </div>
         </section>
 
-        {/* iOS Diagnostics */}
-        {(isIOS() || isSafari() || isPWA()) && (
-          <section className="rounded-xl bg-card overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
-              <Smartphone className="w-4 h-4 text-primary" />
-              <h2 className="text-sm font-semibold text-foreground">
-                {settings.language === 'it' ? 'Diagnostica iOS' : 'iOS Diagnostics'}
-              </h2>
-            </div>
-            <div className="p-4">
-              <IOSDiagnostics language={settings.language} />
-            </div>
-          </section>
-        )}
+        {/* App Logs */}
+        <section className="rounded-xl bg-card overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
+            <Smartphone className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">
+              {settings.language === 'it' ? 'Log App' : 'App Logs'}
+            </h2>
+          </div>
+          <div className="p-4">
+            <AppLogs language={settings.language} />
+          </div>
+        </section>
 
         {/* Info Link */}
         <button
