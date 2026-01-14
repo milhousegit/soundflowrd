@@ -1,43 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Crown, X, Sparkles, Download, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { isPast } from 'date-fns';
 
-const STORAGE_KEY = 'premium_welcome_shown';
+const STORAGE_KEY = 'premium_welcome_last_expiry';
 
 const PremiumWelcomeBanner: React.FC = () => {
   const { profile, isAuthenticated } = useAuth();
   const { settings } = useSettings();
   const [isVisible, setIsVisible] = useState(false);
   const isItalian = settings.language === 'it';
+  const prevPremiumRef = useRef<boolean | null>(null);
 
   const isPremiumActive = profile?.is_premium && 
     profile?.premium_expires_at && 
     !isPast(new Date(profile.premium_expires_at));
 
   useEffect(() => {
-    if (!isAuthenticated || !isPremiumActive) return;
+    if (!isAuthenticated || !profile?.id) return;
 
-    // Check if we already showed the banner for this user
-    const shownForUser = localStorage.getItem(STORAGE_KEY);
-    const currentUserId = profile?.id;
-    
-    if (shownForUser !== currentUserId) {
-      // Show banner with a small delay for better UX
-      const timer = setTimeout(() => {
-        setIsVisible(true);
-      }, 1000);
-      return () => clearTimeout(timer);
+    // Show banner every time premium is activated (new or renewed)
+    if (isPremiumActive && profile?.premium_expires_at) {
+      const lastStoredExpiry = localStorage.getItem(`${STORAGE_KEY}_${profile.id}`);
+      const currentExpiry = profile.premium_expires_at;
+      
+      // Show if expiry date changed (new subscription or renewal) or never shown
+      if (lastStoredExpiry !== currentExpiry) {
+        // Show banner with a small delay for better UX
+        const timer = setTimeout(() => {
+          setIsVisible(true);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [isAuthenticated, isPremiumActive, profile?.id]);
+  }, [isAuthenticated, isPremiumActive, profile?.id, profile?.premium_expires_at]);
 
   const handleDismiss = () => {
     setIsVisible(false);
-    // Mark as shown for this user
-    if (profile?.id) {
-      localStorage.setItem(STORAGE_KEY, profile.id);
+    // Store current expiry date to track if it changes (renewal)
+    if (profile?.id && profile?.premium_expires_at) {
+      localStorage.setItem(`${STORAGE_KEY}_${profile.id}`, profile.premium_expires_at);
     }
   };
 
