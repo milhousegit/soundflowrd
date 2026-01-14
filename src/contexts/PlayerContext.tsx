@@ -26,6 +26,7 @@ import {
 } from '@/lib/realdebrid';
 import { getDeezerStream } from '@/lib/lucida';
 import { getTidalStream } from '@/lib/tidal';
+import { searchTracks } from '@/lib/deezer';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
 import { addSyncedTrack, addSyncingTrack, removeSyncingTrack } from '@/hooks/useSyncedTracks';
 
@@ -243,6 +244,105 @@ const flexibleMatch = (fileName: string, trackTitle: string): boolean => {
   }
 
   return false;
+};
+
+// Helper to clean track title by removing parentheses content
+const cleanTrackTitle = (title: string): string => {
+  return title.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
+};
+
+// Helper to clean artist name - remove "E" prefix badge and get first artist only
+const cleanArtistName = (artist: string): string => {
+  // Get first artist only (comma separated)
+  let cleaned = artist.split(',')[0].trim();
+  
+  // Remove "E" prefix if followed by uppercase letter (not another E)
+  if (cleaned.length > 1 && cleaned.startsWith('E') && /[A-Z]/.test(cleaned[1]) && cleaned[1] !== 'E') {
+    cleaned = cleaned.substring(1);
+  }
+  
+  return cleaned;
+};
+
+// Fetch metadata from Deezer for tracks missing cover/duration
+const fetchTrackMetadata = async (track: Track): Promise<Track> => {
+  // Check if track needs metadata (missing cover or has spotify- prefix ID)
+  const needsMetadata = !track.coverUrl || track.id.startsWith('spotify-') || track.duration === 0;
+  
+  if (!needsMetadata) {
+    return track;
+  }
+  
+  try {
+    const cleanedTitle = cleanTrackTitle(track.title);
+    const cleanedArtist = cleanArtistName(track.artist);
+    
+    console.log(`[Metadata] Searching Deezer for "${cleanedTitle}" by "${cleanedArtist}"`);
+    
+    // Search on Deezer with cleaned title and artist
+    const results = await searchTracks(`${cleanedTitle} ${cleanedArtist}`);
+    
+    if (results.length === 0) {
+      console.log('[Metadata] No results found');
+      return track;
+    }
+    
+    // Find best match
+    const normalizedTitle = cleanedTitle.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const normalizedArtist = cleanedArtist.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    
+    let bestMatch = results[0];
+    let bestScore = 0;
+    
+    for (const result of results) {
+      const resultTitle = (result.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const resultArtist = (result.artist || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      
+      let score = 0;
+      
+      // Title similarity
+      if (resultTitle === normalizedTitle) {
+        score += 50;
+      } else if (resultTitle.includes(normalizedTitle) || normalizedTitle.includes(resultTitle)) {
+        score += 30;
+      }
+      
+      // Artist similarity
+      if (resultArtist === normalizedArtist) {
+        score += 50;
+      } else if (resultArtist.includes(normalizedArtist) || normalizedArtist.includes(resultArtist)) {
+        score += 30;
+      }
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = result;
+      }
+    }
+    
+    // Accept if score is good enough
+    if (bestScore >= 40) {
+      console.log(`[Metadata] Found match: "${bestMatch.title}" by "${bestMatch.artist}" (score: ${bestScore})`);
+      
+      return {
+        ...track,
+        id: bestMatch.id || track.id, // Use Deezer ID if available
+        title: bestMatch.title || track.title,
+        artist: bestMatch.artist || track.artist,
+        album: bestMatch.album || track.album,
+        albumId: bestMatch.albumId || track.albumId,
+        coverUrl: bestMatch.coverUrl || track.coverUrl,
+        duration: bestMatch.duration || track.duration,
+        artistId: bestMatch.artistId || track.artistId,
+      };
+    }
+    
+    console.log(`[Metadata] No good match (best score: ${bestScore})`);
+    return track;
+  } catch (error) {
+    console.error('[Metadata] Error fetching metadata:', error);
+    return track;
+  }
 };
 
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -571,15 +671,31 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         audioRef.current.src = '';
       }
 
-      currentSearchTrackIdRef.current = track.id;
+      // Fetch metadata if track is missing cover/duration (e.g., imported from Spotify without Deezer match)
+      let enrichedTrack = track;
+      const needsMetadata = !track.coverUrl || track.id.startsWith('spotify-') || track.duration === 0;
+      
+      if (needsMetadata) {
+        addDebugLog('🔍 Recupero metadati', `Ricerca su Deezer per "${track.title}"`, 'info');
+        enrichedTrack = await fetchTrackMetadata(track);
+        
+        if (enrichedTrack.coverUrl && enrichedTrack.coverUrl !== track.coverUrl) {
+          addDebugLog('✅ Metadati trovati', `"${enrichedTrack.title}" di ${enrichedTrack.artist}`, 'success');
+        }
+      }
+
+      currentSearchTrackIdRef.current = enrichedTrack.id;
+
+      // Update queue with enriched track if metadata was found
+      const updatedQueue = queue ? queue.map(t => t.id === track.id ? enrichedTrack : t) : [enrichedTrack];
 
       setState((prev) => ({
         ...prev,
-        currentTrack: track,
+        currentTrack: enrichedTrack,
         isPlaying: true,
-        queue: queue || [track],
-        queueIndex: queue ? queue.findIndex((t) => t.id === track.id) : 0,
-        duration: track.duration,
+        queue: updatedQueue,
+        queueIndex: updatedQueue.findIndex((t) => t.id === enrichedTrack.id),
+        duration: enrichedTrack.duration,
         progress: 0,
       }));
 
@@ -593,7 +709,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setCurrentAudioSource(null);
 
       // PRIORITY 1: Check for offline availability first (works without network)
-      const offlineUrl = await getOfflineTrackUrl(track.id);
+      const offlineUrl = await getOfflineTrackUrl(enrichedTrack.id);
       if (offlineUrl && audioRef.current) {
         addDebugLog('📱 Brano offline', `Riproduzione da storage locale`, 'info');
         audioRef.current.src = offlineUrl;
@@ -602,9 +718,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setState((prev) => ({ ...prev, isPlaying: true }));
           setLoadingPhase('idle');
           setCurrentAudioSource('offline');
-          saveRecentlyPlayedTrack(track, user?.id);
-          addDebugLog('✅ Riproduzione offline', `"${track.title}" avviato`, 'success');
-          updateMediaSessionMetadata(track, true);
+          saveRecentlyPlayedTrack(enrichedTrack, user?.id);
+          addDebugLog('✅ Riproduzione offline', `"${enrichedTrack.title}" avviato`, 'success');
+          updateMediaSessionMetadata(enrichedTrack, true);
           return;
         }
       }
@@ -615,28 +731,28 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       // Helper to save recently played (uses database if user is logged in)
       const saveRecentlyPlayed = () => {
-        saveRecentlyPlayedTrack(track, user?.id);
+        saveRecentlyPlayedTrack(enrichedTrack, user?.id);
       };
 
       // Helper function for Tidal fallback (used in hybrid mode)
       const playWithTidalFallback = async (): Promise<boolean> => {
-        addDebugLog('🎵 Fallback Tidal', `Ricerca "${track.title}" di ${track.artist}`, 'info');
+        addDebugLog('🎵 Fallback Tidal', `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist}`, 'info');
         try {
-          const tidalResult = await getTidalStream(track.title, track.artist);
-          if (currentSearchTrackIdRef.current !== track.id) return false;
+          const tidalResult = await getTidalStream(enrichedTrack.title, enrichedTrack.artist);
+          if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
 
           if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
             audioRef.current.src = tidalResult.streamUrl;
             
             try {
-              if (currentSearchTrackIdRef.current !== track.id) return false;
+              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
               
               const playPromise = audioRef.current.play();
               if (playPromise !== undefined) {
                 await playPromise;
               }
               
-              if (currentSearchTrackIdRef.current !== track.id) return false;
+              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
               
               setState((prev) => ({ ...prev, isPlaying: true }));
               setLoadingPhase('idle');
@@ -711,13 +827,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       // =============== DEEZER/TIDAL PRIORITY MODE ===============
       if (isDeezerPriorityMode) {
-        addDebugLog('🎵 Modalità HQ', `Ricerca "${track.title}" di ${track.artist} su Tidal`, 'info');
+        addDebugLog('🎵 Modalità HQ', `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} su Tidal`, 'info');
         setLoadingPhase('searching');
 
         try {
           // Use Tidal via SquidWTF - search by title and artist
-          const tidalResult = await getTidalStream(track.title, track.artist);
-          if (currentSearchTrackIdRef.current !== track.id) return;
+          const tidalResult = await getTidalStream(enrichedTrack.title, enrichedTrack.artist);
+          if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
 
           if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
             setLoadingPhase('loading');
@@ -725,7 +841,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             
             try {
               // Check again if we're still playing this track
-              if (currentSearchTrackIdRef.current !== track.id) return;
+              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
               
               const playPromise = audioRef.current.play();
               if (playPromise !== undefined) {
@@ -733,7 +849,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               }
               
               // Final check after play succeeds
-              if (currentSearchTrackIdRef.current !== track.id) return;
+              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
               
               setState((prev) => ({ ...prev, isPlaying: true }));
               setLoadingPhase('idle');
@@ -788,15 +904,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // First, check if we have RD key and try RD
         if (hasRdKey) {
           // Check for saved RD mapping first
-          if (track.albumId) {
+          if (enrichedTrack.albumId) {
             try {
               const { data: trackMapping } = await supabase
                 .from('track_file_mappings')
                 .select('*, album_torrent_mappings!inner(*)')
-                .eq('track_id', track.id)
+                .eq('track_id', enrichedTrack.id)
                 .maybeSingle();
 
-              if (currentSearchTrackIdRef.current !== track.id) return;
+              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
 
               if (trackMapping?.direct_link && audioRef.current) {
                 setLoadingPhase('loading');
@@ -818,15 +934,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
           // Try quick RD search
           setLoadingPhase('searching');
-          addDebugLog('🔎 Ricerca RD', `Query: "${track.album || track.title} ${track.artist}"`, 'info');
+          addDebugLog('🔎 Ricerca RD', `Query: "${enrichedTrack.album || enrichedTrack.title} ${enrichedTrack.artist}"`, 'info');
           
           try {
-            const query = track.album?.trim() 
-              ? `${track.album} ${track.artist}` 
-              : `${track.title} ${track.artist}`;
+            const query = enrichedTrack.album?.trim() 
+              ? `${enrichedTrack.album} ${enrichedTrack.artist}` 
+              : `${enrichedTrack.title} ${enrichedTrack.artist}`;
             
             const result = await searchStreams(credentials!.realDebridApiKey, query);
-            if (currentSearchTrackIdRef.current !== track.id) return;
+            if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
 
             // Check if we have immediate streams
             if (result.streams?.length) {
@@ -851,7 +967,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             for (const torrent of result.torrents) {
               if (!torrent.files?.length) continue;
               const matchingFile = torrent.files.find((file) =>
-                flexibleMatch(file.filename || '', track.title) || flexibleMatch(file.path || '', track.title)
+                flexibleMatch(file.filename || '', enrichedTrack.title) || flexibleMatch(file.path || '', enrichedTrack.title)
               );
               if (!matchingFile) continue;
 
@@ -859,7 +975,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setLoadingPhase('loading');
 
               const selectResult = await selectFilesAndPlay(credentials!.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
-              if (currentSearchTrackIdRef.current !== track.id) return;
+              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
 
               if (!selectResult.error && selectResult.streams.length > 0) {
                 const streamUrl = selectResult.streams[0].streamUrl;
@@ -867,7 +983,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 setCurrentStreamId(selectResult.streams[0].id);
 
                 await saveFileMapping({
-                  track,
+                  track: enrichedTrack,
                   torrentId: torrent.torrentId,
                   torrentTitle: torrent.title,
                   fileId: matchingFile.id,
@@ -910,7 +1026,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (tidalSuccess) {
           // Start background RD download while playing via Tidal
           if (hasRdKey) {
-            startBackgroundRdDownload(track);
+            startBackgroundRdDownload(enrichedTrack);
           }
           return;
         }
@@ -933,18 +1049,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         return;
       }
 
-      addDebugLog('🎵 Inizio riproduzione', `"${track.title}" di ${track.artist}`, 'info');
+      addDebugLog('🎵 Inizio riproduzione', `"${enrichedTrack.title}" di ${enrichedTrack.artist}`, 'info');
 
       // STEP 1: check saved mapping
-      if (track.albumId) {
+      if (enrichedTrack.albumId) {
         try {
           const { data: trackMapping } = await supabase
             .from('track_file_mappings')
             .select('*, album_torrent_mappings!inner(*)')
-            .eq('track_id', track.id)
+            .eq('track_id', enrichedTrack.id)
             .maybeSingle();
 
-          if (currentSearchTrackIdRef.current !== track.id) return;
+          if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
 
           if (trackMapping) {
             const torrentId = trackMapping.album_torrent_mappings.torrent_id;
@@ -970,11 +1086,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setLoadingPhase('loading');
               const result = await selectFilesAndPlay(credentials!.realDebridApiKey, torrentId, [fileId]);
 
-              if (currentSearchTrackIdRef.current !== track.id) return;
+              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
 
               if (result.error || ['error', 'dead', 'magnet_error', 'not_found'].includes(result.status)) {
                 addDebugLog('⚠️ Mappatura non valida', `Stato: ${result.status || result.error}`, 'warning');
-                await supabase.from('track_file_mappings').delete().eq('track_id', track.id);
+                await supabase.from('track_file_mappings').delete().eq('track_id', enrichedTrack.id);
               } else if (result.streams.length > 0) {
                 const streamUrl = result.streams[0].streamUrl;
                 setAlternativeStreams(result.streams);
@@ -987,7 +1103,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   }
 
                   await saveFileMapping({
-                    track,
+                    track: enrichedTrack,
                     torrentId,
                     torrentTitle: trackMapping.album_torrent_mappings.torrent_title,
                     fileId,
@@ -1017,7 +1133,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
 
       // STEP 2: search torrents for album/track
-      const query = track.album?.trim() ? `${track.album} ${track.artist}` : `${track.title} ${track.artist}`;
+      const query = enrichedTrack.album?.trim() ? `${enrichedTrack.album} ${enrichedTrack.artist}` : `${enrichedTrack.title} ${enrichedTrack.artist}`;
       setLastSearchQuery(query);
       setIsSearchingStreams(true);
       setLoadingPhase('searching');
@@ -1026,7 +1142,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       try {
         const result = await searchStreams(credentials!.realDebridApiKey, query);
 
-        if (currentSearchTrackIdRef.current !== track.id) return;
+        if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
 
         setAvailableTorrents(result.torrents);
 
@@ -1052,7 +1168,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         for (const torrent of result.torrents) {
           if (!torrent.files?.length) continue;
           const matchingFile = torrent.files.find((file) =>
-            flexibleMatch(file.filename || '', track.title) || flexibleMatch(file.path || '', track.title)
+            flexibleMatch(file.filename || '', enrichedTrack.title) || flexibleMatch(file.path || '', enrichedTrack.title)
           );
           if (!matchingFile) continue;
 
@@ -1060,7 +1176,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setLoadingPhase('loading');
 
           const selectResult = await selectFilesAndPlay(credentials!.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
-          if (currentSearchTrackIdRef.current !== track.id) return;
+          if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
 
           if (!selectResult.error && selectResult.streams.length > 0) {
             const streamUrl = selectResult.streams[0].streamUrl;
@@ -1068,7 +1184,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setCurrentStreamId(selectResult.streams[0].id);
 
             await saveFileMapping({
-              track,
+              track: enrichedTrack,
               torrentId: torrent.torrentId,
               torrentTitle: torrent.title,
               fileId: matchingFile.id,
