@@ -5,7 +5,7 @@ import { StreamResult, TorrentInfo, AudioFile } from '@/lib/realdebrid';
 import { DebugLogEntry } from '@/contexts/PlayerContext';
 import { Track } from '@/types/music';
 import { supabase } from '@/integrations/supabase/client';
-import { searchTracks as searchDeezerTracks } from '@/lib/deezer';
+import { searchTracks as searchDeezerTracks, getTrack as getDeezerTrack } from '@/lib/deezer';
 import { getTidalStream } from '@/lib/tidal';
 import {
   AlertCircle,
@@ -283,7 +283,7 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       }
     };
 
-    // Metadata (Deezer) search
+    // Metadata (Deezer) search - supports both text search and ID lookup
     const handleMetadataSearch = async () => {
       if (!metadataQuery.trim()) return;
       
@@ -291,15 +291,36 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       setMetadataResults([]);
       
       try {
-        const results = await searchDeezerTracks(metadataQuery.trim());
-        setMetadataResults(results.slice(0, 20).map((r) => ({
-          id: r.id,
-          title: r.title,
-          artist: r.artist,
-          album: r.album,
-          coverUrl: r.coverUrl,
-          duration: r.duration,
-        })));
+        const query = metadataQuery.trim();
+        
+        // Check if query is a numeric ID (Deezer track ID)
+        if (/^\d+$/.test(query)) {
+          // Search by ID directly
+          const track = await getDeezerTrack(query);
+          if (track) {
+            setMetadataResults([{
+              id: track.id,
+              title: track.title,
+              artist: track.artist,
+              album: track.album,
+              coverUrl: track.coverUrl,
+              duration: track.duration,
+            }]);
+          } else {
+            toast.error(isItalian ? 'Brano non trovato con questo ID' : 'Track not found with this ID');
+          }
+        } else {
+          // Normal text search
+          const results = await searchDeezerTracks(query);
+          setMetadataResults(results.slice(0, 20).map((r) => ({
+            id: r.id,
+            title: r.title,
+            artist: r.artist,
+            album: r.album,
+            coverUrl: r.coverUrl,
+            duration: r.duration,
+          })));
+        }
       } catch (error) {
         console.error('Metadata search error:', error);
         toast.error(isItalian ? 'Errore ricerca Deezer' : 'Deezer search error');

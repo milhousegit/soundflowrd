@@ -28,6 +28,15 @@ export async function searchTracks(query: string): Promise<Track[]> {
   return data || [];
 }
 
+export async function getTrack(id: string): Promise<Track | null> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-track', id },
+  });
+
+  if (error) return null;
+  return data || null;
+}
+
 export async function getArtist(id: string): Promise<Artist & { releases: Album[]; topTracks: Track[]; relatedArtists: Artist[] }> {
   const { data, error } = await supabase.functions.invoke('deezer', {
     body: { action: 'get-artist', id },
