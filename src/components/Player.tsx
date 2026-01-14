@@ -5,7 +5,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import BugsModal from './BugsModal';
+import DebugModal from './DebugModal';
 import QueueModal from './QueueModal';
 import FavoriteButton from './FavoriteButton';
 import { useToast } from '@/hooks/use-toast';
@@ -13,7 +13,7 @@ import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 import { isPast } from 'date-fns';
 
 import {
-  Bug,
+  Settings2,
   ChevronDown,
   ChevronUp,
   Cloud,
@@ -91,7 +91,7 @@ const Player: React.FC = () => {
   // Get current stream URL from alternatives
   const currentStreamUrl = alternativeStreams.find(s => s.id === currentStreamId)?.streamUrl;
 
-  const [showBugsModal, setShowBugsModal] = useState(false);
+  const [showDebugModal, setShowDebugModal] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -145,17 +145,17 @@ const Player: React.FC = () => {
 
   const handleSelectStream = (stream: StreamResult) => {
     selectStream(stream);
-    setShowBugsModal(false);
+    setShowDebugModal(false);
   };
 
   const handleManualSearch = (query: string) => {
     manualSearch(query);
   };
 
-  const handleOpenBugsModal = () => {
+  const handleOpenDebugModal = () => {
     clearDebugLogs();
     loadSavedMapping();
-    setShowBugsModal(true);
+    setShowDebugModal(true);
   };
 
   const handleSelectFile = async (torrentId: string, fileIds: number[]) => {
@@ -269,10 +269,10 @@ const Player: React.FC = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={handleOpenBugsModal}
+                onClick={handleOpenDebugModal}
                 className="text-muted-foreground hover:text-destructive w-10"
               >
-                <Bug className="w-5 h-5" />
+                <Settings2 className="w-5 h-5" />
               </Button>
             </div>
           </div>
@@ -513,11 +513,11 @@ const Player: React.FC = () => {
             <Button
               variant="playerSecondary"
               size="icon"
-              onClick={handleOpenBugsModal}
+              onClick={handleOpenDebugModal}
               className={cn('text-muted-foreground hover:text-destructive relative', isSearchingStreams && 'text-primary')}
               title={t('bugs')}
             >
-              {isSearchingStreams ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bug className="w-5 h-5" />}
+              {isSearchingStreams ? <Loader2 className="w-5 h-5 animate-spin" /> : <Settings2 className="w-5 h-5" />}
             </Button>
             {canDownload && currentStreamUrl && (
               <Button
@@ -539,9 +539,9 @@ const Player: React.FC = () => {
         </div>
       </div>
 
-      <BugsModal
-        isOpen={showBugsModal}
-        onClose={() => setShowBugsModal(false)}
+      <DebugModal
+        isOpen={showDebugModal}
+        onClose={() => setShowDebugModal(false)}
         alternatives={alternativeStreams}
         torrents={availableTorrents}
         onSelect={handleSelectStream}
@@ -550,7 +550,8 @@ const Player: React.FC = () => {
         currentStreamId={currentStreamId}
         isLoading={isSearchingStreams}
         onManualSearch={handleManualSearch}
-        currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist }}
+        currentTrackInfo={{ title: currentTrack.title, artist: currentTrack.artist, albumId: currentTrack.albumId }}
+        currentTrack={currentTrack}
         debugLogs={debugLogs}
         downloadProgress={downloadProgress}
         downloadStatus={downloadStatus}
