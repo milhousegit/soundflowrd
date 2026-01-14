@@ -1,5 +1,5 @@
+// iOS Audio Session Hook - manages audio context for iOS/Safari
 import { useRef, useCallback, useEffect } from 'react';
-
 export interface IOSAudioLog {
   timestamp: Date;
   type: 'info' | 'success' | 'error' | 'warning';
