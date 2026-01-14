@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, ListMusic, Disc, Heart, User, Music, Loader2, Download, Wifi, WifiOff, Trash2 } from 'lucide-react';
+import { Plus, ListMusic, Disc, Heart, User, Music, Loader2, Download, Wifi, WifiOff, Trash2, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
@@ -64,11 +64,11 @@ const Library: React.FC = () => {
   const allTabs: Tab[] = showOfflineTab ? [...baseTabs, 'offline'] : baseTabs;
   
   const tabs = [
-    { id: 'tracks' as Tab, label: t('likedSongs'), icon: Heart },
-    { id: 'albums' as Tab, label: t('albums'), icon: Disc },
-    { id: 'artists' as Tab, label: t('artists'), icon: User },
-    { id: 'playlists' as Tab, label: 'Playlist', icon: ListMusic },
-    ...(showOfflineTab ? [{ id: 'offline' as Tab, label: 'Offline', icon: Download }] : []),
+    { id: 'tracks' as Tab, label: t('likedSongs'), icon: Heart, isPro: false },
+    { id: 'albums' as Tab, label: t('albums'), icon: Disc, isPro: false },
+    { id: 'artists' as Tab, label: t('artists'), icon: User, isPro: false },
+    { id: 'playlists' as Tab, label: 'Playlist', icon: ListMusic, isPro: false },
+    ...(showOfflineTab ? [{ id: 'offline' as Tab, label: 'Offline', icon: Download, isPro: true }] : []),
   ];
 
   // Swipe navigation
@@ -193,6 +193,11 @@ const Library: React.FC = () => {
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
+            {tab.isPro && !canAccessOffline && (
+              <span className="ml-1 text-[10px] font-bold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white px-1.5 py-0.5 rounded">
+                PRO
+              </span>
+            )}
             {tab.id === 'offline' && offlineTracks.length > 0 && (
               <span className="ml-1 text-xs bg-primary/20 px-1.5 rounded-full">
                 {offlineTracks.length}
@@ -201,6 +206,27 @@ const Library: React.FC = () => {
           </Button>
         ))}
       </div>
+
+      {/* PRO Banner for Offline tab when user is not premium */}
+      {activeTab === 'offline' && !canAccessOffline && (
+        <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-[#8B5CF6]/20 via-[#6366F1]/10 to-[#3B82F6]/20 border border-[#8B5CF6]/30">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#3B82F6] flex items-center justify-center flex-shrink-0">
+              <Crown className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-foreground">
+                {settings.language === 'it' ? 'Funzione Premium' : 'Premium Feature'}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {settings.language === 'it' 
+                  ? 'Scarica brani per ascoltarli offline con un abbonamento Premium' 
+                  : 'Download tracks to listen offline with a Premium subscription'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div 
         className="min-h-[50vh] touch-pan-y"
