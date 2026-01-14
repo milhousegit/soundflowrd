@@ -449,6 +449,33 @@ serve(async (req) => {
         });
       }
 
+      case 'get-track': {
+        const data = await fetchWithRetry(`${DEEZER_API}/track/${id}`);
+        
+        if (data.error) {
+          return new Response(JSON.stringify({ error: 'Track not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        const track = {
+          id: String(data.id),
+          title: data.title,
+          artist: data.artist?.name || 'Unknown Artist',
+          artistId: String(data.artist?.id || ''),
+          album: data.album?.title || 'Unknown Album',
+          albumId: String(data.album?.id || ''),
+          duration: data.duration || 0,
+          coverUrl: data.album?.cover_medium || data.album?.cover || undefined,
+          previewUrl: data.preview || undefined,
+        };
+
+        return new Response(JSON.stringify(track), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       default:
         return new Response(JSON.stringify({ error: 'Unknown action' }), {
           status: 400,
