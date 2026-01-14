@@ -116,6 +116,33 @@ const PlaylistPage: React.FC = () => {
     fetchPlaylist();
   }, [id]);
 
+  // Listen for track metadata updates from DebugModal
+  useEffect(() => {
+    const handleMetadataUpdate = (event: CustomEvent<{ oldTrackId: string; newTrack: { id: string; title: string; artist: string; album?: string; coverUrl?: string; duration?: number } }>) => {
+      const { oldTrackId, newTrack } = event.detail;
+      
+      setTracks(prevTracks => prevTracks.map(track => {
+        if (track.id === oldTrackId) {
+          return {
+            ...track,
+            id: newTrack.id,
+            title: newTrack.title,
+            artist: newTrack.artist,
+            album: newTrack.album || track.album,
+            coverUrl: newTrack.coverUrl || track.coverUrl,
+            duration: newTrack.duration || track.duration,
+          };
+        }
+        return track;
+      }));
+    };
+
+    window.addEventListener('track-metadata-updated', handleMetadataUpdate as EventListener);
+    return () => {
+      window.removeEventListener('track-metadata-updated', handleMetadataUpdate as EventListener);
+    };
+  }, []);
+
   const handleSaveEdit = async () => {
     if (!playlist || !editedName.trim()) return;
     

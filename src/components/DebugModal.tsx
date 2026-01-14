@@ -53,6 +53,7 @@ interface DebugModalProps {
   downloadStatus?: string | null;
   currentMappedFileId?: number;
   lastSearchQuery?: string | null;
+  onMetadataSaved?: (oldTrackId: string, newTrack: { id: string; title: string; artist: string; album?: string; coverUrl?: string; duration?: number }) => void;
 }
 
 type DebugTab = 'realdebrid' | 'scraping' | 'metadati';
@@ -94,6 +95,7 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       downloadStatus,
       currentMappedFileId,
       lastSearchQuery,
+      onMetadataSaved,
     },
     ref
   ) => {
@@ -336,6 +338,7 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       }
       
       setSavingMetadata(result.id);
+      const oldTrackId = currentTrack.id;
       
       try {
         // For now, we just update the playlist_tracks table if this is from a playlist
@@ -360,6 +363,31 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
               track_duration: result.duration || null,
             })
             .eq('track_id', currentTrack.id);
+          
+          // Notify parent component to update UI immediately
+          onMetadataSaved?.(oldTrackId, {
+            id: result.id,
+            title: result.title,
+            artist: result.artist,
+            album: result.album,
+            coverUrl: result.coverUrl,
+            duration: result.duration,
+          });
+          
+          // Emit custom event for other components (e.g., Playlist page) to update
+          window.dispatchEvent(new CustomEvent('track-metadata-updated', {
+            detail: {
+              oldTrackId,
+              newTrack: {
+                id: result.id,
+                title: result.title,
+                artist: result.artist,
+                album: result.album,
+                coverUrl: result.coverUrl,
+                duration: result.duration,
+              }
+            }
+          }));
           
           toast.success(isItalian ? 'Metadati salvati!' : 'Metadata saved!');
         } else {
