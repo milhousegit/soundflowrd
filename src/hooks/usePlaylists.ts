@@ -302,9 +302,31 @@ export const usePlaylists = () => {
       }
 
       toast.success('Traccia rimossa dalla playlist');
+      return true;
     } catch (error) {
       console.error('Error removing track:', error);
       toast.error('Errore rimozione traccia');
+      return false;
+    }
+  };
+
+  const reorderPlaylistTracks = async (playlistId: string, trackIds: string[]) => {
+    try {
+      // Update each track's position
+      const updates = trackIds.map((trackId, index) => 
+        supabase
+          .from('playlist_tracks')
+          .update({ position: index })
+          .eq('playlist_id', playlistId)
+          .eq('track_id', trackId)
+      );
+
+      await Promise.all(updates);
+      return true;
+    } catch (error) {
+      console.error('Error reordering tracks:', error);
+      toast.error('Errore nel riordinamento');
+      return false;
     }
   };
 
@@ -319,5 +341,6 @@ export const usePlaylists = () => {
     addTracksToPlaylist,
     getPlaylistTracks,
     removeTrackFromPlaylist,
+    reorderPlaylistTracks,
   };
 };
