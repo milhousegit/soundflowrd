@@ -106,7 +106,7 @@ async function fetchPlaylistWithApi(playlistId: string, token: string): Promise<
   }
 }
 
-// Use Firecrawl to scrape playlist page
+// Use Firecrawl to scrape playlist page with JSON extraction
 async function fetchPlaylistWithScraping(playlistId: string): Promise<PlaylistData | null> {
   const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
   
@@ -117,8 +117,10 @@ async function fetchPlaylistWithScraping(playlistId: string): Promise<PlaylistDa
   
   try {
     const url = `https://open.spotify.com/playlist/${playlistId}`;
+    console.log('Scraping Spotify playlist:', url);
     
-    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    // First, try to use Firecrawl's extract feature for structured data
+    const extractResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -126,83 +128,211 @@ async function fetchPlaylistWithScraping(playlistId: string): Promise<PlaylistDa
       },
       body: JSON.stringify({
         url,
-        formats: ['markdown', 'html'],
+        formats: [
+          'html',
+          {
+            type: 'json',
+            prompt: `Extract the Spotify playlist information. Return a JSON object with:
+- "playlistName": the name of the playlist (e.g., "Top 50 Italia")
+- "playlistDescription": the playlist description if available
+- "coverImageUrl": the URL of the playlist cover image
+- "tracks": an array of tracks, where each track has:
+  - "title": the song title (e.g., "Push It (feat. ANNA)")
+  - "artist": the artist name(s) (e.g., "Kid Yugi")
+  - "album": the album name if visible
+  - "duration": the duration in format "M:SS" if visible
+
+Make sure to extract the actual song titles, not artist names repeated. The format should be "Song Title - Artist Name".`
+          }
+        ],
+        waitFor: 3000, // Wait for JS to render
       }),
     });
     
-    if (!response.ok) {
-      console.error('Firecrawl error:', response.status);
+    if (!extractResponse.ok) {
+      console.error('Firecrawl extract error:', extractResponse.status);
+      const errorText = await extractResponse.text();
+      console.error('Error details:', errorText);
+    } else {
+      const extractData = await extractResponse.json();
+      console.log('Extract response:', JSON.stringify(extractData, null, 2));
+      
+      const jsonData = extractData.data?.json || extractData.json;
+      
+      if (jsonData && jsonData.playlistName && jsonData.tracks?.length > 0) {
+        const tracks: SpotifyTrack[] = jsonData.tracks.map((track: any, index: number) => ({
+          id: `spotify-${playlistId}-${index}`,
+          title: track.title || 'Unknown Title',
+          artist: track.artist || 'Unknown Artist',
+          album: track.album || '',
+          albumId: '',
+          coverUrl: '',
+          duration: parseDuration(track.duration),
+        }));
+        
+        console.log(`Extracted ${tracks.length} tracks via JSON extraction`);
+        
+        return {
+          name: jsonData.playlistName,
+          description: jsonData.playlistDescription || '',
+          coverUrl: jsonData.coverImageUrl || '',
+          tracks,
+        };
+      }
+    }
+    
+    // Fallback: use HTML scraping with og:tags and structured parsing
+    console.log('Falling back to HTML scraping...');
+    
+    const htmlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${firecrawlKey}`,
+      },
+      body: JSON.stringify({
+        url,
+        formats: ['html', 'markdown'],
+        waitFor: 3000,
+      }),
+    });
+    
+    if (!htmlResponse.ok) {
+      console.error('Firecrawl HTML error:', htmlResponse.status);
       return null;
     }
     
-    const data = await response.json();
-    const html = data.data?.html || '';
-    const markdown = data.data?.markdown || '';
+    const htmlData = await htmlResponse.json();
+    const html = htmlData.data?.html || '';
+    const markdown = htmlData.data?.markdown || '';
     
-    // Extract playlist name from title or og:title
+    // Extract playlist name from og:title (most reliable)
     let playlistName = 'Imported Playlist';
-    const titleMatch = html.match(/<title>([^<]+)<\/title>/i) || 
-                       html.match(/og:title" content="([^"]+)"/i);
-    if (titleMatch) {
-      playlistName = titleMatch[1].replace(' | Spotify', '').replace(' - playlist by', ' by').trim();
+    const ogTitleMatch = html.match(/property="og:title"\s+content="([^"]+)"/i) ||
+                         html.match(/content="([^"]+)"\s+property="og:title"/i);
+    if (ogTitleMatch) {
+      // Format: "Top 50 - Italia - playlist by Spotify | Spotify"
+      playlistName = ogTitleMatch[1]
+        .replace(/\s*\|\s*Spotify\s*$/i, '')
+        .replace(/\s*-\s*playlist by.*$/i, '')
+        .trim();
+    } else {
+      // Try title tag
+      const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+      if (titleMatch) {
+        playlistName = titleMatch[1]
+          .replace(/\s*\|\s*Spotify\s*$/i, '')
+          .replace(/\s*-\s*playlist by.*$/i, '')
+          .trim();
+      }
     }
     
-    // Extract cover image
+    // Check if we got reCAPTCHA page
+    if (playlistName.toLowerCase().includes('recaptcha') || 
+        html.toLowerCase().includes('recaptcha') ||
+        html.toLowerCase().includes('verify you are human')) {
+      console.error('Got reCAPTCHA page, cannot scrape');
+      return null;
+    }
+    
+    // Extract cover image from og:image
     let coverUrl = '';
-    const imageMatch = html.match(/og:image" content="([^"]+)"/i);
-    if (imageMatch) {
-      coverUrl = imageMatch[1];
+    const ogImageMatch = html.match(/property="og:image"\s+content="([^"]+)"/i) ||
+                         html.match(/content="([^"]+)"\s+property="og:image"/i);
+    if (ogImageMatch) {
+      coverUrl = ogImageMatch[1];
     }
     
-    // Parse tracks from the page - Spotify embeds track data in JSON-LD or structured data
+    // Parse tracks from markdown - look for proper song format
     const tracks: SpotifyTrack[] = [];
-    
-    // Try to find track listings in the markdown
     const lines = markdown.split('\n');
-    let position = 0;
     
-    for (const line of lines) {
-      // Look for patterns like "Song Title Artist Name" or numbered lists
-      const trackMatch = line.match(/^\d+\.\s*(.+?)(?:\s+[-–]\s+(.+))?$/);
-      if (trackMatch) {
-        const title = trackMatch[1].trim();
-        const artist = trackMatch[2]?.trim() || 'Unknown Artist';
-        
-        tracks.push({
-          id: `imported-${position}`,
-          title,
-          artist,
-          album: '',
-          albumId: '',
-          coverUrl: '',
-          duration: 0,
-        });
-        position++;
-      }
-    }
-    
-    // If markdown parsing didn't work well, try regex on HTML
-    if (tracks.length < 3) {
-      // Look for track rows in the HTML
-      const trackRegex = /data-testid="tracklist-row"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi;
-      let match;
-      position = 0;
+    // Pattern 1: Look for lines with song titles followed by artist/album info
+    // Spotify markdown often has: "Song Title" followed by "Artist Name" on next lines
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
       
-      while ((match = trackRegex.exec(html)) !== null) {
-        tracks.push({
-          id: `imported-${position}`,
-          title: match[1].trim(),
-          artist: match[2].trim(),
-          album: '',
-          albumId: '',
-          coverUrl: '',
-          duration: 0,
-        });
-        position++;
+      // Skip empty lines and headers
+      if (!line || line.startsWith('#') || line.startsWith('---')) continue;
+      
+      // Look for duration pattern (indicates end of track info) - e.g., "2:45" or "3:12"
+      const durationMatch = line.match(/^(\d{1,2}:\d{2})$/);
+      if (durationMatch && i >= 2) {
+        // Go back to find title and artist
+        let title = '';
+        let artist = '';
+        
+        // Look back for the song title and artist
+        for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
+          const prevLine = lines[j].trim();
+          if (!prevLine) continue;
+          
+          if (!artist && !prevLine.match(/^\d{1,2}:\d{2}$/) && !prevLine.match(/^\d+$/)) {
+            if (!title) {
+              // This might be album or artist, check if next non-empty is the title
+              artist = prevLine;
+            } else {
+              artist = prevLine;
+              break;
+            }
+          } else if (!title && !prevLine.match(/^\d{1,2}:\d{2}$/) && !prevLine.match(/^\d+$/)) {
+            title = prevLine;
+          }
+        }
+        
+        // If we found both, the order might be reversed
+        if (title && artist) {
+          // Check if what we have as "artist" looks more like a title
+          // Titles often have parentheses with features
+          if (artist.includes('(feat.') || artist.includes('(ft.') || artist.includes('(with')) {
+            [title, artist] = [artist, title];
+          }
+          
+          tracks.push({
+            id: `spotify-${playlistId}-${tracks.length}`,
+            title,
+            artist,
+            album: '',
+            albumId: '',
+            coverUrl: '',
+            duration: parseDuration(durationMatch[1]),
+          });
+        }
       }
     }
     
-    console.log(`Scraped ${tracks.length} tracks from playlist`);
+    // Pattern 2: If no tracks found, try looking for linked song titles
+    if (tracks.length === 0) {
+      // Look for patterns like: [Song Title](link) by Artist
+      const linkPattern = /\[([^\]]+)\]\([^)]+\)(?:\s+[-–by]+\s+(.+))?/g;
+      let match;
+      while ((match = linkPattern.exec(markdown)) !== null) {
+        const title = match[1].trim();
+        const artist = match[2]?.trim() || 'Unknown Artist';
+        
+        // Skip navigation links and non-song items
+        if (title.length < 100 && !title.includes('playlist') && !title.includes('Spotify')) {
+          tracks.push({
+            id: `spotify-${playlistId}-${tracks.length}`,
+            title,
+            artist,
+            album: '',
+            albumId: '',
+            coverUrl: '',
+            duration: 0,
+          });
+        }
+      }
+    }
+    
+    console.log(`Scraped ${tracks.length} tracks from playlist HTML`);
+    console.log('Playlist name:', playlistName);
+    console.log('Cover URL:', coverUrl);
+    
+    if (tracks.length === 0) {
+      console.log('No tracks found, returning null');
+      return null;
+    }
     
     return {
       name: playlistName,
@@ -214,6 +344,16 @@ async function fetchPlaylistWithScraping(playlistId: string): Promise<PlaylistDa
     console.error('Scraping error:', error);
     return null;
   }
+}
+
+// Helper function to parse duration string to seconds
+function parseDuration(duration: string | undefined): number {
+  if (!duration) return 0;
+  const parts = duration.split(':');
+  if (parts.length === 2) {
+    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+  }
+  return 0;
 }
 
 serve(async (req) => {
