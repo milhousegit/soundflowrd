@@ -407,7 +407,7 @@ export const NotificationsDropdown: React.FC = () => {
                 : 'No notifications'}
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div>
               {allNotifications.map((release) => (
                 <SwipeableNotification
                   key={release.id}
