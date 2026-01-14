@@ -446,83 +446,118 @@ function normalizeString(str: string): string {
     .trim();
 }
 
+// Clean artist name - some scraped names have "E" prefix (e.g., "EGeolier" -> "Geolier")
+function cleanArtistName(artist: string): string[] {
+  const names = [artist];
+  
+  // Split by comma and check each artist
+  const artists = artist.split(',').map(a => a.trim());
+  const cleanedArtists: string[] = [];
+  
+  for (const a of artists) {
+    // If artist starts with "E" followed by uppercase, try without the E
+    if (a.length > 1 && a.startsWith('E') && a[1] === a[1].toUpperCase() && a[1] !== 'E') {
+      cleanedArtists.push(a.substring(1));
+    } else {
+      cleanedArtists.push(a);
+    }
+  }
+  
+  const cleanedArtist = cleanedArtists.join(', ');
+  if (cleanedArtist !== artist) {
+    names.push(cleanedArtist);
+  }
+  
+  return names;
+}
+
 // Search track on Deezer and return matched data
 async function searchTrackOnDeezer(title: string, artist: string): Promise<SpotifyTrack | null> {
-  try {
-    // Search with title + artist
-    const query = `${title} ${artist}`;
-    const response = await fetch(
-      `${DEEZER_API}/search/track?q=${encodeURIComponent(query)}&limit=5`,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'application/json',
-        },
-      }
-    );
+  // Get possible artist name variations (original + without E prefix)
+  const artistVariations = cleanArtistName(artist);
+  
+  for (const artistName of artistVariations) {
+    try {
+      // Search with title + artist
+      const query = `${title} ${artistName}`;
+      const response = await fetch(
+        `${DEEZER_API}/search/track?q=${encodeURIComponent(query)}&limit=5`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
+          },
+        }
+      );
 
-    if (!response.ok) {
-      console.log(`Deezer search failed for "${title}" by "${artist}"`);
-      return null;
+      if (!response.ok) {
+        console.log(`Deezer search failed for "${title}" by "${artistName}"`);
+        continue;
+      }
+
+      const data = await response.json();
+      const tracks = data.data || [];
+
+      if (tracks.length === 0) {
+        console.log(`No Deezer results for "${title}" by "${artistName}"`);
+        continue;
+      }
+
+      // Find best match by comparing normalized title and artist
+      const normalizedTitle = normalizeString(title);
+      const normalizedArtist = normalizeString(artistName);
+
+      let bestMatch = tracks[0];
+      let bestScore = 0;
+
+      for (const track of tracks) {
+        const trackTitle = normalizeString(track.title || '');
+        const trackArtist = normalizeString(track.artist?.name || '');
+
+        let score = 0;
+
+        // Title similarity
+        if (trackTitle === normalizedTitle) {
+          score += 50;
+        } else if (trackTitle.includes(normalizedTitle) || normalizedTitle.includes(trackTitle)) {
+          score += 30;
+        }
+
+        // Artist similarity
+        if (trackArtist === normalizedArtist) {
+          score += 50;
+        } else if (trackArtist.includes(normalizedArtist) || normalizedArtist.includes(trackArtist)) {
+          score += 30;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = track;
+        }
+      }
+
+      // If we have a good match (score > 30), return it
+      if (bestScore > 30) {
+        console.log(`Matched "${title}" by "${artist}" -> Deezer: "${bestMatch.title}" by "${bestMatch.artist?.name}" (score: ${bestScore}, searched: "${artistName}")`);
+
+        return {
+          id: String(bestMatch.id),
+          title: bestMatch.title,
+          artist: bestMatch.artist?.name || artist,
+          artistId: String(bestMatch.artist?.id || ''),
+          album: bestMatch.album?.title || '',
+          albumId: String(bestMatch.album?.id || ''),
+          coverUrl: bestMatch.album?.cover_medium || bestMatch.album?.cover || '',
+          duration: bestMatch.duration || 0,
+        };
+      }
+    } catch (error) {
+      console.error(`Error searching Deezer for "${title}" by "${artistName}":`, error);
     }
-
-    const data = await response.json();
-    const tracks = data.data || [];
-
-    if (tracks.length === 0) {
-      console.log(`No Deezer results for "${title}" by "${artist}"`);
-      return null;
-    }
-
-    // Find best match by comparing normalized title and artist
-    const normalizedTitle = normalizeString(title);
-    const normalizedArtist = normalizeString(artist);
-
-    let bestMatch = tracks[0];
-    let bestScore = 0;
-
-    for (const track of tracks) {
-      const trackTitle = normalizeString(track.title || '');
-      const trackArtist = normalizeString(track.artist?.name || '');
-
-      let score = 0;
-
-      // Title similarity
-      if (trackTitle === normalizedTitle) {
-        score += 50;
-      } else if (trackTitle.includes(normalizedTitle) || normalizedTitle.includes(trackTitle)) {
-        score += 30;
-      }
-
-      // Artist similarity
-      if (trackArtist === normalizedArtist) {
-        score += 50;
-      } else if (trackArtist.includes(normalizedArtist) || normalizedArtist.includes(trackArtist)) {
-        score += 30;
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = track;
-      }
-    }
-
-    console.log(`Matched "${title}" -> Deezer: "${bestMatch.title}" by "${bestMatch.artist?.name}" (score: ${bestScore})`);
-
-    return {
-      id: String(bestMatch.id),
-      title: bestMatch.title,
-      artist: bestMatch.artist?.name || artist,
-      artistId: String(bestMatch.artist?.id || ''),
-      album: bestMatch.album?.title || '',
-      albumId: String(bestMatch.album?.id || ''),
-      coverUrl: bestMatch.album?.cover_medium || bestMatch.album?.cover || '',
-      duration: bestMatch.duration || 0,
-    };
-  } catch (error) {
-    console.error(`Error searching Deezer for "${title}":`, error);
-    return null;
   }
+  
+  console.log(`No good Deezer match for "${title}" by "${artist}"`);
+  return null;
 }
 
 // Match all tracks with Deezer database
