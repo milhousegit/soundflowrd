@@ -205,19 +205,6 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
                 {lyrics}
               </pre>
             )}
-            {songInfo?.url && (
-              <div className="mt-8 pt-4 border-t border-border">
-                <a
-                  href={songInfo.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  {settings.language === 'it' ? 'Visualizza su Genius' : 'View on Genius'}
-                </a>
-              </div>
-            )}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-64 gap-3 text-center px-4">
@@ -228,30 +215,6 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
           </div>
         )}
       </ScrollArea>
-
-      {/* Footer attribution */}
-      <div className="p-4 border-t border-border text-center">
-        <span className="text-xs text-muted-foreground">
-          {settings.language === 'it' ? 'Testi forniti da' : 'Lyrics provided by'}{' '}
-          <a
-            href="https://lrclib.net"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            LRCLIB
-          </a>
-          {' & '}
-          <a
-            href="https://genius.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            Genius
-          </a>
-        </span>
-      </div>
     </div>
   );
 };
