@@ -199,7 +199,7 @@ const Settings: React.FC = () => {
                   <RefreshCw className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-foreground">SoundFlow v1.1</p>
+                  <p className="text-base font-semibold text-foreground">SoundFlow v1.2</p>
                   <p className="text-xs text-muted-foreground">
                     {settings.language === 'it' ? 'Verifica aggiornamenti' : 'Check for updates'}
                   </p>
@@ -282,8 +282,7 @@ const Settings: React.FC = () => {
             </div>
 
             {/* Premium Status - Show expiration for premium users, CTA for free users */}
-            {isPremiumActive && profile?.premium_expires_at ? (
-              <div className="p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 via-[#6366F1]/15 to-[#3B82F6]/10 border border-[#8B5CF6]/30">
+            {isPremiumActive && profile?.premium_expires_at ? <div className="p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 via-[#6366F1]/15 to-[#3B82F6]/10 border border-[#8B5CF6]/30">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] flex items-center justify-center shrink-0">
                     <Crown className="w-4 h-4 text-white" />
@@ -291,14 +290,16 @@ const Settings: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">Premium</p>
                     <p className="text-xs text-muted-foreground">
-                      {settings.language === 'it' ? 'Scade il' : 'Expires'} {new Date(profile.premium_expires_at).toLocaleDateString(settings.language === 'it' ? 'it-IT' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {settings.language === 'it' ? 'Scade il' : 'Expires'} {new Date(profile.premium_expires_at).toLocaleDateString(settings.language === 'it' ? 'it-IT' : 'en-US', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
                     </p>
                   </div>
                   <Check className="w-5 h-5 text-green-500" />
                 </div>
-              </div>
-            ) : !isActualAdmin && (
-              <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
+              </div> : !isActualAdmin && <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
                 <DialogTrigger asChild>
                   <button className="w-full p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] hover:opacity-90 transition-opacity shadow-lg">
                     <div className="flex items-center justify-center gap-2">
@@ -361,8 +362,7 @@ const Settings: React.FC = () => {
                     {settings.language === 'it' ? 'Dona 9,90€/anno' : '€9.90/year'}
                   </Button>
                 </DialogContent>
-              </Dialog>
-            )}
+              </Dialog>}
 
             {/* Connect/Disconnect Telegram */}
             <div className="pt-2">
