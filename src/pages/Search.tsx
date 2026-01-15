@@ -141,8 +141,9 @@ const Search: React.FC = () => {
       ]);
 
       // Filter results (keep API ranking/order)
+      // Exclude "collaboration" artists (names containing commas like "thasup, Nitro")
       const filteredArtists = data.artists.filter((artist) =>
-        matchesTokens([artist.name], searchQuery)
+        matchesTokens([artist.name], searchQuery) && !artist.name.includes(',')
       );
 
       const filteredAlbums = data.albums.filter((album) =>
