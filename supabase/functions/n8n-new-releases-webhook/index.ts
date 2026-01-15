@@ -148,6 +148,17 @@ serve(async (req) => {
           if (albums.length === 0) continue;
 
           const latestAlbum = albums[0];
+          
+          // Check if the album was released today or yesterday (to account for timezone differences)
+          const today = new Date();
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          
+          const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
+          const releaseDate = latestAlbum.release_date; // Deezer format: YYYY-MM-DD
+          
+          const isRecentRelease = releaseDate === todayStr || releaseDate === yesterdayStr;
 
           // Check if this is a new release (different from last tracked)
           if (!tracking) {
@@ -165,11 +176,26 @@ serve(async (req) => {
               });
             console.log(`Initialized tracking for ${artistName} (album: ${latestAlbum.title})`);
           } else if (tracking.last_album_id !== String(latestAlbum.id)) {
-            // New album detected - check for duplicates
+            // New album detected - only notify if released today/yesterday
+            if (!isRecentRelease) {
+              console.log(`Skipping old release: ${artistName} - ${latestAlbum.title} (released: ${releaseDate})`);
+              // Still update tracking to avoid re-checking this album
+              await supabase
+                .from("artist_release_tracking")
+                .update({
+                  last_album_id: String(latestAlbum.id),
+                  last_check_at: new Date().toISOString(),
+                })
+                .eq("user_id", profile.id)
+                .eq("artist_id", artistId);
+              continue;
+            }
+            
+            // Check for duplicates
             const releaseKey = `${profile.id}_${latestAlbum.id}`;
             if (!seenReleases.has(releaseKey)) {
               seenReleases.add(releaseKey);
-              console.log(`NEW RELEASE: ${artistName} - ${latestAlbum.title}`);
+              console.log(`NEW RELEASE: ${artistName} - ${latestAlbum.title} (released: ${releaseDate})`);
               
               newReleases.push({
                 user_id: profile.id,
