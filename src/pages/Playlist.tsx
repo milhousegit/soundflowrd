@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
+import PlaylistRecommendations from '@/components/PlaylistRecommendations';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,7 +43,7 @@ const PlaylistPage: React.FC = () => {
   const { playTrack } = usePlayer();
   const { t } = useSettings();
   const { profile, isAdmin, user } = useAuth();
-  const { getPlaylistTracks, deletePlaylist, updatePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks } = usePlaylists();
+  const { getPlaylistTracks, deletePlaylist, updatePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks, addTrackToPlaylist } = usePlaylists();
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
   
   const [playlist, setPlaylist] = useState<PlaylistType | null>(null);
@@ -643,6 +644,20 @@ const PlaylistPage: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Recommended Tracks - only for owner and non-Deezer playlists */}
+      {isOwner && !playlist.deezer_id && !isEditing && tracks.length > 0 && (
+        <PlaylistRecommendations 
+          tracks={tracks}
+          onAddTrack={async (track) => {
+            const success = await addTrackToPlaylist(playlist.id, track);
+            if (success) {
+              setTracks(prev => [...prev, track]);
+            }
+            return success;
+          }}
+        />
+      )}
     </div>
   );
 };
