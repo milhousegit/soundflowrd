@@ -106,18 +106,7 @@ const Player: React.FC = () => {
   const startY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Resume playback when page becomes visible again (iOS/Safari quirks)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && isPlaying) {
-        // Best-effort: browsers may pause audio; toggling play can resume.
-        // We intentionally keep this minimal and non-invasive.
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isPlaying]);
+  // Visibility handling moved to useIOSAudioSession - removed empty handler
 
   const handleSeek = useCallback(
     (time: number) => {

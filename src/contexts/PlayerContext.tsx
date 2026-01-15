@@ -24,7 +24,7 @@ import {
   searchStreams,
   selectFilesAndPlay,
 } from '@/lib/realdebrid';
-import { getDeezerStream } from '@/lib/lucida';
+
 import { getTidalStream, mapQualityToTidal } from '@/lib/tidal';
 import { searchTracks } from '@/lib/deezer';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
@@ -518,27 +518,23 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const handleTimeUpdate = () => setState((prev) => ({ ...prev, progress: audio.currentTime }));
     const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
     
-    // Enhanced ended handler for iOS - ensure audio session stays alive
+    // Simplified ended handler - no aggressive keepAlive to avoid CarPlay issues
     const handleEnded = () => {
       console.log('[PlayerContext] Track ended, triggering next');
-      // On iOS, we need to keep the audio context alive before switching tracks
-      iosAudioRef.current.keepAlive();
       
       // Keep media session showing "playing" during track transition
-      // This prevents the iOS control center widget from disappearing
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'playing';
       }
       
-      // Small delay to ensure iOS audio session doesn't get interrupted
+      // Small delay to ensure smooth track transition
       setTimeout(() => {
         nextRef.current();
       }, 50);
     };
 
-    // Handle iOS interruptions (phone calls, Siri, etc.)
+    // Handle pause events
     const handlePause = () => {
-      // Only update state if we didn't intentionally pause
       if (!audio.ended) {
         setState((prev) => ({ ...prev, isPlaying: false }));
       }
@@ -548,17 +544,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setState((prev) => ({ ...prev, isPlaying: true }));
     };
 
-    // Handle errors - important for iOS which can have audio interruptions
+    // Simplified error handler - no aggressive keepAlive
     const handleError = (e: Event) => {
       console.error('[PlayerContext] Audio error:', e);
-      // Try to recover by keeping audio session alive
-      iosAudioRef.current.keepAlive();
     };
 
-    // Handle stalled/waiting - iOS sometimes stalls between tracks
+    // Simplified stalled handler
     const handleStalled = () => {
-      console.log('[PlayerContext] Audio stalled, attempting recovery');
-      iosAudioRef.current.keepAlive();
+      console.log('[PlayerContext] Audio stalled');
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -617,9 +610,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Simplified unlock - only quickUnlock, no aggressive keepAlive
   const tryUnlockAudioFromUserGesture = useCallback(() => {
     iosAudio.quickUnlock();
-    iosAudio.keepAlive();
   }, [iosAudio]);
 
   const saveFileMapping = useCallback(async (params: {
