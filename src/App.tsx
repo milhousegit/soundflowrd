@@ -12,6 +12,7 @@ import Login from "@/components/Login";
 import Layout from "@/components/Layout";
 import InstallPrompt from "@/components/InstallPrompt";
 import PremiumWelcomeBanner from "@/components/PremiumWelcomeBanner";
+import PremiumExpiredBanner from "@/components/PremiumExpiredBanner";
 
 import LandscapeBlocker from "@/components/LandscapeBlocker";
 import AutoModePrompt from "@/components/auto/AutoModePrompt";
@@ -97,6 +98,7 @@ const AppContent = () => {
       <Sonner position="top-center" />
       <InstallPrompt />
       <PremiumWelcomeBanner />
+      <PremiumExpiredBanner />
       <LandscapeBlocker />
       <AutoModePrompt />
       <BrowserRouter>
