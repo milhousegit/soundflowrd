@@ -1,13 +1,43 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Track, Album, Artist } from '@/types/music';
 
+// Cache for merged artists
+let mergedArtistsCache: { merged_artist_id: string; master_artist_id: string }[] | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getMergedArtists() {
+  const now = Date.now();
+  if (mergedArtistsCache && (now - cacheTimestamp) < CACHE_TTL) {
+    return mergedArtistsCache;
+  }
+  
+  const { data } = await supabase
+    .from('artist_merges')
+    .select('merged_artist_id, master_artist_id');
+  
+  mergedArtistsCache = (data as { merged_artist_id: string; master_artist_id: string }[]) || [];
+  cacheTimestamp = now;
+  return mergedArtistsCache;
+}
+
+// Filter out merged artists from search results
+async function filterMergedArtists(artists: Artist[]): Promise<Artist[]> {
+  const merges = await getMergedArtists();
+  const mergedIds = new Set(merges.map(m => m.merged_artist_id));
+  return artists.filter(a => !mergedIds.has(a.id));
+}
+
 export async function searchArtists(query: string): Promise<Artist[]> {
   const { data, error } = await supabase.functions.invoke('deezer', {
     body: { action: 'search-artists', query, limit: 20 },
   });
 
   if (error) throw error;
-  return data || [];
+  
+  // Filter out merged artists
+  const artists = data || [];
+  return filterMergedArtists(artists);
 }
 
 export async function searchAlbums(query: string): Promise<Album[]> {
@@ -16,7 +46,24 @@ export async function searchAlbums(query: string): Promise<Album[]> {
   });
 
   if (error) throw error;
-  return data || [];
+  
+  // Replace merged artist names/IDs with master artist
+  const merges = await getMergedArtists();
+  const albums = (data || []).map((album: Album) => {
+    const merge = merges.find(m => m.merged_artist_id === album.artistId);
+    if (merge) {
+      // Get master info from cache - we already have it loaded
+      const masterMerge = merges.find(m => m.master_artist_id === merge.master_artist_id);
+      return { 
+        ...album, 
+        artistId: merge.master_artist_id,
+        // Keep original artist name as we don't have master name in this cache
+      };
+    }
+    return album;
+  });
+  
+  return albums;
 }
 
 export async function searchTracks(query: string): Promise<Track[]> {
@@ -25,7 +72,21 @@ export async function searchTracks(query: string): Promise<Track[]> {
   });
 
   if (error) throw error;
-  return data || [];
+  
+  // Replace merged artist IDs with master artist IDs
+  const merges = await getMergedArtists();
+  const tracks = (data || []).map((track: Track) => {
+    const merge = merges.find(m => m.merged_artist_id === track.artistId);
+    if (merge) {
+      return { 
+        ...track, 
+        artistId: merge.master_artist_id,
+      };
+    }
+    return track;
+  });
+  
+  return tracks;
 }
 
 export async function getTrack(id: string): Promise<Track | null> {
@@ -37,12 +98,82 @@ export async function getTrack(id: string): Promise<Track | null> {
   return data || null;
 }
 
-export async function getArtist(id: string): Promise<Artist & { releases: Album[]; topTracks: Track[]; relatedArtists: Artist[] }> {
+export async function getArtist(id: string): Promise<Artist & { releases: Album[]; topTracks: Track[]; relatedArtists: Artist[]; mergedFrom?: string[] }> {
+  // Check if this artist has been merged into another
+  const merges = await getMergedArtists();
+  const mergeInfo = merges.find(m => m.merged_artist_id === id);
+  
+  if (mergeInfo) {
+    // Redirect to master artist
+    const masterData = await getArtist(mergeInfo.master_artist_id);
+    return masterData;
+  }
+  
   const { data, error } = await supabase.functions.invoke('deezer', {
     body: { action: 'get-artist', id },
   });
 
   if (error) throw error;
+  
+  // Check if this master has any merged artists
+  const mergedArtistIds = merges
+    .filter(m => m.master_artist_id === id)
+    .map(m => m.merged_artist_id);
+  
+  if (mergedArtistIds.length > 0) {
+    // Merge content from merged artists
+    const mergedData = await Promise.all(
+      mergedArtistIds.map(async (mergedId) => {
+        try {
+          const { data: merged } = await supabase.functions.invoke('deezer', {
+            body: { action: 'get-artist', id: mergedId },
+          });
+          return merged;
+        } catch {
+          return null;
+        }
+      })
+    );
+    
+    // Combine releases, removing duplicates by title+year
+    const allReleases = [...(data.releases || [])];
+    const existingKeys = new Set(allReleases.map(r => `${r.title.toLowerCase()}-${r.releaseDate?.split('-')[0] || ''}`));
+    
+    for (const merged of mergedData) {
+      if (merged?.releases) {
+        for (const release of merged.releases) {
+          const key = `${release.title.toLowerCase()}-${release.releaseDate?.split('-')[0] || ''}`;
+          if (!existingKeys.has(key)) {
+            allReleases.push(release);
+            existingKeys.add(key);
+          }
+        }
+      }
+    }
+    
+    // Combine top tracks, removing duplicates by title
+    const allTopTracks = [...(data.topTracks || [])];
+    const existingTrackTitles = new Set(allTopTracks.map(t => t.title.toLowerCase()));
+    
+    for (const merged of mergedData) {
+      if (merged?.topTracks) {
+        for (const track of merged.topTracks) {
+          if (!existingTrackTitles.has(track.title.toLowerCase())) {
+            allTopTracks.push(track);
+            existingTrackTitles.add(track.title.toLowerCase());
+          }
+        }
+      }
+    }
+    
+    return {
+      ...data,
+      releases: allReleases,
+      topTracks: allTopTracks.slice(0, 20),
+      mergedFrom: mergedArtistIds,
+    };
+  }
+  
   return data;
 }
 
