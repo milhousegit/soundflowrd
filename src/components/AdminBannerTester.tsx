@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Eye, Crown, AlertTriangle, Sparkles } from 'lucide-react';
+import { ChevronDown, Eye, Crown, AlertTriangle, Sparkles, Download, Car, Music, Mic2, Zap, X } from 'lucide-react';
+import { useSettings } from '@/contexts/SettingsContext';
 import PremiumWelcomeBanner from './PremiumWelcomeBanner';
 import PremiumExpiredBanner from './PremiumExpiredBanner';
 
@@ -92,10 +93,16 @@ const AdminBannerTester: React.FC<AdminBannerTesterProps> = ({ language }) => {
 
 // Separate component for test welcome banner to bypass normal logic
 const TestWelcomeBanner: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { settings } = require('@/contexts/SettingsContext').useSettings();
+  const { settings } = useSettings();
   const isItalian = settings.language === 'it';
-  const { Download, Music, X, Crown, Sparkles } = require('lucide-react');
-  const { Button } = require('@/components/ui/button');
+
+  const premiumFeatures = [
+    { icon: Car, label: isItalian ? 'Modalità Auto' : 'Auto Mode', desc: isItalian ? 'Interfaccia ottimizzata per la guida' : 'Driving-optimized interface' },
+    { icon: Music, label: isItalian ? 'Importa Playlist' : 'Playlist Import', desc: isItalian ? 'Importa da Spotify e altri servizi' : 'Import from Spotify and other services' },
+    { icon: Download, label: isItalian ? 'Download Offline' : 'Offline Downloads', desc: isItalian ? 'Scarica musica per ascoltarla offline' : 'Download music to listen offline' },
+    { icon: Mic2, label: isItalian ? 'Testi Sincronizzati' : 'Synced Lyrics', desc: isItalian ? 'Karaoke con testi in tempo reale' : 'Karaoke with real-time lyrics' },
+    { icon: Zap, label: isItalian ? 'Modalità Ibrida' : 'Hybrid Mode', desc: isItalian ? 'Fallback audio intelligente' : 'Smart audio fallback' },
+  ];
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-fade-in">
@@ -131,34 +138,18 @@ const TestWelcomeBanner: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             : 'Congratulations! You now have access to all exclusive features.'}
         </p>
 
-        <div className="space-y-3 mb-6">
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-background/50">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <Download className="w-4 h-4 text-primary" />
+        <div className="space-y-2 mb-6">
+          {premiumFeatures.map(({ icon: Icon, label, desc }) => (
+            <div key={label} className="flex items-center gap-3 p-2.5 rounded-lg bg-background/50">
+              <div className="w-8 h-8 rounded-full bg-[#8B5CF6]/10 flex items-center justify-center">
+                <Icon className="w-4 h-4 text-[#8B5CF6]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">{label}</p>
+                <p className="text-xs text-muted-foreground">{desc}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                {isItalian ? 'Download offline' : 'Offline downloads'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {isItalian ? 'Scarica musica per ascoltarla senza connessione' : 'Download music to listen offline'}
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-background/50">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <Music className="w-4 h-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                {isItalian ? 'Qualità audio superiore' : 'Superior audio quality'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {isItalian ? 'Streaming in alta qualità FLAC' : 'High quality FLAC streaming'}
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
 
         <Button 
