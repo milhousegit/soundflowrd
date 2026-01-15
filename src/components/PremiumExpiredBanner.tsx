@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
-import { Crown, X, AlertTriangle, Download, Car, Music, Share2 } from 'lucide-react';
+import { Crown, X, AlertTriangle, Download, Car, Music, Mic2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { isPast } from 'date-fns';
 
@@ -59,24 +59,29 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
 
   const lostFeatures = [
     {
-      icon: Download,
-      label: isItalian ? 'Download Offline' : 'Offline Downloads',
-      desc: isItalian ? 'Non puoi più scaricare brani' : 'You can no longer download tracks'
-    },
-    {
       icon: Car,
       label: isItalian ? 'Modalità Auto' : 'Auto Mode',
       desc: isItalian ? 'Interfaccia guida non disponibile' : 'Driving UI not available'
     },
     {
       icon: Music,
-      label: isItalian ? 'Modalità Ibrida' : 'Hybrid Mode',
-      desc: isItalian ? 'Fallback audio disattivato' : 'Audio fallback disabled'
+      label: isItalian ? 'Importa Playlist' : 'Playlist Import',
+      desc: isItalian ? 'Non puoi importare da altri servizi' : 'Cannot import from other services'
     },
     {
-      icon: Share2,
-      label: isItalian ? 'Playlist Pubbliche' : 'Public Playlists',
-      desc: isItalian ? 'Non puoi condividere playlist' : 'Cannot share playlists'
+      icon: Download,
+      label: isItalian ? 'Download Offline' : 'Offline Downloads',
+      desc: isItalian ? 'Non puoi più scaricare brani' : 'You can no longer download tracks'
+    },
+    {
+      icon: Mic2,
+      label: isItalian ? 'Testi Sincronizzati' : 'Synced Lyrics',
+      desc: isItalian ? 'Karaoke e testi non disponibili' : 'Karaoke and lyrics not available'
+    },
+    {
+      icon: Zap,
+      label: isItalian ? 'Modalità Ibrida' : 'Hybrid Mode',
+      desc: isItalian ? 'Fallback audio disattivato' : 'Audio fallback disabled'
     }
   ];
 
@@ -89,7 +94,7 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
       />
       
       {/* Banner */}
-      <div className="relative z-10 w-full max-w-md bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-red-500/20 border border-amber-500/30 rounded-2xl p-6 shadow-2xl animate-scale-in">
+      <div className="relative z-10 w-full max-w-md bg-gradient-to-br from-violet-500/20 via-purple-500/10 to-blue-500/20 border border-violet-500/30 rounded-2xl p-6 shadow-2xl animate-scale-in">
         {/* Close button */}
         <button 
           onClick={handleDismiss}
@@ -101,10 +106,10 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
         {/* Warning icon */}
         <div className="flex justify-center mb-4">
           <div className="relative">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-lg">
               <AlertTriangle className="w-10 h-10 text-white" />
             </div>
-            <Crown className="absolute -top-1 -right-1 w-6 h-6 text-amber-500" />
+            <Crown className="absolute -top-1 -right-1 w-6 h-6 text-violet-400" />
           </div>
         </div>
 
@@ -139,7 +144,7 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
         <div className="space-y-2">
           <Button 
             onClick={handleDismiss}
-            className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:opacity-90 text-white font-semibold"
+            className="w-full bg-gradient-to-r from-violet-500 to-blue-600 hover:opacity-90 text-white font-semibold"
           >
             <Crown className="w-4 h-4 mr-2" />
             {isItalian ? 'Rinnova Premium' : 'Renew Premium'}
