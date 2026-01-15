@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { verifyApiKey } from '@/lib/realdebrid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Music2, Mail, Lock, Key, Loader2, AlertCircle, UserPlus, LogIn, CheckCircle } from 'lucide-react';
+import { Music2, Mail, Lock, Key, Loader2, AlertCircle, UserPlus, LogIn, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import appLogo from '@/assets/logo.png';
@@ -19,6 +20,10 @@ const signupSchema = z.object({
   apiKey: z.string().optional(),
 });
 
+const resetSchema = z.object({
+  email: z.string().email('Email non valida'),
+});
+
 const Login: React.FC = () => {
   const { signIn, signUp, updateApiKey, profile } = useAuth();
   const { toast } = useToast();
@@ -27,14 +32,52 @@ const Login: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
+  const [resetSent, setResetSent] = useState(false);
 
   // Clear API key field when switching to login mode (not needed for login)
   useEffect(() => {
     if (mode === 'login') {
       setApiKey('');
     }
+    setError('');
+    setResetSent(false);
   }, [mode]);
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const validation = resetSchema.safeParse({ email });
+      if (!validation.success) {
+        setError(validation.error.errors[0].message);
+        setIsLoading(false);
+        return;
+      }
+
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/profile`,
+      });
+
+      if (resetError) {
+        setError(resetError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      setResetSent(true);
+      toast({
+        title: 'Email inviata!',
+        description: 'Controlla la tua casella di posta per reimpostare la password.',
+      });
+    } catch (err) {
+      setError('Errore durante l\'invio. Riprova.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,109 +194,190 @@ const Login: React.FC = () => {
           <p className="text-sm md:text-base text-muted-foreground">Il tuo player musicale personale</p>
         </div>
 
-        {/* Mode Toggle */}
-        <div className="flex gap-2 mb-4 justify-center">
-          <Button
-            type="button"
-            variant={mode === 'login' ? 'default' : 'ghost'}
-            onClick={() => setMode('login')}
-            className="gap-2"
-          >
-            <LogIn className="w-4 h-4" />
-            Accedi
-          </Button>
-          <Button
-            type="button"
-            variant={mode === 'signup' ? 'default' : 'ghost'}
-            onClick={() => setMode('signup')}
-            className="gap-2"
-          >
-            <UserPlus className="w-4 h-4" />
-            Registrati
-          </Button>
-        </div>
+        {/* Password Reset Mode */}
+        {mode === 'reset' ? (
+          <div className="glass rounded-2xl p-6 md:p-8 space-y-5 md:space-y-6 animate-scale-in">
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Torna al login
+            </button>
 
-        {/* Login/Signup Form */}
-        <form onSubmit={handleSubmit} className="glass rounded-2xl p-6 md:p-8 space-y-5 md:space-y-6 animate-scale-in">
-          {error && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-          
-          <div className="space-y-3 md:space-y-4">
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="pl-12"
-                required
-              />
+            <div className="text-center">
+              <h2 className="text-xl font-semibold text-foreground mb-2">Recupera Password</h2>
+              <p className="text-sm text-muted-foreground">
+                Inserisci la tua email per ricevere il link di recupero
+              </p>
             </div>
 
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-12"
-                required
-                minLength={6}
-              />
-            </div>
-
-            {/* API Key only shown for signup */}
-            {mode === 'signup' && (
-              <div className="relative">
-                <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  type="password"
-                  placeholder="Real-Debrid API Key (opzionale)"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="pl-12"
-                />
+            {error && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{error}</span>
               </div>
             )}
-          </div>
 
-
-          <Button
-            type="submit"
-            className="w-full h-12 text-base font-semibold"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+            {resetSent ? (
+              <div className="text-center p-4 rounded-lg bg-primary/10 text-primary">
+                <Mail className="w-12 h-12 mx-auto mb-3 opacity-80" />
+                <p className="font-medium">Email inviata!</p>
+                <p className="text-sm opacity-80 mt-1">
+                  Controlla la tua casella di posta e segui le istruzioni.
+                </p>
+              </div>
             ) : (
-              <>
-                <Music2 className="w-5 h-5" />
-                {mode === 'login' ? 'Accedi' : 'Registrati'}
-              </>
-            )}
-          </Button>
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-12"
+                    required
+                  />
+                </div>
 
-          {mode === 'signup' && (
-            <p className="text-center text-xs md:text-sm text-muted-foreground">
-              Puoi aggiungere la tua API Key da{' '}
-              <a
-                href="https://real-debrid.com/apitoken"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-base font-semibold"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Mail className="w-5 h-5" />
+                      Invia link di recupero
+                    </>
+                  )}
+                </Button>
+              </form>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Mode Toggle */}
+            <div className="flex gap-2 mb-4 justify-center">
+              <Button
+                type="button"
+                variant={mode === 'login' ? 'default' : 'ghost'}
+                onClick={() => setMode('login')}
+                className="gap-2"
               >
-                Real-Debrid
-              </a>
-              {' '}in seguito dalle impostazioni
-            </p>
-          )}
-        </form>
+                <LogIn className="w-4 h-4" />
+                Accedi
+              </Button>
+              <Button
+                type="button"
+                variant={mode === 'signup' ? 'default' : 'ghost'}
+                onClick={() => setMode('signup')}
+                className="gap-2"
+              >
+                <UserPlus className="w-4 h-4" />
+                Registrati
+              </Button>
+            </div>
+
+            {/* Login/Signup Form */}
+            <form onSubmit={handleSubmit} className="glass rounded-2xl p-6 md:p-8 space-y-5 md:space-y-6 animate-scale-in">
+              {error && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+              
+              <div className="space-y-3 md:space-y-4">
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-12"
+                    required
+                  />
+                </div>
+
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-12"
+                    required
+                    minLength={6}
+                  />
+                </div>
+
+                {/* API Key only shown for signup */}
+                {mode === 'signup' && (
+                  <div className="relative">
+                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input
+                      type="password"
+                      placeholder="Real-Debrid API Key (opzionale)"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="pl-12"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Forgot password link - only in login mode */}
+              {mode === 'login' && (
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setMode('reset')}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Password dimenticata?
+                  </button>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full h-12 text-base font-semibold"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <Music2 className="w-5 h-5" />
+                    {mode === 'login' ? 'Accedi' : 'Registrati'}
+                  </>
+                )}
+              </Button>
+
+              {mode === 'signup' && (
+                <p className="text-center text-xs md:text-sm text-muted-foreground">
+                  Puoi aggiungere la tua API Key da{' '}
+                  <a
+                    href="https://real-debrid.com/apitoken"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    Real-Debrid
+                  </a>
+                  {' '}in seguito dalle impostazioni
+                </p>
+              )}
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
