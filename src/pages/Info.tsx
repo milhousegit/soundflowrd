@@ -190,11 +190,23 @@ const Info: React.FC = () => {
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
-                Deezer API - {isItalian ? 'Servizio di terze parti' : 'Third-party service'}
+                Deezer API - {isItalian ? 'Metadati musicali' : 'Music metadata'}
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
-                SquidWTF/Tidal - {isItalian ? 'Servizio di terze parti' : 'Third-party service'}
+                SquidWTF/Tidal - {isItalian ? 'Streaming audio' : 'Audio streaming'}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                LRCLIB - {isItalian ? 'Testi sincronizzati' : 'Synchronized lyrics'}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                Lyrics.ovh - {isItalian ? 'Testi (fallback)' : 'Lyrics (fallback)'}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                Genius API - {isItalian ? 'Testi (fallback)' : 'Lyrics (fallback)'}
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
