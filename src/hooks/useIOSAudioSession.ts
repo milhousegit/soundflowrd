@@ -71,10 +71,64 @@ export const supportsWakeLock = (): boolean => {
 
 /**
  * Detect if audio is being routed to an external device (CarPlay, Bluetooth, AirPlay)
- * This helps us reduce interference with external audio routing
+ * Uses MediaDevices API for accurate detection
  */
-const isExternalAudioRouting = (): boolean => {
-  // Check for CarPlay/external display hints
+const detectExternalAudioDevice = async (): Promise<boolean> => {
+  try {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      return false;
+    }
+    
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+    
+    // Check for Bluetooth, CarPlay, or external audio devices
+    for (const device of audioOutputs) {
+      const label = device.label.toLowerCase();
+      
+      // CarPlay indicators
+      if (label.includes('carplay') || label.includes('car audio') || label.includes('car stereo')) {
+        console.log('[iOS Audio] CarPlay device detected:', device.label);
+        return true;
+      }
+      
+      // Bluetooth indicators (excluding internal speakers)
+      if (label.includes('bluetooth') || label.includes('bt_') || label.includes('airpods') || 
+          label.includes('bose') || label.includes('jbl') || label.includes('sony') ||
+          label.includes('beats') || label.includes('wireless')) {
+        console.log('[iOS Audio] Bluetooth device detected:', device.label);
+        return true;
+      }
+      
+      // AirPlay indicators
+      if (label.includes('airplay') || label.includes('apple tv') || label.includes('homepod')) {
+        console.log('[iOS Audio] AirPlay device detected:', device.label);
+        return true;
+      }
+    }
+    
+    // Fallback: check for multiple audio outputs (suggests external device connected)
+    // Default is usually just "Default" or internal speakers
+    const nonDefaultOutputs = audioOutputs.filter(d => 
+      d.deviceId !== 'default' && 
+      !d.label.toLowerCase().includes('speaker') &&
+      !d.label.toLowerCase().includes('built-in')
+    );
+    
+    if (nonDefaultOutputs.length > 0) {
+      console.log('[iOS Audio] External audio output detected:', nonDefaultOutputs.map(d => d.label).join(', '));
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.log('[iOS Audio] Could not enumerate devices:', error);
+    return false;
+  }
+};
+
+// Synchronous fallback check for external routing
+const isExternalAudioRoutingSync = (): boolean => {
   if (typeof window !== 'undefined') {
     // Multiple displays suggest CarPlay or external screen
     if (window.screen && (window as any).screen.availWidth > window.innerWidth * 2) {
@@ -131,11 +185,55 @@ export const useIOSAudioSession = () => {
 
   // Detect external audio devices (CarPlay, Bluetooth, AirPlay)
   useEffect(() => {
-    const checkExternalRouting = () => {
-      const external = isExternalAudioRouting();
+    const checkExternalRouting = async () => {
+      // Use async detection first, fall back to sync check
+      let external = isExternalAudioRoutingSync();
+      
+      try {
+        external = await detectExternalAudioDevice() || external;
+      } catch {
+        // Use sync fallback
+      }
+      
       if (external !== isExternalDeviceRef.current) {
+        const wasExternal = isExternalDeviceRef.current;
         isExternalDeviceRef.current = external;
-        addLog('info', `External audio routing: ${external ? 'detected' : 'not detected'}`);
+        addLog('info', `External audio routing: ${external ? 'DETECTED' : 'not detected'}`);
+        
+        // When switching TO external routing, cleanup audio artifacts
+        if (external && !wasExternal) {
+          addLog('info', 'Disabling keep-alive for external audio routing');
+          
+          // Pause and remove silent audio to prevent interference
+          if (silentAudioRef.current) {
+            silentAudioRef.current.pause();
+            silentAudioRef.current.src = '';
+            addLog('info', 'Silent audio element disabled for CarPlay/Bluetooth');
+          }
+          
+          // Suspend AudioContext to not interfere with external audio
+          if (audioContextRef.current && audioContextRef.current.state === 'running') {
+            audioContextRef.current.suspend().then(() => {
+              addLog('info', 'AudioContext suspended for external routing');
+            }).catch(() => {});
+          }
+        }
+        
+        // When switching BACK from external routing, re-enable
+        if (!external && wasExternal) {
+          addLog('info', 'Re-enabling keep-alive (external device disconnected)');
+          
+          // Re-initialize silent audio
+          if (silentAudioRef.current && isUnlockedRef.current) {
+            silentAudioRef.current.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNAAAAAAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNAAAAAAAAAAAAAAAAAAAA';
+            silentAudioRef.current.play().catch(() => {});
+          }
+          
+          // Resume AudioContext
+          if (audioContextRef.current?.state === 'suspended') {
+            audioContextRef.current.resume().catch(() => {});
+          }
+        }
       }
     };
 
@@ -153,8 +251,8 @@ export const useIOSAudioSession = () => {
       navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
     }
 
-    // Also check periodically for CarPlay connection
-    const interval = window.setInterval(checkExternalRouting, 5000);
+    // Check periodically for CarPlay connection (less frequently)
+    const interval = window.setInterval(checkExternalRouting, 10000);
 
     return () => {
       if (navigator.mediaDevices?.removeEventListener) {
@@ -219,13 +317,14 @@ export const useIOSAudioSession = () => {
           addLog('success', 'AudioContext resumed', `state: ${audioContextRef.current.state}`);
         }
         
-        // Play a silent buffer
-        const buffer = audioContextRef.current.createBuffer(1, 1, 22050);
+        // Play a silent buffer using native sample rate (prevents CarPlay conflicts)
+        const sampleRate = audioContextRef.current.sampleRate || 44100;
+        const buffer = audioContextRef.current.createBuffer(1, 1, sampleRate);
         const source = audioContextRef.current.createBufferSource();
         source.buffer = buffer;
         source.connect(audioContextRef.current.destination);
         source.start(0);
-        addLog('success', 'Silent buffer played via AudioContext');
+        addLog('success', 'Silent buffer played via AudioContext', `sampleRate: ${sampleRate}`);
       } catch (e) {
         addLog('error', 'AudioContext unlock failed', e instanceof Error ? e.message : String(e));
         success = false;
@@ -270,8 +369,9 @@ export const useIOSAudioSession = () => {
       const ctx: AudioContext = audioContextRef.current || new AudioCtx();
       if (!audioContextRef.current) audioContextRef.current = ctx;
 
-      // Create and play silent buffer synchronously
-      const buffer = ctx.createBuffer(1, 1, 22050);
+      // Create and play silent buffer synchronously using native sample rate
+      const sampleRate = ctx.sampleRate || 44100;
+      const buffer = ctx.createBuffer(1, 1, sampleRate);
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(ctx.destination);
@@ -343,11 +443,47 @@ export const useIOSAudioSession = () => {
       keepAliveIntervalRef.current = null;
     }
     
-    // On external routing (CarPlay), pause the silent audio to not interfere
+    // On external routing (CarPlay/Bluetooth), fully disable silent audio
     if (isExternalDeviceRef.current && silentAudioRef.current) {
       silentAudioRef.current.pause();
-      addLog('info', 'Silent audio paused (external routing)');
+      silentAudioRef.current.src = '';
+      addLog('info', 'Silent audio fully disabled (external routing)');
     }
+  }, [addLog]);
+
+  /**
+   * Cleanup all audio resources - use when CarPlay/Bluetooth is active
+   */
+  const cleanup = useCallback(() => {
+    addLog('info', 'Cleaning up audio resources');
+    
+    // Stop keep-alive
+    if (keepAliveIntervalRef.current) {
+      window.clearInterval(keepAliveIntervalRef.current);
+      keepAliveIntervalRef.current = null;
+    }
+    
+    // Remove silent audio from DOM
+    if (silentAudioRef.current) {
+      silentAudioRef.current.pause();
+      silentAudioRef.current.src = '';
+      if (silentAudioRef.current.parentNode) {
+        silentAudioRef.current.parentNode.removeChild(silentAudioRef.current);
+      }
+      silentAudioRef.current = null;
+      addLog('info', 'Silent audio element removed from DOM');
+    }
+    
+    // Close AudioContext
+    if (audioContextRef.current) {
+      audioContextRef.current.close().then(() => {
+        addLog('info', 'AudioContext closed');
+        audioContextRef.current = null;
+      }).catch(() => {});
+    }
+    
+    isUnlockedRef.current = false;
+    sessionStorage.removeItem('audio_unlocked');
   }, [addLog]);
 
   /**
@@ -419,6 +555,7 @@ export const useIOSAudioSession = () => {
     quickUnlock,
     keepAlive,
     stopKeepAlive,
+    cleanup,
     resetUnlock,
     testAudioPlayback,
     getLogs,
