@@ -67,6 +67,33 @@ const Info: React.FC = () => {
                 {isItalian ? 'Aggiorna' : 'Update'}
               </Button>
             </div>
+            
+            {/* What's New in v1.1 */}
+            <div className="mt-4 pt-4 border-t border-border">
+              <h3 className="text-sm font-medium text-foreground mb-2">
+                {isItalian ? "Novità della versione 1.1" : "What's new in v1.1"}
+              </h3>
+              <ul className="text-sm text-muted-foreground space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 shrink-0" />
+                  {isItalian 
+                    ? "Risolto problema audio a scatti con CarPlay e dispositivi Bluetooth esterni"
+                    : "Fixed stuttering audio with CarPlay and external Bluetooth devices"}
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 shrink-0" />
+                  {isItalian 
+                    ? "Migliorato rilevamento automatico dispositivi audio esterni"
+                    : "Improved automatic detection of external audio devices"}
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 shrink-0" />
+                  {isItalian 
+                    ? "Corretta interferenza con altre app dopo la riproduzione"
+                    : "Fixed interference with other apps after playback"}
+                </li>
+              </ul>
+            </div>
           </div>
         </section>
 
