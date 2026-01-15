@@ -42,11 +42,11 @@ const ArtistCard: React.FC<ArtistCardProps> = ({ artist, showFavorite = false, f
           </div>
         )}
         
-        {/* Play button overlay */}
+        {/* Play button overlay - DESKTOP ONLY */}
         <Button
           variant="player"
           size="player"
-          className="absolute bottom-2 right-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 h-10 w-10 md:h-12 md:w-12"
+          className="absolute bottom-2 right-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 h-10 w-10 md:h-12 md:w-12 hidden md:flex"
           onClick={(e) => {
             e.stopPropagation();
             // Play artist top tracks
@@ -64,7 +64,7 @@ const ArtistCard: React.FC<ArtistCardProps> = ({ artist, showFavorite = false, f
             itemType="artist"
             item={artist}
             size="sm"
-            className="opacity-0 group-hover:opacity-100 transition-opacity"
+            className="opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex"
           />
         )}
       </div>

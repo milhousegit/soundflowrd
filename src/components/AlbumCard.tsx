@@ -38,11 +38,11 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
           </div>
         )}
         
-        {/* Play button overlay */}
+        {/* Play button overlay - DESKTOP ONLY */}
         <Button
           variant="player"
           size="player"
-          className="absolute bottom-2 right-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 h-10 w-10 md:h-12 md:w-12"
+          className="absolute bottom-2 right-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 h-10 w-10 md:h-12 md:w-12 hidden md:flex"
           onClick={(e) => {
             e.stopPropagation();
             // Play album
@@ -64,7 +64,7 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
           itemType="album"
           item={album}
           size="sm"
-          className="opacity-0 group-hover:opacity-100 transition-opacity -mt-0.5 flex-shrink-0"
+          className="opacity-0 group-hover:opacity-100 transition-opacity -mt-0.5 flex-shrink-0 hidden md:flex"
         />
       </div>
     </div>
