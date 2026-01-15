@@ -398,38 +398,34 @@ export const useIOSAudioSession = () => {
    * Keep the audio session alive - call when playback starts
    * Throttled and CarPlay-aware to prevent audio stuttering
    */
+  /**
+   * Keep the audio session alive - SIMPLIFIED for CarPlay compatibility
+   * Heavily throttled and completely skipped on external devices
+   */
   const keepAlive = useCallback(() => {
     const now = Date.now();
     
-    // Throttle keep-alive calls to max once per 2 seconds
-    if (now - lastKeepAliveRef.current < 2000) {
+    // Increased throttle: max once per 5 seconds (was 2)
+    if (now - lastKeepAliveRef.current < 5000) {
       return;
     }
     lastKeepAliveRef.current = now;
 
-    // Skip aggressive keep-alive when external audio routing is active (CarPlay, Bluetooth)
-    // The external system manages the audio session
+    // COMPLETELY skip when external audio routing is active (CarPlay, Bluetooth, AirPlay)
+    // External systems manage their own audio sessions - our interference causes stuttering
     if (isExternalDeviceRef.current) {
-      addLog('info', 'Keep-alive skipped (external audio routing active)');
-      return;
+      return; // Silent skip, no logging to reduce noise
     }
 
-    addLog('info', 'Keep-alive: ensuring silent audio is playing');
-    
-    if (silentAudioRef.current && silentAudioRef.current.paused) {
-      silentAudioRef.current.play().then(() => {
-        addLog('success', 'Keep-alive: silent audio resumed');
-      }).catch(e => {
-        addLog('warning', 'Keep-alive: silent audio resume failed', e instanceof Error ? e.message : String(e));
-      });
+    // Only resume if actually suspended, don't proactively play
+    if (silentAudioRef.current && silentAudioRef.current.paused && isUnlockedRef.current) {
+      silentAudioRef.current.play().catch(() => {});
     }
     
     if (audioContextRef.current?.state === 'suspended') {
-      audioContextRef.current.resume().then(() => {
-        addLog('success', 'Keep-alive: AudioContext resumed');
-      }).catch(() => {});
+      audioContextRef.current.resume().catch(() => {});
     }
-  }, [addLog]);
+  }, []);
 
   /**
    * Stop keep-alive (when playback stops completely)
