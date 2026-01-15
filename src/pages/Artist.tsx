@@ -55,9 +55,10 @@ const Artist: React.FC = () => {
         setRelatedArtists((artistData.relatedArtists || []).slice(0, 10));
         
         // Fetch artist playlists (100% Artist, This is Artist, etc.)
+        // Also includes playlists from merged artists
         if (artistData.name) {
           try {
-            const playlists = await getArtistPlaylists(artistData.name);
+            const playlists = await getArtistPlaylists(artistData.name, id);
             setArtistPlaylists(playlists);
           } catch (e) {
             console.error('Failed to fetch artist playlists:', e);
