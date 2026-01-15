@@ -26,7 +26,7 @@ import {
 } from '@/lib/realdebrid';
 
 import { getTidalStream, mapQualityToTidal } from '@/lib/tidal';
-import { searchTracks } from '@/lib/deezer';
+import { searchTracks, getArtistTopTracks } from '@/lib/deezer';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
 import { addSyncedTrack, addSyncingTrack, removeSyncingTrack } from '@/hooks/useSyncedTracks';
 
@@ -1497,13 +1497,63 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     [playTrack, state.queue]
   );
 
-  const next = useCallback(() => {
+  // Fetch similar tracks based on current track's artist
+  const fetchSimilarTracks = useCallback(async (currentTrack: Track): Promise<Track[]> => {
+    try {
+      // Get top tracks from the same artist
+      const artistTopTracks = await getArtistTopTracks(currentTrack.artistId || '');
+      
+      // Filter out tracks already in queue and current track
+      const queueIds = new Set(state.queue.map(t => t.id));
+      const newTracks = artistTopTracks.filter(t => !queueIds.has(t.id) && t.id !== currentTrack.id);
+      
+      // If we got enough from same artist, use those
+      if (newTracks.length >= 5) {
+        console.log('[Autoplay] Found', newTracks.length, 'similar tracks from', currentTrack.artist);
+        return newTracks.slice(0, 10);
+      }
+      
+      // Otherwise search for related tracks
+      const searchResults = await searchTracks(`${currentTrack.artist}`);
+      const additionalTracks = searchResults.filter(t => 
+        !queueIds.has(t.id) && 
+        t.id !== currentTrack.id &&
+        !newTracks.find(nt => nt.id === t.id)
+      );
+      
+      const combined = [...newTracks, ...additionalTracks].slice(0, 15);
+      console.log('[Autoplay] Found', combined.length, 'tracks for autoplay');
+      return combined;
+    } catch (error) {
+      console.error('[Autoplay] Failed to fetch similar tracks:', error);
+      return [];
+    }
+  }, [state.queue]);
+
+  const next = useCallback(async () => {
     const nextIndex = state.queueIndex + 1;
     if (nextIndex < state.queue.length) {
       playTrack(state.queue[nextIndex], state.queue);
       setState((prev) => ({ ...prev, queueIndex: nextIndex }));
+    } else if (state.currentTrack) {
+      // End of queue - fetch similar tracks and continue playing
+      console.log('[Autoplay] Queue ended, fetching similar tracks...');
+      addDebugLog('🔄 Autoplay', 'Carico brani simili...', 'info');
+      
+      const similarTracks = await fetchSimilarTracks(state.currentTrack);
+      
+      if (similarTracks.length > 0) {
+        // Add similar tracks to queue and play first one
+        const newQueue = [...state.queue, ...similarTracks];
+        setState((prev) => ({ ...prev, queue: newQueue }));
+        playTrack(similarTracks[0], newQueue);
+        setState((prev) => ({ ...prev, queueIndex: state.queue.length }));
+        addDebugLog('✅ Autoplay avviato', `${similarTracks.length} brani aggiunti`, 'success');
+      } else {
+        addDebugLog('ℹ️ Autoplay', 'Nessun brano simile trovato', 'info');
+      }
     }
-  }, [playTrack, state.queue, state.queueIndex]);
+  }, [addDebugLog, fetchSimilarTracks, playTrack, state.currentTrack, state.queue, state.queueIndex]);
 
   const previous = useCallback(() => {
     if (state.progress > 3) {
