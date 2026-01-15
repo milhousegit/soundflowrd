@@ -234,8 +234,8 @@ const AdminArtistEditor: React.FC<AdminArtistEditorProps> = ({
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent side="right" className="w-full sm:max-w-lg">
-        <SheetHeader>
+      <SheetContent side="right" className="w-full sm:max-w-lg pt-[calc(env(safe-area-inset-top)+1rem)]">
+        <SheetHeader className="pr-[env(safe-area-inset-right)]">
           <SheetTitle className="flex items-center gap-2">
             <EyeOff className="w-5 h-5" />
             Gestisci {artistName}
