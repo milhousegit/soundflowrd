@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      artist_merges: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          master_artist_id: string
+          master_artist_name: string
+          merged_artist_id: string
+          merged_artist_name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          master_artist_id: string
+          master_artist_name: string
+          merged_artist_id: string
+          merged_artist_name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          master_artist_id?: string
+          master_artist_name?: string
+          merged_artist_id?: string
+          merged_artist_name?: string
+        }
+        Relationships: []
+      }
       artist_release_tracking: {
         Row: {
           artist_id: string

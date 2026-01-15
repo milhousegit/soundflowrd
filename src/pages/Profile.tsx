@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { verifyApiKey } from '@/lib/realdebrid';
-import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, Bell, ChevronRight, ChevronDown, Info, Globe, Lock, Crown, Download, Car, Share2, Gift, Sparkles, Shield, Users, Send, Eye, EyeOff } from 'lucide-react';
+import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, Bell, ChevronRight, ChevronDown, Info, Globe, Lock, Crown, Download, Car, Share2, Gift, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -15,6 +15,7 @@ import AppLogs from '@/components/AppLogs';
 import AdminNotifications from '@/components/AdminNotifications';
 import AdminUsersManagement from '@/components/AdminUsersManagement';
 import AdminBannerTester from '@/components/AdminBannerTester';
+import AdminArtistMerge from '@/components/AdminArtistMerge';
 import { isPast } from 'date-fns';
 interface CloudFile {
   id: string;
@@ -780,6 +781,22 @@ const Settings: React.FC = () => {
 
               {/* Test Banners */}
               <AdminBannerTester language={settings.language} />
+
+              {/* Artist Merge */}
+              <details className="group">
+                <summary className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-sm text-foreground">
+                      {settings.language === 'it' ? 'Unisci Metadati' : 'Merge Metadata'}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="px-4 pb-4">
+                  <AdminArtistMerge language={settings.language} />
+                </div>
+              </details>
             </div>
           </section>}
       </div>
