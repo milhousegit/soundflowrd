@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      artist_hidden_items: {
+        Row: {
+          artist_id: string
+          created_at: string
+          hidden_by: string
+          id: string
+          item_id: string
+          item_title: string
+          item_type: string
+        }
+        Insert: {
+          artist_id: string
+          created_at?: string
+          hidden_by: string
+          id?: string
+          item_id: string
+          item_title: string
+          item_type: string
+        }
+        Update: {
+          artist_id?: string
+          created_at?: string
+          hidden_by?: string
+          id?: string
+          item_id?: string
+          item_title?: string
+          item_type?: string
+        }
+        Relationships: []
+      }
       artist_merges: {
         Row: {
           created_at: string

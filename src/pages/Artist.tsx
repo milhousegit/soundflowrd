@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, Shuffle, User, ChevronDown, ChevronUp, Disc, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,11 +8,22 @@ import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import FavoriteButton from '@/components/FavoriteButton';
+import AdminArtistEditor from '@/components/AdminArtistEditor';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { getArtist, getArtistPlaylists, DeezerPlaylist } from '@/lib/deezer';
+import { supabase } from '@/integrations/supabase/client';
 import { Artist as ArtistType, Album, Track } from '@/types/music';
+
+interface HiddenItem {
+  id: string;
+  artist_id: string;
+  item_id: string;
+  item_type: 'track' | 'album' | 'playlist';
+  item_title: string;
+}
 
 const Artist: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,9 +37,49 @@ const Artist: React.FC = () => {
   const [artistPlaylists, setArtistPlaylists] = useState<DeezerPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAllTracks, setShowAllTracks] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [hiddenItems, setHiddenItems] = useState<HiddenItem[]>([]);
+  const { user } = useAuth();
 
   // Use artist image or fallback to latest album cover
   const artistImage = artist?.imageUrl || (releases.length > 0 ? releases[0]?.coverUrl : undefined);
+
+  // Check admin status
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      const { data } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+      setIsAdmin(!!data);
+    };
+    checkAdmin();
+  }, [user]);
+
+  // Fetch hidden items for this artist
+  useEffect(() => {
+    const fetchHiddenItems = async () => {
+      if (!id) return;
+      const { data } = await supabase
+        .from('artist_hidden_items')
+        .select('*')
+        .eq('artist_id', id);
+      if (data) {
+        setHiddenItems(data as HiddenItem[]);
+      }
+    };
+    fetchHiddenItems();
+  }, [id]);
+
+  const handleHiddenItemsChange = useCallback((items: HiddenItem[]) => {
+    setHiddenItems(items);
+  }, []);
 
   useEffect(() => {
     const fetchArtist = async () => {
@@ -86,28 +137,36 @@ const Artist: React.FC = () => {
     );
   }
 
+  // Filter out hidden items
+  const isHidden = (itemId: string, itemType: string) =>
+    hiddenItems.some(h => h.item_id === itemId && h.item_type === itemType);
+
+  const visibleTopTracks = topTracks.filter(t => !isHidden(t.id, 'track'));
+  const visibleReleases = releases.filter(r => !isHidden(r.id, 'album'));
+  const visiblePlaylists = artistPlaylists.filter(p => !isHidden(String(p.id), 'playlist'));
+
   const handlePlayAll = () => {
-    if (topTracks.length > 0) {
-      playTrack(topTracks[0], topTracks);
+    if (visibleTopTracks.length > 0) {
+      playTrack(visibleTopTracks[0], visibleTopTracks);
     }
   };
 
   const handleShuffle = () => {
-    if (topTracks.length > 0) {
-      const shuffled = [...topTracks].sort(() => Math.random() - 0.5);
+    if (visibleTopTracks.length > 0) {
+      const shuffled = [...visibleTopTracks].sort(() => Math.random() - 0.5);
       playTrack(shuffled[0], shuffled);
     }
   };
 
-  // Get latest release (album or single)
-  const latestRelease = releases[0];
+  // Get latest release (album or single) - from visible releases
+  const latestRelease = visibleReleases[0];
   
-  // Separate albums from singles/EPs
-  const albums = releases.filter(r => (r as any).recordType === 'album' || !(r as any).recordType);
-  const singlesAndEps = releases.filter(r => (r as any).recordType === 'single' || (r as any).recordType === 'ep');
+  // Separate albums from singles/EPs - from visible releases
+  const albums = visibleReleases.filter(r => (r as any).recordType === 'album' || !(r as any).recordType);
+  const singlesAndEps = visibleReleases.filter(r => (r as any).recordType === 'single' || (r as any).recordType === 'ep');
   
   // Tracks to display (5 by default, all if expanded)
-  const displayedTracks = showAllTracks ? topTracks : topTracks.slice(0, 5);
+  const displayedTracks = showAllTracks ? visibleTopTracks : visibleTopTracks.slice(0, 5);
 
   return (
     <div className="pb-32 animate-fade-in relative">
@@ -154,17 +213,31 @@ const Artist: React.FC = () => {
 
       {/* Actions */}
       <div className="px-4 md:px-8 py-4 md:py-6 flex items-center gap-3 md:gap-4">
-        <Button variant="player" size="player" onClick={handlePlayAll} disabled={topTracks.length === 0}>
+        <Button variant="player" size="player" onClick={handlePlayAll} disabled={visibleTopTracks.length === 0}>
           <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
         </Button>
-        <Button variant="ghost" size="icon" className="w-10 h-10 md:w-12 md:h-12" onClick={handleShuffle} disabled={topTracks.length === 0}>
+        <Button variant="ghost" size="icon" className="w-10 h-10 md:w-12 md:h-12" onClick={handleShuffle} disabled={visibleTopTracks.length === 0}>
           <Shuffle className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
         <FavoriteButton itemType="artist" item={artist} size="md" variant="ghost" />
+        
+        {/* Admin editor button */}
+        {isAdmin && id && (
+          <div className="ml-auto">
+            <AdminArtistEditor
+              artistId={id}
+              artistName={artist.name}
+              tracks={topTracks}
+              albums={releases}
+              playlists={artistPlaylists}
+              onHiddenItemsChange={handleHiddenItemsChange}
+            />
+          </div>
+        )}
       </div>
 
       {/* Popular Tracks - 5 visible, expand to show all */}
-      {topTracks.length > 0 && (
+      {visibleTopTracks.length > 0 && (
         <section className="px-4 md:px-8 mb-8 md:mb-10">
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-3 md:mb-4">{t('popular')}</h2>
           <div className="space-y-1">
@@ -172,13 +245,13 @@ const Artist: React.FC = () => {
               <TrackCard 
                 key={track.id} 
                 track={track}
-                queue={topTracks}
+                queue={visibleTopTracks}
                 index={index}
                 showArtist={false}
               />
             ))}
           </div>
-          {topTracks.length > 5 && (
+          {visibleTopTracks.length > 5 && (
             <Button
               variant="ghost"
               className="w-full mt-2 text-muted-foreground hover:text-foreground"
@@ -192,7 +265,7 @@ const Artist: React.FC = () => {
               ) : (
                 <>
                   <ChevronDown className="w-4 h-4 mr-2" />
-                  Visualizza altro ({topTracks.length - 5} brani)
+                  Visualizza altro ({visibleTopTracks.length - 5} brani)
                 </>
               )}
             </Button>
@@ -233,12 +306,12 @@ const Artist: React.FC = () => {
       )}
 
       {/* Artist Playlists - Horizontal scroll */}
-      {artistPlaylists.length > 0 && (
+      {visiblePlaylists.length > 0 && (
         <section className="px-4 md:px-8 mb-8 md:mb-10">
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-3 md:mb-4">Playlist dell'artista</h2>
           <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex gap-3 md:gap-4 pb-4">
-              {artistPlaylists.map((playlist) => (
+              {visiblePlaylists.map((playlist) => (
                 <div 
                   key={playlist.id} 
                   className="flex-shrink-0 w-32 md:w-40"
