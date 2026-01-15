@@ -298,13 +298,54 @@ export async function getDeezerPlaylist(id: string): Promise<DeezerPlaylist & { 
   return data;
 }
 
-export async function getArtistPlaylists(artistName: string): Promise<DeezerPlaylist[]> {
+export async function getArtistPlaylists(artistName: string, artistId?: string): Promise<DeezerPlaylist[]> {
   const { data, error } = await supabase.functions.invoke('deezer', {
     body: { action: 'get-artist-playlists', query: artistName },
   });
 
   if (error) throw error;
-  return data || [];
+  
+  let playlists: DeezerPlaylist[] = data || [];
+  
+  // If artistId is provided, check for merged artists and fetch their playlists too
+  if (artistId) {
+    const merges = await getMergedArtists();
+    const mergedArtists = merges.filter(m => m.master_artist_id === artistId);
+    
+    if (mergedArtists.length > 0) {
+      // Get merged artist names from the merges table
+      const { data: mergeData } = await supabase
+        .from('artist_merges')
+        .select('merged_artist_name')
+        .eq('master_artist_id', artistId);
+      
+      const mergedNames = (mergeData as { merged_artist_name: string }[] || []).map(m => m.merged_artist_name);
+      
+      // Fetch playlists for each merged artist
+      for (const mergedName of mergedNames) {
+        try {
+          const { data: mergedPlaylists } = await supabase.functions.invoke('deezer', {
+            body: { action: 'get-artist-playlists', query: mergedName },
+          });
+          
+          if (mergedPlaylists?.length) {
+            // Add unique playlists (by ID)
+            const existingIds = new Set(playlists.map(p => p.id));
+            for (const playlist of mergedPlaylists) {
+              if (!existingIds.has(playlist.id)) {
+                playlists.push(playlist);
+                existingIds.add(playlist.id);
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`Failed to fetch playlists for merged artist ${mergedName}:`, e);
+        }
+      }
+    }
+  }
+  
+  return playlists;
 }
 
 export async function getCountryChart(country: string): Promise<Track[]> {
