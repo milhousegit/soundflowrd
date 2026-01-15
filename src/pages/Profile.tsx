@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import AppLogs from '@/components/AppLogs';
 import AdminNotifications from '@/components/AdminNotifications';
 import AdminUsersManagement from '@/components/AdminUsersManagement';
+import AdminBannerTester from '@/components/AdminBannerTester';
 import { isPast } from 'date-fns';
 interface CloudFile {
   id: string;
@@ -776,6 +777,9 @@ const Settings: React.FC = () => {
                   <AdminNotifications language={settings.language} />
                 </div>
               </details>
+
+              {/* Test Banners */}
+              <AdminBannerTester language={settings.language} />
             </div>
           </section>}
       </div>
