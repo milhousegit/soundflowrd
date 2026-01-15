@@ -14,6 +14,22 @@ export interface TidalStreamError {
 }
 
 /**
+ * Map app quality setting to Tidal quality
+ */
+export function mapQualityToTidal(appQuality: 'high' | 'medium' | 'low'): string {
+  switch (appQuality) {
+    case 'high':
+      return 'LOSSLESS'; // FLAC
+    case 'medium':
+      return 'HIGH'; // 320kbps AAC
+    case 'low':
+      return 'LOW'; // 96kbps
+    default:
+      return 'LOSSLESS';
+  }
+}
+
+/**
  * Get audio stream URL for a track by searching on Tidal via SquidWTF
  * @param title - Track title
  * @param artist - Artist name

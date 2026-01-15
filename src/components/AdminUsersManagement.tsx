@@ -13,7 +13,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { addYears, format, isPast } from 'date-fns';
+import { addYears, addMonths, format, isPast } from 'date-fns';
 import { it, enUS } from 'date-fns/locale';
 
 interface UserProfile {
@@ -43,9 +43,11 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     expired: language === 'it' ? 'Scaduto' : 'Expired',
     expiresAt: language === 'it' ? 'Scade il' : 'Expires',
     grantPremium: language === 'it' ? 'Attiva Premium' : 'Grant Premium',
+    grantTrial: language === 'it' ? 'Prova 1 mese' : '1 Month Trial',
     revokePremium: language === 'it' ? 'Revoca Premium' : 'Revoke Premium',
     noUsers: language === 'it' ? 'Nessun utente trovato' : 'No users found',
     premiumGranted: language === 'it' ? 'Premium attivato!' : 'Premium granted!',
+    trialGranted: language === 'it' ? 'Prova attivata!' : 'Trial granted!',
     premiumRevoked: language === 'it' ? 'Premium revocato' : 'Premium revoked',
     error: language === 'it' ? 'Errore' : 'Error',
     registeredAt: language === 'it' ? 'Registrato il' : 'Registered',
@@ -103,6 +105,40 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
       });
     } catch (error) {
       console.error('Failed to update premium status:', error);
+      toast({
+        title: t.error,
+        description: String(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const grantTrial = async (userId: string) => {
+    setUpdatingUser(userId);
+    try {
+      const updateData = { is_premium: true, premium_expires_at: addMonths(new Date(), 1).toISOString() };
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      // Update local state
+      setUsers(prev => prev.map(u => 
+        u.id === userId 
+          ? { ...u, ...updateData }
+          : u
+      ));
+
+      toast({
+        title: t.trialGranted,
+      });
+    } catch (error) {
+      console.error('Failed to grant trial:', error);
       toast({
         title: t.error,
         description: String(error),
@@ -202,21 +238,40 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                     </Badge>
                   )}
                   
-                  <Button
-                    size="sm"
-                    variant={isActive ? "outline" : "default"}
-                    className={`h-7 text-xs ${!isActive ? 'bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0' : ''}`}
-                    onClick={() => togglePremium(user.id, isActive)}
-                    disabled={updatingUser === user.id}
-                  >
-                    {updatingUser === user.id ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : isActive ? (
-                      <><X className="w-3 h-3 mr-1" /> {t.revokePremium}</>
-                    ) : (
-                      <><Check className="w-3 h-3 mr-1" /> {t.grantPremium}</>
+                  <div className="flex items-center gap-1.5">
+                    {/* Trial button - only show for non-premium users */}
+                    {!isActive && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-[#8B5CF6]/50 text-[#8B5CF6] hover:bg-[#8B5CF6]/10"
+                        onClick={() => grantTrial(user.id)}
+                        disabled={updatingUser === user.id}
+                      >
+                        {updatingUser === user.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          t.grantTrial
+                        )}
+                      </Button>
                     )}
-                  </Button>
+                    
+                    <Button
+                      size="sm"
+                      variant={isActive ? "outline" : "default"}
+                      className={`h-7 text-xs ${!isActive ? 'bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0' : ''}`}
+                      onClick={() => togglePremium(user.id, isActive)}
+                      disabled={updatingUser === user.id}
+                    >
+                      {updatingUser === user.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : isActive ? (
+                        <><X className="w-3 h-3 mr-1" /> {t.revokePremium}</>
+                      ) : (
+                        <><Check className="w-3 h-3 mr-1" /> {t.grantPremium}</>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             );
