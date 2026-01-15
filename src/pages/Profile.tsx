@@ -184,7 +184,7 @@ const Settings: React.FC = () => {
       minute: '2-digit'
     });
   };
-  return <div className="p-4 md:p-6 pb-32 max-w-xl mx-auto animate-fade-in">
+  return <div className="p-4 md:p-6 pb-32 max-w-xl md:max-w-3xl lg:max-w-4xl mx-auto animate-fade-in">
       <h1 className="text-2xl font-bold text-foreground mb-6">{t('profile')}</h1>
 
       <div className="space-y-4">
@@ -279,8 +279,24 @@ const Settings: React.FC = () => {
               </select>
             </div>
 
-            {/* Premium CTA - Show only for non-admin and non-premium users */}
-            {!isActualAdmin && !isPremiumActive && <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
+            {/* Premium Status - Show expiration for premium users, CTA for free users */}
+            {isPremiumActive && profile?.premium_expires_at ? (
+              <div className="p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 via-[#6366F1]/15 to-[#3B82F6]/10 border border-[#8B5CF6]/30">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] flex items-center justify-center shrink-0">
+                    <Crown className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">Premium</p>
+                    <p className="text-xs text-muted-foreground">
+                      {settings.language === 'it' ? 'Scade il' : 'Expires'} {new Date(profile.premium_expires_at).toLocaleDateString(settings.language === 'it' ? 'it-IT' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <Check className="w-5 h-5 text-green-500" />
+                </div>
+              </div>
+            ) : !isActualAdmin && (
+              <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
                 <DialogTrigger asChild>
                   <button className="w-full p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] hover:opacity-90 transition-opacity shadow-lg">
                     <div className="flex items-center justify-center gap-2">
@@ -343,7 +359,8 @@ const Settings: React.FC = () => {
                     {settings.language === 'it' ? 'Dona 9,90€/anno' : '€9.90/year'}
                   </Button>
                 </DialogContent>
-              </Dialog>}
+              </Dialog>
+            )}
 
             {/* Connect/Disconnect Telegram */}
             <div className="pt-2">

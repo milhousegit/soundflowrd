@@ -25,7 +25,7 @@ import {
   selectFilesAndPlay,
 } from '@/lib/realdebrid';
 import { getDeezerStream } from '@/lib/lucida';
-import { getTidalStream } from '@/lib/tidal';
+import { getTidalStream, mapQualityToTidal } from '@/lib/tidal';
 import { searchTracks } from '@/lib/deezer';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
 import { addSyncedTrack, addSyncingTrack, removeSyncingTrack } from '@/hooks/useSyncedTracks';
@@ -351,7 +351,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Audio element reference
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials, user } = useAuth();
-  const { audioSourceMode } = useSettings();
+  const { audioSourceMode, settings } = useSettings();
   // iOS audio session management (uses only refs internally)
   const iosAudio = useIOSAudioSession();
 
@@ -776,9 +776,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       // Helper function for Tidal fallback (used in hybrid mode)
       const playWithTidalFallback = async (): Promise<boolean> => {
-        addDebugLog('🎵 Fallback Tidal', `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist}`, 'info');
+        const tidalQuality = mapQualityToTidal(settings.audioQuality);
+        addDebugLog('🎵 Fallback Tidal', `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} (${tidalQuality})`, 'info');
         try {
-          const tidalResult = await getTidalStream(enrichedTrack.title, enrichedTrack.artist);
+          const tidalResult = await getTidalStream(enrichedTrack.title, enrichedTrack.artist, tidalQuality);
           if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
 
           if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
@@ -867,12 +868,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       // =============== DEEZER/TIDAL PRIORITY MODE ===============
       if (isDeezerPriorityMode) {
-        addDebugLog('🎵 Modalità HQ', `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} su Tidal`, 'info');
+        const tidalQuality = mapQualityToTidal(settings.audioQuality);
+        addDebugLog('🎵 Modalità HQ', `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} su Tidal (${tidalQuality})`, 'info');
         setLoadingPhase('searching');
 
         try {
           // Use Tidal via SquidWTF - search by title and artist
-          const tidalResult = await getTidalStream(enrichedTrack.title, enrichedTrack.artist);
+          const tidalResult = await getTidalStream(enrichedTrack.title, enrichedTrack.artist, tidalQuality);
           if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
 
           if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
