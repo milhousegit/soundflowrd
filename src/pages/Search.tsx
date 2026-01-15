@@ -141,10 +141,27 @@ const Search: React.FC = () => {
       ]);
 
       // Filter results (keep API ranking/order)
-      // Exclude "collaboration" artists (names containing commas like "thasup, Nitro")
-      const filteredArtists = data.artists.filter((artist) =>
-        matchesTokens([artist.name], searchQuery) && !artist.name.includes(',')
-      );
+      // Exclude "collaboration" artist pages (names like "thasup, Nitro") 
+      // only when the searched term matches one of the parts
+      const normalizedSearchQuery = normalizeForMatch(searchQuery);
+      const filteredArtists = data.artists.filter((artist) => {
+        if (!matchesTokens([artist.name], searchQuery)) return false;
+        
+        // Check if this is a collaboration page (contains comma)
+        if (artist.name.includes(',')) {
+          // Split by comma and check if any part closely matches the search query
+          const parts = artist.name.split(',').map(p => normalizeForMatch(p.trim()));
+          const isCollabPage = parts.some(part => 
+            part === normalizedSearchQuery || 
+            normalizedSearchQuery.includes(part) || 
+            part.includes(normalizedSearchQuery)
+          );
+          // Hide only if it's a collab page matching our search
+          if (isCollabPage) return false;
+        }
+        
+        return true;
+      });
 
       const filteredAlbums = data.albums.filter((album) =>
         matchesTokens([album.title, album.artist], searchQuery)
