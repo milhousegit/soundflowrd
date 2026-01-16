@@ -493,6 +493,31 @@ const PlaylistPage: React.FC = () => {
                       </Button>
                     </div>
                   )}
+                  
+                  {/* Admin-only: Show SoundFlow playlist ID for chart configuration */}
+                  {isAdmin && !playlist.deezer_id && (
+                    <div className="pt-2 border-t border-border">
+                      <p className="text-xs text-muted-foreground mb-1">ID Playlist (per classifiche)</p>
+                      <div className="flex gap-2">
+                        <Input
+                          readOnly
+                          value={`sf:${playlist.id}`}
+                          className="text-xs font-mono"
+                        />
+                        <Button 
+                          size="icon" 
+                          variant="outline" 
+                          onClick={() => {
+                            navigator.clipboard.writeText(`sf:${playlist.id}`);
+                            toast.success('ID copiato!');
+                          }}
+                          className="flex-shrink-0"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </PopoverContent>
             </Popover>
