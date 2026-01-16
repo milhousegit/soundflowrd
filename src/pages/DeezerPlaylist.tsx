@@ -32,7 +32,7 @@ const DeezerPlaylistPage: React.FC = () => {
   const [playlist, setPlaylist] = useState<(DeezerPlaylist & { tracks: Track[] }) | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [linkCopied, setLinkCopied] = useState(false);
-
+  const [idCopied, setIdCopied] = useState(false);
   const shareUrl = `${window.location.origin}/deezer-playlist/${id}`;
 
   const handleCopyShareLink = async () => {
@@ -43,6 +43,18 @@ const DeezerPlaylistPage: React.FC = () => {
       setTimeout(() => setLinkCopied(false), 2000);
     } catch {
       toast.error('Impossibile copiare il link');
+    }
+  };
+
+  const handleCopyPlaylistId = async () => {
+    if (!id) return;
+    try {
+      await navigator.clipboard.writeText(id);
+      setIdCopied(true);
+      toast.success('ID playlist copiato!');
+      setTimeout(() => setIdCopied(false), 2000);
+    } catch {
+      toast.error('Impossibile copiare l\'ID');
     }
   };
 
@@ -183,6 +195,29 @@ const DeezerPlaylistPage: React.FC = () => {
                   )}
                 </Button>
               </div>
+              
+              {/* Admin: Copy playlist ID for chart configuration */}
+              {isAdmin && id && (
+                <div className="pt-2 border-t border-border">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    ID playlist per classifiche:
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      value={id}
+                      readOnly
+                      className="text-xs font-mono"
+                    />
+                    <Button size="sm" variant="outline" onClick={handleCopyPlaylistId}>
+                      {idCopied ? (
+                        <CheckCircle className="w-4 h-4" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </PopoverContent>
         </Popover>
