@@ -31,15 +31,23 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import NotificationsDropdown from '@/components/NotificationsDropdown';
+interface ChartConfig {
+  id: string;
+  country_code: string;
+  playlist_id: string;
+  playlist_title: string | null;
+}
+
 const Home: React.FC = () => {
   const [newReleases, setNewReleases] = useState<Album[]>([]);
   const [popularArtists, setPopularArtists] = useState<Artist[]>([]);
-  const [countryChartTracks, setCountryChartTracks] = useState<Track[]>([]);
+  const [chartConfigs, setChartConfigs] = useState<ChartConfig[]>([]);
   const [isLoadingReleases, setIsLoadingReleases] = useState(true);
   const [isLoadingArtists, setIsLoadingArtists] = useState(true);
-  const [isLoadingCountryChart, setIsLoadingCountryChart] = useState(true);
+  const [isLoadingCharts, setIsLoadingCharts] = useState(true);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
+  const [playingChartCountry, setPlayingChartCountry] = useState<string | null>(null);
   
   const { settings, t } = useSettings();
   const { currentTrack, isPlaying, playTrack, toggle, addToQueue } = usePlayer();
@@ -48,21 +56,6 @@ const Home: React.FC = () => {
   const { recentTracks, isLoading: isLoadingRecent } = useRecentlyPlayed();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-
-  // Get country code from language
-  const getCountryFromLanguage = (lang: string): string => {
-    const langToCountry: Record<string, string> = {
-      'it': 'IT',
-      'en': 'US',
-      'es': 'ES',
-      'fr': 'FR',
-      'de': 'DE',
-      'pt': 'PT',
-    };
-    return langToCountry[lang] || 'IT';
-  };
-
-  const country = getCountryFromLanguage(settings.language);
 
   // Get all favorites to extract unique artist names
   const favoriteArtists = getFavoritesByType('artist');
@@ -210,22 +203,42 @@ const Home: React.FC = () => {
     fetchArtistsForYou();
   }, [favorites.length]);
 
-  // Fetch country chart
+  // Fetch chart configurations
   useEffect(() => {
-    const fetchCountryChart = async () => {
-      setIsLoadingCountryChart(true);
+    const fetchChartConfigs = async () => {
+      setIsLoadingCharts(true);
       try {
-        const tracks = await getCountryChart(country);
-        setCountryChartTracks(tracks.slice(0, 10));
+        const { data, error } = await supabase
+          .from('chart_configurations')
+          .select('*')
+          .order('country_code');
+        
+        if (error) throw error;
+        setChartConfigs(data || []);
       } catch (error) {
-        console.error('Failed to fetch country chart:', error);
+        console.error('Failed to fetch chart configurations:', error);
       } finally {
-        setIsLoadingCountryChart(false);
+        setIsLoadingCharts(false);
       }
     };
 
-    fetchCountryChart();
-  }, [country]);
+    fetchChartConfigs();
+  }, []);
+
+  // Play a chart
+  const handlePlayChart = async (countryCode: string) => {
+    setPlayingChartCountry(countryCode);
+    try {
+      const tracks = await getCountryChart(countryCode);
+      if (tracks.length > 0) {
+        playTrack(tracks[0], tracks);
+      }
+    } catch (error) {
+      console.error('Failed to play chart:', error);
+    } finally {
+      setPlayingChartCountry(null);
+    }
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -536,68 +549,74 @@ const Home: React.FC = () => {
         </section>
       )}
 
-      {/* Country Chart - Top tracks for user's country */}
+      {/* Charts - All country charts as cards */}
       {homeDisplayOptions.showTopCharts && (
         <section>
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-4 md:mb-6">
-            {settings.language === 'it' 
-              ? `Top ${country === 'IT' ? 'Italia' : country === 'US' ? 'USA' : country}` 
-              : `Top ${country === 'IT' ? 'Italy' : country === 'US' ? 'USA' : country}`}
+            {settings.language === 'it' ? 'Classifiche' : 'Charts'}
           </h2>
-          {isLoadingCountryChart ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 animate-pulse">
-                  <div className="w-6 h-4 bg-muted rounded" />
-                  <div className="w-12 h-12 bg-muted rounded" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-muted rounded w-2/3" />
-                    <div className="h-3 bg-muted rounded w-1/3" />
-                  </div>
+          {isLoadingCharts ? (
+            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex-shrink-0 w-32 md:w-auto">
+                  <AlbumCardSkeleton />
                 </div>
               ))}
             </div>
-          ) : countryChartTracks.length > 0 ? (
-            <div className="space-y-1">
-              {countryChartTracks.map((track, index) => {
-                const isCurrentTrack = currentTrack?.id === track.id;
+          ) : chartConfigs.length > 0 ? (
+            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
+              {chartConfigs.map((chart) => {
+                const countryNames: Record<string, { it: string; en: string; flag: string }> = {
+                  'IT': { it: 'Italia', en: 'Italy', flag: '🇮🇹' },
+                  'US': { it: 'Stati Uniti', en: 'United States', flag: '🇺🇸' },
+                  'ES': { it: 'Spagna', en: 'Spain', flag: '🇪🇸' },
+                  'FR': { it: 'Francia', en: 'France', flag: '🇫🇷' },
+                  'DE': { it: 'Germania', en: 'Germany', flag: '🇩🇪' },
+                  'PT': { it: 'Portogallo', en: 'Portugal', flag: '🇵🇹' },
+                  'GB': { it: 'Regno Unito', en: 'United Kingdom', flag: '🇬🇧' },
+                  'BR': { it: 'Brasile', en: 'Brazil', flag: '🇧🇷' },
+                };
+                
+                const countryInfo = countryNames[chart.country_code] || { 
+                  it: chart.country_code, 
+                  en: chart.country_code, 
+                  flag: '🌍' 
+                };
+                const displayName = chart.playlist_title || (settings.language === 'it' 
+                  ? `Top ${countryInfo.it}` 
+                  : `Top ${countryInfo.en}`);
+                const isLoading = playingChartCountry === chart.country_code;
                 
                 return (
                   <TapArea
-                    key={track.id}
-                    onTap={() => (isCurrentTrack ? toggle() : playTrack(track, countryChartTracks))}
-                    className="group flex items-center gap-3 p-2 md:p-3 rounded-lg hover:bg-secondary/70 transition-all cursor-pointer touch-manipulation"
+                    key={chart.id}
+                    onTap={() => !isLoading && handlePlayChart(chart.country_code)}
+                    className="flex-shrink-0 w-32 md:w-auto cursor-pointer group"
                   >
-                    <span className={`w-6 text-center font-bold text-sm ${index < 3 ? 'text-primary' : 'text-muted-foreground'}`}>
-                      {index + 1}
-                    </span>
-                    <div className="w-10 h-10 md:w-12 md:h-12 rounded overflow-hidden flex-shrink-0 bg-muted relative">
-                      {track.coverUrl ? (
-                        <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Music className="w-4 h-4 text-muted-foreground" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        {isCurrentTrack && isPlaying ? (
-                          <Pause className="w-4 h-4 text-primary" />
+                    <div className="aspect-square rounded-xl overflow-hidden bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5 relative mb-2 shadow-lg">
+                      {/* Flag emoji as main visual */}
+                      <div className="absolute inset-0 flex items-center justify-center text-6xl md:text-7xl">
+                        {countryInfo.flag}
+                      </div>
+                      {/* Overlay on hover/loading */}
+                      <div className={`absolute inset-0 bg-background/60 flex items-center justify-center transition-opacity ${isLoading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                        {isLoading ? (
+                          <Loader2 className="w-8 h-8 text-primary animate-spin" />
                         ) : (
-                          <Play className="w-4 h-4 text-foreground ml-0.5" />
+                          <Play className="w-8 h-8 text-foreground ml-1" />
                         )}
                       </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm md:text-base text-foreground truncate">{track.title}</p>
-                      <p className="text-xs md:text-sm text-muted-foreground truncate">{track.artist}</p>
-                    </div>
+                    <p className="font-medium text-sm md:text-base text-foreground truncate text-center">
+                      {displayName}
+                    </p>
                   </TapArea>
                 );
               })}
             </div>
           ) : (
             <p className="text-muted-foreground text-center py-8">
-              {settings.language === 'it' ? 'Classifica non disponibile' : 'Chart not available'}
+              {settings.language === 'it' ? 'Nessuna classifica disponibile' : 'No charts available'}
             </p>
           )}
         </section>
