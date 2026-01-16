@@ -76,7 +76,23 @@ const Info: React.FC = () => {
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
                   {isItalian ? "Semplificato sistema di riproduzione per maggiore stabilità" : "Simplified playback system for better stability"}
                 </li>
-                
+              </ul>
+            </div>
+            
+            {/* Roadmap */}
+            <div className="mt-4 pt-4 border-t border-border">
+              <h3 className="text-sm font-medium text-foreground mb-2">
+                {isItalian ? "Roadmap" : "Roadmap"}
+              </h3>
+              <ul className="text-sm text-muted-foreground space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 mt-1.5 shrink-0" />
+                  {isItalian ? "Risoluzione problema della riproduzione a singhiozzo su CarPlay" : "Fixing stuttering playback issue on CarPlay"}
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 mt-1.5 shrink-0" />
+                  {isItalian ? "Sincronizzazione widget iOS durante caricamento stream" : "iOS widget sync during stream loading"}
+                </li>
               </ul>
             </div>
           </div>
