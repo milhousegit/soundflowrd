@@ -1,3 +1,4 @@
+// Layout component - Main app layout with sidebar, player and navigation
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
