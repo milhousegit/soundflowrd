@@ -9,7 +9,7 @@ import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import PlaylistRecommendations from '@/components/PlaylistRecommendations';
-import CoverImageUploader from '@/components/CoverImageUploader';
+
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -161,18 +161,24 @@ const PlaylistPage: React.FC = () => {
     };
   }, []);
 
-  const handleSaveEdit = async () => {
-    if (!playlist || !editedName.trim()) return;
+  const handleSaveAndExit = async () => {
+    if (!playlist) return;
     
-    await updatePlaylist(playlist.id, {
-      name: editedName.trim(),
-      cover_url: editedCoverUrl || undefined,
-      is_public: editedIsPublic,
-    });
+    // Save if name is not empty
+    if (editedName.trim()) {
+      await updatePlaylist(playlist.id, {
+        name: editedName.trim(),
+        cover_url: editedCoverUrl || undefined,
+        is_public: editedIsPublic,
+      });
+      
+      setPlaylist({ ...playlist, name: editedName.trim(), cover_url: editedCoverUrl || null, is_public: editedIsPublic });
+      toast.success('Playlist aggiornata');
+    }
     
-    setPlaylist({ ...playlist, name: editedName.trim(), cover_url: editedCoverUrl || null, is_public: editedIsPublic });
     setIsEditing(false);
-    toast.success('Playlist aggiornata');
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const handleCopyShareLink = () => {
@@ -237,11 +243,7 @@ const PlaylistPage: React.FC = () => {
     setDragOverIndex(null);
   };
 
-  const handleExitEditMode = () => {
-    setIsEditing(false);
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
+  // Removed - now using handleSaveAndExit for everything
 
   if (isLoading) {
     return (
@@ -300,13 +302,84 @@ const PlaylistPage: React.FC = () => {
       
       {/* Header */}
       <div className="relative p-4 md:p-8 pt-12 md:pt-16 flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-8 bg-gradient-to-b from-primary/10 to-transparent">
-        {/* Cover */}
-        <div className="w-40 h-40 md:w-56 md:h-56 rounded-xl overflow-hidden bg-muted shadow-2xl flex-shrink-0">
-          {playlist.cover_url ? (
-            <img src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
+        {/* Cover - with edit overlay when editing */}
+        <div className="relative w-40 h-40 md:w-56 md:h-56 flex-shrink-0">
+          {isEditing && canEdit && user ? (
+            // Editing mode - cover with upload overlay
+            <div 
+              className="w-full h-full rounded-xl overflow-hidden bg-muted shadow-2xl relative group cursor-pointer"
+              onClick={() => document.getElementById('cover-file-input')?.click()}
+            >
+              {/* Current cover or placeholder */}
+              {editedCoverUrl ? (
+                <img src={editedCoverUrl} alt={playlist.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+                  <Music className="w-16 md:w-24 h-16 md:h-24 text-primary/50" />
+                </div>
+              )}
+              
+              {/* Upload overlay */}
+              <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Upload className="w-8 h-8 text-white mb-2" />
+                <p className="text-white text-sm font-medium">Cambia cover</p>
+              </div>
+              
+              {/* Hidden file input */}
+              <input
+                id="cover-file-input"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file && user) {
+                    const { uploadCover } = await import('@/hooks/usePlaylistCoverUpload').then(m => ({ uploadCover: m.usePlaylistCoverUpload }));
+                    // Upload directly
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    const fileName = `${user.id}/${Date.now()}-${file.name}`;
+                    const { data, error } = await supabase.storage
+                      .from('playlist-covers')
+                      .upload(fileName, file, { upsert: true });
+                    
+                    if (!error && data) {
+                      const { data: { publicUrl } } = supabase.storage
+                        .from('playlist-covers')
+                        .getPublicUrl(data.path);
+                      setEditedCoverUrl(publicUrl);
+                    }
+                  }
+                }}
+              />
+              
+              {/* Remove button in bottom right */}
+              {editedCoverUrl && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  className="absolute bottom-2 right-2 w-8 h-8 rounded-full opacity-90 hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditedCoverUrl('');
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-              <Music className="w-16 md:w-24 h-16 md:h-24 text-primary/50" />
+            // View mode - normal cover
+            <div className="w-full h-full rounded-xl overflow-hidden bg-muted shadow-2xl">
+              {playlist.cover_url ? (
+                <img src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+                  <Music className="w-16 md:w-24 h-16 md:h-24 text-primary/50" />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -323,16 +396,6 @@ const PlaylistPage: React.FC = () => {
                 placeholder="Nome playlist"
                 className="text-xl font-bold"
               />
-              
-              {/* Cover uploader */}
-              {user && (
-                <CoverImageUploader
-                  currentUrl={editedCoverUrl}
-                  onUrlChange={setEditedCoverUrl}
-                  userId={user.id}
-                  previewSize="md"
-                />
-              )}
               
               {/* Public/Private toggle */}
               <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
@@ -358,10 +421,6 @@ const PlaylistPage: React.FC = () => {
                   checked={editedIsPublic}
                   onCheckedChange={setEditedIsPublic}
                 />
-              </div>
-              
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleSaveEdit}>Salva Info</Button>
               </div>
             </div>
           ) : (
@@ -399,12 +458,12 @@ const PlaylistPage: React.FC = () => {
       {/* Actions */}
       <div className="px-4 md:px-8 py-4 md:py-6 flex items-center gap-3">
         {isEditing && canEdit ? (
-          // Edit mode actions
+          // Edit mode actions - single button that saves and exits
           <>
             <Button 
               variant="default" 
               size="sm"
-              onClick={handleExitEditMode}
+              onClick={handleSaveAndExit}
               className="gap-2"
             >
               <Check className="w-4 h-4" />
@@ -412,8 +471,8 @@ const PlaylistPage: React.FC = () => {
             </Button>
             <p className="text-sm text-muted-foreground">
               {playlist.deezer_id 
-                ? 'Modifica info playlist' 
-                : 'Modifica info, trascina per riordinare o clicca X per rimuovere'}
+                ? 'Clicca sulla cover per cambiarla' 
+                : 'Clicca sulla cover per cambiarla, trascina i brani per riordinare'}
             </p>
           </>
         ) : (
