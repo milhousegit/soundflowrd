@@ -363,19 +363,54 @@ export const useIOSAudioSession = () => {
 
   /**
    * Keep the audio session alive - call when playback starts
-   * Throttled and CarPlay-aware to prevent audio stuttering
-   */
-  /**
-   * Keep the audio session alive - SIMPLIFIED for CarPlay compatibility
-   * Heavily throttled and completely skipped on external devices
+   * ENABLED ONLY for internal speakers (iPhone speaker/earpiece)
+   * DISABLED for external devices (CarPlay, Bluetooth, AirPlay) to prevent stuttering
    */
   const keepAlive = useCallback(() => {
-    // COMPLETELY DISABLED - this function is a no-op
-    // The silent audio loop was causing CarPlay stuttering every ~1 second
-    // The main audio element handles its own playback session
-    // External audio routing (CarPlay, Bluetooth) manages audio sessions automatically
-    return;
-  }, []);
+    // Skip on external devices - they manage audio sessions automatically
+    // and the silent audio loop causes stuttering on CarPlay
+    if (isExternalDeviceRef.current) {
+      return;
+    }
+    
+    // Skip if not iOS or not in PWA mode
+    if (!isIOS() || !isPWA()) {
+      return;
+    }
+    
+    // Throttle: only run every 5 seconds to reduce overhead
+    const now = Date.now();
+    if (now - lastKeepAliveRef.current < 5000) {
+      return;
+    }
+    lastKeepAliveRef.current = now;
+    
+    addLog('info', 'Keep-alive pulse (internal speaker)');
+    
+    try {
+      // Resume AudioContext if suspended
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
+      
+      // Play a brief silent buffer to keep the audio session active in background
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      
+      const ctx: AudioContext = audioContextRef.current || new AudioCtx();
+      if (!audioContextRef.current) audioContextRef.current = ctx;
+      
+      // Use native sample rate
+      const sampleRate = ctx.sampleRate || 44100;
+      const buffer = ctx.createBuffer(1, 1, sampleRate);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+    } catch (e) {
+      addLog('warning', 'Keep-alive failed', e instanceof Error ? e.message : String(e));
+    }
+  }, [addLog]);
 
   /**
    * Stop keep-alive (when playback stops completely)

@@ -511,6 +511,28 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const iosAudioRef = useRef(iosAudio);
   iosAudioRef.current = iosAudio;
 
+  // iOS background playback keep-alive interval
+  // Calls keepAlive every 10 seconds during playback to maintain audio session
+  // ONLY on internal speakers (iPhone speaker/earpiece), DISABLED on CarPlay/Bluetooth
+  useEffect(() => {
+    if (!state.isPlaying) return;
+    
+    // Skip if on external device (CarPlay/Bluetooth) - they manage sessions automatically
+    if (iosAudio.isExternalDevice()) return;
+    
+    // Call keepAlive immediately when playback starts
+    iosAudio.keepAlive();
+    
+    // Then call every 10 seconds during playback
+    const intervalId = setInterval(() => {
+      if (!iosAudio.isExternalDevice()) {
+        iosAudio.keepAlive();
+      }
+    }, 10000);
+    
+    return () => clearInterval(intervalId);
+  }, [state.isPlaying, iosAudio]);
+
   useEffect(() => {
     audioRef.current = new Audio();
     audioRef.current.volume = state.volume;
