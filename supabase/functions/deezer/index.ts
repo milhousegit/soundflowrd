@@ -330,33 +330,51 @@ serve(async (req) => {
       }
 
       case 'get-playlist': {
-        const data = await fetchWithRetry(`${DEEZER_API}/playlist/${id}`);
-        
-        const playlist = {
-          id: String(data.id),
-          title: data.title,
-          description: data.description || '',
-          coverUrl: data.picture_big || data.picture_medium || data.picture || undefined,
-          trackCount: data.nb_tracks || 0,
-          creator: data.creator?.name || 'Deezer',
-          duration: data.duration || 0,
-          tracks: (data.tracks?.data || []).map((track: any, index: number) => ({
-            id: String(track.id),
-            title: track.title,
-            artist: track.artist?.name || 'Unknown Artist',
-            artistId: String(track.artist?.id || ''),
-            album: track.album?.title || 'Unknown Album',
-            albumId: String(track.album?.id || ''),
-            duration: track.duration || 0,
-            coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
-            previewUrl: track.preview || undefined,
-            trackNumber: index + 1,
-          })),
-        };
+        try {
+          const data = await fetchWithRetry(`${DEEZER_API}/playlist/${id}`);
+          
+          const playlist = {
+            id: String(data.id),
+            title: data.title,
+            description: data.description || '',
+            coverUrl: data.picture_big || data.picture_medium || data.picture || undefined,
+            trackCount: data.nb_tracks || 0,
+            creator: data.creator?.name || 'Deezer',
+            duration: data.duration || 0,
+            tracks: (data.tracks?.data || []).map((track: any, index: number) => ({
+              id: String(track.id),
+              title: track.title,
+              artist: track.artist?.name || 'Unknown Artist',
+              artistId: String(track.artist?.id || ''),
+              album: track.album?.title || 'Unknown Album',
+              albumId: String(track.album?.id || ''),
+              duration: track.duration || 0,
+              coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+              previewUrl: track.preview || undefined,
+              trackNumber: index + 1,
+            })),
+          };
 
-        return new Response(JSON.stringify(playlist), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+          return new Response(JSON.stringify(playlist), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } catch (error) {
+          // Return empty playlist on error (403, etc.) instead of throwing
+          console.error(`Error fetching playlist ${id}:`, error);
+          return new Response(JSON.stringify({
+            id: String(id),
+            title: '',
+            description: '',
+            coverUrl: null,
+            trackCount: 0,
+            creator: '',
+            duration: 0,
+            tracks: [],
+            error: true,
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       }
 
       case 'get-artist-playlists': {
