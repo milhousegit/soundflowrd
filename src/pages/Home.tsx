@@ -7,7 +7,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getNewReleases, getPopularArtists, searchAlbums, getArtist, getCountryChart } from '@/lib/deezer';
+import { getNewReleases, getPopularArtists, getArtist, getCountryChart } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
@@ -67,54 +67,57 @@ const Home: React.FC = () => {
   const favoriteTracks = getFavoritesByType('track');
   const favoriteAlbums = getFavoritesByType('album');
 
-  // Extract unique artist names from all favorites
-  const getUniqueArtistNames = (): string[] => {
+
+  // recentTracks now comes from useRecentlyPlayed hook (synced with database)
+
+  // Get unique artist IDs from favorites
+  const getUniqueArtistIds = (): string[] => {
     const artistSet = new Set<string>();
     
-    // From favorite artists
+    // From favorite artists - use item_id as the artist ID
     favoriteArtists.forEach(f => {
-      if (f.item_title) artistSet.add(f.item_title);
+      if (f.item_id) artistSet.add(f.item_id);
     });
     
-    // From favorite tracks (artist name is in item_artist)
+    // From favorite tracks (artistId from item_data if available)
     favoriteTracks.forEach(f => {
-      if (f.item_artist) artistSet.add(f.item_artist);
+      const data = f.item_data as { artistId?: string } | null;
+      if (data?.artistId) artistSet.add(data.artistId);
     });
     
-    // From favorite albums (artist name is in item_artist)
+    // From favorite albums (artistId from item_data if available)
     favoriteAlbums.forEach(f => {
-      if (f.item_artist) artistSet.add(f.item_artist);
+      const data = f.item_data as { artistId?: string } | null;
+      if (data?.artistId) artistSet.add(data.artistId);
     });
     
     return Array.from(artistSet);
   };
 
-  // recentTracks now comes from useRecentlyPlayed hook (synced with database)
-
   useEffect(() => {
     const fetchNewReleases = async () => {
       setIsLoadingReleases(true);
       try {
-        const uniqueArtistNames = getUniqueArtistNames();
+        const uniqueArtistIds = getUniqueArtistIds();
         
-        // If user has favorites, search for releases from those artists
-        if (uniqueArtistNames.length > 0) {
+        // If user has favorites, get releases from those artists via getArtist
+        if (uniqueArtistIds.length > 0) {
           const allReleases: Album[] = [];
           
-          // Search releases for up to 5 artists using Deezer
-          for (const artistName of uniqueArtistNames.slice(0, 5)) {
+          // Fetch releases for up to 8 favorite artists using getArtist (which returns releases sorted by date)
+          const artistPromises = uniqueArtistIds.slice(0, 8).map(async (artistId) => {
             try {
-              const albums = await searchAlbums(artistName);
-              // Filter to only include releases that match the artist name
-              const artistReleases = albums.filter((album: Album) => 
-                album.artist?.toLowerCase().includes(artistName.toLowerCase()) ||
-                artistName.toLowerCase().includes(album.artist?.toLowerCase() || '')
-              );
-              allReleases.push(...artistReleases.slice(0, 6));
+              const artistData = await getArtist(artistId);
+              // artistData.releases contains albums sorted by release date
+              return (artistData.releases || []).slice(0, 6);
             } catch (e) {
-              console.error('Error fetching releases for', artistName, e);
+              console.error('Error fetching releases for artist', artistId, e);
+              return [];
             }
-          }
+          });
+          
+          const releasesArrays = await Promise.all(artistPromises);
+          releasesArrays.forEach(releases => allReleases.push(...releases));
           
           // Sort by release date (newest first) and dedupe
           const uniqueReleases = allReleases
