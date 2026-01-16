@@ -103,27 +103,27 @@ const AppContent = () => {
       <PremiumExpiredBanner />
       <LandscapeBlocker />
       <AutoModePrompt />
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <AppRoutes />
     </>
   );
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <SettingsProvider>
-        <PlayerProvider>
-          <AutoModeProvider>
-            <TooltipProvider>
-              <AppContent />
-            </TooltipProvider>
-          </AutoModeProvider>
-        </PlayerProvider>
-      </SettingsProvider>
-    </AuthProvider>
-  </QueryClientProvider>
+  <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <SettingsProvider>
+          <PlayerProvider>
+            <AutoModeProvider>
+              <TooltipProvider>
+                <AppContent />
+              </TooltipProvider>
+            </AutoModeProvider>
+          </PlayerProvider>
+        </SettingsProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </BrowserRouter>
 );
 
 export default App;
