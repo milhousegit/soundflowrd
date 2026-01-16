@@ -490,6 +490,54 @@ export const useIOSAudioSession = () => {
     };
   }, [addLog, keepAlive]);
 
+  /**
+   * Play a silent placeholder to "occupy" the iOS audio session.
+   * This prevents the widget from de-syncing during stream loading.
+   * ONLY used on iOS when NOT on external device (CarPlay/Bluetooth)
+   */
+  const playPlaceholder = useCallback(async (): Promise<boolean> => {
+    // Skip on external devices - they manage audio sessions automatically
+    if (isExternalDeviceRef.current) {
+      addLog('info', 'Placeholder skipped (external device)');
+      return false;
+    }
+    
+    // Only needed on iOS
+    if (!isIOS()) {
+      return false;
+    }
+    
+    addLog('info', 'Playing audio placeholder for iOS widget sync');
+    
+    try {
+      // Use AudioContext to play a short silent buffer
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return false;
+      
+      const ctx: AudioContext = audioContextRef.current || new AudioCtx();
+      if (!audioContextRef.current) audioContextRef.current = ctx;
+      
+      // Resume if suspended
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+      
+      // Create a longer silent buffer (0.5 seconds) to maintain session
+      const sampleRate = ctx.sampleRate || 44100;
+      const buffer = ctx.createBuffer(1, Math.floor(sampleRate * 0.5), sampleRate);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+      
+      addLog('success', 'Audio placeholder active');
+      return true;
+    } catch (e) {
+      addLog('warning', 'Placeholder failed', e instanceof Error ? e.message : String(e));
+      return false;
+    }
+  }, [addLog]);
+
   return {
     initialize,
     unlock,
@@ -504,6 +552,7 @@ export const useIOSAudioSession = () => {
     addLog,
     isUnlocked: () => isUnlockedRef.current,
     isExternalDevice: () => isExternalDeviceRef.current,
+    playPlaceholder,
     silentAudioRef,
     audioContextRef,
   };

@@ -728,6 +728,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         progress: 0,
       }));
 
+      // iOS widget sync: Set metadata immediately and play placeholder
+      // This keeps the widget showing correct info during stream loading
+      updateMediaSessionMetadata(track, true);
+      
+      // Play silent placeholder on iOS (not on CarPlay/Bluetooth) to maintain session
+      await iosAudio.playPlaceholder();
+
       // REMOVED: Automatic metadata fetch - user can manually fix metadata via Debug Modal if needed
       // Use original track for playback
       const enrichedTrack = track;
