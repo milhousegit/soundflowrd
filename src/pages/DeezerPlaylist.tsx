@@ -39,7 +39,7 @@ const DeezerPlaylistPage: React.FC = () => {
   // Admin edit state
   const [isEditing, setIsEditing] = useState(false);
   const [editedCoverUrl, setEditedCoverUrl] = useState<string>('');
-  const [localPlaylistData, setLocalPlaylistData] = useState<{ id: string; cover_url: string | null } | null>(null);
+  const [customCoverData, setCustomCoverData] = useState<{ id: string; cover_url: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const handleCopyShareLink = async () => {
@@ -75,16 +75,16 @@ const DeezerPlaylistPage: React.FC = () => {
         const data = await getDeezerPlaylist(id);
         setPlaylist(data);
         
-        // Check if there's a local override for cover
-        const { data: localData } = await supabase
-          .from('playlists')
+        // Check if there's a custom cover for this Deezer playlist
+        const { data: coverData } = await supabase
+          .from('deezer_playlist_covers')
           .select('id, cover_url')
-          .eq('deezer_id', id)
+          .eq('deezer_playlist_id', id)
           .maybeSingle();
         
-        if (localData) {
-          setLocalPlaylistData(localData);
-          setEditedCoverUrl(localData.cover_url || data.coverUrl || '');
+        if (coverData) {
+          setCustomCoverData(coverData);
+          setEditedCoverUrl(coverData.cover_url);
         } else {
           setEditedCoverUrl(data.coverUrl || '');
         }
@@ -98,37 +98,45 @@ const DeezerPlaylistPage: React.FC = () => {
     fetchPlaylist();
   }, [id]);
 
-  // Get effective cover URL (local override or Deezer original)
-  const effectiveCoverUrl = localPlaylistData?.cover_url || playlist?.coverUrl || '';
+  // Get effective cover URL (custom cover or Deezer original)
+  const effectiveCoverUrl = customCoverData?.cover_url || playlist?.coverUrl || '';
 
   const handleSaveEdit = async () => {
-    if (!id || !playlist || !user) return;
+    if (!id || !user) return;
     
     try {
-      if (localPlaylistData) {
-        // Update existing local record
+      if (editedCoverUrl) {
+        if (customCoverData) {
+          // Update existing custom cover
+          await supabase
+            .from('deezer_playlist_covers')
+            .update({ cover_url: editedCoverUrl, updated_by: user.id })
+            .eq('id', customCoverData.id);
+          
+          setCustomCoverData({ ...customCoverData, cover_url: editedCoverUrl });
+        } else {
+          // Create new custom cover record
+          const { data: newCover, error } = await supabase
+            .from('deezer_playlist_covers')
+            .insert({
+              deezer_playlist_id: id,
+              cover_url: editedCoverUrl,
+              updated_by: user.id,
+            })
+            .select('id, cover_url')
+            .single();
+          
+          if (error) throw error;
+          setCustomCoverData(newCover);
+        }
+      } else if (customCoverData) {
+        // Remove custom cover (delete record)
         await supabase
-          .from('playlists')
-          .update({ cover_url: editedCoverUrl || null })
-          .eq('id', localPlaylistData.id);
+          .from('deezer_playlist_covers')
+          .delete()
+          .eq('id', customCoverData.id);
         
-        setLocalPlaylistData({ ...localPlaylistData, cover_url: editedCoverUrl || null });
-      } else {
-        // Create new local record for this Deezer playlist
-        const { data: newPlaylist, error } = await supabase
-          .from('playlists')
-          .insert({
-            user_id: user.id,
-            name: playlist.title,
-            deezer_id: id,
-            cover_url: editedCoverUrl || null,
-            is_public: true,
-          })
-          .select('id, cover_url')
-          .single();
-        
-        if (error) throw error;
-        setLocalPlaylistData(newPlaylist);
+        setCustomCoverData(null);
       }
       
       toast.success('Cover aggiornata');
