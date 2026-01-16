@@ -375,6 +375,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const nextRef = useRef<() => void>(() => {});
   const previousRef = useRef<() => void>(() => {});
   const autoSkipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Pre-fetching system for seamless background playback on iOS
+  const prefetchedNextUrlRef = useRef<{ trackId: string; url: string; source: AudioSource } | null>(null);
+  const isPrefetchingRef = useRef(false);
+  const prefetchedTrackIdRef = useRef<string | null>(null);
 
   // Auto-skip to next track when current track is unavailable
   const autoSkipToNext = useCallback(() => {
@@ -515,26 +520,56 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const audio = audioRef.current;
 
-    const handleTimeUpdate = () => setState((prev) => ({ ...prev, progress: audio.currentTime }));
+    // Enhanced time update handler with pre-fetching for background playback
+    const handleTimeUpdate = () => {
+      const currentTime = audio.currentTime;
+      const duration = audio.duration;
+      
+      setState((prev) => ({ ...prev, progress: currentTime }));
+      
+      // Pre-fetch next track URL when 10 seconds from end (for iOS background playback)
+      if (duration && duration > 15 && (duration - currentTime) <= 10 && (duration - currentTime) > 5) {
+        // Trigger pre-fetch via a custom event to access state
+        window.dispatchEvent(new CustomEvent('prefetch-next-track'));
+      }
+    };
+    
     const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
     
-    // Track ended handler - maintains audio session during transition
+    // Track ended handler - uses pre-fetched URL for seamless background playback
     const handleEnded = () => {
-      console.log('[PlayerContext] Track ended, triggering next');
+      console.log('[PlayerContext] Track ended');
       
       // Keep media session showing "playing" during track transition
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'playing';
       }
       
-      // On iOS (non-external devices): play placeholder to maintain session during transition
-      // Fire-and-forget - don't block the transition
+      // Check if we have a pre-fetched URL for immediate playback
+      const prefetched = prefetchedNextUrlRef.current;
+      if (prefetched && prefetched.url) {
+        console.log('[PlayerContext] Using pre-fetched URL for seamless transition');
+        
+        // Immediately set the new source and play - no async operations!
+        audio.src = prefetched.url;
+        audio.play().catch(() => {});
+        
+        // Clear the prefetch
+        prefetchedNextUrlRef.current = null;
+        prefetchedTrackIdRef.current = null;
+        
+        // Trigger state update via event
+        window.dispatchEvent(new CustomEvent('prefetch-played', { detail: prefetched }));
+        return;
+      }
+      
+      // Fallback: On iOS (non-external devices): play placeholder to maintain session
       const iosAudioInstance = iosAudioRef.current;
       if (iosAudioInstance && !iosAudioInstance.isExternalDevice()) {
         iosAudioInstance.playPlaceholder().catch(() => {});
       }
       
-      // Small delay to ensure smooth track transition
+      // Use normal next() flow
       setTimeout(() => {
         nextRef.current();
       }, 100);
@@ -551,7 +586,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setState((prev) => ({ ...prev, isPlaying: true }));
     };
 
-    // Simplified error handler - no aggressive keepAlive
+    // Simplified error handler
     const handleError = (e: Event) => {
       console.error('[PlayerContext] Audio error:', e);
     };
@@ -570,9 +605,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     audio.addEventListener('stalled', handleStalled);
 
     if ('mediaSession' in navigator) {
-      // Detect iOS to customize media session handlers
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      
       navigator.mediaSession.setActionHandler('play', () => {
         audio.play();
         setState((prev) => ({ ...prev, isPlaying: true }));
@@ -1587,6 +1619,78 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     nextRef.current = next;
     previousRef.current = previous;
   }, [next, previous]);
+
+  // Pre-fetch next track URL for seamless iOS background playback
+  useEffect(() => {
+    const handlePrefetchNextTrack = async () => {
+      // Skip if already prefetching or no next track
+      if (isPrefetchingRef.current) return;
+      
+      const nextIndex = state.queueIndex + 1;
+      if (nextIndex >= state.queue.length) return;
+      
+      const nextTrack = state.queue[nextIndex];
+      if (!nextTrack) return;
+      
+      // Skip if already prefetched this track
+      if (prefetchedTrackIdRef.current === nextTrack.id) return;
+      
+      isPrefetchingRef.current = true;
+      console.log('[Prefetch] Starting prefetch for:', nextTrack.title);
+      
+      try {
+        // Try Tidal first (most common source)
+        const tidalQuality = mapQualityToTidal(settings.audioQuality);
+        const tidalResult = await getTidalStream(nextTrack.title, nextTrack.artist, tidalQuality);
+        
+        if ('streamUrl' in tidalResult && tidalResult.streamUrl) {
+          prefetchedNextUrlRef.current = {
+            trackId: nextTrack.id,
+            url: tidalResult.streamUrl,
+            source: 'tidal'
+          };
+          prefetchedTrackIdRef.current = nextTrack.id;
+          console.log('[Prefetch] Successfully prefetched Tidal URL for:', nextTrack.title);
+          addDebugLog('📥 Pre-caricato', `"${nextTrack.title}" pronto per transizione`, 'success');
+        }
+      } catch (error) {
+        console.log('[Prefetch] Failed to prefetch:', error);
+      } finally {
+        isPrefetchingRef.current = false;
+      }
+    };
+    
+    // Handle when prefetched track starts playing
+    const handlePrefetchPlayed = (event: CustomEvent) => {
+      const { trackId, source } = event.detail;
+      const nextIndex = state.queueIndex + 1;
+      
+      if (nextIndex < state.queue.length) {
+        const nextTrack = state.queue[nextIndex];
+        if (nextTrack && nextTrack.id === trackId) {
+          console.log('[Prefetch] Updating state for prefetched track');
+          setState((prev) => ({
+            ...prev,
+            currentTrack: nextTrack,
+            queueIndex: nextIndex,
+            isPlaying: true,
+            progress: 0,
+          }));
+          setCurrentAudioSource(source);
+          updateMediaSessionMetadata(nextTrack, true);
+          saveRecentlyPlayedTrack(nextTrack, user?.id);
+        }
+      }
+    };
+    
+    window.addEventListener('prefetch-next-track', handlePrefetchNextTrack);
+    window.addEventListener('prefetch-played', handlePrefetchPlayed as EventListener);
+    
+    return () => {
+      window.removeEventListener('prefetch-next-track', handlePrefetchNextTrack);
+      window.removeEventListener('prefetch-played', handlePrefetchPlayed as EventListener);
+    };
+  }, [state.queue, state.queueIndex, settings.audioQuality, addDebugLog, user?.id]);
 
   // Note: Media Session next/previous handlers are set up in the audio initialization useEffect
 
