@@ -492,16 +492,36 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     updateMediaSessionMetadata(state.currentTrack, state.isPlaying);
   }, [state.currentTrack, state.isPlaying]);
 
-  // Update position state for Media Session scrubbing
+  // Track last position state update to throttle updates
+  const lastPositionUpdateRef = useRef<number>(0);
+  
+  // Update position state for Media Session scrubbing - throttled to avoid desync
   useEffect(() => {
     if (!('mediaSession' in navigator) || !state.currentTrack) return;
     
+    const now = Date.now();
+    const duration = state.duration || 0;
+    const position = Math.min(state.progress, duration);
+    
+    // Only update if duration is valid and either:
+    // 1. It's been at least 1 second since last update, or
+    // 2. Position is near start (new track), or
+    // 3. Position is near end
+    const shouldUpdate = duration > 0 && (
+      now - lastPositionUpdateRef.current > 1000 ||
+      position < 2 ||
+      (duration - position) < 2
+    );
+    
+    if (!shouldUpdate) return;
+    
     try {
       navigator.mediaSession.setPositionState({
-        duration: state.duration || 0,
+        duration: duration,
         playbackRate: 1,
-        position: Math.min(state.progress, state.duration || 0),
+        position: position,
       });
+      lastPositionUpdateRef.current = now;
     } catch (e) {
       // Ignore errors on browsers that don't support setPositionState
     }
@@ -534,7 +554,23 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
     };
     
-    const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
+    const handleLoadedMetadata = () => {
+      setState((prev) => ({ ...prev, duration: audio.duration }));
+      
+      // Reset position state immediately when new track loads
+      // This fixes Android widget staying stuck at end of previous track
+      if ('mediaSession' in navigator && audio.duration > 0) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: audio.duration,
+            playbackRate: 1,
+            position: 0,
+          });
+        } catch (e) {
+          // Ignore errors
+        }
+      }
+    };
     
     // Track ended handler - uses pre-fetched URL for seamless background playback
     const handleEnded = () => {
@@ -621,8 +657,20 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (details.seekTime !== undefined && audio.duration) {
-          audio.currentTime = details.seekTime;
-          setState((prev) => ({ ...prev, progress: details.seekTime! }));
+          const seekTime = Math.max(0, Math.min(details.seekTime, audio.duration));
+          audio.currentTime = seekTime;
+          setState((prev) => ({ ...prev, progress: seekTime }));
+          
+          // Immediately update position state after seek for accurate widget sync
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: audio.duration,
+              playbackRate: 1,
+              position: seekTime,
+            });
+          } catch (e) {
+            // Ignore errors
+          }
         }
       });
       
