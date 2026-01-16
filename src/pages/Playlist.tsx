@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle, Download, GripVertical, X, Check, Globe, Lock, Share2, Copy, CheckCircle } from 'lucide-react';
+import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle, Download, GripVertical, X, Check, Globe, Lock, Share2, Copy, CheckCircle, Upload, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -9,6 +9,7 @@ import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import PlaylistRecommendations from '@/components/PlaylistRecommendations';
+import CoverImageUploader from '@/components/CoverImageUploader';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -63,6 +64,9 @@ const PlaylistPage: React.FC = () => {
   
   // Check if current user is the owner of the playlist
   const isOwner = user?.id === playlist?.user_id;
+  
+  // Check if admin can edit (admins can edit any playlist)
+  const canEdit = isOwner || isAdmin;
   
   // Get track IDs for sync status checking
   const trackIds = useMemo(() => tracks.map(t => t.id), [tracks]);
@@ -311,7 +315,7 @@ const PlaylistPage: React.FC = () => {
         <div className="flex-1 min-w-0 text-center md:text-left">
           <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">{playlist.deezer_id ? 'Playlist Deezer' : 'Playlist'}</p>
           
-          {isEditing && !playlist.deezer_id ? (
+          {isEditing && canEdit ? (
             <div className="space-y-3 max-w-md">
               <Input
                 value={editedName}
@@ -319,11 +323,16 @@ const PlaylistPage: React.FC = () => {
                 placeholder="Nome playlist"
                 className="text-xl font-bold"
               />
-              <Input
-                value={editedCoverUrl}
-                onChange={(e) => setEditedCoverUrl(e.target.value)}
-                placeholder="URL copertina (opzionale)"
-              />
+              
+              {/* Cover uploader */}
+              {user && (
+                <CoverImageUploader
+                  currentUrl={editedCoverUrl}
+                  onUrlChange={setEditedCoverUrl}
+                  userId={user.id}
+                  previewSize="md"
+                />
+              )}
               
               {/* Public/Private toggle */}
               <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
@@ -389,7 +398,7 @@ const PlaylistPage: React.FC = () => {
 
       {/* Actions */}
       <div className="px-4 md:px-8 py-4 md:py-6 flex items-center gap-3">
-        {isEditing && !playlist.deezer_id ? (
+        {isEditing && canEdit ? (
           // Edit mode actions
           <>
             <Button 
@@ -402,7 +411,9 @@ const PlaylistPage: React.FC = () => {
               Fatto
             </Button>
             <p className="text-sm text-muted-foreground">
-              Modifica info, trascina per riordinare o clicca X per rimuovere
+              {playlist.deezer_id 
+                ? 'Modifica info playlist' 
+                : 'Modifica info, trascina per riordinare o clicca X per rimuovere'}
             </p>
           </>
         ) : (
@@ -539,8 +550,8 @@ const PlaylistPage: React.FC = () => {
               </Button>
             )}
 
-            {/* Edit button - only for non-Deezer playlists and owner only */}
-            {!playlist.deezer_id && isOwner && (
+            {/* Edit button - owner or admin can edit any playlist */}
+            {canEdit && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -606,7 +617,7 @@ const PlaylistPage: React.FC = () => {
             {/* Tracks */}
             <div className="space-y-1">
               {tracks.map((track, index) => (
-                isEditing && !playlist.deezer_id ? (
+                isEditing && canEdit && !playlist.deezer_id ? (
                   // Edit mode track row
                   <div
                     key={`${track.id}-${index}`}

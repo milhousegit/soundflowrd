@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, Music, Upload, Link, Plus, Crown, Globe, Lock } from 'lucide-react';
 import { Track } from '@/types/music';
+import CoverImageUploader from '@/components/CoverImageUploader';
 
 interface SpotifyTrack {
   id: string;
@@ -46,7 +47,7 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   onPlaylistCreated,
 }) => {
   const { createPlaylist, addTracksToPlaylist } = usePlaylists();
-  const { profile, isAdmin, simulateFreeUser } = useAuth();
+  const { profile, isAdmin, simulateFreeUser, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'manual' | 'import'>('manual');
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
@@ -184,7 +185,7 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Crea Playlist</DialogTitle>
         </DialogHeader>
@@ -225,25 +226,34 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
 
             <div>
               <label className="text-sm text-muted-foreground mb-2 block">
-                URL copertina (opzionale)
+                Copertina (opzionale)
               </label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="https://..."
-                  value={manualCoverUrl}
-                  onChange={(e) => setManualCoverUrl(e.target.value)}
+              {user ? (
+                <CoverImageUploader
+                  currentUrl={manualCoverUrl}
+                  onUrlChange={setManualCoverUrl}
+                  userId={user.id}
+                  previewSize="md"
                 />
-                {manualCoverUrl && (
-                  <div className="w-10 h-10 rounded bg-secondary overflow-hidden flex-shrink-0">
-                    <img
-                      src={manualCoverUrl}
-                      alt="Cover"
-                      className="w-full h-full object-cover"
-                      onError={(e) => (e.currentTarget.style.display = 'none')}
-                    />
-                  </div>
-                )}
-              </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="https://..."
+                    value={manualCoverUrl}
+                    onChange={(e) => setManualCoverUrl(e.target.value)}
+                  />
+                  {manualCoverUrl && (
+                    <div className="w-10 h-10 rounded bg-secondary overflow-hidden flex-shrink-0">
+                      <img
+                        src={manualCoverUrl}
+                        alt="Cover"
+                        className="w-full h-full object-cover"
+                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Public/Private toggle */}
@@ -353,13 +363,22 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
 
                 <div>
                   <label className="text-sm text-muted-foreground mb-2 block">
-                    URL copertina
+                    Copertina
                   </label>
-                  <Input
-                    placeholder="https://..."
-                    value={editedCoverUrl}
-                    onChange={(e) => setEditedCoverUrl(e.target.value)}
-                  />
+                  {user ? (
+                    <CoverImageUploader
+                      currentUrl={editedCoverUrl}
+                      onUrlChange={setEditedCoverUrl}
+                      userId={user.id}
+                      previewSize="md"
+                    />
+                  ) : (
+                    <Input
+                      placeholder="https://..."
+                      value={editedCoverUrl}
+                      onChange={(e) => setEditedCoverUrl(e.target.value)}
+                    />
+                  )}
                 </div>
 
                 {/* Public/Private toggle for import */}
