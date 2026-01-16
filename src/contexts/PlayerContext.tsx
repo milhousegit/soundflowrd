@@ -1751,8 +1751,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return () => clearInterval(pollInterval);
   }, [addDebugLog, availableTorrents, credentials, loadingPhase]);
 
-  // Pre-sync next track in queue (kept behavior)
+  // Pre-sync next track in queue (ONLY if RD mode is selected)
   useEffect(() => {
+    // Skip RD pre-sync if not using RD priority mode
+    if (audioSourceMode !== 'rd_priority' && audioSourceMode !== 'hybrid_priority') return;
     if (!credentials?.realDebridApiKey) return;
     if (!state.currentTrack || !state.isPlaying) return;
 
