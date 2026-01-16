@@ -17,6 +17,7 @@ import AdminUsersManagement from '@/components/AdminUsersManagement';
 import AdminBannerTester from '@/components/AdminBannerTester';
 import AdminArtistMerge from '@/components/AdminArtistMerge';
 import AdminChartConfig from '@/components/AdminChartConfig';
+import PaymentPendingBanner from '@/components/PaymentPendingBanner';
 import { isPast } from 'date-fns';
 interface CloudFile {
   id: string;
@@ -62,6 +63,7 @@ const Settings: React.FC = () => {
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
   const [showCloudSection, setShowCloudSection] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showPaymentPendingBanner, setShowPaymentPendingBanner] = useState(false);
 
   // Check if user has active premium (respect simulation mode)
   const isPremiumActive = !simulateFreeUser && profile?.is_premium && (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at)));
@@ -356,9 +358,15 @@ const Settings: React.FC = () => {
                       </div>)}
                   </div>
                   
-                  <Button className="w-full h-11 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0" onClick={() => toast({
-                title: settings.language === 'it' ? 'Prossimamente!' : 'Coming Soon!'
-              })}>
+                  <Button className="w-full h-11 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0" onClick={() => {
+                setShowPremiumModal(false);
+                // Open PayPal link
+                window.open('https://www.paypal.me/tony271202/9,90', '_blank');
+                // Show payment pending banner after a short delay
+                setTimeout(() => {
+                  setShowPaymentPendingBanner(true);
+                }, 1500);
+              }}>
                     <Crown className="w-4 h-4 mr-2" />
                     {settings.language === 'it' ? 'Dona 9,90€/anno' : '€9.90/year'}
                   </Button>
@@ -817,6 +825,11 @@ const Settings: React.FC = () => {
             </div>
           </section>}
       </div>
+      
+      {/* Payment Pending Banner */}
+      {showPaymentPendingBanner && (
+        <PaymentPendingBanner onClose={() => setShowPaymentPendingBanner(false)} />
+      )}
     </div>;
 };
 export default Settings;
