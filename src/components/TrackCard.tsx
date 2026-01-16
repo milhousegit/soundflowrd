@@ -2,7 +2,7 @@ import React, { forwardRef, useState, useCallback } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, Loader2, ListMusic, Plus, Download, HardDrive, Copy } from 'lucide-react';
+import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, Loader2, ListMusic, Plus, Download, HardDrive, Copy, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
@@ -45,10 +45,12 @@ interface TrackCardProps {
   isSyncing?: boolean;
   isDownloading?: boolean;
   onCreatePlaylist?: () => void;
+  onRemoveFromPlaylist?: (trackId: string) => void;
+  playlistId?: string;
 }
 
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
-  ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading, onCreatePlaylist }, ref) => {
+  ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading, onCreatePlaylist, onRemoveFromPlaylist, playlistId }, ref) => {
     const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase } = usePlayer();
     const { profile, isAdmin } = useAuth();
     const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
@@ -180,6 +182,12 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       toast.success(`ID copiato: ${track.id}`);
     };
 
+    // Handle remove from playlist
+    const handleRemoveFromPlaylist = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onRemoveFromPlaylist?.(track.id);
+    };
+
     // Menu content (shared between DropdownMenu and ContextMenu)
     const renderMenuItems = (isContext: boolean = false) => {
       const MenuItem = isContext ? ContextMenuItem : DropdownMenuItem;
@@ -240,6 +248,15 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
               <HardDrive className="w-4 h-4 mr-2 text-green-500" />
               Disponibile offline
             </MenuItem>
+          )}
+          {onRemoveFromPlaylist && (
+            <>
+              <MenuSeparator />
+              <MenuItem onClick={handleRemoveFromPlaylist} className="cursor-pointer text-destructive focus:text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Rimuovi dalla playlist
+              </MenuItem>
+            </>
           )}
           <MenuSeparator />
           <MenuItem onClick={handleCopyId} className="cursor-pointer">

@@ -637,6 +637,8 @@ const PlaylistPage: React.FC = () => {
                     isSynced={isSynced(track.id)}
                     isSyncing={isSyncing(track.id)}
                     isDownloading={isDownloading(track.id)}
+                    playlistId={isOwner && !playlist.deezer_id ? playlist.id : undefined}
+                    onRemoveFromPlaylist={isOwner && !playlist.deezer_id ? handleRemoveTrack : undefined}
                   />
                 )
               ))}
