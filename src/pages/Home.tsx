@@ -38,10 +38,16 @@ interface ChartConfig {
   playlist_title: string | null;
 }
 
+interface ChartDisplayData {
+  coverUrl: string | null;
+  trackCount: number;
+}
+
 const Home: React.FC = () => {
   const [newReleases, setNewReleases] = useState<Album[]>([]);
   const [popularArtists, setPopularArtists] = useState<Artist[]>([]);
   const [chartConfigs, setChartConfigs] = useState<ChartConfig[]>([]);
+  const [chartDisplayData, setChartDisplayData] = useState<Record<string, ChartDisplayData>>({});
   const [isLoadingReleases, setIsLoadingReleases] = useState(true);
   const [isLoadingArtists, setIsLoadingArtists] = useState(true);
   const [isLoadingCharts, setIsLoadingCharts] = useState(true);
@@ -202,7 +208,7 @@ const Home: React.FC = () => {
     fetchArtistsForYou();
   }, [favorites.length]);
 
-  // Fetch chart configurations
+  // Fetch chart configurations and their display data
   useEffect(() => {
     const fetchChartConfigs = async () => {
       setIsLoadingCharts(true);
@@ -213,7 +219,50 @@ const Home: React.FC = () => {
           .order('country_code');
         
         if (error) throw error;
-        setChartConfigs(data || []);
+        const configs = data || [];
+        setChartConfigs(configs);
+        
+        // Fetch display data for each chart
+        const displayData: Record<string, ChartDisplayData> = {};
+        
+        for (const chart of configs) {
+          const playlistId = chart.playlist_id;
+          
+          if (playlistId.startsWith('sf:')) {
+            // SoundFlow playlist - get from DB
+            const sfId = playlistId.replace('sf:', '');
+            const [playlistResult, tracksResult] = await Promise.all([
+              supabase.from('playlists').select('cover_url').eq('id', sfId).single(),
+              supabase.from('playlist_tracks').select('id', { count: 'exact' }).eq('playlist_id', sfId)
+            ]);
+            
+            displayData[chart.id] = {
+              coverUrl: playlistResult.data?.cover_url || null,
+              trackCount: tracksResult.count || 0
+            };
+          } else {
+            // Deezer playlist - fetch from API
+            try {
+              const response = await fetch(
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deezer?action=playlist&id=${playlistId}`
+              );
+              if (response.ok) {
+                const playlist = await response.json();
+                displayData[chart.id] = {
+                  coverUrl: playlist.picture_medium || playlist.picture || null,
+                  trackCount: playlist.nb_tracks || 0
+                };
+              } else {
+                displayData[chart.id] = { coverUrl: null, trackCount: 0 };
+              }
+            } catch (e) {
+              console.error('Error fetching Deezer playlist:', e);
+              displayData[chart.id] = { coverUrl: null, trackCount: 0 };
+            }
+          }
+        }
+        
+        setChartDisplayData(displayData);
       } catch (error) {
         console.error('Failed to fetch chart configurations:', error);
       } finally {
@@ -564,25 +613,28 @@ const Home: React.FC = () => {
           ) : chartConfigs.length > 0 ? (
             <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
               {chartConfigs.map((chart) => {
-                const countryNames: Record<string, { it: string; en: string; flag: string }> = {
-                  'IT': { it: 'Italia', en: 'Italy', flag: '🇮🇹' },
-                  'US': { it: 'Stati Uniti', en: 'United States', flag: '🇺🇸' },
-                  'ES': { it: 'Spagna', en: 'Spain', flag: '🇪🇸' },
-                  'FR': { it: 'Francia', en: 'France', flag: '🇫🇷' },
-                  'DE': { it: 'Germania', en: 'Germany', flag: '🇩🇪' },
-                  'PT': { it: 'Portogallo', en: 'Portugal', flag: '🇵🇹' },
-                  'GB': { it: 'Regno Unito', en: 'United Kingdom', flag: '🇬🇧' },
-                  'BR': { it: 'Brasile', en: 'Brazil', flag: '🇧🇷' },
+                const countryNames: Record<string, { it: string; en: string }> = {
+                  'IT': { it: 'Italia', en: 'Italy' },
+                  'US': { it: 'Stati Uniti', en: 'United States' },
+                  'ES': { it: 'Spagna', en: 'Spain' },
+                  'FR': { it: 'Francia', en: 'France' },
+                  'DE': { it: 'Germania', en: 'Germany' },
+                  'PT': { it: 'Portogallo', en: 'Portugal' },
+                  'GB': { it: 'Regno Unito', en: 'United Kingdom' },
+                  'BR': { it: 'Brasile', en: 'Brazil' },
                 };
                 
                 const countryInfo = countryNames[chart.country_code] || { 
                   it: chart.country_code, 
-                  en: chart.country_code, 
-                  flag: '🌍' 
+                  en: chart.country_code
                 };
                 const displayName = chart.playlist_title || (settings.language === 'it' 
                   ? `Top ${countryInfo.it}` 
                   : `Top ${countryInfo.en}`);
+                
+                const displayData = chartDisplayData[chart.id];
+                const trackCount = displayData?.trackCount || 0;
+                const coverUrl = displayData?.coverUrl;
                 
                 return (
                   <TapArea
@@ -591,16 +643,23 @@ const Home: React.FC = () => {
                     className="flex-shrink-0 w-32 md:w-auto cursor-pointer group touch-manipulation"
                   >
                     <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted">
-                      {/* Flag emoji as cover */}
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-                        <span className="text-5xl md:text-6xl">{countryInfo.flag}</span>
-                      </div>
+                      {coverUrl ? (
+                        <img 
+                          src={coverUrl} 
+                          alt={displayName} 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+                          <ListMusic className="w-12 h-12 text-muted-foreground" />
+                        </div>
+                      )}
                     </div>
                     <h3 className="font-medium text-sm text-foreground truncate">
                       {displayName}
                     </h3>
                     <p className="text-xs text-muted-foreground truncate">
-                      {settings.language === 'it' ? 'Classifica' : 'Chart'}
+                      {trackCount} {settings.language === 'it' ? 'brani' : 'tracks'}
                     </p>
                   </TapArea>
                 );
