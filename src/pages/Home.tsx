@@ -240,18 +240,22 @@ const Home: React.FC = () => {
               coverUrl: playlistResult.data?.cover_url || null,
               trackCount: tracksResult.count || 0
             };
-          } else {
-            // Deezer playlist - fetch from API
+          } else if (playlistId.length > 6) {
+            // Long ID = Deezer playlist - fetch from API
             try {
               const response = await fetch(
                 `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deezer?action=playlist&id=${playlistId}`
               );
               if (response.ok) {
                 const playlist = await response.json();
-                displayData[chart.id] = {
-                  coverUrl: playlist.picture_medium || playlist.picture || null,
-                  trackCount: playlist.nb_tracks || 0
-                };
+                if (playlist && !playlist.error) {
+                  displayData[chart.id] = {
+                    coverUrl: playlist.picture_medium || playlist.picture || null,
+                    trackCount: playlist.nb_tracks || 0
+                  };
+                } else {
+                  displayData[chart.id] = { coverUrl: null, trackCount: 0 };
+                }
               } else {
                 displayData[chart.id] = { coverUrl: null, trackCount: 0 };
               }
@@ -259,6 +263,9 @@ const Home: React.FC = () => {
               console.error('Error fetching Deezer playlist:', e);
               displayData[chart.id] = { coverUrl: null, trackCount: 0 };
             }
+          } else {
+            // Short ID = Editorial chart ID - can't get cover directly, skip
+            displayData[chart.id] = { coverUrl: null, trackCount: 0 };
           }
         }
         
