@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Eye, Crown, AlertTriangle, Sparkles, Download, Car, Music, Mic2, Zap, X, Clock, CheckCircle2, Mail } from 'lucide-react';
+import { ChevronDown, Eye, Crown, AlertTriangle, Sparkles, Download, Car, Music, Mic2, Zap, X, Clock, CheckCircle2, Mail, Share2, Gift } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import PremiumExpiredBanner from './PremiumExpiredBanner';
 
@@ -9,6 +9,7 @@ interface AdminBannerTesterProps {
 }
 
 const AdminBannerTester: React.FC<AdminBannerTesterProps> = ({ language }) => {
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [showWelcomeBanner, setShowWelcomeBanner] = useState(false);
   const [showExpiredBanner, setShowExpiredBanner] = useState(false);
   const [showPendingBanner, setShowPendingBanner] = useState(false);
@@ -35,6 +36,27 @@ const AdminBannerTester: React.FC<AdminBannerTesterProps> = ({ language }) => {
           </p>
           
           <div className="space-y-2">
+            {/* Unlock Premium Modal Test */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2 h-10"
+              onClick={() => setShowUnlockModal(true)}
+            >
+              <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] flex items-center justify-center">
+                <Crown className="w-3 h-3 text-white" />
+              </div>
+              <div className="text-left flex-1">
+                <p className="text-sm font-medium">
+                  {isItalian ? 'Modal Sblocca Premium' : 'Unlock Premium Modal'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {isItalian ? 'Mostrato per acquistare Premium' : 'Shown to purchase Premium'}
+                </p>
+              </div>
+              <Crown className="w-4 h-4 text-[#8B5CF6]" />
+            </Button>
+
             {/* Welcome Banner Test */}
             <Button
               variant="outline"
@@ -53,7 +75,7 @@ const AdminBannerTester: React.FC<AdminBannerTesterProps> = ({ language }) => {
                   {isItalian ? 'Mostrato quando attivi Premium' : 'Shown when Premium is activated'}
                 </p>
               </div>
-              <Crown className="w-4 h-4 text-[#8B5CF6]" />
+              <Sparkles className="w-4 h-4 text-[#8B5CF6]" />
             </Button>
 
             {/* Expired Banner Test */}
@@ -101,7 +123,16 @@ const AdminBannerTester: React.FC<AdminBannerTesterProps> = ({ language }) => {
         </div>
       </details>
 
-      {/* Test banners - force show */}
+      {/* Test modals and banners */}
+      {showUnlockModal && (
+        <TestUnlockPremiumModal 
+          onClose={() => setShowUnlockModal(false)} 
+          onPayment={() => {
+            setShowUnlockModal(false);
+            setTimeout(() => setShowPendingBanner(true), 1500);
+          }}
+        />
+      )}
       {showWelcomeBanner && (
         <TestWelcomeBanner onClose={() => setShowWelcomeBanner(false)} />
       )}
@@ -112,6 +143,69 @@ const AdminBannerTester: React.FC<AdminBannerTesterProps> = ({ language }) => {
         <TestPaymentPendingBanner onClose={() => setShowPendingBanner(false)} />
       )}
     </>
+  );
+};
+
+// Test Unlock Premium Modal
+const TestUnlockPremiumModal: React.FC<{ onClose: () => void; onPayment: () => void }> = ({ onClose, onPayment }) => {
+  const { settings } = useSettings();
+  const isItalian = settings.language === 'it';
+
+  const premiumFeatures = [
+    { icon: Download, label: isItalian ? 'Download Offline' : 'Offline Downloads', desc: isItalian ? 'Scarica brani in locale' : 'Download tracks locally' },
+    { icon: Car, label: isItalian ? 'Modalità Auto' : 'Auto Mode', desc: isItalian ? 'UI ottimizzata per guida' : 'Driving-optimized UI' },
+    { icon: Crown, label: isItalian ? 'Riproduzione Ibrida' : 'Hybrid Playback', desc: isItalian ? 'Mai interrompere la musica' : 'Never interrupt music' },
+    { icon: Share2, label: isItalian ? 'Condividi Playlist' : 'Share Playlists', desc: isItalian ? 'Con i tuoi amici' : 'With friends' },
+    { icon: Gift, label: 'Wrapper', desc: isItalian ? 'Il tuo anno in musica' : 'Your year in music' },
+    { icon: Sparkles, label: isItalian ? 'Accesso Anticipato' : 'Early Access', desc: isItalian ? 'Novità in anteprima' : 'New features first' },
+  ];
+
+  const handlePayment = () => {
+    window.open('https://www.paypal.me/tony271202/9,90', '_blank');
+    onPayment();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-fade-in">
+      <div 
+        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      <div className="relative z-10 w-full max-w-sm bg-card border border-border rounded-2xl p-6 shadow-2xl animate-scale-in">
+        <button 
+          onClick={onClose}
+          className="absolute top-3 right-3 p-1.5 rounded-full bg-background/50 hover:bg-background/80 transition-colors"
+        >
+          <X className="w-4 h-4 text-muted-foreground" />
+        </button>
+
+        <div className="flex items-center gap-2 mb-4">
+          <Crown className="w-5 h-5 text-[#8B5CF6]" />
+          <span className="text-lg font-bold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">Premium</span>
+        </div>
+
+        <div className="space-y-3 py-2">
+          {premiumFeatures.map(({ icon: Icon, label, desc }) => (
+            <div key={label} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50">
+              <Icon className="w-4 h-4 text-[#8B5CF6] shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">{label}</p>
+                <p className="text-xs text-muted-foreground truncate">{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <Button 
+          onClick={handlePayment}
+          className="w-full h-11 mt-4 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0"
+        >
+          <Crown className="w-4 h-4 mr-2" />
+          {isItalian ? 'Dona 9,90€/anno' : '€9.90/year'}
+        </Button>
+      </div>
+    </div>
   );
 };
 
