@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, ListMusic, Disc, Heart, User, Music, Loader2, Download, Wifi, WifiOff, Trash2, Crown } from 'lucide-react';
+import { Plus, ListMusic, Disc, Heart, User, Music, Loader2, Download, Wifi, WifiOff, Trash2, Crown, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
@@ -453,6 +453,16 @@ const Library: React.FC = () => {
                     </>
                   )}
                 </div>
+              </div>
+
+              {/* PWA Limitations Banner */}
+              <div className="mb-6 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex gap-3">
+                <Info className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-200/80">
+                  {settings.language === 'it' 
+                    ? "A causa di alcune limitazioni delle PWA imposte da alcuni dispositivi bisogna aprire l'app mentre si è online per poi attivare la modalità aereo e godersi le canzoni scaricate. Attenzione: se si chiude l'app e si prova a riaprire mentre si è offline questa potrebbe non funzionare, l'apertura va effettuata mentre si è online."
+                    : "Due to some PWA limitations imposed by certain devices, you need to open the app while online, then enable airplane mode to enjoy your downloaded songs. Warning: if you close the app and try to reopen it while offline, it may not work. The app must be opened while online."}
+                </p>
               </div>
 
               {/* Offline Tracks List */}
