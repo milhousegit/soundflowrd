@@ -533,28 +533,91 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return () => clearInterval(intervalId);
   }, [state.isPlaying, iosAudio]);
 
-  // Sync isPlaying state with actual audio element when app comes back from background
+  // App lifecycle instrumentation (helps debug iOS/PWA background behaviour)
   useEffect(() => {
+    const snapshot = (eventName: string) => {
+      const audio = audioRef.current;
+      const track = state.currentTrack;
+      const details = JSON.stringify({
+        visibility: document.visibilityState,
+        isPlayingState: state.isPlaying,
+        audioPaused: audio ? audio.paused : null,
+        audioEnded: audio ? audio.ended : null,
+        audioReadyState: audio ? audio.readyState : null,
+        audioCurrentTime: audio ? Number(audio.currentTime.toFixed(3)) : null,
+        queueIndex: state.queueIndex,
+        trackId: track?.id || null,
+        trackTitle: track?.title || null,
+      });
+
+      // Persist into iOS audio logs so we can copy them from the UI
+      iosAudio.addLog('info', `[AppLifecycle] ${eventName}`, details);
+    };
+
+    const syncFromAudio = () => {
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      // readyState > 2 means we have current data, helps avoid false positives right after src swap
+      const actuallyPlaying = !audio.paused && !audio.ended && audio.readyState > 2;
+
+      iosAudio.addLog(
+        'info',
+        '[AppLifecycle] visible -> sync',
+        JSON.stringify({ actuallyPlaying, isPlayingState: state.isPlaying })
+      );
+
+      // Sync state with reality
+      if (state.isPlaying !== actuallyPlaying) {
+        setState((prev) => ({ ...prev, isPlaying: actuallyPlaying }));
+      }
+
+      // Also sync MediaSession (widget) with what we think is happening now
+      updateMediaSessionMetadata(state.currentTrack, actuallyPlaying);
+    };
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && audioRef.current) {
-        const audio = audioRef.current;
-        const actuallyPlaying = !audio.paused && !audio.ended && audio.readyState > 2;
-        
-        console.log('[PlayerContext] App became visible - audio.paused:', audio.paused, 
-          'audio.ended:', audio.ended, 'readyState:', audio.readyState,
-          'actuallyPlaying:', actuallyPlaying, 'state.isPlaying:', state.isPlaying);
-        
-        // Sync state with reality
-        if (state.isPlaying !== actuallyPlaying) {
-          console.log('[PlayerContext] Syncing state - setting isPlaying to:', actuallyPlaying);
-          setState((prev) => ({ ...prev, isPlaying: actuallyPlaying }));
-        }
+      snapshot('visibilitychange');
+      if (document.visibilityState === 'visible') {
+        syncFromAudio();
       }
     };
 
+    const handlePageHide = (e: PageTransitionEvent) => {
+      iosAudio.addLog('info', '[AppLifecycle] pagehide', `persisted: ${e.persisted}`);
+      snapshot('pagehide');
+    };
+
+    const handlePageShow = (e: PageTransitionEvent) => {
+      iosAudio.addLog('info', '[AppLifecycle] pageshow', `persisted: ${e.persisted}`);
+      snapshot('pageshow');
+      // On bfcache restore, audio state can be weird; re-sync
+      syncFromAudio();
+    };
+
+    const handleFocus = () => {
+      snapshot('focus');
+      syncFromAudio();
+    };
+
+    const handleBlur = () => {
+      snapshot('blur');
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [state.isPlaying]);
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [iosAudio, state.currentTrack, state.isPlaying, state.queueIndex]);
 
   useEffect(() => {
     audioRef.current = new Audio();
