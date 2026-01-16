@@ -291,9 +291,15 @@ const Player: React.FC = () => {
           </div>
 
           <div className="flex-1 flex items-center justify-center px-8 pt-2 pb-1">
-            <div className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative">
+            <div className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none">
               {currentTrack.coverUrl ? (
-                <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
+                <img 
+                  src={currentTrack.coverUrl} 
+                  alt={currentTrack.album} 
+                  className="w-full h-full object-cover select-none pointer-events-none" 
+                  draggable={false}
+                  onContextMenu={(e) => e.preventDefault()}
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <Music className="w-24 h-24 text-muted-foreground" />
@@ -356,7 +362,12 @@ const Player: React.FC = () => {
             )}
           </div>
 
-          <div className="px-8 py-3">
+          <div 
+            className="px-8 py-3"
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
             <Slider value={[progress]} max={duration || 100} step={1} onValueChange={([value]) => handleSeek(value)} />
             <div className="flex justify-between mt-2">
               <span className="text-xs text-muted-foreground">{formatTime(progress)}</span>
