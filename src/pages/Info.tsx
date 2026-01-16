@@ -58,7 +58,7 @@ const Info: React.FC = () => {
               </Button>
             </div>
             
-            {/* What's New in v1.2 */}
+            {/* What's New in v1.3 */}
             <div className="mt-4 pt-4 border-t border-border">
               <h3 className="text-sm font-medium text-foreground mb-2">
                 {isItalian ? "Novità della versione" : "What's new"}
@@ -66,15 +66,15 @@ const Info: React.FC = () => {
               <ul className="text-sm text-muted-foreground space-y-1.5">
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "Autoplay: a fine coda la musica continua con brani simili" : "Autoplay: music continues with similar tracks at end of queue"}
+                  {isItalian ? "Playlist YouTube Music integrate nella ricerca e nelle pagine artista" : "YouTube Music playlists integrated in search and artist pages"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Risolto problema audio a scatti con CarPlay e dispositivi Bluetooth" : "Fixed stuttering audio with CarPlay and Bluetooth devices"}
+                  {isItalian ? "Migliorata riproduzione in background su iPhone (keep-alive audio)" : "Improved background playback on iPhone (audio keep-alive)"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Semplificato sistema di riproduzione per maggiore stabilità" : "Simplified playback system for better stability"}
+                  {isItalian ? "Badge YT per distinguere le playlist YouTube da quelle Deezer" : "YT badge to distinguish YouTube playlists from Deezer ones"}
                 </li>
               </ul>
             </div>
