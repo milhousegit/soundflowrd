@@ -519,7 +519,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
     
     // Track ended handler - maintains audio session during transition
-    const handleEnded = async () => {
+    const handleEnded = () => {
       console.log('[PlayerContext] Track ended, triggering next');
       
       // Keep media session showing "playing" during track transition
@@ -528,10 +528,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
       
       // On iOS (non-external devices): play placeholder to maintain session during transition
-      // This prevents the widget from disappearing when exiting the app at song end
+      // Fire-and-forget - don't block the transition
       const iosAudioInstance = iosAudioRef.current;
       if (iosAudioInstance && !iosAudioInstance.isExternalDevice()) {
-        await iosAudioInstance.playPlaceholder();
+        iosAudioInstance.playPlaceholder().catch(() => {});
       }
       
       // Small delay to ensure smooth track transition
