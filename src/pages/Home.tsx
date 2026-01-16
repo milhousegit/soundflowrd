@@ -94,18 +94,43 @@ const Home: React.FC = () => {
     return Array.from(artistSet);
   };
 
+  // Cache key for new releases based on favorite artist IDs
+  const getNewReleasesCacheKey = (artistIds: string[]): string => {
+    if (artistIds.length === 0) return 'newReleases_generic';
+    return `newReleases_${artistIds.sort().join('_')}`;
+  };
+
   useEffect(() => {
     // Wait until we know if user has favorites before fetching
     if (isLoadingFavorites) return;
     
     const fetchNewReleases = async () => {
+      const uniqueArtistIds = getUniqueArtistIds();
+      const cacheKey = getNewReleasesCacheKey(uniqueArtistIds);
+      
+      // Try to load from sessionStorage first for instant display
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          const cacheAge = Date.now() - timestamp;
+          // Use cache if less than 30 minutes old
+          if (cacheAge < 30 * 60 * 1000 && data?.length > 0) {
+            setNewReleases(data);
+            setIsLoadingReleases(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('Error reading cache:', e);
+      }
+      
       setIsLoadingReleases(true);
       try {
-        const uniqueArtistIds = getUniqueArtistIds();
-        
         // If user has favorites, get releases from those artists via getArtist
         if (uniqueArtistIds.length > 0) {
           const allReleases: Album[] = [];
+          const seenIds = new Set<string>();
           
           // Fetch releases for up to 8 favorite artists using getArtist (which returns releases sorted by date)
           const artistPromises = uniqueArtistIds.slice(0, 8).map(async (artistId) => {
@@ -120,26 +145,52 @@ const Home: React.FC = () => {
           });
           
           const releasesArrays = await Promise.all(artistPromises);
-          releasesArrays.forEach(releases => allReleases.push(...releases));
           
-          // Sort by release date (newest first) and dedupe
-          const uniqueReleases = allReleases
-            .reduce((acc, album) => {
-              if (!acc.find(a => a.id === album.id)) acc.push(album);
-              return acc;
-            }, [] as Album[])
-            .sort((a, b) => {
-              const dateA = a.releaseDate ? new Date(a.releaseDate).getTime() : 0;
-              const dateB = b.releaseDate ? new Date(b.releaseDate).getTime() : 0;
-              return dateB - dateA;
+          // Dedupe while adding to allReleases
+          releasesArrays.forEach(releases => {
+            releases.forEach(album => {
+              if (!seenIds.has(album.id)) {
+                seenIds.add(album.id);
+                allReleases.push(album);
+              }
             });
+          });
           
-          setNewReleases(uniqueReleases.slice(0, 12));
+          // Sort by release date (newest first)
+          const sortedReleases = allReleases.sort((a, b) => {
+            const dateA = a.releaseDate ? new Date(a.releaseDate).getTime() : 0;
+            const dateB = b.releaseDate ? new Date(b.releaseDate).getTime() : 0;
+            return dateB - dateA;
+          });
+          
+          const finalReleases = sortedReleases.slice(0, 12);
+          setNewReleases(finalReleases);
+          
+          // Cache the results
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify({
+              data: finalReleases,
+              timestamp: Date.now()
+            }));
+          } catch (e) {
+            console.error('Error caching releases:', e);
+          }
         } else {
           // No favorites - get new releases from Deezer
           try {
             const releases = await getNewReleases();
-            setNewReleases(releases.slice(0, 12));
+            const finalReleases = releases.slice(0, 12);
+            setNewReleases(finalReleases);
+            
+            // Cache generic releases too
+            try {
+              sessionStorage.setItem(cacheKey, JSON.stringify({
+                data: finalReleases,
+                timestamp: Date.now()
+              }));
+            } catch (e) {
+              console.error('Error caching releases:', e);
+            }
           } catch (cacheError) {
             console.error('Failed to fetch new releases:', cacheError);
             setNewReleases([]);
