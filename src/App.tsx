@@ -26,6 +26,7 @@ import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
 import DeezerPlaylist from "@/pages/DeezerPlaylist";
+import YouTubePlaylist from "@/pages/YouTubePlaylist";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -85,6 +86,7 @@ const AppRoutes = () => {
         <Route path="album/:id" element={<Album />} />
         <Route path="playlist/:id" element={<Playlist />} />
         <Route path="deezer-playlist/:id" element={<DeezerPlaylist />} />
+        <Route path="youtube-playlist/:id" element={<YouTubePlaylist />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

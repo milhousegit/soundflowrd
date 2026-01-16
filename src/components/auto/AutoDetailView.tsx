@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Track, Album, Artist } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { getAlbum, getArtistTopTracks, getArtist, getDeezerPlaylist } from '@/lib/deezer';
+import { getYouTubePlaylist } from '@/lib/youtube-music';
 import { supabase } from '@/integrations/supabase/client';
 
-export type DetailType = 'album' | 'artist' | 'playlist' | 'deezer-playlist';
+export type DetailType = 'album' | 'artist' | 'playlist' | 'deezer-playlist' | 'youtube-playlist';
 
 interface DetailData {
   type: DetailType;
@@ -65,6 +66,12 @@ const AutoDetailView: React.FC<AutoDetailViewProps> = ({ detail, onBack }) => {
           // Load from Deezer API
           const playlistData = await getDeezerPlaylist(detail.id);
           setTracks(playlistData.tracks || []);
+        } else if (detail.type === 'youtube-playlist') {
+          // Load from YouTube Music API
+          const playlistData = await getYouTubePlaylist(detail.id);
+          if (playlistData) {
+            setTracks(playlistData.tracks || []);
+          }
         }
       } catch (error) {
         console.error('Error loading detail:', error);

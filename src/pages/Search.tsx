@@ -218,7 +218,12 @@ const Search: React.FC = () => {
         navigate(`/album/${item.id}`);
         break;
       case 'playlist':
-        navigate(`/deezer-playlist/${item.id}`);
+        // Navigate based on source
+        if ((item as any).source === 'youtube') {
+          navigate(`/youtube-playlist/${item.id}`);
+        } else {
+          navigate(`/deezer-playlist/${item.id}`);
+        }
         break;
       case 'track':
         // For tracks, we just update the item as "opened" but stay on search
@@ -431,7 +436,7 @@ const Search: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
                 {results.playlists.slice(0, 6).map((playlist) => (
                   <TapArea
-                    key={playlist.id}
+                    key={`${playlist.source || 'deezer'}-${playlist.id}`}
                     onTap={() => {
                       saveRecentItem({ 
                         type: 'playlist', 
@@ -440,9 +445,11 @@ const Search: React.FC = () => {
                         subtitle: `${playlist.trackCount} brani • ${playlist.creator}`,
                         coverUrl: playlist.coverUrl 
                       });
-                      // Navigate to local playlist page if it's not a Deezer playlist
-                      if (playlist.isDeezerPlaylist === false) {
+                      // Navigate based on source
+                      if (playlist.source === 'local' || playlist.isDeezerPlaylist === false) {
                         navigate(`/playlist/${playlist.id}`);
+                      } else if (playlist.source === 'youtube') {
+                        navigate(`/youtube-playlist/${playlist.id}`);
                       } else {
                         navigate(`/deezer-playlist/${playlist.id}`);
                       }
@@ -459,6 +466,12 @@ const Search: React.FC = () => {
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Music className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                      )}
+                      {/* YouTube badge */}
+                      {playlist.source === 'youtube' && (
+                        <div className="absolute top-1 right-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                          YT
                         </div>
                       )}
                     </div>
