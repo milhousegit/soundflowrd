@@ -47,7 +47,6 @@ const Home: React.FC = () => {
   const [isLoadingCharts, setIsLoadingCharts] = useState(true);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
-  const [playingChartCountry, setPlayingChartCountry] = useState<string | null>(null);
   
   const { settings, t } = useSettings();
   const { currentTrack, isPlaying, playTrack, toggle, addToQueue } = usePlayer();
@@ -225,18 +224,17 @@ const Home: React.FC = () => {
     fetchChartConfigs();
   }, []);
 
-  // Play a chart
-  const handlePlayChart = async (countryCode: string) => {
-    setPlayingChartCountry(countryCode);
-    try {
-      const tracks = await getCountryChart(countryCode);
-      if (tracks.length > 0) {
-        playTrack(tracks[0], tracks);
-      }
-    } catch (error) {
-      console.error('Failed to play chart:', error);
-    } finally {
-      setPlayingChartCountry(null);
+  // Navigate to chart playlist
+  const handleOpenChart = (chart: ChartConfig) => {
+    const playlistId = chart.playlist_id;
+    
+    if (playlistId.startsWith('sf:')) {
+      // SoundFlow playlist - navigate to local playlist page
+      const sfId = playlistId.replace('sf:', '');
+      navigate(`/playlist/${sfId}`);
+    } else {
+      // Deezer playlist - navigate to deezer playlist page
+      navigate(`/deezer-playlist/${playlistId}`);
     }
   };
 
@@ -549,7 +547,7 @@ const Home: React.FC = () => {
         </section>
       )}
 
-      {/* Charts - All country charts as cards */}
+      {/* Charts - Same style as playlists */}
       {homeDisplayOptions.showTopCharts && (
         <section>
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-4 md:mb-6">
@@ -585,30 +583,24 @@ const Home: React.FC = () => {
                 const displayName = chart.playlist_title || (settings.language === 'it' 
                   ? `Top ${countryInfo.it}` 
                   : `Top ${countryInfo.en}`);
-                const isLoading = playingChartCountry === chart.country_code;
                 
                 return (
                   <TapArea
                     key={chart.id}
-                    onTap={() => !isLoading && handlePlayChart(chart.country_code)}
-                    className="flex-shrink-0 w-32 md:w-auto cursor-pointer group"
+                    onTap={() => handleOpenChart(chart)}
+                    className="flex-shrink-0 w-32 md:w-auto cursor-pointer group touch-manipulation"
                   >
-                    <div className="aspect-square rounded-xl overflow-hidden bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5 relative mb-2 shadow-lg">
-                      {/* Flag emoji as main visual */}
-                      <div className="absolute inset-0 flex items-center justify-center text-6xl md:text-7xl">
-                        {countryInfo.flag}
-                      </div>
-                      {/* Overlay on hover/loading */}
-                      <div className={`absolute inset-0 bg-background/60 flex items-center justify-center transition-opacity ${isLoading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                        {isLoading ? (
-                          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                        ) : (
-                          <Play className="w-8 h-8 text-foreground ml-1" />
-                        )}
+                    <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted">
+                      {/* Flag emoji as cover */}
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+                        <span className="text-5xl md:text-6xl">{countryInfo.flag}</span>
                       </div>
                     </div>
-                    <p className="font-medium text-sm md:text-base text-foreground truncate text-center">
+                    <h3 className="font-medium text-sm text-foreground truncate">
                       {displayName}
+                    </h3>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {settings.language === 'it' ? 'Classifica' : 'Chart'}
                     </p>
                   </TapArea>
                 );
