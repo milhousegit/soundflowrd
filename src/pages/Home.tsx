@@ -9,6 +9,7 @@ import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getNewReleases, getPopularArtists, getArtist, getCountryChart } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
+import { useDeezerPlaylistCovers, getEffectiveCover } from '@/hooks/useDeezerPlaylistCovers';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import PlaylistCard from '@/components/PlaylistCard';
@@ -61,6 +62,12 @@ const Home: React.FC = () => {
   const { recentTracks, isLoading: isLoadingRecent } = useRecentlyPlayed();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  
+  // Get Deezer playlist IDs for custom covers lookup
+  const deezerPlaylistIds = chartConfigs
+    .map(c => c.playlist_id)
+    .filter(id => !id.startsWith('sf:') && id.length > 6);
+  const { data: customCoversMap } = useDeezerPlaylistCovers(deezerPlaylistIds);
 
   // Get all favorites to extract unique artist names
   const favoriteArtists = getFavoritesByType('artist');
@@ -706,7 +713,12 @@ const Home: React.FC = () => {
                 
                 const displayData = chartDisplayData[chart.id];
                 const trackCount = displayData?.trackCount || 0;
-                const coverUrl = displayData?.coverUrl;
+                // Use custom cover from deezer_playlist_covers if available
+                const playlistId = chart.playlist_id;
+                const originalCoverUrl = displayData?.coverUrl;
+                const coverUrl = !playlistId.startsWith('sf:') && playlistId.length > 6
+                  ? getEffectiveCover(playlistId, originalCoverUrl || undefined, customCoversMap)
+                  : originalCoverUrl;
                 
                 return (
                   <TapArea
