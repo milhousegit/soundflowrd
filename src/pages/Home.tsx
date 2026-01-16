@@ -7,7 +7,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getNewReleases, getPopularArtists, getArtist, getCountryChart } from '@/lib/deezer';
+import { getNewReleases, getPopularArtists, searchAlbums, getArtist, getCountryChart } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
@@ -91,47 +91,28 @@ const Home: React.FC = () => {
 
   // recentTracks now comes from useRecentlyPlayed hook (synced with database)
 
-  // Extract favorite artist IDs
-  const getFavoriteArtistIds = (): { id: string; name: string }[] => {
-    return favoriteArtists.map(f => {
-      const itemData = f.item_data as { id?: string | number } | null;
-      return {
-        id: itemData?.id ? String(itemData.id) : f.item_id,
-        name: f.item_title,
-      };
-    });
-  };
-
   useEffect(() => {
     const fetchNewReleases = async () => {
       setIsLoadingReleases(true);
       try {
-        const favoriteArtistList = getFavoriteArtistIds();
+        const uniqueArtistNames = getUniqueArtistNames();
         
-        // If user has favorite artists, fetch their releases (including singles)
-        if (favoriteArtistList.length > 0) {
+        // If user has favorites, search for releases from those artists
+        if (uniqueArtistNames.length > 0) {
           const allReleases: Album[] = [];
           
-          // Fetch releases for up to 5 favorite artists using getArtist (includes singles)
-          for (const artist of favoriteArtistList.slice(0, 5)) {
+          // Search releases for up to 5 artists using Deezer
+          for (const artistName of uniqueArtistNames.slice(0, 5)) {
             try {
-              const artistData = await getArtist(artist.id);
-              // artistData.releases includes both albums and singles
-              if (artistData.releases) {
-                const releases = artistData.releases.map((r: any) => ({
-                  id: String(r.id),
-                  title: r.title,
-                  artist: r.artist || artistData.name,
-                  artistId: String(r.artistId || artistData.id),
-                  coverUrl: r.coverUrl,
-                  releaseDate: r.releaseDate,
-                  trackCount: r.trackCount,
-                  recordType: r.recordType,
-                }));
-                allReleases.push(...releases.slice(0, 6));
-              }
+              const albums = await searchAlbums(artistName);
+              // Filter to only include releases that match the artist name
+              const artistReleases = albums.filter((album: Album) => 
+                album.artist?.toLowerCase().includes(artistName.toLowerCase()) ||
+                artistName.toLowerCase().includes(album.artist?.toLowerCase() || '')
+              );
+              allReleases.push(...artistReleases.slice(0, 6));
             } catch (e) {
-              console.error('Error fetching releases for artist', artist.name, e);
+              console.error('Error fetching releases for', artistName, e);
             }
           }
           
@@ -149,7 +130,7 @@ const Home: React.FC = () => {
           
           setNewReleases(uniqueReleases.slice(0, 12));
         } else {
-          // No favorite artists - get new releases from Deezer
+          // No favorites - get new releases from Deezer
           try {
             const releases = await getNewReleases();
             setNewReleases(releases.slice(0, 12));
