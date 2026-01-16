@@ -367,12 +367,6 @@ export const useIOSAudioSession = () => {
    * DISABLED for external devices (CarPlay, Bluetooth, AirPlay) to prevent stuttering
    */
   const keepAlive = useCallback(() => {
-    // Skip on external devices - they manage audio sessions automatically
-    // and the silent audio loop causes stuttering on CarPlay
-    if (isExternalDeviceRef.current) {
-      return;
-    }
-    
     // Skip if not iOS or not in PWA mode
     if (!isIOS() || !isPWA()) {
       return;
@@ -385,7 +379,7 @@ export const useIOSAudioSession = () => {
     }
     lastKeepAliveRef.current = now;
     
-    addLog('info', 'Keep-alive pulse (internal speaker)');
+    addLog('info', 'Keep-alive pulse');
     
     try {
       // Resume AudioContext if suspended
@@ -501,23 +495,18 @@ export const useIOSAudioSession = () => {
   // On CarPlay/Bluetooth, we do NOTHING - let the system handle audio
   useEffect(() => {
     const handleVisibilityChange = () => {
-      // Only log on non-external routing to reduce noise
-      if (!isExternalDeviceRef.current) {
-        addLog('info', 'Visibility changed', `state: ${document.visibilityState}`);
-        
-        // Only call keep-alive if not on external routing and page is visible
-        if (document.visibilityState === 'visible') {
-          keepAlive();
-        }
+      addLog('info', 'Visibility changed', `state: ${document.visibilityState}`);
+      
+      // Call keep-alive when page becomes visible
+      if (document.visibilityState === 'visible') {
+        keepAlive();
       }
     };
 
     const handlePageShow = (e: PageTransitionEvent) => {
-      if (!isExternalDeviceRef.current) {
-        addLog('info', 'pageshow event', `persisted: ${e.persisted}`);
-        if (e.persisted) {
-          keepAlive();
-        }
+      addLog('info', 'pageshow event', `persisted: ${e.persisted}`);
+      if (e.persisted) {
+        keepAlive();
       }
     };
 

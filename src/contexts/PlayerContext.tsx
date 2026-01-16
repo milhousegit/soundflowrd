@@ -517,17 +517,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     if (!state.isPlaying) return;
     
-    // Skip if on external device (CarPlay/Bluetooth) - they manage sessions automatically
-    if (iosAudio.isExternalDevice()) return;
-    
     // Call keepAlive immediately when playback starts
     iosAudio.keepAlive();
     
     // Then call every 10 seconds during playback
     const intervalId = setInterval(() => {
-      if (!iosAudio.isExternalDevice()) {
-        iosAudio.keepAlive();
-      }
+      iosAudio.keepAlive();
     }, 10000);
     
     return () => clearInterval(intervalId);
