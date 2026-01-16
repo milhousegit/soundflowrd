@@ -251,18 +251,20 @@ export const useIOSAudioSession = () => {
       addLog('error', 'Failed to create AudioContext', e instanceof Error ? e.message : String(e));
     }
 
-    // Create silent audio element for keep-alive
-    if (!silentAudioRef.current) {
+    // Create silent audio element for keep-alive - ONLY for non-external devices
+    // On CarPlay/Bluetooth, this silent audio can cause stuttering, so we skip it entirely
+    if (!silentAudioRef.current && !isExternalDeviceRef.current) {
       silentAudioRef.current = document.createElement('audio');
       silentAudioRef.current.id = 'ios-silent-audio';
-      silentAudioRef.current.loop = true;
+      // NO LOOP - looping causes periodic audio interruptions on CarPlay
+      silentAudioRef.current.loop = false;
       silentAudioRef.current.setAttribute('playsinline', '');
       silentAudioRef.current.preload = 'auto';
-      // Use a data URI for a tiny silent MP3 (very small, ~100 bytes)
+      // Longer silent audio (10 seconds) to reduce frequency of restarts
       silentAudioRef.current.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNAAAAAAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNAAAAAAAAAAAAAAAAAAAA';
-      silentAudioRef.current.volume = 0.01; // Near-silent but not muted
-      document.body.appendChild(silentAudioRef.current);
-      addLog('info', 'Silent audio element created and added to DOM');
+      silentAudioRef.current.volume = 0.001; // Even quieter
+      // Don't add to DOM yet - only add when needed
+      addLog('info', 'Silent audio element created (not added to DOM yet)');
     }
   }, [addLog]);
 
@@ -302,18 +304,9 @@ export const useIOSAudioSession = () => {
       }
     }
 
-    // 2. Start silent audio element (only if not on external routing)
-    if (silentAudioRef.current && !isExternalDeviceRef.current) {
-      try {
-        // Reset to start
-        silentAudioRef.current.currentTime = 0;
-        await silentAudioRef.current.play();
-        addLog('success', 'Silent audio element playing', `paused: ${silentAudioRef.current.paused}`);
-      } catch (e) {
-        addLog('error', 'Silent audio play failed', e instanceof Error ? e.message : String(e));
-        success = false;
-      }
-    }
+    // 2. Silent audio element completely DISABLED for unlock
+    // This was causing CarPlay stuttering - let the main audio handle everything
+    // The AudioContext buffer playback above is sufficient for unlocking
 
     if (success) {
       isUnlockedRef.current = true;
@@ -352,10 +345,8 @@ export const useIOSAudioSession = () => {
         (ctx as any).resume?.();
       }
 
-      // Also try silent audio element (only if not external routing)
-      if (silentAudioRef.current && !isExternalDeviceRef.current) {
-        silentAudioRef.current.play().catch(() => {});
-      }
+      // Silent audio element DISABLED - was causing CarPlay stuttering
+      // The AudioContext buffer is sufficient for quick unlock
 
       sessionStorage.setItem('audio_unlocked', 'true');
       isUnlockedRef.current = true;
@@ -374,28 +365,11 @@ export const useIOSAudioSession = () => {
    * Heavily throttled and completely skipped on external devices
    */
   const keepAlive = useCallback(() => {
-    const now = Date.now();
-    
-    // Increased throttle: max once per 5 seconds (was 2)
-    if (now - lastKeepAliveRef.current < 5000) {
-      return;
-    }
-    lastKeepAliveRef.current = now;
-
-    // COMPLETELY skip when external audio routing is active (CarPlay, Bluetooth, AirPlay)
-    // External systems manage their own audio sessions - our interference causes stuttering
-    if (isExternalDeviceRef.current) {
-      return; // Silent skip, no logging to reduce noise
-    }
-
-    // Only resume if actually suspended, don't proactively play
-    if (silentAudioRef.current && silentAudioRef.current.paused && isUnlockedRef.current) {
-      silentAudioRef.current.play().catch(() => {});
-    }
-    
-    if (audioContextRef.current?.state === 'suspended') {
-      audioContextRef.current.resume().catch(() => {});
-    }
+    // COMPLETELY DISABLED - this function is a no-op
+    // The silent audio loop was causing CarPlay stuttering every ~1 second
+    // The main audio element handles its own playback session
+    // External audio routing (CarPlay, Bluetooth) manages audio sessions automatically
+    return;
   }, []);
 
   /**
