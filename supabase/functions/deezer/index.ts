@@ -38,15 +38,25 @@ async function fetchWithRetry(url: string, retries = 3): Promise<any> {
         // Log response body for debugging
         const text = await response.text();
         console.error(`Deezer API response ${response.status}:`, text.substring(0, 200));
+        
+        // If it's a 403, don't retry - return graceful error
+        if (response.status === 403) {
+          return { error: true, status: 403, message: 'Access denied by Deezer' };
+        }
+        
         throw new Error(`HTTP ${response.status}`);
       }
       return await response.json();
     } catch (error) {
       console.log(`Attempt ${i + 1} failed:`, error);
-      if (i === retries - 1) throw error;
+      if (i === retries - 1) {
+        // Return graceful error instead of throwing
+        return { error: true, message: String(error) };
+      }
       await new Promise(r => setTimeout(r, 1000 * (i + 1)));
     }
   }
+  return { error: true, message: 'Max retries exceeded' };
 }
 
 serve(async (req) => {

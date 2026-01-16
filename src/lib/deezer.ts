@@ -113,7 +113,18 @@ export async function getArtist(id: string): Promise<Artist & { releases: Album[
     body: { action: 'get-artist', id },
   });
 
-  if (error) throw error;
+  // Handle errors gracefully - return empty artist data instead of throwing
+  if (error || data?.error) {
+    console.error('Error fetching artist:', id, error || data?.message);
+    return {
+      id,
+      name: 'Unknown Artist',
+      imageUrl: '',
+      releases: [],
+      topTracks: [],
+      relatedArtists: [],
+    };
+  }
   
   // Check if this master has any merged artists
   const mergedArtistIds = merges
