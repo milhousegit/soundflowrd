@@ -184,6 +184,8 @@ export const useIOSAudioSession = () => {
   }, [addLog]);
 
   // Detect external audio devices (CarPlay, Bluetooth, AirPlay)
+  // SIMPLIFIED: Only detect once on mount and on explicit device change events
+  // NO periodic polling to avoid interference with CarPlay audio
   useEffect(() => {
     const checkExternalRouting = async () => {
       // Use async detection first, fall back to sync check
@@ -196,54 +198,24 @@ export const useIOSAudioSession = () => {
       }
       
       if (external !== isExternalDeviceRef.current) {
-        const wasExternal = isExternalDeviceRef.current;
         isExternalDeviceRef.current = external;
         addLog('info', `External audio routing: ${external ? 'DETECTED' : 'not detected'}`);
         
-        // When switching TO external routing, cleanup audio artifacts
-        if (external && !wasExternal) {
-          addLog('info', 'Disabling keep-alive for external audio routing');
-          
-          // Pause and remove silent audio to prevent interference
-          if (silentAudioRef.current) {
-            silentAudioRef.current.pause();
-            silentAudioRef.current.src = '';
-            addLog('info', 'Silent audio element disabled for CarPlay/Bluetooth');
-          }
-          
-          // Suspend AudioContext to not interfere with external audio
-          if (audioContextRef.current && audioContextRef.current.state === 'running') {
-            audioContextRef.current.suspend().then(() => {
-              addLog('info', 'AudioContext suspended for external routing');
-            }).catch(() => {});
-          }
-        }
-        
-        // When switching BACK from external routing, re-enable
-        if (!external && wasExternal) {
-          addLog('info', 'Re-enabling keep-alive (external device disconnected)');
-          
-          // Re-initialize silent audio
-          if (silentAudioRef.current && isUnlockedRef.current) {
-            silentAudioRef.current.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNAAAAAAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNAAAAAAAAAAAAAAAAAAAA';
-            silentAudioRef.current.play().catch(() => {});
-          }
-          
-          // Resume AudioContext
-          if (audioContextRef.current?.state === 'suspended') {
-            audioContextRef.current.resume().catch(() => {});
-          }
+        // When on external routing, just set the flag - DON'T manipulate AudioContext
+        // The main audio element handles playback; we just disable keepAlive interference
+        if (external) {
+          addLog('info', 'External device detected - disabling keepAlive only');
         }
       }
     };
 
-    // Check on device change events
+    // Check on device change events only
     const handleDeviceChange = () => {
       addLog('info', 'Audio device change detected');
       checkExternalRouting();
     };
 
-    // Initial check
+    // Initial check only (no periodic polling)
     checkExternalRouting();
 
     // Listen for device changes
@@ -251,14 +223,13 @@ export const useIOSAudioSession = () => {
       navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
     }
 
-    // Check periodically for CarPlay connection (less frequently)
-    const interval = window.setInterval(checkExternalRouting, 10000);
+    // NO periodic interval - this was causing CarPlay stuttering
+    // The devicechange event is sufficient for detecting connection changes
 
     return () => {
       if (navigator.mediaDevices?.removeEventListener) {
         navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
       }
-      window.clearInterval(interval);
     };
   }, [addLog]);
 
@@ -512,36 +483,36 @@ export const useIOSAudioSession = () => {
     }
   }, [addLog]);
 
-  // Listen for visibility changes
+  // Listen for visibility changes - SIMPLIFIED to reduce interference
+  // On CarPlay/Bluetooth, we do NOTHING - let the system handle audio
   useEffect(() => {
     const handleVisibilityChange = () => {
-      addLog('info', 'Visibility changed', `state: ${document.visibilityState}`);
-      
-      // Only call keep-alive if not on external routing and page is visible
-      if (document.visibilityState === 'visible' && !isExternalDeviceRef.current) {
-        keepAlive();
+      // Only log on non-external routing to reduce noise
+      if (!isExternalDeviceRef.current) {
+        addLog('info', 'Visibility changed', `state: ${document.visibilityState}`);
+        
+        // Only call keep-alive if not on external routing and page is visible
+        if (document.visibilityState === 'visible') {
+          keepAlive();
+        }
       }
     };
 
     const handlePageShow = (e: PageTransitionEvent) => {
-      addLog('info', 'pageshow event', `persisted: ${e.persisted}`);
-      if (e.persisted && !isExternalDeviceRef.current) {
-        keepAlive();
+      if (!isExternalDeviceRef.current) {
+        addLog('info', 'pageshow event', `persisted: ${e.persisted}`);
+        if (e.persisted) {
+          keepAlive();
+        }
       }
-    };
-
-    const handlePageHide = () => {
-      addLog('info', 'pagehide event');
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pageshow', handlePageShow);
-    window.addEventListener('pagehide', handlePageHide);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pageshow', handlePageShow);
-      window.removeEventListener('pagehide', handlePageHide);
     };
   }, [addLog, keepAlive]);
 
