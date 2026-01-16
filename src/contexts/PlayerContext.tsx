@@ -1575,19 +1575,55 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const nextIndex = state.queueIndex + 1;
     if (nextIndex < state.queue.length) {
       const nextTrack = state.queue[nextIndex];
-      setState((prev) => ({ ...prev, queueIndex: nextIndex }));
+      setState((prev) => ({ ...prev, queueIndex: nextIndex, currentTrack: nextTrack }));
+      
+      // CHECK: Do we have a prefetched URL for this track?
+      const prefetched = prefetchedNextUrlRef.current;
+      if (prefetched && prefetched.trackId === nextTrack.id && prefetched.url) {
+        console.log('[Next] Using prefetched URL for:', nextTrack.title);
+        
+        // Clear prefetch refs
+        prefetchedNextUrlRef.current = null;
+        prefetchedTrackIdRef.current = null;
+        
+        // Use prefetched URL directly - SKIP the search!
+        if (audioRef.current) {
+          audioRef.current.src = prefetched.url;
+          updateMediaSessionMetadata(nextTrack, true);
+          
+          try {
+            await audioRef.current.play();
+            setState((prev) => ({ ...prev, isPlaying: true }));
+            setCurrentAudioSource(prefetched.source === 'tidal' ? 'tidal' : prefetched.source === 'offline' ? 'offline' : 'real-debrid');
+            setLoadingPhase('idle');
+            addDebugLog('⚡ Transizione veloce', `"${nextTrack.title}" (pre-caricato)`, 'success');
+            
+            // Save to recently played
+            saveRecentlyPlayedTrack(nextTrack, user?.id);
+            
+            // Start prefetching the NEXT next track
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('prefetch-next-track'));
+            }, 3000);
+            
+            return;
+          } catch (playError) {
+            console.log('[Next] Prefetched play failed, falling back to normal:', playError);
+            // Fall through to normal playback
+          }
+        }
+      }
+      
+      // Normal playback (no prefetch or prefetch failed)
       playTrack(nextTrack, state.queue);
     } else if (state.currentTrack) {
       // End of queue - fetch similar tracks and continue playing
-      // Do this async to not block - if it fails, just stop playing
       console.log('[Autoplay] Queue ended, fetching similar tracks...');
       addDebugLog('🔄 Autoplay', 'Carico brani simili...', 'info');
       
-      // Don't await here - let it run in background to not block iOS
       fetchSimilarTracks(state.currentTrack).then((similarTracks) => {
         if (similarTracks.length > 0) {
-          // Add similar tracks to queue and play first one
-          const currentQueue = state.queue; // Use captured state
+          const currentQueue = state.queue;
           const newQueue = [...currentQueue, ...similarTracks];
           setState((prev) => ({ ...prev, queue: newQueue }));
           playTrack(similarTracks[0], newQueue);
@@ -1601,7 +1637,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         addDebugLog('❌ Autoplay fallito', error instanceof Error ? error.message : 'Errore', 'error');
       });
     }
-  }, [addDebugLog, fetchSimilarTracks, playTrack, state.currentTrack, state.queue, state.queueIndex]);
+  }, [addDebugLog, fetchSimilarTracks, playTrack, state.currentTrack, state.queue, state.queueIndex, user?.id]);
 
   const previous = useCallback(() => {
     if (state.progress > 3) {
@@ -1820,7 +1856,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const timeout = setTimeout(preSyncNextTrack, 3000);
     return () => clearTimeout(timeout);
-  }, [credentials, saveFileMapping, state.currentTrack, state.isPlaying, state.queue, state.queueIndex]);
+  }, [audioSourceMode, credentials, saveFileMapping, state.currentTrack, state.isPlaying, state.queue, state.queueIndex]);
 
   return (
     <PlayerContext.Provider
