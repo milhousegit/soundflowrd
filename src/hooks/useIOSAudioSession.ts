@@ -72,6 +72,7 @@ export const supportsWakeLock = (): boolean => {
 /**
  * Detect if audio is being routed to an external device (CarPlay, Bluetooth, AirPlay)
  * Uses MediaDevices API for accurate detection
+ * IMPORTANT: Excludes virtual audio drivers (BlackHole, VB-Audio, Soundflower, etc.)
  */
 const detectExternalAudioDevice = async (): Promise<boolean> => {
   try {
@@ -82,9 +83,22 @@ const detectExternalAudioDevice = async (): Promise<boolean> => {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
     
-    // Check for Bluetooth, CarPlay, or external audio devices
+    // Virtual audio drivers to IGNORE (these are NOT external devices)
+    const virtualDriverPatterns = [
+      'blackhole', 'vb-audio', 'soundflower', 'loopback', 'virtual', 
+      'aggregate', 'multi-output', 'voicemeeter', 'cable', 'obs',
+      'screen capture', 'zoom', 'teams', 'discord', 'rec'
+    ];
+    
+    // Check for REAL Bluetooth, CarPlay, or external audio devices
     for (const device of audioOutputs) {
       const label = device.label.toLowerCase();
+      
+      // Skip virtual drivers
+      if (virtualDriverPatterns.some(pattern => label.includes(pattern))) {
+        console.log('[iOS Audio] Skipping virtual driver:', device.label);
+        continue;
+      }
       
       // CarPlay indicators
       if (label.includes('carplay') || label.includes('car audio') || label.includes('car stereo')) {
@@ -107,18 +121,9 @@ const detectExternalAudioDevice = async (): Promise<boolean> => {
       }
     }
     
-    // Fallback: check for multiple audio outputs (suggests external device connected)
-    // Default is usually just "Default" or internal speakers
-    const nonDefaultOutputs = audioOutputs.filter(d => 
-      d.deviceId !== 'default' && 
-      !d.label.toLowerCase().includes('speaker') &&
-      !d.label.toLowerCase().includes('built-in')
-    );
-    
-    if (nonDefaultOutputs.length > 0) {
-      console.log('[iOS Audio] External audio output detected:', nonDefaultOutputs.map(d => d.label).join(', '));
-      return true;
-    }
+    // NO LONGER use fallback detection for "non-default" outputs
+    // This was causing false positives with virtual audio drivers
+    // Only explicitly detected devices (CarPlay, Bluetooth, AirPlay) count as external
     
     return false;
   } catch (error) {

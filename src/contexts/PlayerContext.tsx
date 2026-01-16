@@ -518,8 +518,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const handleTimeUpdate = () => setState((prev) => ({ ...prev, progress: audio.currentTime }));
     const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
     
-    // Simplified ended handler - no aggressive keepAlive to avoid CarPlay issues
-    const handleEnded = () => {
+    // Track ended handler - maintains audio session during transition
+    const handleEnded = async () => {
       console.log('[PlayerContext] Track ended, triggering next');
       
       // Keep media session showing "playing" during track transition
@@ -527,10 +527,17 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         navigator.mediaSession.playbackState = 'playing';
       }
       
+      // On iOS (non-external devices): play placeholder to maintain session during transition
+      // This prevents the widget from disappearing when exiting the app at song end
+      const iosAudioInstance = iosAudioRef.current;
+      if (iosAudioInstance && !iosAudioInstance.isExternalDevice()) {
+        await iosAudioInstance.playPlaceholder();
+      }
+      
       // Small delay to ensure smooth track transition
       setTimeout(() => {
         nextRef.current();
-      }, 50);
+      }, 100);
     };
 
     // Handle pause events
