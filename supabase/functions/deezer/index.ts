@@ -428,6 +428,7 @@ serve(async (req) => {
         // Try to fetch from database configuration
         let playlistId = defaultCountryToEditorial[country?.toUpperCase()] ?? '0';
         let usePlaylist = false;
+        let useSoundFlowPlaylist = false;
         
         try {
           const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -448,8 +449,15 @@ serve(async (req) => {
               const configData = await configResponse.json();
               if (configData && configData.length > 0 && configData[0].playlist_id) {
                 playlistId = configData[0].playlist_id;
-                // If playlist_id is a long number (more than 3 digits), it's a playlist ID, not editorial
-                usePlaylist = playlistId.length > 3;
+                
+                // Check if it's a SoundFlow playlist (prefixed with "sf:")
+                if (playlistId.startsWith('sf:')) {
+                  useSoundFlowPlaylist = true;
+                  playlistId = playlistId.replace('sf:', '');
+                } else if (playlistId.length > 3) {
+                  // If playlist_id is a long number (more than 3 digits), it's a Deezer playlist ID
+                  usePlaylist = true;
+                }
               }
             }
           }
@@ -457,29 +465,68 @@ serve(async (req) => {
           console.error('Failed to fetch chart configuration, using default:', configError);
         }
         
-        console.log(`Getting chart for country: ${country}, ID: ${playlistId}, isPlaylist: ${usePlaylist}`);
+        console.log(`Getting chart for country: ${country}, ID: ${playlistId}, isDeezerPlaylist: ${usePlaylist}, isSoundFlow: ${useSoundFlowPlaylist}`);
         
-        let data;
-        if (usePlaylist) {
-          // Fetch tracks from a Deezer playlist
-          data = await fetchWithRetry(`${DEEZER_API}/playlist/${playlistId}/tracks?limit=${limit}`);
+        let tracks: any[] = [];
+        
+        if (useSoundFlowPlaylist) {
+          // Fetch tracks from SoundFlow (local) playlist
+          try {
+            const supabaseUrl = Deno.env.get('SUPABASE_URL');
+            const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+            
+            if (supabaseUrl && supabaseKey) {
+              const tracksResponse = await fetch(
+                `${supabaseUrl}/rest/v1/playlist_tracks?playlist_id=eq.${playlistId}&order=position.asc&limit=${limit}&select=track_id,track_title,track_artist,track_album,track_album_id,track_cover_url,track_duration`,
+                {
+                  headers: {
+                    'apikey': supabaseKey,
+                    'Authorization': `Bearer ${supabaseKey}`,
+                  },
+                }
+              );
+              
+              if (tracksResponse.ok) {
+                const tracksData = await tracksResponse.json();
+                tracks = (tracksData || []).map((t: any, index: number) => ({
+                  id: t.track_id,
+                  title: t.track_title,
+                  artist: t.track_artist || 'Unknown Artist',
+                  artistId: '',
+                  album: t.track_album || 'Unknown Album',
+                  albumId: t.track_album_id || '',
+                  duration: t.track_duration || 0,
+                  coverUrl: t.track_cover_url || undefined,
+                  position: index + 1,
+                }));
+              }
+            }
+          } catch (sfError) {
+            console.error('Failed to fetch SoundFlow playlist:', sfError);
+          }
         } else {
-          // Fetch from editorial chart
-          data = await fetchWithRetry(`${DEEZER_API}/chart/${playlistId}/tracks?limit=${limit}`);
+          let data;
+          if (usePlaylist) {
+            // Fetch tracks from a Deezer playlist
+            data = await fetchWithRetry(`${DEEZER_API}/playlist/${playlistId}/tracks?limit=${limit}`);
+          } else {
+            // Fetch from editorial chart
+            data = await fetchWithRetry(`${DEEZER_API}/chart/${playlistId}/tracks?limit=${limit}`);
+          }
+          
+          tracks = (data.data || []).map((track: any, index: number) => ({
+            id: String(track.id),
+            title: track.title,
+            artist: track.artist?.name || 'Unknown Artist',
+            artistId: String(track.artist?.id || ''),
+            album: track.album?.title || 'Unknown Album',
+            albumId: String(track.album?.id || ''),
+            duration: track.duration || 0,
+            coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+            previewUrl: track.preview || undefined,
+            position: index + 1,
+          }));
         }
-        
-        const tracks = (data.data || []).map((track: any, index: number) => ({
-          id: String(track.id),
-          title: track.title,
-          artist: track.artist?.name || 'Unknown Artist',
-          artistId: String(track.artist?.id || ''),
-          album: track.album?.title || 'Unknown Album',
-          albumId: String(track.album?.id || ''),
-          duration: track.duration || 0,
-          coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
-          previewUrl: track.preview || undefined,
-          position: index + 1,
-        }));
 
         return new Response(JSON.stringify(tracks), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
