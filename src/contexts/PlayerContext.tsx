@@ -643,12 +643,24 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       });
       
-      // Remove seek handlers to force track navigation buttons on all platforms
+      // CRITICAL: On iOS, setting to null doesn't work - we must set explicit handlers
+      // that do the same as prev/next to force iOS to show track buttons instead of seek
       try {
+        // First try setting to null (works on some browsers)
         navigator.mediaSession.setActionHandler('seekbackward', null);
         navigator.mediaSession.setActionHandler('seekforward', null);
       } catch (e) {
-        // Some browsers don't support setting to null
+        // If null doesn't work, set explicit handlers that act as prev/next
+        try {
+          navigator.mediaSession.setActionHandler('seekbackward', () => {
+            previousRef.current();
+          });
+          navigator.mediaSession.setActionHandler('seekforward', () => {
+            nextRef.current();
+          });
+        } catch (e2) {
+          // Fallback: just ignore
+        }
       }
     }
 
