@@ -903,15 +903,23 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // =============== DEEZER/TIDAL PRIORITY MODE ===============
       if (isDeezerPriorityMode) {
         const tidalQuality = mapQualityToTidal(settings.audioQuality);
-        addDebugLog('🎵 Modalità HQ', `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} su Tidal (${tidalQuality})`, 'info');
+        const searchStartTime = Date.now();
+        addDebugLog('🔍 Avvio ricerca', `"${enrichedTrack.title}" - ${enrichedTrack.artist}`, 'info');
         setLoadingPhase('searching');
 
         try {
           // Use Tidal via SquidWTF - search by title and artist
+          addDebugLog('📡 Chiamata API', `Tidal/SquidWTF (${tidalQuality})...`, 'info');
           const tidalResult = await getTidalStream(enrichedTrack.title, enrichedTrack.artist, tidalQuality);
-          if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
+          const searchDuration = Date.now() - searchStartTime;
+          
+          if (currentSearchTrackIdRef.current !== enrichedTrack.id) {
+            addDebugLog('⏭️ Ricerca annullata', `Traccia cambiata (${searchDuration}ms)`, 'warning');
+            return;
+          }
 
           if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
+            addDebugLog('✅ Stream trovato', `${searchDuration}ms - Caricamento audio...`, 'success');
             setLoadingPhase('loading');
             audioRef.current.src = tidalResult.streamUrl;
             
