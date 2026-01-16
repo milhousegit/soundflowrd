@@ -56,7 +56,7 @@ const Home: React.FC = () => {
   
   const { settings, t } = useSettings();
   const { currentTrack, isPlaying, playTrack, toggle, addToQueue } = usePlayer();
-  const { favorites, getFavoritesByType } = useFavorites();
+  const { favorites, isLoading: isLoadingFavorites, getFavoritesByType } = useFavorites();
   const { playlists, isLoading: isLoadingPlaylists, addTrackToPlaylist } = usePlaylists();
   const { recentTracks, isLoading: isLoadingRecent } = useRecentlyPlayed();
   const isMobile = useIsMobile();
@@ -95,6 +95,9 @@ const Home: React.FC = () => {
   };
 
   useEffect(() => {
+    // Wait until we know if user has favorites before fetching
+    if (isLoadingFavorites) return;
+    
     const fetchNewReleases = async () => {
       setIsLoadingReleases(true);
       try {
@@ -150,9 +153,12 @@ const Home: React.FC = () => {
     };
 
     fetchNewReleases();
-  }, [favorites.length]);
+  }, [isLoadingFavorites, favorites.length]);
 
   useEffect(() => {
+    // Wait until we know if user has favorites before fetching
+    if (isLoadingFavorites) return;
+    
     const fetchArtistsForYou = async () => {
       setIsLoadingArtists(true);
       try {
@@ -209,7 +215,7 @@ const Home: React.FC = () => {
     };
 
     fetchArtistsForYou();
-  }, [favorites.length]);
+  }, [isLoadingFavorites, favorites.length]);
 
   // Fetch chart configurations and their display data
   useEffect(() => {
