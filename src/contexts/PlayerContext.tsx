@@ -398,10 +398,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Safe play helper that handles interrupted play errors gracefully
   const safePlay = useCallback(async (audio: HTMLAudioElement): Promise<boolean> => {
     try {
+      console.log('[PlayerContext] safePlay called, audio.paused:', audio.paused, 'readyState:', audio.readyState);
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         await playPromise;
       }
+      console.log('[PlayerContext] safePlay SUCCESS');
       return true;
     } catch (error) {
       if (error instanceof Error) {
@@ -412,11 +414,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
         // NotAllowedError: Autoplay blocked - user needs to interact first
         if (error.name === 'NotAllowedError') {
-          console.log('[PlayerContext] Autoplay blocked');
+          console.log('[PlayerContext] Autoplay blocked - syncing state to paused');
+          // CRITICAL: Sync state with reality when autoplay is blocked
+          setState((prev) => ({ ...prev, isPlaying: false }));
           return false;
         }
       }
       console.error('[PlayerContext] Play error:', error);
+      // Sync state with reality on any error
+      setState((prev) => ({ ...prev, isPlaying: false }));
       return false;
     }
   }, []);
@@ -513,7 +519,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // iOS background playback keep-alive interval
   // Calls keepAlive every 10 seconds during playback to maintain audio session
-  // ONLY on internal speakers (iPhone speaker/earpiece), DISABLED on CarPlay/Bluetooth
   useEffect(() => {
     if (!state.isPlaying) return;
     
@@ -527,6 +532,29 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     
     return () => clearInterval(intervalId);
   }, [state.isPlaying, iosAudio]);
+
+  // Sync isPlaying state with actual audio element when app comes back from background
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && audioRef.current) {
+        const audio = audioRef.current;
+        const actuallyPlaying = !audio.paused && !audio.ended && audio.readyState > 2;
+        
+        console.log('[PlayerContext] App became visible - audio.paused:', audio.paused, 
+          'audio.ended:', audio.ended, 'readyState:', audio.readyState,
+          'actuallyPlaying:', actuallyPlaying, 'state.isPlaying:', state.isPlaying);
+        
+        // Sync state with reality
+        if (state.isPlaying !== actuallyPlaying) {
+          console.log('[PlayerContext] Syncing state - setting isPlaying to:', actuallyPlaying);
+          setState((prev) => ({ ...prev, isPlaying: actuallyPlaying }));
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [state.isPlaying]);
 
   useEffect(() => {
     audioRef.current = new Audio();
@@ -1617,6 +1645,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           updateMediaSessionMetadata(nextTrack, true);
           
           try {
+            console.log('[Next] Playing prefetched track:', nextTrack.title);
             await audioRef.current.play();
             setState((prev) => ({ ...prev, isPlaying: true }));
             setCurrentAudioSource(prefetched.source === 'tidal' ? 'tidal' : prefetched.source === 'offline' ? 'offline' : 'real-debrid');
@@ -1633,8 +1662,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             
             return;
           } catch (playError) {
-            console.log('[Next] Prefetched play failed, falling back to normal:', playError);
-            // Fall through to normal playback
+            console.log('[Next] Prefetched play failed:', playError);
+            // CRITICAL: If autoplay blocked, sync state to paused
+            if (playError instanceof Error && playError.name === 'NotAllowedError') {
+              console.log('[Next] Autoplay blocked - setting isPlaying to false');
+              setState((prev) => ({ ...prev, isPlaying: false }));
+              addDebugLog('⚠️ Autoplay bloccato', 'Premi play per avviare', 'warning');
+              return; // Don't fallback, just wait for user interaction
+            }
+            // Fall through to normal playback for other errors
           }
         }
       }
