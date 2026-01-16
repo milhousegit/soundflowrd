@@ -241,17 +241,22 @@ const Home: React.FC = () => {
               trackCount: tracksResult.count || 0
             };
           } else if (playlistId.length > 6) {
-            // Long ID = Deezer playlist - fetch from API
+            // Long ID = Deezer playlist - fetch from API using POST with JSON body
             try {
               const response = await fetch(
-                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deezer?action=playlist&id=${playlistId}`
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deezer`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'get-playlist', id: playlistId })
+                }
               );
               if (response.ok) {
                 const playlist = await response.json();
                 if (playlist && !playlist.error) {
                   displayData[chart.id] = {
-                    coverUrl: playlist.picture_medium || playlist.picture || null,
-                    trackCount: playlist.nb_tracks || 0
+                    coverUrl: playlist.coverUrl || null,
+                    trackCount: playlist.trackCount || 0
                   };
                 } else {
                   displayData[chart.id] = { coverUrl: null, trackCount: 0 };
