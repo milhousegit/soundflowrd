@@ -527,10 +527,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       setState((prev) => ({ ...prev, progress: currentTime }));
       
-      // Pre-fetch next track URL when 10 seconds from end (for iOS background playback)
-      if (duration && duration > 15 && (duration - currentTime) <= 10 && (duration - currentTime) > 5) {
-        // Trigger pre-fetch via a custom event to access state
-        window.dispatchEvent(new CustomEvent('prefetch-next-track'));
+      // Pre-fetch next track URL when 15-8 seconds from end (for iOS background playback)
+      // Start earlier to give more time for the request to complete
+      if (duration && duration > 20 && (duration - currentTime) <= 15 && (duration - currentTime) > 8) {
+        // Check if we haven't already started prefetching
+        if (!isPrefetchingRef.current && !prefetchedNextUrlRef.current) {
+          window.dispatchEvent(new CustomEvent('prefetch-next-track'));
+        }
       }
     };
     
@@ -545,34 +548,48 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         navigator.mediaSession.playbackState = 'playing';
       }
       
+      // On iOS (non-external devices): play placeholder immediately to maintain session
+      const iosAudioInstance = iosAudioRef.current;
+      const isExternalDevice = iosAudioInstance?.isExternalDevice() ?? false;
+      if (iosAudioInstance && !isExternalDevice) {
+        iosAudioInstance.playPlaceholder().catch(() => {});
+      }
+      
       // Check if we have a pre-fetched URL for immediate playback
       const prefetched = prefetchedNextUrlRef.current;
       if (prefetched && prefetched.url) {
         console.log('[PlayerContext] Using pre-fetched URL for seamless transition');
         
-        // Immediately set the new source and play - no async operations!
-        audio.src = prefetched.url;
-        audio.play().catch(() => {});
+        // Store details before clearing
+        const prefetchDetails = { ...prefetched };
         
-        // Clear the prefetch
+        // Clear the prefetch refs immediately to prevent duplicate plays
         prefetchedNextUrlRef.current = null;
         prefetchedTrackIdRef.current = null;
         
-        // Trigger state update via event
-        window.dispatchEvent(new CustomEvent('prefetch-played', { detail: prefetched }));
+        // Immediately set the new source and play - no async operations!
+        audio.src = prefetchDetails.url;
+        
+        // Try to play, with fallback to next() if it fails
+        audio.play().then(() => {
+          console.log('[PlayerContext] Prefetched track started successfully');
+          // Trigger state update via event
+          window.dispatchEvent(new CustomEvent('prefetch-played', { detail: prefetchDetails }));
+        }).catch((error) => {
+          console.log('[PlayerContext] Prefetched play failed, falling back to next():', error);
+          // Fallback to normal next() flow
+          setTimeout(() => {
+            nextRef.current();
+          }, 50);
+        });
         return;
       }
       
-      // Fallback: On iOS (non-external devices): play placeholder to maintain session
-      const iosAudioInstance = iosAudioRef.current;
-      if (iosAudioInstance && !iosAudioInstance.isExternalDevice()) {
-        iosAudioInstance.playPlaceholder().catch(() => {});
-      }
-      
-      // Use normal next() flow
+      // Fallback: Use normal next() flow
+      console.log('[PlayerContext] No prefetch available, using next()');
       setTimeout(() => {
         nextRef.current();
-      }, 100);
+      }, 50);
     };
 
     // Handle pause events
@@ -1579,25 +1596,32 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const next = useCallback(async () => {
     const nextIndex = state.queueIndex + 1;
     if (nextIndex < state.queue.length) {
-      playTrack(state.queue[nextIndex], state.queue);
+      const nextTrack = state.queue[nextIndex];
       setState((prev) => ({ ...prev, queueIndex: nextIndex }));
+      playTrack(nextTrack, state.queue);
     } else if (state.currentTrack) {
       // End of queue - fetch similar tracks and continue playing
+      // Do this async to not block - if it fails, just stop playing
       console.log('[Autoplay] Queue ended, fetching similar tracks...');
       addDebugLog('🔄 Autoplay', 'Carico brani simili...', 'info');
       
-      const similarTracks = await fetchSimilarTracks(state.currentTrack);
-      
-      if (similarTracks.length > 0) {
-        // Add similar tracks to queue and play first one
-        const newQueue = [...state.queue, ...similarTracks];
-        setState((prev) => ({ ...prev, queue: newQueue }));
-        playTrack(similarTracks[0], newQueue);
-        setState((prev) => ({ ...prev, queueIndex: state.queue.length }));
-        addDebugLog('✅ Autoplay avviato', `${similarTracks.length} brani aggiunti`, 'success');
-      } else {
-        addDebugLog('ℹ️ Autoplay', 'Nessun brano simile trovato', 'info');
-      }
+      // Don't await here - let it run in background to not block iOS
+      fetchSimilarTracks(state.currentTrack).then((similarTracks) => {
+        if (similarTracks.length > 0) {
+          // Add similar tracks to queue and play first one
+          const currentQueue = state.queue; // Use captured state
+          const newQueue = [...currentQueue, ...similarTracks];
+          setState((prev) => ({ ...prev, queue: newQueue }));
+          playTrack(similarTracks[0], newQueue);
+          setState((prev) => ({ ...prev, queueIndex: currentQueue.length }));
+          addDebugLog('✅ Autoplay avviato', `${similarTracks.length} brani aggiunti`, 'success');
+        } else {
+          addDebugLog('ℹ️ Autoplay', 'Nessun brano simile trovato', 'info');
+        }
+      }).catch((error) => {
+        console.error('[Autoplay] Error fetching similar tracks:', error);
+        addDebugLog('❌ Autoplay fallito', error instanceof Error ? error.message : 'Errore', 'error');
+      });
     }
   }, [addDebugLog, fetchSimilarTracks, playTrack, state.currentTrack, state.queue, state.queueIndex]);
 
