@@ -538,57 +538,24 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     
     const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
     
-    // Track ended handler - uses pre-fetched URL for seamless background playback
+    // Track ended handler - SIMPLE and FAST transition to next track
     const handleEnded = () => {
-      console.log('[PlayerContext] Track ended');
+      console.log('[PlayerContext] Track ended - transitioning to next');
       
-      // Keep media session showing "playing" during track transition
+      // Keep media session active
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'playing';
       }
       
-      // On iOS (non-external devices): play placeholder immediately to maintain session
+      // iOS: maintain audio session
       const iosAudioInstance = iosAudioRef.current;
-      const isExternalDevice = iosAudioInstance?.isExternalDevice() ?? false;
-      if (iosAudioInstance && !isExternalDevice) {
+      if (iosAudioInstance && !iosAudioInstance.isExternalDevice()) {
         iosAudioInstance.playPlaceholder().catch(() => {});
       }
       
-      // Check if we have a pre-fetched URL for immediate playback
-      const prefetched = prefetchedNextUrlRef.current;
-      if (prefetched && prefetched.url) {
-        console.log('[PlayerContext] Using pre-fetched URL for seamless transition');
-        
-        // Store details before clearing
-        const prefetchDetails = { ...prefetched };
-        
-        // Clear the prefetch refs immediately to prevent duplicate plays
-        prefetchedNextUrlRef.current = null;
-        prefetchedTrackIdRef.current = null;
-        
-        // Immediately set the new source and play - no async operations!
-        audio.src = prefetchDetails.url;
-        
-        // Try to play, with fallback to next() if it fails
-        audio.play().then(() => {
-          console.log('[PlayerContext] Prefetched track started successfully');
-          // Trigger state update via event
-          window.dispatchEvent(new CustomEvent('prefetch-played', { detail: prefetchDetails }));
-        }).catch((error) => {
-          console.log('[PlayerContext] Prefetched play failed, falling back to next():', error);
-          // Fallback to normal next() flow
-          setTimeout(() => {
-            nextRef.current();
-          }, 50);
-        });
-        return;
-      }
-      
-      // Fallback: Use normal next() flow
-      console.log('[PlayerContext] No prefetch available, using next()');
-      setTimeout(() => {
-        nextRef.current();
-      }, 50);
+      // SIMPLE: Just call next() immediately - let it handle everything
+      // The prefetch is just an optimization, not required
+      nextRef.current();
     };
 
     // Handle pause events
@@ -1655,7 +1622,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     previousRef.current = previous;
   }, [next, previous]);
 
-  // Pre-fetch next track URL for seamless iOS background playback
+  // Pre-fetch next track URL for seamless iOS background playback (SIMPLE VERSION)
   useEffect(() => {
     const handlePrefetchNextTrack = async () => {
       // Skip if already prefetching or no next track
@@ -1672,32 +1639,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       isPrefetchingRef.current = true;
       console.log('[Prefetch] Starting prefetch for:', nextTrack.title);
-      addDebugLog('🔄 Pre-caricamento', `Preparando "${nextTrack.title}"...`, 'info');
       
       try {
-        // STEP 1: Check if we have a saved mapping with direct link (fastest)
-        if (nextTrack.albumId) {
-          const { data: trackMapping } = await supabase
-            .from('track_file_mappings')
-            .select('direct_link')
-            .eq('track_id', nextTrack.id)
-            .maybeSingle();
-          
-          if (trackMapping?.direct_link) {
-            prefetchedNextUrlRef.current = {
-              trackId: nextTrack.id,
-              url: trackMapping.direct_link,
-              source: 'real-debrid'
-            };
-            prefetchedTrackIdRef.current = nextTrack.id;
-            console.log('[Prefetch] Found cached RD link for:', nextTrack.title);
-            addDebugLog('✅ Pre-caricato (RD cache)', `"${nextTrack.title}" pronto`, 'success');
-            isPrefetchingRef.current = false;
-            return;
-          }
-        }
-        
-        // STEP 2: Try Tidal (fast and reliable)
+        // Simple: Just use Tidal - it's fast and reliable
         const tidalQuality = mapQualityToTidal(settings.audioQuality);
         const tidalResult = await getTidalStream(nextTrack.title, nextTrack.artist, tidalQuality);
         
@@ -1708,103 +1652,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             source: 'tidal'
           };
           prefetchedTrackIdRef.current = nextTrack.id;
-          console.log('[Prefetch] Successfully prefetched Tidal URL for:', nextTrack.title);
-          addDebugLog('✅ Pre-caricato (Tidal)', `"${nextTrack.title}" pronto`, 'success');
-          isPrefetchingRef.current = false;
-          return;
-        }
-        
-        // STEP 3: If Tidal failed and we have RD credentials, try RD search
-        if (credentials?.realDebridApiKey) {
-          console.log('[Prefetch] Tidal failed, trying RD for:', nextTrack.title);
-          addDebugLog('🔄 Tidal fallito, provo RD...', nextTrack.title, 'info');
-          
-          const query = nextTrack.album?.trim() 
-            ? `${nextTrack.album} ${nextTrack.artist}` 
-            : `${nextTrack.title} ${nextTrack.artist}`;
-          
-          const result = await searchStreams(credentials.realDebridApiKey, query);
-          
-          // Try to find matching file in torrents
-          for (const torrent of result.torrents) {
-            if (!torrent.files?.length) continue;
-            const matchingFile = torrent.files.find((file) =>
-              flexibleMatch(file.filename || '', nextTrack.title) || 
-              flexibleMatch(file.path || '', nextTrack.title)
-            );
-            if (!matchingFile) continue;
-            
-            // Select the file and get stream URL
-            const selectResult = await selectFilesAndPlay(
-              credentials.realDebridApiKey, 
-              torrent.torrentId, 
-              [matchingFile.id]
-            );
-            
-            if (!selectResult.error && selectResult.streams.length > 0) {
-              const streamUrl = selectResult.streams[0].streamUrl;
-              
-              prefetchedNextUrlRef.current = {
-                trackId: nextTrack.id,
-                url: streamUrl,
-                source: 'real-debrid'
-              };
-              prefetchedTrackIdRef.current = nextTrack.id;
-              console.log('[Prefetch] Successfully prefetched RD URL for:', nextTrack.title);
-              addDebugLog('✅ Pre-caricato (RD)', `"${nextTrack.title}" pronto`, 'success');
-              
-              // Also save mapping for future use
-              if (nextTrack.albumId) {
-                // Fire and forget - don't block prefetch
-                saveFileMapping({
-                  track: nextTrack,
-                  torrentId: torrent.torrentId,
-                  torrentTitle: torrent.title,
-                  fileId: matchingFile.id,
-                  fileName: matchingFile.filename,
-                  filePath: matchingFile.path,
-                  directLink: streamUrl,
-                }).catch(() => {});
-              }
-              break;
-            }
-          }
-        }
-        
-        if (!prefetchedNextUrlRef.current) {
-          console.log('[Prefetch] All sources failed for:', nextTrack.title);
-          addDebugLog('⚠️ Pre-caricamento fallito', `"${nextTrack.title}" - userà ricerca normale`, 'warning');
+          console.log('[Prefetch] Prefetched:', nextTrack.title);
+          addDebugLog('📥 Pre-caricato', `"${nextTrack.title}" pronto`, 'success');
         }
       } catch (error) {
-        console.log('[Prefetch] Error during prefetch:', error);
-        addDebugLog('⚠️ Errore pre-caricamento', error instanceof Error ? error.message : 'Errore', 'warning');
+        console.log('[Prefetch] Failed:', error);
       } finally {
         isPrefetchingRef.current = false;
       }
     };
     
-    // Handle when prefetched track starts playing
-    const handlePrefetchPlayed = (event: CustomEvent) => {
-      const { trackId, source } = event.detail;
-      const nextIndex = state.queueIndex + 1;
-      
-      if (nextIndex < state.queue.length) {
-        const nextTrack = state.queue[nextIndex];
-        if (nextTrack && nextTrack.id === trackId) {
-          console.log('[Prefetch] Updating state for prefetched track');
-          setState((prev) => ({
-            ...prev,
-            currentTrack: nextTrack,
-            queueIndex: nextIndex,
-            isPlaying: true,
-            progress: 0,
-          }));
-          setCurrentAudioSource(source);
-          updateMediaSessionMetadata(nextTrack, true);
-          saveRecentlyPlayedTrack(nextTrack, user?.id);
-        }
-      }
-    };
+    // Handle when prefetched track starts playing (not used anymore but keep for cleanup)
+    const handlePrefetchPlayed = () => {};
     
     window.addEventListener('prefetch-next-track', handlePrefetchNextTrack);
     window.addEventListener('prefetch-played', handlePrefetchPlayed as EventListener);
@@ -1813,7 +1672,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       window.removeEventListener('prefetch-next-track', handlePrefetchNextTrack);
       window.removeEventListener('prefetch-played', handlePrefetchPlayed as EventListener);
     };
-  }, [state.queue, state.queueIndex, settings.audioQuality, addDebugLog, user?.id, credentials?.realDebridApiKey, saveFileMapping]);
+  }, [state.queue, state.queueIndex, settings.audioQuality, addDebugLog]);
 
   // Note: Media Session next/previous handlers are set up in the audio initialization useEffect
 
