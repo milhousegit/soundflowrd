@@ -3,22 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, RefreshCw, Shield, FileText, Scale, Info as InfoIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
-
 const Info: React.FC = () => {
   const navigate = useNavigate();
-  const { settings } = useSettings();
+  const {
+    settings
+  } = useSettings();
   const isItalian = settings.language === 'it';
-
-  return (
-    <div className="p-4 md:p-8 pb-32 max-w-2xl animate-fade-in">
+  return <div className="p-4 md:p-8 pb-32 max-w-2xl animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6 md:mb-8">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate('/profile')}
-          className="shrink-0"
-        >
+        <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} className="shrink-0">
           <ChevronLeft className="w-5 h-5" />
         </Button>
         <h1 className="text-2xl md:text-4xl font-bold text-foreground">
@@ -42,27 +36,23 @@ const Info: React.FC = () => {
                 <p className="text-lg font-semibold text-foreground">SoundFlow</p>
                 <p className="text-sm text-muted-foreground">v1.2</p>
               </div>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={async () => {
-                  try {
-                    // Clear all caches
-                    const cacheNames = await caches.keys();
-                    await Promise.all(cacheNames.map(name => caches.delete(name)));
-                    
-                    // Unregister all service workers
-                    const registrations = await navigator.serviceWorker.getRegistrations();
-                    await Promise.all(registrations.map(reg => reg.unregister()));
-                    
-                    // Force reload from server
-                    window.location.reload();
-                  } catch (error) {
-                    console.error('Failed to clear cache:', error);
-                    window.location.reload();
-                  }
-                }}
-              >
+              <Button variant="outline" className="gap-2" onClick={async () => {
+              try {
+                // Clear all caches
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+
+                // Unregister all service workers
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(reg => reg.unregister()));
+
+                // Force reload from server
+                window.location.reload();
+              } catch (error) {
+                console.error('Failed to clear cache:', error);
+                window.location.reload();
+              }
+            }}>
                 <RefreshCw className="w-4 h-4" />
                 {isItalian ? 'Aggiorna' : 'Update'}
               </Button>
@@ -76,28 +66,17 @@ const Info: React.FC = () => {
               <ul className="text-sm text-muted-foreground space-y-1.5">
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian 
-                    ? "Autoplay: a fine coda la musica continua con brani simili"
-                    : "Autoplay: music continues with similar tracks at end of queue"}
+                  {isItalian ? "Autoplay: a fine coda la musica continua con brani simili" : "Autoplay: music continues with similar tracks at end of queue"}
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 shrink-0" />
-                  {isItalian 
-                    ? "Risolto problema audio a scatti con CarPlay e dispositivi Bluetooth"
-                    : "Fixed stuttering audio with CarPlay and Bluetooth devices"}
+                  <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
+                  {isItalian ? "Risolto problema audio a scatti con CarPlay e dispositivi Bluetooth" : "Fixed stuttering audio with CarPlay and Bluetooth devices"}
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 shrink-0" />
-                  {isItalian 
-                    ? "Semplificato sistema di riproduzione per maggiore stabilità"
-                    : "Simplified playback system for better stability"}
+                  <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
+                  {isItalian ? "Semplificato sistema di riproduzione per maggiore stabilità" : "Simplified playback system for better stability"}
                 </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 shrink-0" />
-                  {isItalian 
-                    ? "Rimosso codice obsoleto e dipendenze non necessarie"
-                    : "Removed obsolete code and unnecessary dependencies"}
-                </li>
+                
               </ul>
             </div>
           </div>
@@ -114,9 +93,7 @@ const Info: React.FC = () => {
           
           <div className="p-3 md:p-4 rounded-xl bg-card space-y-4">
             <p className="text-sm text-muted-foreground leading-relaxed">
-              {isItalian 
-                ? "SoundFlow rispetta pienamente la tua privacy e si impegna a proteggere i tuoi dati personali. Le informazioni fornite, come email, preferenze e cronologia di ascolto, vengono conservate in modo sicuro e non vengono mai condivise con terze parti."
-                : "SoundFlow fully respects your privacy and is committed to protecting your personal data. Information provided, such as email, preferences, and listening history, is stored securely and never shared with third parties."}
+              {isItalian ? "SoundFlow rispetta pienamente la tua privacy e si impegna a proteggere i tuoi dati personali. Le informazioni fornite, come email, preferenze e cronologia di ascolto, vengono conservate in modo sicuro e non vengono mai condivise con terze parti." : "SoundFlow fully respects your privacy and is committed to protecting your personal data. Information provided, such as email, preferences, and listening history, is stored securely and never shared with third parties."}
             </p>
             
             <div>
@@ -124,9 +101,7 @@ const Info: React.FC = () => {
                 {isItalian ? "Sicurezza dei dati e delle chiavi API" : "Data and API Key Security"}
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {isItalian 
-                  ? "Eventuali API key inserite all'interno dell'app sono crittografate e accessibili esclusivamente a te. SoundFlow non visualizza né memorizza le tue credenziali in forma leggibile."
-                  : "Any API keys entered within the app are encrypted and accessible only to you. SoundFlow does not view or store your credentials in readable form."}
+                {isItalian ? "Eventuali API key inserite all'interno dell'app sono crittografate e accessibili esclusivamente a te. SoundFlow non visualizza né memorizza le tue credenziali in forma leggibile." : "Any API keys entered within the app are encrypted and accessible only to you. SoundFlow does not view or store your credentials in readable form."}
               </p>
             </div>
             
@@ -135,9 +110,7 @@ const Info: React.FC = () => {
                 {isItalian ? "Personalizzazione dell'esperienza" : "Experience Personalization"}
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {isItalian 
-                  ? "Quando metti \"Mi piace\" a artisti, brani o album, accetti che questi dati vengano utilizzati unicamente per migliorare la tua esperienza d'uso, attraverso suggerimenti e raccomandazioni personalizzate gestite da un algoritmo interno. Puoi interrompere questa raccolta dati in qualsiasi momento semplicemente non utilizzando la funzione \"Mi piace\" o rimuovendo i \"Mi piace\" già assegnati."
-                  : "When you \"like\" artists, tracks, or albums, you agree that this data will be used solely to improve your experience through personalized suggestions and recommendations managed by an internal algorithm. You can stop this data collection at any time by simply not using the \"like\" feature or removing existing likes."}
+                {isItalian ? "Quando metti \"Mi piace\" a artisti, brani o album, accetti che questi dati vengano utilizzati unicamente per migliorare la tua esperienza d'uso, attraverso suggerimenti e raccomandazioni personalizzate gestite da un algoritmo interno. Puoi interrompere questa raccolta dati in qualsiasi momento semplicemente non utilizzando la funzione \"Mi piace\" o rimuovendo i \"Mi piace\" già assegnati." : "When you \"like\" artists, tracks, or albums, you agree that this data will be used solely to improve your experience through personalized suggestions and recommendations managed by an internal algorithm. You can stop this data collection at any time by simply not using the \"like\" feature or removing existing likes."}
               </p>
             </div>
             
@@ -146,9 +119,7 @@ const Info: React.FC = () => {
                 {isItalian ? "Richiesta di accesso o cancellazione dei dati" : "Data Access or Deletion Request"}
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {isItalian 
-                  ? "Hai sempre il diritto di chiedere l'accesso, la modifica o la cancellazione di tutti i dati in nostro possesso. Per esercitare questo diritto, puoi contattarci all'indirizzo email: milhousedhl@proton.me."
-                  : "You always have the right to request access, modification, or deletion of all data we hold. To exercise this right, you can contact us at: milhousedhl@proton.me."}
+                {isItalian ? "Hai sempre il diritto di chiedere l'accesso, la modifica o la cancellazione di tutti i dati in nostro possesso. Per esercitare questo diritto, puoi contattarci all'indirizzo email: milhousedhl@proton.me." : "You always have the right to request access, modification, or deletion of all data we hold. To exercise this right, you can contact us at: milhousedhl@proton.me."}
               </p>
             </div>
           </div>
@@ -165,9 +136,7 @@ const Info: React.FC = () => {
           
           <div className="p-3 md:p-4 rounded-xl bg-card space-y-3">
             <p className="text-sm text-muted-foreground">
-              {isItalian 
-                ? 'SoundFlow utilizza le seguenti librerie e servizi:'
-                : 'SoundFlow uses the following libraries and services:'}
+              {isItalian ? 'SoundFlow utilizza le seguenti librerie e servizi:' : 'SoundFlow uses the following libraries and services:'}
             </p>
             <ul className="text-sm text-muted-foreground space-y-1.5">
               <li className="flex items-center gap-2">
@@ -225,9 +194,7 @@ const Info: React.FC = () => {
           
           <div className="p-3 md:p-4 rounded-xl bg-card space-y-4">
             <p className="text-sm text-muted-foreground leading-relaxed">
-              {isItalian 
-                ? "Utilizzando SoundFlow, accetti integralmente i presenti Termini d'Uso. L'applicazione è fornita \"così com'è\" (as is), senza alcuna garanzia espressa o implicita riguardo a funzionalità, disponibilità o risultati attesi."
-                : 'By using SoundFlow, you fully accept these Terms of Use. The application is provided "as is", without any express or implied warranty regarding functionality, availability, or expected results.'}
+              {isItalian ? "Utilizzando SoundFlow, accetti integralmente i presenti Termini d'Uso. L'applicazione è fornita \"così com'è\" (as is), senza alcuna garanzia espressa o implicita riguardo a funzionalità, disponibilità o risultati attesi." : 'By using SoundFlow, you fully accept these Terms of Use. The application is provided "as is", without any express or implied warranty regarding functionality, availability, or expected results.'}
             </p>
             
             <div>
@@ -235,9 +202,7 @@ const Info: React.FC = () => {
                 {isItalian ? "Responsabilità dell'utente" : "User Responsibility"}
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {isItalian 
-                  ? "L'utente è l'unico responsabile del rispetto delle leggi sul copyright e dei diritti di proprietà intellettuale vigenti nel proprio Paese. Qualsiasi utilizzo di contenuti protetti deve avvenire in conformità con tali normative."
-                  : "Users are solely responsible for compliance with copyright laws and intellectual property rights in their country. Any use of protected content must comply with such regulations."}
+                {isItalian ? "L'utente è l'unico responsabile del rispetto delle leggi sul copyright e dei diritti di proprietà intellettuale vigenti nel proprio Paese. Qualsiasi utilizzo di contenuti protetti deve avvenire in conformità con tali normative." : "Users are solely responsible for compliance with copyright laws and intellectual property rights in their country. Any use of protected content must comply with such regulations."}
               </p>
             </div>
             
@@ -246,9 +211,7 @@ const Info: React.FC = () => {
                 {isItalian ? "Servizi di terze parti" : "Third-Party Services"}
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {isItalian 
-                  ? "SoundFlow non ospita né distribuisce direttamente contenuti multimediali. L'applicazione fornisce unicamente un'interfaccia che consente di accedere a servizi di terze parti, i cui termini e condizioni si applicano separatamente."
-                  : "SoundFlow does not host or directly distribute multimedia content. The application only provides an interface to access third-party services, whose terms and conditions apply separately."}
+                {isItalian ? "SoundFlow non ospita né distribuisce direttamente contenuti multimediali. L'applicazione fornisce unicamente un'interfaccia che consente di accedere a servizi di terze parti, i cui termini e condizioni si applicano separatamente." : "SoundFlow does not host or directly distribute multimedia content. The application only provides an interface to access third-party services, whose terms and conditions apply separately."}
               </p>
             </div>
             
@@ -257,9 +220,7 @@ const Info: React.FC = () => {
                 {isItalian ? "Uso personale" : "Personal Use"}
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {isItalian 
-                  ? "Tutti i contenuti accessibili tramite SoundFlow possono essere utilizzati esclusivamente per fini personali e non commerciali. È vietata qualsiasi forma di rivendita, copia, condivisione o redistribuzione non autorizzata."
-                  : "All content accessible through SoundFlow may only be used for personal and non-commercial purposes. Any form of resale, copying, sharing, or unauthorized redistribution is prohibited."}
+                {isItalian ? "Tutti i contenuti accessibili tramite SoundFlow possono essere utilizzati esclusivamente per fini personali e non commerciali. È vietata qualsiasi forma di rivendita, copia, condivisione o redistribuzione non autorizzata." : "All content accessible through SoundFlow may only be used for personal and non-commercial purposes. Any form of resale, copying, sharing, or unauthorized redistribution is prohibited."}
               </p>
             </div>
             
@@ -268,9 +229,7 @@ const Info: React.FC = () => {
                 {isItalian ? "Limitazione di responsabilità" : "Limitation of Liability"}
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {isItalian 
-                  ? "Essendo nata come progetto sperimentale ed esercizio di stile, SoundFlow non garantisce la disponibilità continua del servizio né l'assenza di errori. Gli sviluppatori non sono responsabili per eventuali utilizzi impropri dell'app o per danni derivanti dal suo uso."
-                  : "As an experimental project and style exercise, SoundFlow does not guarantee continuous service availability or absence of errors. Developers are not responsible for any improper use of the app or damages arising from its use."}
+                {isItalian ? "Essendo nata come progetto sperimentale ed esercizio di stile, SoundFlow non garantisce la disponibilità continua del servizio né l'assenza di errori. Gli sviluppatori non sono responsabili per eventuali utilizzi impropri dell'app o per danni derivanti dal suo uso." : "As an experimental project and style exercise, SoundFlow does not guarantee continuous service availability or absence of errors. Developers are not responsible for any improper use of the app or damages arising from its use."}
               </p>
             </div>
             
@@ -279,16 +238,12 @@ const Info: React.FC = () => {
                 {isItalian ? "Conformità legale" : "Legal Compliance"}
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {isItalian 
-                  ? "L'uso dell'applicazione implica che l'utente si assuma ogni responsabilità per eventuali attività contrarie alle norme del proprio Paese."
-                  : "Using the application implies that users assume all responsibility for any activities contrary to the laws of their country."}
+                {isItalian ? "L'uso dell'applicazione implica che l'utente si assuma ogni responsabilità per eventuali attività contrarie alle norme del proprio Paese." : "Using the application implies that users assume all responsibility for any activities contrary to the laws of their country."}
               </p>
             </div>
           </div>
         </section>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default Info;
