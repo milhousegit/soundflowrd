@@ -460,8 +460,8 @@ const Library: React.FC = () => {
                 <Info className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-200/80">
                   {settings.language === 'it' 
-                    ? "A causa di alcune limitazioni delle PWA imposte da alcuni dispositivi bisogna aprire l'app mentre si è online per poi attivare la modalità aereo e godersi le canzoni scaricate. Attenzione: se si chiude l'app e si prova a riaprire mentre si è offline questa potrebbe non funzionare, l'apertura va effettuata mentre si è online."
-                    : "Due to some PWA limitations imposed by certain devices, you need to open the app while online, then enable airplane mode to enjoy your downloaded songs. Warning: if you close the app and try to reopen it while offline, it may not work. The app must be opened while online."}
+                    ? "A causa di alcune limitazioni delle PWA imposte da alcuni dispositivi, è necessario aprire l'app mentre si è online per poi attivare la modalità aereo e godersi le canzoni scaricate. Attenzione: se si chiude l'app e si prova a riaprirla mentre si è offline, questa potrebbe non funzionare. L'apertura va effettuata mentre si è online."
+                    : "Due to certain PWA limitations imposed by some devices, you must open the app while online before enabling airplane mode to enjoy your downloaded songs. Note: if you close the app and try to reopen it while offline, it may not work. Always open the app while online first."}
                 </p>
               </div>
 
