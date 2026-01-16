@@ -16,35 +16,76 @@ const API_TARGETS = [
   'https://maus.qqdl.site',
 ] as const;
 
+/**
+ * Race all API targets in parallel and return the first successful response
+ */
 async function fetchJsonWithFallback(path: string): Promise<any> {
-  let lastErr: unknown;
+  const startTime = Date.now();
+  console.log(`[SquidWTF] ⚡ Parallel fetch: ${path}`);
 
-  for (const baseUrl of API_TARGETS) {
+  // Create abort controllers for each request so we can cancel losers
+  const controllers = API_TARGETS.map(() => new AbortController());
+
+  const fetchPromises = API_TARGETS.map(async (baseUrl, index) => {
     const url = `${baseUrl}${path}`;
+    const fetchStart = Date.now();
+    
     try {
       const res = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'application/json',
         },
+        signal: controllers[index].signal,
       });
+
+      const fetchDuration = Date.now() - fetchStart;
 
       if (!res.ok) {
         const text = await res.text();
-        console.error(`[SquidWTF] ${url} -> ${res.status} (${text.substring(0, 120)})`);
-        lastErr = new Error(`HTTP ${res.status}`);
-        continue;
+        console.log(`[SquidWTF] ❌ ${baseUrl} -> ${res.status} (${fetchDuration}ms)`);
+        throw new Error(`HTTP ${res.status}: ${text.substring(0, 80)}`);
       }
 
-      return await res.json();
-    } catch (e) {
-      console.error(`[SquidWTF] Fetch failed for ${url}:`, e);
-      lastErr = e;
-      continue;
+      const data = await res.json();
+      console.log(`[SquidWTF] ✅ ${baseUrl} -> OK (${fetchDuration}ms)`);
+      
+      // Cancel all other pending requests
+      controllers.forEach((c, i) => {
+        if (i !== index) c.abort();
+      });
+      
+      return { data, source: baseUrl };
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        // This is expected when we cancel losers
+        throw e;
+      }
+      const fetchDuration = Date.now() - fetchStart;
+      console.log(`[SquidWTF] ❌ ${baseUrl} -> Error (${fetchDuration}ms): ${e.message?.substring(0, 50)}`);
+      throw e;
     }
-  }
+  });
 
-  throw new Error(`All API targets failed${lastErr ? `: ${(lastErr as any)?.message ?? String(lastErr)}` : ''}`);
+  try {
+    // Promise.any resolves with the first successful promise
+    const result = await Promise.any(fetchPromises);
+    const totalTime = Date.now() - startTime;
+    console.log(`[SquidWTF] 🏁 Fastest response from ${result.source} in ${totalTime}ms`);
+    return result.data;
+  } catch (aggregateError: any) {
+    const totalTime = Date.now() - startTime;
+    console.error(`[SquidWTF] 💥 All ${API_TARGETS.length} targets failed in ${totalTime}ms`);
+    
+    // Extract the actual errors from AggregateError
+    const errors = aggregateError.errors || [];
+    const errorMsgs = errors
+      .filter((e: any) => e.name !== 'AbortError')
+      .map((e: any) => e.message)
+      .slice(0, 3);
+    
+    throw new Error(`All API targets failed: ${errorMsgs.join('; ')}`);
+  }
 }
 
 /**
@@ -222,6 +263,7 @@ serve(async (req) => {
 
     switch (action) {
       case 'search-and-stream': {
+        const totalStart = Date.now();
         // Search for the track on Tidal and get stream
         if (!title || !artist) {
           return new Response(
@@ -230,17 +272,28 @@ serve(async (req) => {
           );
         }
         
+        console.log(`[SquidWTF] 🔍 Step 1: Finding best match...`);
+        const matchStart = Date.now();
         const match = await findBestMatch(title, artist);
+        const matchDuration = Date.now() - matchStart;
+        console.log(`[SquidWTF] 🔍 Step 1 done: ${matchDuration}ms`);
         
         if (!match) {
-          console.log(`[SquidWTF] No match found for "${title}" by ${artist}`);
+          console.log(`[SquidWTF] ❌ No match found for "${title}" by ${artist} (total: ${Date.now() - totalStart}ms)`);
           return new Response(
             JSON.stringify({ error: 'Track not found on Tidal' }),
             { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         
+        console.log(`[SquidWTF] 🎵 Step 2: Getting stream for ID ${match.tidalId}...`);
+        const streamStart = Date.now();
         const stream = await getTrackStream(match.tidalId, quality || 'LOSSLESS');
+        const streamDuration = Date.now() - streamStart;
+        console.log(`[SquidWTF] 🎵 Step 2 done: ${streamDuration}ms`);
+        
+        const totalDuration = Date.now() - totalStart;
+        console.log(`[SquidWTF] ✅ Total time: ${totalDuration}ms (match: ${matchDuration}ms, stream: ${streamDuration}ms)`);
         
         return new Response(
           JSON.stringify({
