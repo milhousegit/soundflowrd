@@ -413,23 +413,60 @@ serve(async (req) => {
       }
 
       case 'get-country-chart': {
-        // Country codes to Deezer chart IDs mapping
-        // Deezer uses editorial IDs for country charts
-        const countryToEditorial: Record<string, number> = {
-          'IT': 116, // Italy
-          'US': 0,   // United States (global/US)
-          'ES': 134, // Spain
-          'FR': 52,  // France
-          'DE': 56,  // Germany
-          'PT': 131, // Portugal
-          'GB': 104, // UK
-          'BR': 91,  // Brazil
+        // Fallback country codes to Deezer chart IDs mapping
+        const defaultCountryToEditorial: Record<string, string> = {
+          'IT': '116',
+          'US': '0',
+          'ES': '134',
+          'FR': '52',
+          'DE': '56',
+          'PT': '131',
+          'GB': '104',
+          'BR': '91',
         };
         
-        const editorialId = countryToEditorial[country?.toUpperCase()] ?? 0;
-        console.log(`Getting chart for country: ${country}, editorial ID: ${editorialId}`);
+        // Try to fetch from database configuration
+        let playlistId = defaultCountryToEditorial[country?.toUpperCase()] ?? '0';
+        let usePlaylist = false;
         
-        const data = await fetchWithRetry(`${DEEZER_API}/chart/${editorialId}/tracks?limit=${limit}`);
+        try {
+          const supabaseUrl = Deno.env.get('SUPABASE_URL');
+          const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+          
+          if (supabaseUrl && supabaseKey) {
+            const configResponse = await fetch(
+              `${supabaseUrl}/rest/v1/chart_configurations?country_code=eq.${country?.toUpperCase()}&select=playlist_id`,
+              {
+                headers: {
+                  'apikey': supabaseKey,
+                  'Authorization': `Bearer ${supabaseKey}`,
+                },
+              }
+            );
+            
+            if (configResponse.ok) {
+              const configData = await configResponse.json();
+              if (configData && configData.length > 0 && configData[0].playlist_id) {
+                playlistId = configData[0].playlist_id;
+                // If playlist_id is a long number (more than 3 digits), it's a playlist ID, not editorial
+                usePlaylist = playlistId.length > 3;
+              }
+            }
+          }
+        } catch (configError) {
+          console.error('Failed to fetch chart configuration, using default:', configError);
+        }
+        
+        console.log(`Getting chart for country: ${country}, ID: ${playlistId}, isPlaylist: ${usePlaylist}`);
+        
+        let data;
+        if (usePlaylist) {
+          // Fetch tracks from a Deezer playlist
+          data = await fetchWithRetry(`${DEEZER_API}/playlist/${playlistId}/tracks?limit=${limit}`);
+        } else {
+          // Fetch from editorial chart
+          data = await fetchWithRetry(`${DEEZER_API}/chart/${playlistId}/tracks?limit=${limit}`);
+        }
         
         const tracks = (data.data || []).map((track: any, index: number) => ({
           id: String(track.id),

@@ -16,6 +16,7 @@ import AdminNotifications from '@/components/AdminNotifications';
 import AdminUsersManagement from '@/components/AdminUsersManagement';
 import AdminBannerTester from '@/components/AdminBannerTester';
 import AdminArtistMerge from '@/components/AdminArtistMerge';
+import AdminChartConfig from '@/components/AdminChartConfig';
 import { isPast } from 'date-fns';
 interface CloudFile {
   id: string;
@@ -795,6 +796,22 @@ const Settings: React.FC = () => {
                 </summary>
                 <div className="px-4 pb-4">
                   <AdminArtistMerge language={settings.language} />
+                </div>
+              </details>
+
+              {/* Chart Configurations */}
+              <details className="group">
+                <summary className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Music className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-sm text-foreground">
+                      {settings.language === 'it' ? 'Classifiche Nazionali' : 'Country Charts'}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="px-4 pb-4">
+                  <AdminChartConfig language={settings.language} />
                 </div>
               </details>
             </div>

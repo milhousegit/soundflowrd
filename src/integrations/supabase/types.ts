@@ -137,6 +137,33 @@ export type Database = {
         }
         Relationships: []
       }
+      chart_configurations: {
+        Row: {
+          country_code: string
+          id: string
+          playlist_id: string
+          playlist_title: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          country_code: string
+          id?: string
+          playlist_id: string
+          playlist_title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          country_code?: string
+          id?: string
+          playlist_id?: string
+          playlist_title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       favorites: {
         Row: {
           created_at: string
