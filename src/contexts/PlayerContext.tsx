@@ -517,19 +517,37 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const iosAudioRef = useRef(iosAudio);
   iosAudioRef.current = iosAudio;
 
+  // iOS: during the last seconds of a track, iOS can drop the audio session while we swap src.
+  // We run a short "transition keep-alive" window: from ~5s before end to ~5s after next starts.
+  const transitionKeepAliveIntervalRef = useRef<number | null>(null);
+  const transitionStopTimeoutRef = useRef<number | null>(null);
+  const transitionArmedRef = useRef(false);
+
+  const stopTransitionKeepAlive = useCallback(() => {
+    if (transitionKeepAliveIntervalRef.current) {
+      window.clearInterval(transitionKeepAliveIntervalRef.current);
+      transitionKeepAliveIntervalRef.current = null;
+    }
+    if (transitionStopTimeoutRef.current) {
+      window.clearTimeout(transitionStopTimeoutRef.current);
+      transitionStopTimeoutRef.current = null;
+    }
+    transitionArmedRef.current = false;
+  }, []);
+
   // iOS background playback keep-alive interval
   // Calls keepAlive every 10 seconds during playback to maintain audio session
   useEffect(() => {
     if (!state.isPlaying) return;
-    
+
     // Call keepAlive immediately when playback starts
     iosAudio.keepAlive();
-    
+
     // Then call every 10 seconds during playback
     const intervalId = setInterval(() => {
       iosAudio.keepAlive();
     }, 10000);
-    
+
     return () => clearInterval(intervalId);
   }, [state.isPlaying, iosAudio]);
 
@@ -662,9 +680,28 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const handleTimeUpdate = () => {
       const currentTime = audio.currentTime;
       const duration = audio.duration;
-      
+
       setState((prev) => ({ ...prev, progress: currentTime }));
-      
+
+      // iOS/PWA: "bridge" keep-alive during track transition window.
+      // Start when we are within the last 5 seconds of the current track.
+      // We force keepAlive (bypassing throttle) and repeat until ~5s after the next track starts.
+      if (duration && Number.isFinite(duration) && duration > 0) {
+        const remaining = duration - currentTime;
+        if (remaining <= 5 && remaining >= 0 && !transitionArmedRef.current) {
+          transitionArmedRef.current = true;
+          iosAudioRef.current.addLog('info', '[TransitionKeepAlive] armed', `remaining=${remaining.toFixed(2)}s`);
+
+          // Immediate pulse
+          iosAudioRef.current.keepAlive({ force: true });
+
+          // Keep pulsing during the swap (frequency kept reasonable to reduce audibility)
+          transitionKeepAliveIntervalRef.current = window.setInterval(() => {
+            iosAudioRef.current.keepAlive({ force: true });
+          }, 2500);
+        }
+      }
+
       // AGGRESSIVE PREFETCH: Start prefetching 3 seconds AFTER playback begins
       // This gives maximum time for the next track to be ready
       if (currentTime >= 3 && currentTime < 6) {
@@ -673,24 +710,26 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       }
     };
-    
+
     const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
-    
+
     // Track ended handler - SIMPLE and FAST transition to next track
     const handleEnded = () => {
       console.log('[PlayerContext] Track ended - transitioning to next');
-      
+
       // Keep media session active
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'playing';
       }
-      
+
       // iOS: maintain audio session
       const iosAudioInstance = iosAudioRef.current;
       if (iosAudioInstance && !iosAudioInstance.isExternalDevice()) {
+        // Force a pulse right at the boundary to reduce chance of session drop.
+        iosAudioInstance.keepAlive({ force: true });
         iosAudioInstance.playPlaceholder().catch(() => {});
       }
-      
+
       // SIMPLE: Just call next() immediately - let it handle everything
       // The prefetch is just an optimization, not required
       nextRef.current();
@@ -701,10 +740,23 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (!audio.ended) {
         setState((prev) => ({ ...prev, isPlaying: false }));
       }
+
+      // If user pauses, stop the transition keep-alive window.
+      stopTransitionKeepAlive();
     };
 
     const handlePlay = () => {
       setState((prev) => ({ ...prev, isPlaying: true }));
+
+      // If we were in the transition window, keep it alive for ~5s after the new track starts,
+      // then stop to reduce any audible artifacts.
+      if (transitionArmedRef.current) {
+        if (transitionStopTimeoutRef.current) window.clearTimeout(transitionStopTimeoutRef.current);
+        transitionStopTimeoutRef.current = window.setTimeout(() => {
+          iosAudioRef.current.addLog('info', '[TransitionKeepAlive] stopping (post-start)');
+          stopTransitionKeepAlive();
+        }, 5000);
+      }
     };
 
     // Simplified error handler
@@ -776,6 +828,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('stalled', handleStalled);
+
+      stopTransitionKeepAlive();
+
       audio.pause();
       audio.src = '';
     };

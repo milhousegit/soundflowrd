@@ -370,53 +370,54 @@ export const useIOSAudioSession = () => {
    * We use a very low frequency tone (50Hz) at minimal volume (0.02) - barely perceptible
    * but enough to keep the audio session active.
    */
-  const keepAlive = useCallback(() => {
+  const keepAlive = useCallback((opts?: { force?: boolean }) => {
     // Skip if not iOS or not in PWA mode
     if (!isIOS() || !isPWA()) {
       return;
     }
-    
-    // Throttle: only run every 5 seconds to reduce overhead
+
+    // Throttle by default to reduce overhead, but allow forcing during track transitions
     const now = Date.now();
-    if (now - lastKeepAliveRef.current < 5000) {
-      return;
+    if (!opts?.force) {
+      if (now - lastKeepAliveRef.current < 5000) {
+        return;
+      }
     }
     lastKeepAliveRef.current = now;
-    
-    addLog('info', 'Keep-alive pulse (audible heartbeat)');
-    
+
+    addLog('info', `Keep-alive pulse (audible heartbeat)${opts?.force ? ' [force]' : ''}`);
+
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
-      
+
       const ctx: AudioContext = audioContextRef.current || new AudioCtx();
       if (!audioContextRef.current) audioContextRef.current = ctx;
-      
+
       // Resume AudioContext if suspended
       if (ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
       }
-      
+
       // Create a VERY LOW frequency oscillator (50Hz) - barely audible "heartbeat"
-      // This is the key: iOS needs AUDIBLE audio to keep background alive
+      // iOS needs AUDIBLE audio to keep background alive.
       const oscillator = ctx.createOscillator();
       const gainNode = ctx.createGain();
-      
+
       oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(50, ctx.currentTime); // 50Hz - very low, almost sub-bass
-      
+      oscillator.frequency.setValueAtTime(50, ctx.currentTime);
+
       // Volume: 0.02 = barely perceptible but enough for iOS
       gainNode.gain.setValueAtTime(0.02, ctx.currentTime);
       // Quick fade out to avoid clicks
       gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(ctx.destination);
-      
+
       // Play for 150ms - short "heartbeat" pulse
       oscillator.start(ctx.currentTime);
       oscillator.stop(ctx.currentTime + 0.15);
-      
     } catch (e) {
       addLog('warning', 'Keep-alive failed', e instanceof Error ? e.message : String(e));
     }
