@@ -1,4 +1,4 @@
-// PlayerContext - Audio playback state management (v2.1 - CarPlay optimization)
+// PlayerContext - Audio playback state management (v2.2 - Enhanced lifecycle logging)
 import React, {
   createContext,
   useCallback,
