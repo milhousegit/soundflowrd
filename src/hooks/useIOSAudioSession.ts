@@ -365,6 +365,10 @@ export const useIOSAudioSession = () => {
    * Keep the audio session alive - call when playback starts
    * ENABLED ONLY for internal speakers (iPhone speaker/earpiece)
    * DISABLED for external devices (CarPlay, Bluetooth, AirPlay) to prevent stuttering
+   * 
+   * IMPORTANT: iOS requires AUDIBLE audio to keep background tasks alive.
+   * We use a very low frequency tone (50Hz) at minimal volume (0.02) - barely perceptible
+   * but enough to keep the audio session active.
    */
   const keepAlive = useCallback(() => {
     // Skip if not iOS or not in PWA mode
@@ -379,28 +383,40 @@ export const useIOSAudioSession = () => {
     }
     lastKeepAliveRef.current = now;
     
-    addLog('info', 'Keep-alive pulse');
+    addLog('info', 'Keep-alive pulse (audible heartbeat)');
     
     try {
-      // Resume AudioContext if suspended
-      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {});
-      }
-      
-      // Play a brief silent buffer to keep the audio session active in background
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
       
       const ctx: AudioContext = audioContextRef.current || new AudioCtx();
       if (!audioContextRef.current) audioContextRef.current = ctx;
       
-      // Use native sample rate
-      const sampleRate = ctx.sampleRate || 44100;
-      const buffer = ctx.createBuffer(1, 1, sampleRate);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.start(0);
+      // Resume AudioContext if suspended
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      
+      // Create a VERY LOW frequency oscillator (50Hz) - barely audible "heartbeat"
+      // This is the key: iOS needs AUDIBLE audio to keep background alive
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(50, ctx.currentTime); // 50Hz - very low, almost sub-bass
+      
+      // Volume: 0.02 = barely perceptible but enough for iOS
+      gainNode.gain.setValueAtTime(0.02, ctx.currentTime);
+      // Quick fade out to avoid clicks
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      // Play for 150ms - short "heartbeat" pulse
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.15);
+      
     } catch (e) {
       addLog('warning', 'Keep-alive failed', e instanceof Error ? e.message : String(e));
     }
@@ -520,9 +536,12 @@ export const useIOSAudioSession = () => {
   }, [addLog, keepAlive]);
 
   /**
-   * Play a silent placeholder to "occupy" the iOS audio session.
+   * Play an audible placeholder to "occupy" the iOS audio session.
    * This prevents the widget from de-syncing during stream loading.
    * ONLY used on iOS when NOT on external device (CarPlay/Bluetooth)
+   * 
+   * Uses a low frequency tone (50Hz) at minimal volume - barely perceptible
+   * but required by iOS to maintain background audio session.
    */
   const playPlaceholder = useCallback(async (): Promise<boolean> => {
     // Skip on external devices - they manage audio sessions automatically
@@ -536,10 +555,9 @@ export const useIOSAudioSession = () => {
       return false;
     }
     
-    addLog('info', 'Playing audio placeholder for iOS widget sync');
+    addLog('info', 'Playing audible placeholder for iOS widget sync');
     
     try {
-      // Use AudioContext to play a short silent buffer
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return false;
       
@@ -551,15 +569,26 @@ export const useIOSAudioSession = () => {
         await ctx.resume();
       }
       
-      // Create a longer silent buffer (0.5 seconds) to maintain session
-      const sampleRate = ctx.sampleRate || 44100;
-      const buffer = ctx.createBuffer(1, Math.floor(sampleRate * 0.5), sampleRate);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.start(0);
+      // Create an AUDIBLE low frequency tone (50Hz) for ~300ms
+      // This keeps the iOS audio session active during track transitions
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
       
-      addLog('success', 'Audio placeholder active');
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(50, ctx.currentTime); // 50Hz sub-bass
+      
+      // Volume: 0.02 = barely perceptible but enough for iOS
+      gainNode.gain.setValueAtTime(0.02, ctx.currentTime);
+      // Fade out smoothly
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.3);
+      
+      addLog('success', 'Audible placeholder active (50Hz heartbeat)');
       return true;
     } catch (e) {
       addLog('warning', 'Placeholder failed', e instanceof Error ? e.message : String(e));
