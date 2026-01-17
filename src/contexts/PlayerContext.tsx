@@ -2056,6 +2056,62 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
 export const usePlayer = () => {
   const context = useContext(PlayerContext);
-  if (!context) throw new Error('usePlayer must be used within a PlayerProvider');
+
+  // In rare cases (HMR/cache edge cases), the tree can momentarily render without the provider.
+  // Throwing here causes a blank screen, so we fail-safe with a noop context and loud logging.
+  if (!context) {
+    console.error('[PlayerContext] usePlayer called outside PlayerProvider (returning noop context)');
+    return {
+      currentTrack: null,
+      isPlaying: false,
+      volume: 0.7,
+      progress: 0,
+      duration: 0,
+      queue: [],
+      queueIndex: 0,
+
+      play: () => {},
+      pause: () => {},
+      toggle: () => {},
+      next: () => {},
+      previous: () => {},
+      seek: () => {},
+      setVolume: () => {},
+
+      addToQueue: () => {},
+      playTrack: () => {},
+      playQueueIndex: () => {},
+      clearQueue: () => {},
+
+      alternativeStreams: [],
+      availableTorrents: [],
+      selectStream: () => {},
+      selectTorrentFile: async () => {},
+      refreshTorrent: async () => {},
+
+      currentStreamId: undefined,
+      isSearchingStreams: false,
+      manualSearch: async () => {},
+
+      debugLogs: [],
+      clearDebugLogs: () => {},
+
+      downloadProgress: null,
+      downloadStatus: null,
+      loadSavedMapping: async () => {},
+      currentMappedFileId: undefined,
+      loadingPhase: 'idle',
+
+      lastSearchQuery: null,
+
+      isShuffled: false,
+      toggleShuffle: () => {},
+
+      currentAudioSource: null,
+
+      updateTrackMetadata: () => {},
+    } as any;
+  }
+
   return context;
 };
