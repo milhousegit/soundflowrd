@@ -534,70 +534,99 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [state.isPlaying, iosAudio]);
 
   // App lifecycle instrumentation (helps debug iOS/PWA background behaviour)
-  useEffect(() => {
-    const snapshot = (eventName: string) => {
-      const audio = audioRef.current;
-      const track = state.currentTrack;
-      const details = JSON.stringify({
-        visibility: document.visibilityState,
-        isPlayingState: state.isPlaying,
-        audioPaused: audio ? audio.paused : null,
-        audioEnded: audio ? audio.ended : null,
-        audioReadyState: audio ? audio.readyState : null,
-        audioCurrentTime: audio ? Number(audio.currentTime.toFixed(3)) : null,
-        queueIndex: state.queueIndex,
-        trackId: track?.id || null,
-        trackTitle: track?.title || null,
-      });
+  // IMPORTANT: attach listeners once to avoid duplicated logs.
+  const lifecycleRef = useRef({
+    isPlaying: false,
+    queueIndex: 0,
+    track: null as Track | null,
+  });
 
-      // Persist into iOS audio logs so we can copy them from the UI
-      iosAudio.addLog('info', `[AppLifecycle] ${eventName}`, details);
+  useEffect(() => {
+    lifecycleRef.current = {
+      isPlaying: state.isPlaying,
+      queueIndex: state.queueIndex,
+      track: state.currentTrack,
+    };
+  }, [state.isPlaying, state.queueIndex, state.currentTrack]);
+
+  useEffect(() => {
+    const getMediaSessionSnapshot = () => {
+      if (!('mediaSession' in navigator)) return null;
+      const ms = navigator.mediaSession;
+      const md: any = ms.metadata as any;
+      return {
+        playbackState: ms.playbackState,
+        title: md?.title ?? null,
+        artist: md?.artist ?? null,
+      };
     };
 
-    const syncFromAudio = () => {
+    const snapshot = (eventName: string, extra?: Record<string, unknown>) => {
+      const audio = audioRef.current;
+      const { isPlaying, queueIndex, track } = lifecycleRef.current;
+
+      const details = {
+        ts: new Date().toISOString(),
+        event: eventName,
+        visibility: document.visibilityState,
+        isPlayingState: isPlaying,
+        queueIndex,
+        trackId: track?.id ?? null,
+        trackTitle: track?.title ?? null,
+        audio: audio
+          ? {
+              paused: audio.paused,
+              ended: audio.ended,
+              readyState: audio.readyState,
+              networkState: audio.networkState,
+              currentTime: Number(audio.currentTime.toFixed(3)),
+              duration: Number((audio.duration || 0).toFixed(3)),
+              src: audio.currentSrc || audio.src || null,
+              errorCode: audio.error?.code ?? null,
+            }
+          : null,
+        mediaSession: getMediaSessionSnapshot(),
+        ...extra,
+      };
+
+      iosAudioRef.current.addLog('info', '[AppLifecycle]', JSON.stringify(details));
+    };
+
+    const syncFromAudio = (reason: string) => {
       const audio = audioRef.current;
       if (!audio) return;
 
       // readyState > 2 means we have current data, helps avoid false positives right after src swap
       const actuallyPlaying = !audio.paused && !audio.ended && audio.readyState > 2;
+      const { isPlaying, track } = lifecycleRef.current;
 
-      iosAudio.addLog(
-        'info',
-        '[AppLifecycle] visible -> sync',
-        JSON.stringify({ actuallyPlaying, isPlayingState: state.isPlaying })
-      );
+      snapshot('sync', { reason, actuallyPlaying, isPlayingState: isPlaying });
 
-      // Sync state with reality
-      if (state.isPlaying !== actuallyPlaying) {
+      if (isPlaying !== actuallyPlaying) {
         setState((prev) => ({ ...prev, isPlaying: actuallyPlaying }));
       }
 
-      // Also sync MediaSession (widget) with what we think is happening now
-      updateMediaSessionMetadata(state.currentTrack, actuallyPlaying);
+      // Refresh widget state (best effort)
+      updateMediaSessionMetadata(track, actuallyPlaying);
     };
 
     const handleVisibilityChange = () => {
       snapshot('visibilitychange');
-      if (document.visibilityState === 'visible') {
-        syncFromAudio();
-      }
+      if (document.visibilityState === 'visible') syncFromAudio('visibilitychange-visible');
     };
 
     const handlePageHide = (e: PageTransitionEvent) => {
-      iosAudio.addLog('info', '[AppLifecycle] pagehide', `persisted: ${e.persisted}`);
-      snapshot('pagehide');
+      snapshot('pagehide', { persisted: e.persisted });
     };
 
     const handlePageShow = (e: PageTransitionEvent) => {
-      iosAudio.addLog('info', '[AppLifecycle] pageshow', `persisted: ${e.persisted}`);
-      snapshot('pageshow');
-      // On bfcache restore, audio state can be weird; re-sync
-      syncFromAudio();
+      snapshot('pageshow', { persisted: e.persisted });
+      syncFromAudio('pageshow');
     };
 
     const handleFocus = () => {
       snapshot('focus');
-      syncFromAudio();
+      syncFromAudio('focus');
     };
 
     const handleBlur = () => {
@@ -617,7 +646,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [iosAudio, state.currentTrack, state.isPlaying, state.queueIndex]);
+  }, []);
+
 
   useEffect(() => {
     audioRef.current = new Audio();
