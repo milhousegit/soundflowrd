@@ -1,5 +1,6 @@
 // useCrossfade - Web Audio API crossfade system for gapless playback
-// Uses a single shared AudioContext with two AudioBufferSourceNodes for smooth transitions
+// v1.7.2: Uses HTMLAudioElement + MediaElementAudioSourceNode on iOS for widget compatibility
+// On other platforms: Uses AudioBufferSourceNode for maximum control
 
 import { useRef, useCallback, useEffect } from 'react';
 import { isIOS, isPWA } from './useIOSAudioSession';
@@ -11,6 +12,15 @@ interface CrossfadeSource {
   duration: number;
 }
 
+// For iOS: HTMLAudioElement-based source
+interface MediaElementSource {
+  audioElement: HTMLAudioElement | null;
+  sourceNode: MediaElementAudioSourceNode | null;
+  gainNode: GainNode | null;
+  url: string;
+  duration: number;
+}
+
 interface UseCrossfadeOptions {
   fadeDuration?: number; // seconds
   onTrackEnd?: () => void;
@@ -19,33 +29,19 @@ interface UseCrossfadeOptions {
 }
 
 export interface CrossfadeHandle {
-  // Load a buffer into the current source and start playing
   playFromUrl: (url: string, startOffset?: number) => Promise<boolean>;
-  // Preload the next track's buffer (won't start playing)
   preloadNext: (url: string) => Promise<boolean>;
-  // Preload from an existing buffer
   preloadNextFromBuffer: (buffer: AudioBuffer) => void;
-  // Play from an existing buffer
   playFromBuffer: (buffer: AudioBuffer, startOffset?: number) => Promise<boolean>;
-  // Trigger crossfade transition now (manual)
   crossfadeToNext: () => void;
-  // Stop all playback
   stop: () => void;
-  // Pause
   pause: () => void;
-  // Resume
   resume: () => Promise<boolean>;
-  // Seek to time (restarts buffer from offset)
   seek: (time: number) => Promise<void>;
-  // Current playback time
   getCurrentTime: () => number;
-  // Current duration
   getDuration: () => number;
-  // Is currently playing
   isPlaying: () => boolean;
-  // Get the AudioContext (for external integrations)
   getAudioContext: () => AudioContext | null;
-  // Expose buffer for iOS queue prefetch
   getCurrentBuffer: () => AudioBuffer | null;
   getNextBuffer: () => AudioBuffer | null;
 }
@@ -53,10 +49,13 @@ export interface CrossfadeHandle {
 export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle => {
   const { fadeDuration = 3, onTrackEnd, onCrossfadeStart, enabled = true } = options;
 
+  // Detect if we should use HTMLAudioElement mode (iOS needs this for widget)
+  const useMediaElementMode = isIOS();
+
   // Shared AudioContext
   const audioContextRef = useRef<AudioContext | null>(null);
   
-  // Current and next sources
+  // Buffer-based sources (non-iOS)
   const currentRef = useRef<CrossfadeSource>({
     sourceNode: null,
     gainNode: null,
@@ -70,17 +69,33 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     buffer: null,
     duration: 0,
   });
+
+  // MediaElement-based sources (iOS)
+  const currentMediaRef = useRef<MediaElementSource>({
+    audioElement: null,
+    sourceNode: null,
+    gainNode: null,
+    url: '',
+    duration: 0,
+  });
+
+  const nextMediaRef = useRef<MediaElementSource>({
+    audioElement: null,
+    sourceNode: null,
+    gainNode: null,
+    url: '',
+    duration: 0,
+  });
   
   // Playback state
   const isPlayingRef = useRef(false);
-  const startTimeRef = useRef(0); // AudioContext time when playback started
-  const pauseOffsetRef = useRef(0); // Offset when paused
+  const startTimeRef = useRef(0);
+  const pauseOffsetRef = useRef(0);
   const crossfadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize AudioContext lazily
   const getOrCreateContext = useCallback((): AudioContext | null => {
     if (audioContextRef.current) {
-      // Resume if suspended
       if (audioContextRef.current.state === 'suspended') {
         audioContextRef.current.resume();
       }
@@ -100,7 +115,214 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     return null;
   }, []);
 
-  // Load audio from URL and decode into buffer
+  // ========== iOS MediaElement Mode ==========
+
+  const createMediaElementSource = useCallback((url: string): MediaElementSource => {
+    const ctx = getOrCreateContext();
+    if (!ctx) return { audioElement: null, sourceNode: null, gainNode: null, url: '', duration: 0 };
+
+    const audio = document.createElement('audio');
+    audio.crossOrigin = 'anonymous';
+    audio.preload = 'auto';
+    audio.setAttribute('playsinline', '');
+    audio.setAttribute('webkit-playsinline', '');
+    audio.src = url;
+
+    const sourceNode = ctx.createMediaElementSource(audio);
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    
+    sourceNode.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    return {
+      audioElement: audio,
+      sourceNode,
+      gainNode,
+      url,
+      duration: 0,
+    };
+  }, [getOrCreateContext]);
+
+  const playFromUrlMediaElement = useCallback(async (url: string, startOffset: number = 0): Promise<boolean> => {
+    const ctx = getOrCreateContext();
+    if (!ctx) return false;
+
+    // Stop current
+    if (currentMediaRef.current.audioElement) {
+      currentMediaRef.current.audioElement.pause();
+      currentMediaRef.current.audioElement.src = '';
+      currentMediaRef.current.gainNode?.disconnect();
+      currentMediaRef.current.sourceNode?.disconnect();
+    }
+
+    // Clear scheduled crossfade
+    if (crossfadeTimeoutRef.current) {
+      clearTimeout(crossfadeTimeoutRef.current);
+      crossfadeTimeoutRef.current = null;
+    }
+
+    // Create new source
+    const newSource = createMediaElementSource(url);
+    if (!newSource.audioElement || !newSource.gainNode) return false;
+
+    currentMediaRef.current = newSource;
+    
+    return new Promise((resolve) => {
+      const audio = newSource.audioElement!;
+      
+      const onCanPlay = () => {
+        audio.removeEventListener('canplay', onCanPlay);
+        audio.removeEventListener('error', onError);
+        
+        newSource.duration = audio.duration || 0;
+        currentMediaRef.current.duration = newSource.duration;
+        
+        // Seek if needed
+        if (startOffset > 0) {
+          audio.currentTime = startOffset;
+        }
+
+        // Fade in
+        newSource.gainNode!.gain.setValueAtTime(0, ctx.currentTime);
+        newSource.gainNode!.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.1);
+
+        audio.play().then(() => {
+          isPlayingRef.current = true;
+          pauseOffsetRef.current = startOffset;
+          startTimeRef.current = ctx.currentTime;
+          
+          console.log('[Crossfade/iOS] Playback started via MediaElement');
+          
+          // Schedule crossfade
+          scheduleMediaElementCrossfade();
+          resolve(true);
+        }).catch((e) => {
+          console.error('[Crossfade/iOS] Play failed:', e);
+          resolve(false);
+        });
+      };
+
+      const onError = () => {
+        audio.removeEventListener('canplay', onCanPlay);
+        audio.removeEventListener('error', onError);
+        console.error('[Crossfade/iOS] Audio load error');
+        resolve(false);
+      };
+
+      audio.addEventListener('canplay', onCanPlay);
+      audio.addEventListener('error', onError);
+      audio.load();
+    });
+  }, [getOrCreateContext, createMediaElementSource]);
+
+  const scheduleMediaElementCrossfade = useCallback(() => {
+    if (crossfadeTimeoutRef.current) {
+      clearTimeout(crossfadeTimeoutRef.current);
+      crossfadeTimeoutRef.current = null;
+    }
+
+    const audio = currentMediaRef.current.audioElement;
+    if (!audio || !audio.duration) return;
+
+    const checkTime = () => {
+      if (!isPlayingRef.current) return;
+      
+      const remaining = audio.duration - audio.currentTime;
+      
+      if (remaining <= fadeDuration && remaining > 0) {
+        performMediaElementCrossfade();
+      } else if (remaining > fadeDuration) {
+        crossfadeTimeoutRef.current = setTimeout(checkTime, (remaining - fadeDuration - 0.5) * 1000);
+      }
+    };
+
+    // Start checking after a brief delay
+    crossfadeTimeoutRef.current = setTimeout(checkTime, 1000);
+  }, [fadeDuration]);
+
+  const performMediaElementCrossfade = useCallback(() => {
+    const ctx = audioContextRef.current;
+    const current = currentMediaRef.current;
+    const next = nextMediaRef.current;
+
+    if (!ctx) return;
+
+    console.log('[Crossfade/iOS] Starting crossfade transition');
+    onCrossfadeStart?.();
+
+    const now = ctx.currentTime;
+
+    // Fade out current
+    if (current.gainNode) {
+      current.gainNode.gain.setValueAtTime(current.gainNode.gain.value, now);
+      current.gainNode.gain.linearRampToValueAtTime(0, now + fadeDuration);
+    }
+
+    // Fade in next if preloaded
+    if (next.audioElement && next.gainNode) {
+      next.gainNode.gain.setValueAtTime(0, now);
+      next.gainNode.gain.linearRampToValueAtTime(1, now + fadeDuration);
+      next.audioElement.play().catch(() => {});
+    }
+
+    // After fade, cleanup
+    setTimeout(() => {
+      if (current.audioElement) {
+        current.audioElement.pause();
+        current.audioElement.src = '';
+      }
+      current.gainNode?.disconnect();
+      current.sourceNode?.disconnect();
+
+      // Promote next to current
+      currentMediaRef.current = { ...nextMediaRef.current };
+      nextMediaRef.current = {
+        audioElement: null,
+        sourceNode: null,
+        gainNode: null,
+        url: '',
+        duration: 0,
+      };
+
+      if (isPlayingRef.current && currentMediaRef.current.audioElement) {
+        scheduleMediaElementCrossfade();
+      }
+
+      onTrackEnd?.();
+    }, fadeDuration * 1000);
+  }, [fadeDuration, onCrossfadeStart, onTrackEnd, scheduleMediaElementCrossfade]);
+
+  const preloadNextMediaElement = useCallback(async (url: string): Promise<boolean> => {
+    const newSource = createMediaElementSource(url);
+    if (!newSource.audioElement) return false;
+
+    return new Promise((resolve) => {
+      const audio = newSource.audioElement!;
+      
+      const onCanPlay = () => {
+        audio.removeEventListener('canplay', onCanPlay);
+        audio.removeEventListener('error', onError);
+        newSource.duration = audio.duration || 0;
+        nextMediaRef.current = newSource;
+        console.log('[Crossfade/iOS] Next track preloaded');
+        resolve(true);
+      };
+
+      const onError = () => {
+        audio.removeEventListener('canplay', onCanPlay);
+        audio.removeEventListener('error', onError);
+        resolve(false);
+      };
+
+      audio.addEventListener('canplay', onCanPlay);
+      audio.addEventListener('error', onError);
+      audio.load();
+    });
+  }, [createMediaElementSource]);
+
+  // ========== Standard Buffer Mode (non-iOS) ==========
+
   const loadBuffer = useCallback(async (url: string): Promise<AudioBuffer | null> => {
     const ctx = getOrCreateContext();
     if (!ctx) return null;
@@ -120,7 +342,6 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     }
   }, [getOrCreateContext]);
 
-  // Create source node from buffer and connect to gain
   const createSourceFromBuffer = useCallback((buffer: AudioBuffer): CrossfadeSource => {
     const ctx = getOrCreateContext();
     if (!ctx) return { sourceNode: null, gainNode: null, buffer: null, duration: 0 };
@@ -142,7 +363,6 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     };
   }, [getOrCreateContext]);
 
-  // Schedule crossfade based on current buffer duration
   const scheduleCrossfade = useCallback(() => {
     if (crossfadeTimeoutRef.current) {
       clearTimeout(crossfadeTimeoutRef.current);
@@ -155,11 +375,8 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     const ctx = audioContextRef.current;
     if (!ctx) return;
     
-    // Calculate remaining time
     const elapsed = ctx.currentTime - startTimeRef.current + pauseOffsetRef.current;
     const remaining = current.duration - elapsed;
-    
-    // Schedule crossfade fadeDuration seconds before end
     const crossfadeStartIn = Math.max(0, (remaining - fadeDuration) * 1000);
     
     console.log('[Crossfade] Scheduling crossfade in', (crossfadeStartIn / 1000).toFixed(2), 's');
@@ -171,7 +388,6 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     }, crossfadeStartIn);
   }, [fadeDuration]);
 
-  // Perform the actual crossfade
   const performCrossfade = useCallback(() => {
     const ctx = audioContextRef.current;
     const current = currentRef.current;
@@ -184,13 +400,11 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     
     const now = ctx.currentTime;
     
-    // Fade out current
     if (current.gainNode) {
       current.gainNode.gain.setValueAtTime(current.gainNode.gain.value, now);
       current.gainNode.gain.linearRampToValueAtTime(0, now + fadeDuration);
     }
     
-    // If we have a preloaded next buffer, start it
     if (next.buffer && next.gainNode) {
       next.gainNode.gain.setValueAtTime(0, now);
       next.gainNode.gain.linearRampToValueAtTime(1, now + fadeDuration);
@@ -199,33 +413,26 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
         try {
           next.sourceNode.start(0);
         } catch (e) {
-          // Already started or error
           console.log('[Crossfade] Source already started:', e);
         }
       }
     }
     
-    // After fade completes, cleanup current and promote next
     setTimeout(() => {
-      // Stop old current
       if (current.sourceNode) {
         try {
           current.sourceNode.stop();
           current.sourceNode.disconnect();
-        } catch (e) {
-          // Already stopped
-        }
+        } catch (e) {}
       }
       if (current.gainNode) {
         current.gainNode.disconnect();
       }
       
-      // Promote next to current
       currentRef.current = { ...nextRef.current };
       startTimeRef.current = ctx.currentTime;
       pauseOffsetRef.current = 0;
       
-      // Clear next
       nextRef.current = {
         sourceNode: null,
         gainNode: null,
@@ -233,32 +440,39 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
         duration: 0,
       };
       
-      // Schedule next crossfade if still playing
       if (isPlayingRef.current && currentRef.current.buffer) {
         scheduleCrossfade();
       }
       
-      // Notify track end (caller should preload next)
       onTrackEnd?.();
     }, fadeDuration * 1000);
   }, [fadeDuration, onCrossfadeStart, onTrackEnd, scheduleCrossfade]);
 
-  // Public: Play from URL
+  // ========== Public API ==========
+
   const playFromUrl = useCallback(async (url: string, startOffset: number = 0): Promise<boolean> => {
     if (!enabled) return false;
+    
+    if (useMediaElementMode) {
+      return playFromUrlMediaElement(url, startOffset);
+    }
     
     const buffer = await loadBuffer(url);
     if (!buffer) return false;
     
     return playFromBuffer(buffer, startOffset);
-  }, [enabled, loadBuffer]);
+  }, [enabled, useMediaElementMode, playFromUrlMediaElement, loadBuffer]);
 
-  // Public: Play from existing buffer
   const playFromBuffer = useCallback(async (buffer: AudioBuffer, startOffset: number = 0): Promise<boolean> => {
+    // Buffer mode only for non-iOS
+    if (useMediaElementMode) {
+      console.log('[Crossfade] Buffer mode not available on iOS, use playFromUrl');
+      return false;
+    }
+
     const ctx = getOrCreateContext();
     if (!ctx) return false;
     
-    // Stop current if playing
     if (currentRef.current.sourceNode) {
       try {
         currentRef.current.sourceNode.stop();
@@ -269,33 +483,26 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
       currentRef.current.gainNode.disconnect();
     }
     
-    // Clear any scheduled crossfade
     if (crossfadeTimeoutRef.current) {
       clearTimeout(crossfadeTimeoutRef.current);
       crossfadeTimeoutRef.current = null;
     }
     
-    // Create new source
     const newSource = createSourceFromBuffer(buffer);
     if (!newSource.sourceNode || !newSource.gainNode) return false;
     
-    // Set up for playback
     currentRef.current = newSource;
     pauseOffsetRef.current = startOffset;
     
-    // Fade in immediately
     newSource.gainNode.gain.setValueAtTime(0, ctx.currentTime);
     newSource.gainNode.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.1);
     
-    // Start playback
     try {
       newSource.sourceNode.start(0, startOffset);
       startTimeRef.current = ctx.currentTime;
       isPlayingRef.current = true;
       
       console.log('[Crossfade] Playback started, offset:', startOffset);
-      
-      // Schedule crossfade
       scheduleCrossfade();
       
       return true;
@@ -303,44 +510,66 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
       console.error('[Crossfade] Failed to start playback:', e);
       return false;
     }
-  }, [getOrCreateContext, createSourceFromBuffer, scheduleCrossfade]);
+  }, [useMediaElementMode, getOrCreateContext, createSourceFromBuffer, scheduleCrossfade]);
 
-  // Public: Preload next track
   const preloadNext = useCallback(async (url: string): Promise<boolean> => {
+    if (useMediaElementMode) {
+      return preloadNextMediaElement(url);
+    }
+    
     const buffer = await loadBuffer(url);
     if (!buffer) return false;
     
     preloadNextFromBuffer(buffer);
     return true;
-  }, [loadBuffer]);
+  }, [useMediaElementMode, preloadNextMediaElement, loadBuffer]);
 
-  // Public: Preload next from buffer
   const preloadNextFromBuffer = useCallback((buffer: AudioBuffer) => {
+    if (useMediaElementMode) return; // Not supported
+    
     const newSource = createSourceFromBuffer(buffer);
     nextRef.current = newSource;
     console.log('[Crossfade] Next track preloaded, duration:', buffer.duration.toFixed(2));
-  }, [createSourceFromBuffer]);
+  }, [useMediaElementMode, createSourceFromBuffer]);
 
-  // Public: Manual crossfade trigger
   const crossfadeToNext = useCallback(() => {
+    if (useMediaElementMode) {
+      if (nextMediaRef.current.audioElement) {
+        performMediaElementCrossfade();
+      } else {
+        stop();
+        onTrackEnd?.();
+      }
+      return;
+    }
+    
     if (nextRef.current.buffer) {
       performCrossfade();
     } else {
-      console.log('[Crossfade] No next track preloaded, cannot crossfade');
-      // Just stop current
       stop();
       onTrackEnd?.();
     }
-  }, [performCrossfade, onTrackEnd]);
+  }, [useMediaElementMode, performMediaElementCrossfade, performCrossfade, onTrackEnd]);
 
-  // Public: Stop
   const stop = useCallback(() => {
     if (crossfadeTimeoutRef.current) {
       clearTimeout(crossfadeTimeoutRef.current);
       crossfadeTimeoutRef.current = null;
     }
+
+    // Stop MediaElement sources
+    if (currentMediaRef.current.audioElement) {
+      currentMediaRef.current.audioElement.pause();
+      currentMediaRef.current.audioElement.src = '';
+    }
+    if (nextMediaRef.current.audioElement) {
+      nextMediaRef.current.audioElement.pause();
+      nextMediaRef.current.audioElement.src = '';
+    }
+    currentMediaRef.current = { audioElement: null, sourceNode: null, gainNode: null, url: '', duration: 0 };
+    nextMediaRef.current = { audioElement: null, sourceNode: null, gainNode: null, url: '', duration: 0 };
     
-    // Stop current
+    // Stop buffer sources
     if (currentRef.current.sourceNode) {
       try {
         currentRef.current.sourceNode.stop();
@@ -350,8 +579,6 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     if (currentRef.current.gainNode) {
       currentRef.current.gainNode.disconnect();
     }
-    
-    // Stop next
     if (nextRef.current.sourceNode) {
       try {
         nextRef.current.sourceNode.stop();
@@ -369,16 +596,27 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     startTimeRef.current = 0;
   }, []);
 
-  // Public: Pause
   const pause = useCallback(() => {
+    if (useMediaElementMode) {
+      if (currentMediaRef.current.audioElement) {
+        pauseOffsetRef.current = currentMediaRef.current.audioElement.currentTime;
+        currentMediaRef.current.audioElement.pause();
+      }
+      isPlayingRef.current = false;
+      if (crossfadeTimeoutRef.current) {
+        clearTimeout(crossfadeTimeoutRef.current);
+        crossfadeTimeoutRef.current = null;
+      }
+      console.log('[Crossfade/iOS] Paused');
+      return;
+    }
+
     const ctx = audioContextRef.current;
     if (!ctx || !isPlayingRef.current) return;
     
-    // Calculate current offset
     const elapsed = ctx.currentTime - startTimeRef.current;
     pauseOffsetRef.current = pauseOffsetRef.current + elapsed;
     
-    // Stop source (we'll recreate on resume)
     if (currentRef.current.sourceNode) {
       try {
         currentRef.current.sourceNode.stop();
@@ -387,7 +625,6 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
       currentRef.current.sourceNode = null;
     }
     
-    // Clear scheduled crossfade
     if (crossfadeTimeoutRef.current) {
       clearTimeout(crossfadeTimeoutRef.current);
       crossfadeTimeoutRef.current = null;
@@ -395,33 +632,43 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     
     isPlayingRef.current = false;
     console.log('[Crossfade] Paused at offset:', pauseOffsetRef.current);
-  }, []);
+  }, [useMediaElementMode]);
 
-  // Public: Resume
   const resume = useCallback(async (): Promise<boolean> => {
+    if (useMediaElementMode) {
+      const audio = currentMediaRef.current.audioElement;
+      if (!audio) return false;
+      
+      try {
+        await audio.play();
+        isPlayingRef.current = true;
+        scheduleMediaElementCrossfade();
+        console.log('[Crossfade/iOS] Resumed');
+        return true;
+      } catch (e) {
+        console.error('[Crossfade/iOS] Resume failed:', e);
+        return false;
+      }
+    }
+
     const ctx = getOrCreateContext();
     const buffer = currentRef.current.buffer;
     if (!ctx || !buffer) return false;
     
-    // Recreate source from stored buffer
     const newSource = createSourceFromBuffer(buffer);
     if (!newSource.sourceNode || !newSource.gainNode) return false;
     
     currentRef.current.sourceNode = newSource.sourceNode;
     currentRef.current.gainNode = newSource.gainNode;
     
-    // Set gain to 1 immediately
     newSource.gainNode.gain.setValueAtTime(1, ctx.currentTime);
     
-    // Start from paused offset
     try {
       newSource.sourceNode.start(0, pauseOffsetRef.current);
       startTimeRef.current = ctx.currentTime;
       isPlayingRef.current = true;
       
       console.log('[Crossfade] Resumed from offset:', pauseOffsetRef.current);
-      
-      // Re-schedule crossfade
       scheduleCrossfade();
       
       return true;
@@ -429,16 +676,23 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
       console.error('[Crossfade] Failed to resume:', e);
       return false;
     }
-  }, [getOrCreateContext, createSourceFromBuffer, scheduleCrossfade]);
+  }, [useMediaElementMode, scheduleMediaElementCrossfade, getOrCreateContext, createSourceFromBuffer, scheduleCrossfade]);
 
-  // Public: Seek
   const seek = useCallback(async (time: number): Promise<void> => {
+    if (useMediaElementMode) {
+      const audio = currentMediaRef.current.audioElement;
+      if (audio && audio.duration) {
+        audio.currentTime = Math.max(0, Math.min(time, audio.duration));
+        pauseOffsetRef.current = audio.currentTime;
+      }
+      return;
+    }
+
     const buffer = currentRef.current.buffer;
     if (!buffer) return;
     
     const wasPlaying = isPlayingRef.current;
     
-    // Stop current
     if (currentRef.current.sourceNode) {
       try {
         currentRef.current.sourceNode.stop();
@@ -452,38 +706,39 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     if (wasPlaying) {
       await resume();
     }
-  }, [resume]);
+  }, [useMediaElementMode, resume]);
 
-  // Public: Get current time
   const getCurrentTime = useCallback((): number => {
+    if (useMediaElementMode) {
+      return currentMediaRef.current.audioElement?.currentTime || pauseOffsetRef.current;
+    }
+
     const ctx = audioContextRef.current;
     if (!ctx || !isPlayingRef.current) return pauseOffsetRef.current;
     
     const elapsed = ctx.currentTime - startTimeRef.current;
     return pauseOffsetRef.current + elapsed;
-  }, []);
+  }, [useMediaElementMode]);
 
-  // Public: Get duration
   const getDuration = useCallback((): number => {
+    if (useMediaElementMode) {
+      return currentMediaRef.current.audioElement?.duration || currentMediaRef.current.duration || 0;
+    }
     return currentRef.current.duration || 0;
-  }, []);
+  }, [useMediaElementMode]);
 
-  // Public: Is playing
   const isPlaying = useCallback((): boolean => {
     return isPlayingRef.current;
   }, []);
 
-  // Public: Get AudioContext
   const getAudioContext = useCallback((): AudioContext | null => {
     return audioContextRef.current;
   }, []);
 
-  // Public: Get current buffer
   const getCurrentBuffer = useCallback((): AudioBuffer | null => {
     return currentRef.current.buffer;
   }, []);
 
-  // Public: Get next buffer
   const getNextBuffer = useCallback((): AudioBuffer | null => {
     return nextRef.current.buffer;
   }, []);
