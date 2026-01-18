@@ -202,7 +202,7 @@ const Settings: React.FC = () => {
                   <RefreshCw className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-foreground">SoundFlow v1.7.2</p>
+                  <p className="text-base font-semibold text-foreground">SoundFlow v1.7.3</p>
                   <p className="text-xs text-muted-foreground">
                     {settings.language === 'it' ? 'Verifica aggiornamenti' : 'Check for updates'}
                   </p>
