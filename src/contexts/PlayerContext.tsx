@@ -1,4 +1,4 @@
-// PlayerContext - Audio playback state management (v2.1 - CarPlay optimization)
+// PlayerContext - Audio playback state management (v2.2 - Web Audio Crossfade)
 import React, {
   createContext,
   useCallback,
@@ -14,7 +14,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Track, type PlayerState } from '@/types/music';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
-import { useIOSAudioSession } from '@/hooks/useIOSAudioSession';
+import { useIOSAudioSession, isIOS, isPWA } from '@/hooks/useIOSAudioSession';
+import { useCrossfade, type CrossfadeHandle } from '@/hooks/useCrossfade';
 
 import {
   type AudioFile,
@@ -348,12 +349,34 @@ const fetchTrackMetadata = async (track: Track): Promise<Track> => {
 };
 
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Audio element reference
+  // Audio element reference (fallback for non-crossfade mode)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials, user } = useAuth();
   const { audioSourceMode, settings } = useSettings();
   // iOS audio session management (uses only refs internally)
   const iosAudio = useIOSAudioSession();
+  
+  // Determine if crossfade should be used (auto-enabled on iOS PWA)
+  const useCrossfadeMode = settings.crossfadeEnabled || (isIOS() && isPWA());
+  const crossfadeDuration = settings.crossfade || 3;
+  
+  // Web Audio crossfade system
+  const crossfade = useCrossfade({
+    fadeDuration: crossfadeDuration,
+    enabled: useCrossfadeMode,
+    onTrackEnd: () => {
+      console.log('[Crossfade] Track ended, triggering next');
+      nextRef.current();
+    },
+    onCrossfadeStart: () => {
+      console.log('[Crossfade] Crossfade starting, preloading next track');
+      window.dispatchEvent(new CustomEvent('prefetch-next-track'));
+    },
+  });
+  
+  // Ref to track crossfade mode for callbacks
+  const useCrossfadeModeRef = useRef(useCrossfadeMode);
+  useCrossfadeModeRef.current = useCrossfadeMode;
 
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
@@ -377,7 +400,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const autoSkipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Pre-fetching system for seamless background playback on iOS
-  const prefetchedNextUrlRef = useRef<{ trackId: string; url: string; source: AudioSource } | null>(null);
+  const prefetchedNextUrlRef = useRef<{ trackId: string; url: string; source: AudioSource; buffer?: AudioBuffer } | null>(null);
   const isPrefetchingRef = useRef(false);
   const prefetchedTrackIdRef = useRef<string | null>(null);
 
@@ -643,6 +666,38 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Crossfade time sync - update progress from Web Audio when crossfade is active
+  useEffect(() => {
+    if (!useCrossfadeMode) return;
+    
+    const syncInterval = setInterval(() => {
+      if (crossfade.isPlaying()) {
+        const currentTime = crossfade.getCurrentTime();
+        const duration = crossfade.getDuration();
+        setState((prev) => ({ 
+          ...prev, 
+          progress: currentTime,
+          duration: duration || prev.duration
+        }));
+        
+        // Update Media Session position state
+        if ('mediaSession' in navigator) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: duration || 0,
+              playbackRate: 1,
+              position: Math.min(currentTime, duration || 0),
+            });
+          } catch (e) {
+            // Ignore
+          }
+        }
+      }
+    }, 250); // Update 4x per second
+    
+    return () => clearInterval(syncInterval);
+  }, [useCrossfadeMode, crossfade]);
 
   // Simplified unlock - only quickUnlock, no aggressive keepAlive
   const tryUnlockAudioFromUserGesture = useCallback(() => {
@@ -1457,6 +1512,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     (track?: Track) => {
       if (track) {
         playTrack(track);
+      } else if (useCrossfadeModeRef.current && crossfade.getCurrentBuffer()) {
+        // Resume crossfade playback
+        crossfade.resume().then((success) => {
+          if (success) setState((prev) => ({ ...prev, isPlaying: true }));
+        });
       } else if (audioRef.current) {
         safePlay(audioRef.current).then((success) => {
           if (success) setState((prev) => ({ ...prev, isPlaying: true }));
@@ -1465,13 +1525,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setState((prev) => ({ ...prev, isPlaying: true }));
       }
     },
-    [playTrack, safePlay]
+    [playTrack, safePlay, crossfade]
   );
 
   const pause = useCallback(() => {
+    if (useCrossfadeModeRef.current && crossfade.isPlaying()) {
+      crossfade.pause();
+    }
     audioRef.current?.pause();
     setState((prev) => ({ ...prev, isPlaying: false }));
-  }, []);
+  }, [crossfade]);
 
   const toggle = useCallback(() => {
     if (state.isPlaying) pause();
@@ -1479,9 +1542,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [pause, play, state.isPlaying]);
 
   const seek = useCallback((time: number) => {
+    if (useCrossfadeModeRef.current && crossfade.getCurrentBuffer()) {
+      crossfade.seek(time);
+    }
     if (audioRef.current) audioRef.current.currentTime = time;
     setState((prev) => ({ ...prev, progress: time }));
-  }, []);
+  }, [crossfade]);
 
   const setVolume = useCallback((volume: number) => {
     if (audioRef.current) audioRef.current.volume = volume;
@@ -1585,7 +1651,34 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const nextTrack = state.queue[nextIndex];
       setState((prev) => ({ ...prev, queueIndex: nextIndex, currentTrack: nextTrack }));
       
-      // CHECK: Do we have a prefetched URL for this track?
+      // CHECK: If crossfade mode, trigger crossfade to preloaded buffer
+      if (useCrossfadeModeRef.current && crossfade.getNextBuffer()) {
+        console.log('[Next] Using crossfade transition for:', nextTrack.title);
+        
+        // Clear prefetch refs
+        prefetchedNextUrlRef.current = null;
+        prefetchedTrackIdRef.current = null;
+        
+        // Trigger crossfade - the buffer is already loaded
+        crossfade.crossfadeToNext();
+        updateMediaSessionMetadata(nextTrack, true);
+        setState((prev) => ({ ...prev, isPlaying: true }));
+        setCurrentAudioSource('tidal');
+        setLoadingPhase('idle');
+        addDebugLog('🔀 Crossfade', `"${nextTrack.title}" (gapless)`, 'success');
+        
+        // Save to recently played
+        saveRecentlyPlayedTrack(nextTrack, user?.id);
+        
+        // Start prefetching the NEXT next track
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('prefetch-next-track'));
+        }, 3000);
+        
+        return;
+      }
+      
+      // CHECK: Do we have a prefetched URL for this track? (non-crossfade mode)
       const prefetched = prefetchedNextUrlRef.current;
       if (prefetched && prefetched.trackId === nextTrack.id && prefetched.url) {
         console.log('[Next] Using prefetched URL for:', nextTrack.title);
@@ -1594,7 +1687,25 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         prefetchedNextUrlRef.current = null;
         prefetchedTrackIdRef.current = null;
         
-        // Use prefetched URL directly - SKIP the search!
+        // If crossfade mode, play via crossfade system
+        if (useCrossfadeModeRef.current) {
+          const success = await crossfade.playFromUrl(prefetched.url);
+          if (success) {
+            updateMediaSessionMetadata(nextTrack, true);
+            setState((prev) => ({ ...prev, isPlaying: true }));
+            setCurrentAudioSource('tidal');
+            setLoadingPhase('idle');
+            addDebugLog('⚡ Transizione crossfade', `"${nextTrack.title}"`, 'success');
+            saveRecentlyPlayedTrack(nextTrack, user?.id);
+            
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('prefetch-next-track'));
+            }, 3000);
+            return;
+          }
+        }
+        
+        // Use prefetched URL directly via HTMLAudio - SKIP the search!
         if (audioRef.current) {
           audioRef.current.src = prefetched.url;
           updateMediaSessionMetadata(nextTrack, true);
@@ -1645,7 +1756,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         addDebugLog('❌ Autoplay fallito', error instanceof Error ? error.message : 'Errore', 'error');
       });
     }
-  }, [addDebugLog, fetchSimilarTracks, playTrack, state.currentTrack, state.queue, state.queueIndex, user?.id]);
+  }, [addDebugLog, fetchSimilarTracks, playTrack, state.currentTrack, state.queue, state.queueIndex, user?.id, crossfade]);
 
   const previous = useCallback(() => {
     if (state.progress > 3) {
@@ -1666,7 +1777,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     previousRef.current = previous;
   }, [next, previous]);
 
-  // Pre-fetch next track URL for seamless iOS background playback (SIMPLE VERSION)
+  // Pre-fetch next track URL for seamless iOS background playback (with crossfade buffer support)
   useEffect(() => {
     const handlePrefetchNextTrack = async () => {
       // Skip if already prefetching or no next track
@@ -1690,6 +1801,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const tidalResult = await getTidalStream(nextTrack.title, nextTrack.artist, tidalQuality);
         
         if ('streamUrl' in tidalResult && tidalResult.streamUrl) {
+          // If using crossfade mode, also preload the buffer
+          if (useCrossfadeModeRef.current) {
+            console.log('[Prefetch] Crossfade mode - preloading buffer...');
+            const preloadSuccess = await crossfade.preloadNext(tidalResult.streamUrl);
+            if (preloadSuccess) {
+              addDebugLog('📥 Buffer pre-caricato', `"${nextTrack.title}" (crossfade)`, 'success');
+            }
+          }
+          
           prefetchedNextUrlRef.current = {
             trackId: nextTrack.id,
             url: tidalResult.streamUrl,
@@ -1716,7 +1836,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       window.removeEventListener('prefetch-next-track', handlePrefetchNextTrack);
       window.removeEventListener('prefetch-played', handlePrefetchPlayed as EventListener);
     };
-  }, [state.queue, state.queueIndex, settings.audioQuality, addDebugLog]);
+  }, [state.queue, state.queueIndex, settings.audioQuality, addDebugLog, crossfade]);
 
   // Note: Media Session next/previous handlers are set up in the audio initialization useEffect
 
