@@ -363,7 +363,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   
   // AudioContext-based crossfade for iOS (new system)
   const crossfade = useCrossfade();
+  const crossfadeRef = useRef(crossfade);
   const usingAudioContextCrossfadeRef = useRef(false);
+  
+  // Keep crossfadeRef updated
+  useEffect(() => {
+    crossfadeRef.current = crossfade;
+  }, [crossfade]);
 
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
@@ -933,9 +939,23 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       navigator.mediaSession.setActionHandler('previoustrack', () => {
         previousRef.current();
       });
+      
+      // ENHANCED: nexttrack handler with AudioContext crossfade support for CarPlay
       navigator.mediaSession.setActionHandler('nexttrack', () => {
-        nextRef.current();
+        const shouldUseCrossfade = crossfadeEnabledRef.current && isIOS() && isPWA();
+        
+        if (shouldUseCrossfade && crossfadeRef.current?.hasPreloadedNext()) {
+          // Use AudioContext crossfade for gapless transition
+          console.log('[MediaSession] Using AudioContext crossfade for nexttrack');
+          iosAudioRef.current.addLog('info', '[MediaSession]', 'nexttrack -> AudioContext crossfade');
+          crossfadeRef.current.triggerCrossfade();
+        } else {
+          // Fallback to standard next
+          console.log('[MediaSession] Using standard next for nexttrack');
+          nextRef.current();
+        }
       });
+      
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (details.seekTime !== undefined && audio.duration) {
           audio.currentTime = details.seekTime;
@@ -952,7 +972,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             previousRef.current();
           });
           navigator.mediaSession.setActionHandler('seekforward', () => {
-            nextRef.current();
+            // Also use crossfade for seekforward if available
+            const shouldUseCrossfade = crossfadeEnabledRef.current && isIOS() && isPWA();
+            if (shouldUseCrossfade && crossfadeRef.current?.hasPreloadedNext()) {
+              crossfadeRef.current.triggerCrossfade();
+            } else {
+              nextRef.current();
+            }
           });
         } catch (e2) {
           // Fallback: just ignore
