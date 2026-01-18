@@ -19,6 +19,7 @@ interface MediaElementSource {
   url: string;
   duration: number;
   fadeInterval: NodeJS.Timeout | null;
+  endedHandler: (() => void) | null; // Fallback for when setTimeout is suspended
 }
 
 interface UseCrossfadeOptions {
@@ -74,6 +75,7 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     url: '',
     duration: 0,
     fadeInterval: null,
+    endedHandler: null,
   });
 
   const nextMediaRef = useRef<MediaElementSource>({
@@ -81,6 +83,7 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     url: '',
     duration: 0,
     fadeInterval: null,
+    endedHandler: null,
   });
   
   const isPlayingRef = useRef(false);
@@ -135,6 +138,7 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
       url,
       duration: 0,
       fadeInterval: null,
+      endedHandler: null,
     };
   }, []);
 
@@ -170,12 +174,23 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     const current = currentMediaRef.current;
     const next = nextMediaRef.current;
 
+    // Prevent double-trigger: if crossfade already in progress, skip
+    if (current.fadeInterval) {
+      console.log('[Crossfade/iOS] Crossfade already in progress, skipping');
+      return;
+    }
+
     console.log('[Crossfade/iOS] Starting crossfade transition (native volume control)');
     onCrossfadeStartRef.current?.();
 
     // Clear any existing fade intervals
-    if (current.fadeInterval) clearInterval(current.fadeInterval);
     if (next.fadeInterval) clearInterval(next.fadeInterval);
+
+    // Remove 'ended' handler from current track to prevent double-trigger
+    if (current.audioElement && current.endedHandler) {
+      current.audioElement.removeEventListener('ended', current.endedHandler);
+      current.endedHandler = null;
+    }
 
     const fadeSteps = 30; // 30 steps over fadeDuration
     const stepTime = (fadeDuration * 1000) / fadeSteps;
@@ -201,6 +216,7 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
 
       if (step >= fadeSteps) {
         clearInterval(fadeInterval);
+        current.fadeInterval = null;
 
         // Cleanup old track
         if (current.audioElement) {
@@ -214,6 +230,7 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
           url: '',
           duration: 0,
           fadeInterval: null,
+          endedHandler: null,
         };
 
         if (isPlayingRef.current && currentMediaRef.current.audioElement) {
@@ -232,10 +249,13 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
 
   // iOS: Play using native HTMLAudioElement (no Web Audio)
   const playFromUrlMediaElement = useCallback(async (url: string, startOffset: number = 0): Promise<boolean> => {
-    // Stop current
+    // Stop current and remove ended handler
     if (currentMediaRef.current.audioElement) {
       if (currentMediaRef.current.fadeInterval) {
         clearInterval(currentMediaRef.current.fadeInterval);
+      }
+      if (currentMediaRef.current.endedHandler) {
+        currentMediaRef.current.audioElement.removeEventListener('ended', currentMediaRef.current.endedHandler);
       }
       currentMediaRef.current.audioElement.pause();
       currentMediaRef.current.audioElement.src = '';
@@ -253,6 +273,22 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
     
     return new Promise((resolve) => {
       const audio = newSource.audioElement!;
+      
+      // CRITICAL: Add 'ended' event as fallback for when setTimeout is suspended in background
+      // iOS suspends setTimeout/setInterval when app is in background, but 'ended' event still fires
+      const onEnded = () => {
+        console.log('[Crossfade/iOS] Track ended via native event (fallback)');
+        
+        // If we have a next track preloaded, try crossfade
+        if (nextMediaRef.current.audioElement) {
+          performMediaElementCrossfadeRef.current();
+        } else {
+          // No next track, just trigger track end callback
+          onTrackEndRef.current?.();
+        }
+      };
+      audio.addEventListener('ended', onEnded);
+      newSource.endedHandler = onEnded;
       
       const onCanPlay = () => {
         audio.removeEventListener('canplay', onCanPlay);
@@ -292,6 +328,7 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
       const onError = () => {
         audio.removeEventListener('canplay', onCanPlay);
         audio.removeEventListener('error', onError);
+        audio.removeEventListener('ended', onEnded);
         console.error('[Crossfade/iOS] Audio load error');
         resolve(false);
       };
@@ -572,17 +609,29 @@ export const useCrossfade = (options: UseCrossfadeOptions = {}): CrossfadeHandle
       crossfadeTimeoutRef.current = null;
     }
 
-    // Stop MediaElement sources
+    // Stop MediaElement sources and remove handlers
     if (currentMediaRef.current.audioElement) {
+      if (currentMediaRef.current.endedHandler) {
+        currentMediaRef.current.audioElement.removeEventListener('ended', currentMediaRef.current.endedHandler);
+      }
+      if (currentMediaRef.current.fadeInterval) {
+        clearInterval(currentMediaRef.current.fadeInterval);
+      }
       currentMediaRef.current.audioElement.pause();
       currentMediaRef.current.audioElement.src = '';
     }
     if (nextMediaRef.current.audioElement) {
+      if (nextMediaRef.current.endedHandler) {
+        nextMediaRef.current.audioElement.removeEventListener('ended', nextMediaRef.current.endedHandler);
+      }
+      if (nextMediaRef.current.fadeInterval) {
+        clearInterval(nextMediaRef.current.fadeInterval);
+      }
       nextMediaRef.current.audioElement.pause();
       nextMediaRef.current.audioElement.src = '';
     }
-    currentMediaRef.current = { audioElement: null, url: '', duration: 0, fadeInterval: null };
-    nextMediaRef.current = { audioElement: null, url: '', duration: 0, fadeInterval: null };
+    currentMediaRef.current = { audioElement: null, url: '', duration: 0, fadeInterval: null, endedHandler: null };
+    nextMediaRef.current = { audioElement: null, url: '', duration: 0, fadeInterval: null, endedHandler: null };
     
     // Stop buffer sources
     if (currentRef.current.sourceNode) {
