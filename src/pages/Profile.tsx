@@ -688,8 +688,8 @@ const Settings: React.FC = () => {
                     </p>
                     <p className="text-xs text-green-500/70">
                       {settings.language === 'it' 
-                        ? 'Web Audio API + Preload automatico + Cache SW'
-                        : 'Web Audio API + Auto preload + SW Cache'}
+                        ? 'AudioContext unificato + Preload automatico'
+                        : 'Unified AudioContext + Auto preload'}
                     </p>
                   </div>
                 </div>
