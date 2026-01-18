@@ -926,10 +926,26 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const handleError = (e: Event) => {
       console.error('[PlayerContext] Audio error:', e);
+      const audioElement = e.target as HTMLAudioElement;
+      const errorCode = audioElement?.error?.code;
+      const errorMessage = audioElement?.error?.message;
+      
+      console.log('[PlayerContext] Error details:', { errorCode, errorMessage });
+      iosAudioRef.current.addLog('error', '[Audio]', `Error code: ${errorCode}, message: ${errorMessage}`);
+      
+      // Auto-skip to next track on certain errors (network errors, decode errors)
+      if (errorCode && errorCode !== MediaError.MEDIA_ERR_ABORTED) {
+        console.log('[PlayerContext] Auto-skipping to next track due to audio error');
+        // Small delay to avoid rapid skipping
+        setTimeout(() => {
+          nextRef.current();
+        }, 1000);
+      }
     };
 
     const handleStalled = () => {
       console.log('[PlayerContext] Audio stalled');
+      iosAudioRef.current.addLog('warning', '[Audio]', 'Playback stalled');
     };
 
     // Listen for crossfade check event

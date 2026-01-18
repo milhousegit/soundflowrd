@@ -15,8 +15,9 @@ const isPWA = () => window.matchMedia('(display-mode: standalone)').matches ||
 const Layout: React.FC = () => {
   const { currentTrack, queuePrefetchState } = usePlayer();
   
-  // Only show prefetch indicator on iOS PWA when playing
-  const showPrefetchIndicator = isIOS() && isPWA() && currentTrack && queuePrefetchState.totalTracks > 0;
+  // Show prefetch indicator on iOS PWA when prefetching is active
+  // Also show on iOS browsers when prefetching happens (for testing)
+  const showPrefetchIndicator = isIOS() && currentTrack && queuePrefetchState.totalTracks > 0;
 
   return (
     <div className="flex h-screen bg-background overflow-hidden pt-[env(safe-area-inset-top)]">
