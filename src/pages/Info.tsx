@@ -34,7 +34,7 @@ const Info: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">SoundFlow</p>
-                <p className="text-sm text-muted-foreground">v1.5</p>
+                <p className="text-sm text-muted-foreground">v1.6</p>
               </div>
               <Button variant="outline" className="gap-2" onClick={async () => {
               try {
@@ -58,7 +58,7 @@ const Info: React.FC = () => {
               </Button>
             </div>
             
-            {/* What's New in v1.5 */}
+            {/* What's New in v1.6 */}
             <div className="mt-4 pt-4 border-t border-border">
               <h3 className="text-sm font-medium text-foreground mb-2">
                 {isItalian ? "Novità della versione" : "What's new"}
@@ -66,15 +66,15 @@ const Info: React.FC = () => {
               <ul className="text-sm text-muted-foreground space-y-1.5">
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "Heartbeat audio udibile (50Hz) per mantenere la sessione attiva in background su iOS" : "Audible heartbeat audio (50Hz) to keep background session alive on iOS"}
+                  {isItalian ? "Crossfade dual-audio: transizione fluida tra brani senza interruzioni (consigliato iOS)" : "Dual-audio crossfade: smooth track transitions without interruptions (recommended iOS)"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Log AppLifecycle migliorati con snapshot MediaSession e stato audio dettagliato" : "Improved AppLifecycle logs with MediaSession snapshot and detailed audio state"}
+                  {isItalian ? "Manifest PWA aggiornato a minimal-ui per miglior compatibilità" : "PWA manifest updated to minimal-ui for better compatibility"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Fallback sicuro per usePlayer per evitare blank screen in casi rari" : "Safe fallback for usePlayer to prevent blank screen in edge cases"}
+                  {isItalian ? "Precaricamento traccia successiva 10s prima della fine" : "Next track preloading 10s before current track ends"}
                 </li>
               </ul>
             </div>

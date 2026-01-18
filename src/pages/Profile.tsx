@@ -202,7 +202,7 @@ const Settings: React.FC = () => {
                   <RefreshCw className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-foreground">SoundFlow v1.5</p>
+                  <p className="text-base font-semibold text-foreground">SoundFlow v1.6</p>
                   <p className="text-xs text-muted-foreground">
                     {settings.language === 'it' ? 'Verifica aggiornamenti' : 'Check for updates'}
                   </p>
@@ -671,6 +671,27 @@ const Settings: React.FC = () => {
                 <option value="medium">{t('medium')}</option>
                 <option value="low">{t('low')}</option>
               </select>
+            </div>
+
+            {/* Crossfade Toggle */}
+            <div className="flex items-center justify-between pt-3 border-t border-border">
+              <div className="flex-1 min-w-0 pr-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-foreground">{t('crossfade')}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-medium shrink-0">
+                    {settings.language === 'it' ? 'Consigliato iOS' : 'Recommended iOS'}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {settings.language === 'it' 
+                    ? 'Transizione fluida tra brani per evitare interruzioni' 
+                    : 'Smooth transition between tracks to avoid interruptions'}
+                </p>
+              </div>
+              <Switch
+                checked={settings.crossfadeEnabled}
+                onCheckedChange={(checked) => updateSettings({ crossfadeEnabled: checked })}
+              />
             </div>
           </div>
         </section>
