@@ -443,6 +443,31 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, []);
 
+  // UNIFIED PLAY HELPER: Plays from URL using either Web Audio (iOS crossfade) or HTMLAudio
+  const playStreamUrl = useCallback(async (url: string): Promise<boolean> => {
+    // iOS crossfade mode: use Web Audio API exclusively
+    if (useCrossfadeModeRef.current) {
+      console.log('[PlayerContext] Playing via Web Audio (crossfade mode)');
+      try {
+        const success = await crossfade.playFromUrl(url);
+        if (success) {
+          setState((prev) => ({ ...prev, isPlaying: true }));
+        }
+        return success;
+      } catch (error) {
+        console.error('[PlayerContext] Web Audio play failed:', error);
+        return false;
+      }
+    }
+    
+    // Standard mode: use HTMLAudioElement
+    if (audioRef.current) {
+      audioRef.current.src = url;
+      return safePlay(audioRef.current);
+    }
+    return false;
+  }, [crossfade, safePlay]);
+
   const [state, setState] = useState<PlayerState>({
     currentTrack: null,
     isPlaying: false,
@@ -795,7 +820,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     async (track: Track, queue?: Track[]) => {
       tryUnlockAudioFromUserGesture();
 
-      if (audioRef.current) {
+      // iOS crossfade mode: stop crossfade, otherwise stop HTMLAudio
+      if (useCrossfadeModeRef.current) {
+        crossfade.stop();
+      } else if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = '';
       }
@@ -870,29 +898,28 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           const tidalResult = await getTidalStream(enrichedTrack.title, enrichedTrack.artist, tidalQuality);
           if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
 
-          if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
-            audioRef.current.src = tidalResult.streamUrl;
-            
+          if ('streamUrl' in tidalResult && tidalResult.streamUrl) {
             try {
               if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
               
-              const playPromise = audioRef.current.play();
-              if (playPromise !== undefined) {
-                await playPromise;
-              }
+              // Use unified play helper
+              const success = await playStreamUrl(tidalResult.streamUrl);
               
               if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
               
-              setState((prev) => ({ ...prev, isPlaying: true }));
-              setLoadingPhase('idle');
-              setCurrentAudioSource('tidal');
-              saveRecentlyPlayed();
-              
-              const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
-                ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
-                : tidalResult.quality || 'LOSSLESS';
-              addDebugLog('✅ Fallback Tidal avviato', `Stream ${qualityInfo}`, 'success');
-              return true;
+              if (success) {
+                setState((prev) => ({ ...prev, isPlaying: true }));
+                setLoadingPhase('idle');
+                setCurrentAudioSource('tidal');
+                saveRecentlyPlayed();
+                
+                const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
+                  ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
+                  : tidalResult.quality || 'LOSSLESS';
+                addDebugLog('✅ Fallback Tidal avviato', `Stream ${qualityInfo}`, 'success');
+                return true;
+              }
+              return false;
             } catch (playError) {
               if (playError instanceof Error && (playError.name === 'AbortError' || playError.name === 'NotAllowedError')) {
                 return false;
@@ -972,35 +999,35 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             return;
           }
 
-          if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
+          if ('streamUrl' in tidalResult && tidalResult.streamUrl) {
             addDebugLog('✅ Stream trovato', `${searchDuration}ms - Caricamento audio...`, 'success');
             setLoadingPhase('loading');
-            audioRef.current.src = tidalResult.streamUrl;
             
             try {
               // Check again if we're still playing this track
               if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
               
-              const playPromise = audioRef.current.play();
-              if (playPromise !== undefined) {
-                await playPromise;
-              }
+              // Use unified play helper (Web Audio on iOS, HTMLAudio otherwise)
+              const playSuccess = await playStreamUrl(tidalResult.streamUrl);
               
               // Final check after play succeeds
               if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
               
-              setState((prev) => ({ ...prev, isPlaying: true }));
-              setLoadingPhase('idle');
-              setCurrentAudioSource('tidal');
-              
-              // Save to recently played for Deezer/Tidal mode
-              saveRecentlyPlayed();
-              
-              const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
-                ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
-                : tidalResult.quality || 'LOSSLESS';
-              addDebugLog('✅ Riproduzione Tidal', `Stream ${qualityInfo} avviato`, 'success');
-              return;
+              if (playSuccess) {
+                setState((prev) => ({ ...prev, isPlaying: true }));
+                setLoadingPhase('idle');
+                setCurrentAudioSource('tidal');
+                
+                // Save to recently played for Deezer/Tidal mode
+                saveRecentlyPlayed();
+                
+                const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
+                  ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
+                  : tidalResult.quality || 'LOSSLESS';
+                addDebugLog('✅ Riproduzione Tidal', `Stream ${qualityInfo} avviato`, 'success');
+                return;
+              }
+              throw new Error('Play failed');
             } catch (playError) {
               // Ignore "interrupted" errors - this is normal when user switches tracks quickly
               if (playError instanceof Error && playError.name === 'AbortError') {
@@ -1052,10 +1079,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
               if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
 
-              if (trackMapping?.direct_link && audioRef.current) {
+              if (trackMapping?.direct_link) {
                 setLoadingPhase('loading');
-                audioRef.current.src = trackMapping.direct_link;
-                if (await safePlay(audioRef.current)) {
+                if (await playStreamUrl(trackMapping.direct_link)) {
                   setState((prev) => ({ ...prev, isPlaying: true }));
                 }
                 setLoadingPhase('idle');
@@ -1087,10 +1113,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setAlternativeStreams(result.streams);
               const selected = result.streams[0];
               setCurrentStreamId(selected.id);
-              if (audioRef.current && selected.streamUrl) {
+              if (selected.streamUrl) {
                 setLoadingPhase('loading');
-                audioRef.current.src = selected.streamUrl;
-                if (await safePlay(audioRef.current)) {
+                if (await playStreamUrl(selected.streamUrl)) {
                   setState((prev) => ({ ...prev, isPlaying: true }));
                 }
                 setLoadingPhase('idle');
@@ -1130,9 +1155,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                   directLink: streamUrl,
                 });
 
-                if (audioRef.current && streamUrl) {
-                  audioRef.current.src = streamUrl;
-                  if (await safePlay(audioRef.current)) {
+                if (streamUrl) {
+                  if (await playStreamUrl(streamUrl)) {
                     setState((prev) => ({ ...prev, isPlaying: true }));
                   }
                 }
@@ -1209,10 +1233,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setCurrentMappedFileId(fileId);
               addDebugLog('🎯 Mappatura RD trovata', `File ID: ${fileId}`, 'success');
 
-              if (directLink && audioRef.current) {
+              if (directLink) {
                 setLoadingPhase('loading');
-                audioRef.current.src = directLink;
-                if (await safePlay(audioRef.current)) {
+                if (await playStreamUrl(directLink)) {
                   setState((prev) => ({ ...prev, isPlaying: true }));
                 }
                 setLoadingPhase('idle');
@@ -1234,9 +1257,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 setAlternativeStreams(result.streams);
                 setCurrentStreamId(result.streams[0].id);
 
-                if (audioRef.current && streamUrl) {
-                  audioRef.current.src = streamUrl;
-                  if (await safePlay(audioRef.current)) {
+                if (streamUrl) {
+                  if (await playStreamUrl(streamUrl)) {
                     setState((prev) => ({ ...prev, isPlaying: true }));
                   }
 
@@ -1288,10 +1310,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setAlternativeStreams(result.streams);
           const selected = result.streams[0];
           setCurrentStreamId(selected.id);
-          if (audioRef.current && selected.streamUrl) {
+          if (selected.streamUrl) {
             setLoadingPhase('loading');
-            audioRef.current.src = selected.streamUrl;
-            if (await safePlay(audioRef.current)) {
+            if (await playStreamUrl(selected.streamUrl)) {
               setState((prev) => ({ ...prev, isPlaying: true }));
             }
             setLoadingPhase('idle');
@@ -1331,9 +1352,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               directLink: streamUrl,
             });
 
-            if (audioRef.current && streamUrl) {
-              audioRef.current.src = streamUrl;
-              if (await safePlay(audioRef.current)) {
+            if (streamUrl) {
+              if (await playStreamUrl(streamUrl)) {
                 setState((prev) => ({ ...prev, isPlaying: true }));
               }
             }
@@ -1375,10 +1395,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       addDebugLog,
       clearDebugLogs,
       credentials,
-      safePlay,
+      playStreamUrl,
       saveFileMapping,
       tryUnlockAudioFromUserGesture,
       user,
+      crossfade,
     ]
   );
 
@@ -1388,17 +1409,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setDownloadProgress(null);
       setDownloadStatus(null);
 
-      if (audioRef.current && stream.streamUrl) {
-        audioRef.current.src = stream.streamUrl;
-        audioRef.current.currentTime = 0;
-        if (await safePlay(audioRef.current)) {
+      if (stream.streamUrl) {
+        if (await playStreamUrl(stream.streamUrl)) {
           setState((prev) => ({ ...prev, isPlaying: true }));
         }
       }
 
       addDebugLog('Stream selezionato', `Riproduco: ${stream.title}`, 'success');
     },
-    [addDebugLog, safePlay]
+    [addDebugLog, playStreamUrl]
   );
 
   const selectTorrentFile = useCallback(
@@ -1419,9 +1438,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setCurrentStreamId(result.streams[0].id);
 
         const streamUrl = result.streams[0].streamUrl;
-        if (audioRef.current && streamUrl) {
-          audioRef.current.src = streamUrl;
-          if (await safePlay(audioRef.current)) {
+        if (streamUrl) {
+          if (await playStreamUrl(streamUrl)) {
             setState((prev) => ({ ...prev, isPlaying: true }));
           }
         }
@@ -1486,10 +1504,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (result.streams?.length) {
           const first = result.streams[0];
           setCurrentStreamId(first.id);
-          if (audioRef.current && first.streamUrl) {
+          if (first.streamUrl) {
             setLoadingPhase('loading');
-            audioRef.current.src = first.streamUrl;
-            if (await safePlay(audioRef.current)) {
+            if (await playStreamUrl(first.streamUrl)) {
               setState((prev) => ({ ...prev, isPlaying: true }));
             }
             setLoadingPhase('idle');
@@ -1504,7 +1521,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setIsSearchingStreams(false);
       }
     },
-    [addDebugLog, credentials, safePlay]
+    [addDebugLog, credentials, playStreamUrl]
   );
 
   const play = useCallback(
@@ -1528,10 +1545,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   );
 
   const pause = useCallback(() => {
-    if (useCrossfadeModeRef.current && crossfade.isPlaying()) {
+    if (useCrossfadeModeRef.current) {
       crossfade.pause();
+    } else {
+      audioRef.current?.pause();
     }
-    audioRef.current?.pause();
     setState((prev) => ({ ...prev, isPlaying: false }));
   }, [crossfade]);
 
@@ -1541,10 +1559,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [pause, play, state.isPlaying]);
 
   const seek = useCallback((time: number) => {
-    if (useCrossfadeModeRef.current && crossfade.getCurrentBuffer()) {
+    if (useCrossfadeModeRef.current) {
       crossfade.seek(time);
+    } else if (audioRef.current) {
+      audioRef.current.currentTime = time;
     }
-    if (audioRef.current) audioRef.current.currentTime = time;
     setState((prev) => ({ ...prev, progress: time }));
   }, [crossfade]);
 
@@ -1895,9 +1914,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setDownloadStatus(null);
             setLoadingPhase('idle');
 
-            if (audioRef.current && streamUrl) {
-              audioRef.current.src = streamUrl;
-              safePlay(audioRef.current).then((success) => {
+            if (streamUrl) {
+              playStreamUrl(streamUrl).then((success) => {
                 if (success) setState((prev) => ({ ...prev, isPlaying: true }));
               });
             }
