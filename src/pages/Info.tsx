@@ -58,7 +58,7 @@ const Info: React.FC = () => {
               </Button>
             </div>
             
-            {/* What's New in v1.6.2 */}
+            {/* What's New in v1.6.3 */}
             <div className="mt-4 pt-4 border-t border-border">
               <h3 className="text-sm font-medium text-foreground mb-2">
                 {isItalian ? "Novità della versione" : "What's new"}

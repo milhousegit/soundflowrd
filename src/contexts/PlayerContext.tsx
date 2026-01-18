@@ -726,15 +726,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     nextAudioRef.current.setAttribute('playsinline', '');
     nextAudioRef.current.setAttribute('webkit-playsinline', '');
 
-    // Create DUMMY audio element for Media Session with Web Audio API
-    // This keeps the media session alive and synced when using AudioContext
-    dummyAudioRef.current = new Audio();
-    dummyAudioRef.current.volume = 0;
-    dummyAudioRef.current.loop = true;
-    dummyAudioRef.current.setAttribute('playsinline', '');
-    dummyAudioRef.current.setAttribute('webkit-playsinline', '');
-    // Use a silent audio data URI (1 second of silence)
-    dummyAudioRef.current.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+    // DUMMY AUDIO: Optional - for keeping Media Session alive on iOS with Web Audio
+    // Only create if needed to avoid potential interference with main playback
+    if (isIOS() && isPWA()) {
+      dummyAudioRef.current = new Audio();
+      dummyAudioRef.current.volume = 0.001; // Near-silent but not muted (iOS requires audible audio)
+      dummyAudioRef.current.loop = true;
+      dummyAudioRef.current.setAttribute('playsinline', '');
+      dummyAudioRef.current.setAttribute('webkit-playsinline', '');
+    }
+    
     const audio = audioRef.current;
     const nextAudio = nextAudioRef.current;
 
@@ -961,31 +962,22 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     window.addEventListener('check-crossfade', handleCheckCrossfade);
 
     if ('mediaSession' in navigator) {
-      const dummyAudio = dummyAudioRef.current;
-      
-      // Start dummy audio to keep Media Session alive (especially for Web Audio API)
-      const startDummyAudio = async () => {
-        if (dummyAudio && dummyAudio.paused) {
-          try {
-            await dummyAudio.play();
-            console.log('[MediaSession] Dummy audio started for session persistence');
-          } catch (e) {
-            // Ignore - user interaction required
-          }
-        }
-      };
-      
       navigator.mediaSession.setActionHandler('play', async () => {
+        console.log('[MediaSession] play triggered');
         // Resume AudioContext if using crossfade
         if (usingAudioContextCrossfadeRef.current) {
           await crossfadeRef.current?.resume?.();
         }
-        await audio.play();
-        await startDummyAudio();
-        setState((prev) => ({ ...prev, isPlaying: true }));
+        try {
+          await audio.play();
+          setState((prev) => ({ ...prev, isPlaying: true }));
+        } catch (e) {
+          console.log('[MediaSession] play failed:', e);
+        }
       });
       
       navigator.mediaSession.setActionHandler('pause', () => {
+        console.log('[MediaSession] pause triggered');
         // Pause AudioContext if using crossfade
         if (usingAudioContextCrossfadeRef.current) {
           crossfadeRef.current?.pause?.();
@@ -1197,9 +1189,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const playTrack = useCallback(
     async (track: Track, queue?: Track[]) => {
+      console.log('[playTrack] Starting playback:', track.title, 'by', track.artist);
       tryUnlockAudioFromUserGesture();
 
       if (audioRef.current) {
+        console.log('[playTrack] Stopping current audio');
         audioRef.current.pause();
         audioRef.current.src = '';
       }
@@ -1227,15 +1221,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Play silent placeholder on iOS (not on CarPlay/Bluetooth) to maintain session
       await iosAudio.playPlaceholder();
       
-      // Start dummy audio to keep Media Session alive (especially important for iOS PWA)
-      if (dummyAudioRef.current && isIOS() && isPWA()) {
-        try {
-          await dummyAudioRef.current.play();
-          console.log('[playTrack] Dummy audio started for Media Session persistence');
-        } catch (e) {
-          // Ignore - will be started on user interaction via Media Session
-        }
-      }
+      // Note: Dummy audio for Media Session is handled by the keep-alive system
+      // Don't start it here to avoid interference with main playback
 
       // REMOVED: Automatic metadata fetch - user can manually fix metadata via Debug Modal if needed
       // Use original track for playback
