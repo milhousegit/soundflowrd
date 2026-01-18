@@ -363,20 +363,59 @@ export const useIOSAudioSession = () => {
   }, [addLog]);
 
   /**
-   * Keep the audio session alive - call when playback starts
-   * Throttled and CarPlay-aware to prevent audio stuttering
-   */
-  /**
-   * Keep the audio session alive - SIMPLIFIED for CarPlay compatibility
-   * Heavily throttled and completely skipped on external devices
+   * Keep the audio session alive using an "audible heartbeat"
+   * Plays a very low frequency tone (50Hz) at minimal volume to prevent iOS from suspending AudioContext
+   * This is necessary for Web Audio API playback to continue in background
    */
   const keepAlive = useCallback(() => {
-    // COMPLETELY DISABLED - this function is a no-op
-    // The silent audio loop was causing CarPlay stuttering every ~1 second
-    // The main audio element handles its own playback session
-    // External audio routing (CarPlay, Bluetooth) manages audio sessions automatically
-    return;
-  }, []);
+    // Skip on external devices - they manage audio sessions automatically
+    if (isExternalDeviceRef.current) {
+      return;
+    }
+    
+    // Only needed on iOS PWA with Web Audio
+    if (!isIOS() || !isPWA()) {
+      return;
+    }
+    
+    // Throttle to every 5 seconds
+    const now = Date.now();
+    if (now - lastKeepAliveRef.current < 5000) {
+      return;
+    }
+    lastKeepAliveRef.current = now;
+    
+    try {
+      const ctx = audioContextRef.current;
+      if (!ctx) return;
+      
+      // Resume if suspended
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      
+      // Create a short "audible heartbeat" - 50Hz tone at very low volume
+      // This is below human hearing threshold but iOS still considers it "audio activity"
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(50, ctx.currentTime); // 50Hz - very low, almost inaudible
+      
+      gainNode.gain.setValueAtTime(0.02, ctx.currentTime); // Very quiet
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      // Play for 100ms
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.1);
+      
+      addLog('info', 'Heartbeat pulse sent');
+    } catch (e) {
+      // Silently fail
+    }
+  }, [addLog]);
 
   /**
    * Stop keep-alive (when playback stops completely)
@@ -463,36 +502,61 @@ export const useIOSAudioSession = () => {
     }
   }, [addLog]);
 
-  // Listen for visibility changes - SIMPLIFIED to reduce interference
-  // On CarPlay/Bluetooth, we do NOTHING - let the system handle audio
+  // Listen for visibility changes - trigger keepAlive on BOTH hidden and visible
+  // On background, we need to pump the heartbeat to prevent iOS from suspending AudioContext
   useEffect(() => {
     const handleVisibilityChange = () => {
-      // Only log on non-external routing to reduce noise
-      if (!isExternalDeviceRef.current) {
-        addLog('info', 'Visibility changed', `state: ${document.visibilityState}`);
-        
-        // Only call keep-alive if not on external routing and page is visible
-        if (document.visibilityState === 'visible') {
+      // Skip on external routing
+      if (isExternalDeviceRef.current) return;
+      
+      addLog('info', 'Visibility changed', `state: ${document.visibilityState}`);
+      
+      // CRITICAL: Call keepAlive on BOTH transitions
+      // When going to background - pump heartbeat to prevent suspension
+      // When coming to foreground - resume AudioContext if suspended
+      keepAlive();
+      
+      // If going to background, start a temporary aggressive heartbeat
+      if (document.visibilityState === 'hidden' && isIOS() && isPWA()) {
+        // Pump heartbeat more aggressively for the first 10 seconds of background
+        let pulseCount = 0;
+        const backgroundHeartbeat = setInterval(() => {
+          if (document.visibilityState === 'visible' || pulseCount >= 4) {
+            clearInterval(backgroundHeartbeat);
+            return;
+          }
+          // Force keepAlive ignoring throttle
+          lastKeepAliveRef.current = 0;
           keepAlive();
-        }
+          pulseCount++;
+        }, 2500); // Every 2.5 seconds for first 10 seconds
       }
     };
 
     const handlePageShow = (e: PageTransitionEvent) => {
-      if (!isExternalDeviceRef.current) {
-        addLog('info', 'pageshow event', `persisted: ${e.persisted}`);
-        if (e.persisted) {
-          keepAlive();
-        }
-      }
+      if (isExternalDeviceRef.current) return;
+      
+      addLog('info', 'pageshow event', `persisted: ${e.persisted}`);
+      keepAlive();
+    };
+
+    const handlePageHide = () => {
+      if (isExternalDeviceRef.current) return;
+      
+      addLog('info', 'pagehide event');
+      // Force keepAlive
+      lastKeepAliveRef.current = 0;
+      keepAlive();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('pagehide', handlePageHide);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('pagehide', handlePageHide);
     };
   }, [addLog, keepAlive]);
 
