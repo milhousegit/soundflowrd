@@ -692,6 +692,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, []);
 
   // Crossfade time sync - update progress from Web Audio when crossfade is active
+  // Also includes iOS heartbeat keepAlive for background playback
   useEffect(() => {
     if (!useCrossfadeMode) return;
     
@@ -717,11 +718,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             // Ignore
           }
         }
+        
+        // iOS background keepAlive heartbeat - call every 5 seconds during playback
+        iosAudio.keepAlive();
       }
     }, 250); // Update 4x per second
     
     return () => clearInterval(syncInterval);
-  }, [useCrossfadeMode, crossfade]);
+  }, [useCrossfadeMode, crossfade, iosAudio]);
 
   // Simplified unlock - only quickUnlock, no aggressive keepAlive
   const tryUnlockAudioFromUserGesture = useCallback(() => {
