@@ -26,7 +26,6 @@ import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
 import DeezerPlaylist from "@/pages/DeezerPlaylist";
-import YouTubePlaylist from "@/pages/YouTubePlaylist";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -86,7 +85,6 @@ const AppRoutes = () => {
         <Route path="album/:id" element={<Album />} />
         <Route path="playlist/:id" element={<Playlist />} />
         <Route path="deezer-playlist/:id" element={<DeezerPlaylist />} />
-        <Route path="youtube-playlist/:id" element={<YouTubePlaylist />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
@@ -103,27 +101,27 @@ const AppContent = () => {
       <PremiumExpiredBanner />
       <LandscapeBlocker />
       <AutoModePrompt />
-      <AppRoutes />
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
     </>
   );
 };
 
 const App = () => (
-  <BrowserRouter>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <SettingsProvider>
-          <PlayerProvider>
-            <AutoModeProvider>
-              <TooltipProvider>
-                <AppContent />
-              </TooltipProvider>
-            </AutoModeProvider>
-          </PlayerProvider>
-        </SettingsProvider>
-      </AuthProvider>
-    </QueryClientProvider>
-  </BrowserRouter>
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <SettingsProvider>
+        <PlayerProvider>
+          <AutoModeProvider>
+            <TooltipProvider>
+              <AppContent />
+            </TooltipProvider>
+          </AutoModeProvider>
+        </PlayerProvider>
+      </SettingsProvider>
+    </AuthProvider>
+  </QueryClientProvider>
 );
 
 export default App;

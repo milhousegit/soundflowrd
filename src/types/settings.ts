@@ -11,7 +11,6 @@ export interface AppSettings {
   };
   audioQuality: 'high' | 'medium' | 'low';
   crossfade: number; // seconds, 0 = off
-  crossfadeEnabled: boolean; // dual-audio crossfade for seamless transitions (iOS recommended)
   realDebridApiKey?: string;
   audioSourceMode: AudioSourceMode; // 'deezer_priority' = Deezer (Lucida), 'rd_priority' = Real-Debrid
 }
@@ -27,7 +26,6 @@ export const defaultSettings: AppSettings = {
   },
   audioQuality: 'high',
   crossfade: 0,
-  crossfadeEnabled: false, // Default OFF
   realDebridApiKey: undefined,
   audioSourceMode: 'deezer_priority', // Default to Scraping Ponte (no RD API key required)
 };

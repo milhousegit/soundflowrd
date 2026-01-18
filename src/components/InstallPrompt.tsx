@@ -15,10 +15,8 @@ const InstallPrompt: React.FC = () => {
   const { t } = useSettings();
 
   useEffect(() => {
-    // Check if already installed (standalone or minimal-ui)
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                         window.matchMedia('(display-mode: minimal-ui)').matches ||
-                         (window.navigator as any).standalone === true; // iOS Safari standalone
+    // Check if already installed
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
     if (isStandalone) return;
 
     // Check if dismissed recently
@@ -29,13 +27,12 @@ const InstallPrompt: React.FC = () => {
       if (Date.now() - dismissedTime < 7 * 24 * 60 * 60 * 1000) return;
     }
 
-    // Detect iOS Safari
+    // Detect iOS
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     setIsIOS(isIOSDevice);
 
-    // Show iOS/Safari prompt after delay (Safari doesn't support beforeinstallprompt)
-    if (isIOSDevice || (isSafari && !isStandalone)) {
+    // Show iOS prompt after delay
+    if (isIOSDevice) {
       const timer = setTimeout(() => setShowPrompt(true), 3000);
       return () => clearTimeout(timer);
     }
@@ -70,10 +67,7 @@ const InstallPrompt: React.FC = () => {
   if (!showPrompt) return null;
 
   return (
-    <div 
-      className="fixed left-4 right-4 z-[100] animate-slide-up md:left-auto md:right-4 md:max-w-sm"
-      style={{ top: 'max(env(safe-area-inset-top, 0px), 16px)' }}
-    >
+    <div className="fixed top-4 left-4 right-4 z-[100] animate-slide-up md:left-auto md:right-4 md:max-w-sm">
       <div className="glass rounded-xl p-4 shadow-lg border border-border">
         <div className="flex items-start gap-3">
           <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">

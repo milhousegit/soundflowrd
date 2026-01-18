@@ -106,16 +106,9 @@ const AutoSearchView: React.FC = () => {
   };
 
   const handlePlaylistClick = (playlist: DeezerPlaylist) => {
-    // Determine the type based on source
-    const type: DetailType = playlist.source === 'youtube' 
-      ? 'youtube-playlist' 
-      : playlist.source === 'local' || playlist.isDeezerPlaylist === false
-        ? 'playlist'
-        : 'deezer-playlist';
-    
     setSelectedDetail({
-      type,
-      id: playlist.id,
+      type: 'playlist',
+      id: `deezer-${playlist.id}`,
       title: playlist.title,
       subtitle: `${playlist.trackCount} brani`,
       coverUrl: playlist.coverUrl
@@ -248,22 +241,16 @@ const AutoSearchView: React.FC = () => {
               <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                 {results.playlists.slice(0, 12).map((playlist) => (
                   <button
-                    key={`${playlist.source || 'deezer'}-${playlist.id}`}
+                    key={playlist.id}
                     onClick={() => handlePlaylistClick(playlist)}
                     className="flex flex-col items-center p-2 rounded-lg bg-card hover:bg-secondary transition-colors text-center"
                   >
-                    <div className="w-full aspect-square rounded-md overflow-hidden bg-muted mb-2 relative">
+                    <div className="w-full aspect-square rounded-md overflow-hidden bg-muted mb-2">
                       {playlist.coverUrl ? (
                         <img src={playlist.coverUrl} alt={playlist.title} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <ListMusic className="w-8 h-8 text-muted-foreground" />
-                        </div>
-                      )}
-                      {/* YouTube badge */}
-                      {playlist.source === 'youtube' && (
-                        <div className="absolute top-1 right-1 bg-red-600 text-white text-[8px] font-bold px-1 py-0.5 rounded">
-                          YT
                         </div>
                       )}
                     </div>

@@ -24,6 +24,3 @@ schedule = "0 8 * * *"
 
 [functions.send-broadcast-notification]
 verify_jwt = false
-
-[functions.youtube-music]
-verify_jwt = false

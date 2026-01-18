@@ -251,7 +251,6 @@ export interface DeezerPlaylist {
   trackCount: number;
   creator?: string;
   isDeezerPlaylist?: boolean;
-  source?: 'deezer' | 'youtube' | 'local';
 }
 
 export async function searchDeezerPlaylists(query: string): Promise<DeezerPlaylist[]> {
@@ -260,7 +259,7 @@ export async function searchDeezerPlaylists(query: string): Promise<DeezerPlayli
   });
 
   if (error) throw error;
-  return (data || []).map((p: DeezerPlaylist) => ({ ...p, source: 'deezer' as const }));
+  return data || [];
 }
 
 // Search public playlists from local database
@@ -287,23 +286,18 @@ export async function searchLocalPlaylists(query: string): Promise<DeezerPlaylis
     trackCount: p.track_count || 0,
     creator: 'Utente',
     isDeezerPlaylist: false,
-    source: 'local' as const,
   }));
 }
 
-// Import YouTube Music search
-import { searchYouTubePlaylists, getYouTubeArtistPlaylists } from './youtube-music';
-
-// Combined search: local public playlists + Deezer playlists + YouTube Music playlists
+// Combined search: local public playlists + Deezer playlists
 export async function searchPlaylists(query: string): Promise<DeezerPlaylist[]> {
-  const [localPlaylists, deezerPlaylists, youtubePlaylists] = await Promise.all([
+  const [localPlaylists, deezerPlaylists] = await Promise.all([
     searchLocalPlaylists(query).catch(() => []),
     searchDeezerPlaylists(query).catch(() => []),
-    searchYouTubePlaylists(query).catch(() => []),
   ]);
 
-  // Local playlists first, then Deezer, then YouTube
-  return [...localPlaylists, ...deezerPlaylists, ...youtubePlaylists];
+  // Local playlists first, then Deezer ones
+  return [...localPlaylists, ...deezerPlaylists];
 }
 
 export async function getDeezerPlaylist(id: string): Promise<DeezerPlaylist & { tracks: Track[] }> {
@@ -316,22 +310,13 @@ export async function getDeezerPlaylist(id: string): Promise<DeezerPlaylist & { 
 }
 
 export async function getArtistPlaylists(artistName: string, artistId?: string): Promise<DeezerPlaylist[]> {
-  // Fetch from both Deezer and YouTube Music in parallel
-  const [deezerResult, youtubeResult] = await Promise.all([
-    supabase.functions.invoke('deezer', {
-      body: { action: 'get-artist-playlists', query: artistName },
-    }).catch(() => ({ data: [], error: null })),
-    getYouTubeArtistPlaylists(artistName).catch(() => []),
-  ]);
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-artist-playlists', query: artistName },
+  });
 
-  // Add source to Deezer playlists
-  let playlists: DeezerPlaylist[] = (deezerResult.data || []).map((p: DeezerPlaylist) => ({
-    ...p,
-    source: 'deezer' as const,
-  }));
+  if (error) throw error;
   
-  // Add YouTube playlists
-  playlists = [...playlists, ...youtubeResult];
+  let playlists: DeezerPlaylist[] = data || [];
   
   // If artistId is provided, check for merged artists and fetch their playlists too
   if (artistId) {
@@ -347,29 +332,20 @@ export async function getArtistPlaylists(artistName: string, artistId?: string):
       
       const mergedNames = (mergeData as { merged_artist_name: string }[] || []).map(m => m.merged_artist_name);
       
-      // Fetch playlists for each merged artist (both Deezer and YouTube)
+      // Fetch playlists for each merged artist
       for (const mergedName of mergedNames) {
         try {
-          const [mergedDeezer, mergedYoutube] = await Promise.all([
-            supabase.functions.invoke('deezer', {
-              body: { action: 'get-artist-playlists', query: mergedName },
-            }).catch(() => ({ data: [] })),
-            getYouTubeArtistPlaylists(mergedName).catch(() => []),
-          ]);
+          const { data: mergedPlaylists } = await supabase.functions.invoke('deezer', {
+            body: { action: 'get-artist-playlists', query: mergedName },
+          });
           
-          const mergedPlaylists = [
-            ...(mergedDeezer.data || []).map((p: DeezerPlaylist) => ({ ...p, source: 'deezer' as const })),
-            ...mergedYoutube,
-          ];
-          
-          if (mergedPlaylists.length) {
-            // Add unique playlists (by ID + source to avoid conflicts)
-            const existingKeys = new Set(playlists.map(p => `${p.source}-${p.id}`));
+          if (mergedPlaylists?.length) {
+            // Add unique playlists (by ID)
+            const existingIds = new Set(playlists.map(p => p.id));
             for (const playlist of mergedPlaylists) {
-              const key = `${playlist.source}-${playlist.id}`;
-              if (!existingKeys.has(key)) {
+              if (!existingIds.has(playlist.id)) {
                 playlists.push(playlist);
-                existingKeys.add(key);
+                existingIds.add(playlist.id);
               }
             }
           }

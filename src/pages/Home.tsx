@@ -107,12 +107,6 @@ const Home: React.FC = () => {
     return `newReleases_${artistIds.sort().join('_')}`;
   };
 
-  // Cache key for artists based on favorite artist IDs
-  const getArtistsCacheKey = (artistIds: string[]): string => {
-    if (artistIds.length === 0) return 'artistsForYou_generic';
-    return `artistsForYou_${artistIds.slice(0, 3).sort().join('_')}`;
-  };
-
   useEffect(() => {
     // Wait until we know if user has favorites before fetching
     if (isLoadingFavorites) return;
@@ -224,29 +218,11 @@ const Home: React.FC = () => {
     if (isLoadingFavorites) return;
     
     const fetchArtistsForYou = async () => {
-      const favoriteArtistItems = getFavoritesByType('artist').slice(0, 3);
-      const artistIds = favoriteArtistItems.map(f => f.item_id);
-      const cacheKey = getArtistsCacheKey(artistIds);
-      
-      // Try to load from sessionStorage first for instant display
-      try {
-        const cached = sessionStorage.getItem(cacheKey);
-        if (cached) {
-          const { data, timestamp } = JSON.parse(cached);
-          const cacheAge = Date.now() - timestamp;
-          // Use cache if less than 30 minutes old
-          if (cacheAge < 30 * 60 * 1000 && data?.length > 0) {
-            setPopularArtists(data);
-            setIsLoadingArtists(false);
-            return;
-          }
-        }
-      } catch (e) {
-        console.error('Error reading artists cache:', e);
-      }
-      
       setIsLoadingArtists(true);
       try {
+        // Get favorite artists (up to 3)
+        const favoriteArtistItems = getFavoritesByType('artist').slice(0, 3);
+        
         if (favoriteArtistItems.length > 0) {
           // We have favorite artists - show them + their related artists
           const favoriteArtistsData: Artist[] = [];
@@ -282,33 +258,12 @@ const Home: React.FC = () => {
           }
           
           // Combine: favorite artists first, then related artists
-          const combined = [...favoriteArtistsData, ...relatedArtistsData].slice(0, 12);
-          setPopularArtists(combined);
-          
-          // Cache the results
-          try {
-            sessionStorage.setItem(cacheKey, JSON.stringify({
-              data: combined,
-              timestamp: Date.now()
-            }));
-          } catch (e) {
-            console.error('Error caching artists:', e);
-          }
+          const combined = [...favoriteArtistsData, ...relatedArtistsData];
+          setPopularArtists(combined.slice(0, 12));
         } else {
           // No favorite artists - fall back to popular artists
           const artists = await getPopularArtists();
-          const finalArtists = artists.slice(0, 12);
-          setPopularArtists(finalArtists);
-          
-          // Cache generic artists too
-          try {
-            sessionStorage.setItem(cacheKey, JSON.stringify({
-              data: finalArtists,
-              timestamp: Date.now()
-            }));
-          } catch (e) {
-            console.error('Error caching artists:', e);
-          }
+          setPopularArtists(artists.slice(0, 12));
         }
       } catch (error) {
         console.error('Failed to fetch artists for you:', error);

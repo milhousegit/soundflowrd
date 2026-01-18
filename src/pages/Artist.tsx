@@ -313,16 +313,9 @@ const Artist: React.FC = () => {
             <div className="flex gap-3 md:gap-4 pb-4">
               {visiblePlaylists.map((playlist) => (
                 <div 
-                  key={`${playlist.source || 'deezer'}-${playlist.id}`} 
+                  key={playlist.id} 
                   className="flex-shrink-0 w-32 md:w-40"
-                  onClick={() => {
-                    // Navigate based on source
-                    if (playlist.source === 'youtube') {
-                      navigate(`/youtube-playlist/${playlist.id}`);
-                    } else {
-                      navigate(`/deezer-playlist/${playlist.id}`);
-                    }
-                  }}
+                  onClick={() => navigate(`/deezer-playlist/${playlist.id}`)}
                 >
                   <div className="group relative cursor-pointer">
                     <div className="relative aspect-square rounded-lg overflow-hidden bg-muted mb-2">
@@ -335,12 +328,6 @@ const Artist: React.FC = () => {
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Music className="w-8 h-8 text-muted-foreground" />
-                        </div>
-                      )}
-                      {/* YouTube badge */}
-                      {playlist.source === 'youtube' && (
-                        <div className="absolute top-1 right-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
-                          YT
                         </div>
                       )}
                     </div>

@@ -34,7 +34,7 @@ const Info: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">SoundFlow</p>
-                <p className="text-sm text-muted-foreground">v1.6.3</p>
+                <p className="text-sm text-muted-foreground">v1.3</p>
               </div>
               <Button variant="outline" className="gap-2" onClick={async () => {
               try {
@@ -58,7 +58,7 @@ const Info: React.FC = () => {
               </Button>
             </div>
             
-            {/* What's New in v1.6.3 */}
+            {/* What's New in v1.2 */}
             <div className="mt-4 pt-4 border-t border-border">
               <h3 className="text-sm font-medium text-foreground mb-2">
                 {isItalian ? "Novità della versione" : "What's new"}
@@ -66,15 +66,15 @@ const Info: React.FC = () => {
               <ul className="text-sm text-muted-foreground space-y-1.5">
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "Preload AudioContext più aggressivo e sincrono per background stabile" : "More aggressive and synchronous AudioContext preload for stable background"}
+                  {isItalian ? "Autoplay: a fine coda la musica continua con brani simili" : "Autoplay: music continues with similar tracks at end of queue"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Inizializzazione AudioContext automatica durante il preload" : "Automatic AudioContext initialization during preload"}
+                  {isItalian ? "Risolto problema audio a scatti con CarPlay e dispositivi Bluetooth" : "Fixed stuttering audio with CarPlay and Bluetooth devices"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Logging dettagliato per debug transizioni CarPlay" : "Detailed logging for CarPlay transition debugging"}
+                  {isItalian ? "Semplificato sistema di riproduzione per maggiore stabilità" : "Simplified playback system for better stability"}
                 </li>
               </ul>
             </div>
