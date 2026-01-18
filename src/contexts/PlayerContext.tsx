@@ -2530,6 +2530,7 @@ export const usePlayer = () => {
         totalTracks: 0,
         fetchedCount: 0,
         bufferReadyCount: 0,
+        swCachedCount: 0,
         currentlyFetching: null,
         lastFetchedIndex: -1,
         isActive: false,
