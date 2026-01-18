@@ -15,8 +15,10 @@ const InstallPrompt: React.FC = () => {
   const { t } = useSettings();
 
   useEffect(() => {
-    // Check if already installed
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    // Check if already installed - support both standalone and minimal-ui modes
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                        window.matchMedia('(display-mode: minimal-ui)').matches ||
+                        (window.navigator as any).standalone === true;
     if (isStandalone) return;
 
     // Check if dismissed recently
