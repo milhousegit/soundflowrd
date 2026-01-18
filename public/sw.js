@@ -1,7 +1,6 @@
-// Service Worker for Push Notifications, Offline Support & Audio Caching - v0.14
-const CACHE_NAME = 'soundflow-v0.14';
-const APP_SHELL_CACHE = 'soundflow-app-shell-v0.14';
-const AUDIO_CACHE = 'soundflow-audio-v1';
+// Service Worker for Push Notifications and Offline Support - v0.13
+const CACHE_NAME = 'soundflow-v0.13';
+const APP_SHELL_CACHE = 'soundflow-app-shell-v0.13';
 
 // App shell files to cache for offline access
 const APP_SHELL_FILES = [
@@ -15,11 +14,8 @@ const APP_SHELL_FILES = [
 // Dynamic assets that should be cached when fetched
 const CACHEABLE_EXTENSIONS = ['.js', '.css', '.woff2', '.woff', '.ttf', '.png', '.jpg', '.jpeg', '.svg', '.ico'];
 
-// Audio file extensions to cache
-const AUDIO_EXTENSIONS = ['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.wav'];
-
 self.addEventListener('install', (event) => {
-  console.log('[SW] Service Worker v0.14 installed');
+  console.log('[SW] Service Worker v0.13 installed');
   
   event.waitUntil(
     Promise.all([
@@ -27,7 +23,7 @@ self.addEventListener('install', (event) => {
       caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames
-            .filter((name) => name !== CACHE_NAME && name !== APP_SHELL_CACHE && name !== AUDIO_CACHE)
+            .filter((name) => name !== CACHE_NAME && name !== APP_SHELL_CACHE)
             .map((name) => {
               console.log('[SW] Deleting old cache:', name);
               return caches.delete(name);
@@ -48,7 +44,7 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Service Worker v0.14 activated');
+  console.log('[SW] Service Worker v0.13 activated');
   event.waitUntil(clients.claim());
 });
 
@@ -59,82 +55,7 @@ const shouldCache = (url) => {
          pathname.includes('/assets/');
 };
 
-// Helper to check if URL is audio
-const isAudioUrl = (url) => {
-  const pathname = new URL(url).pathname.toLowerCase();
-  // Check for audio extensions or streaming domains
-  return AUDIO_EXTENSIONS.some(ext => pathname.includes(ext)) ||
-         url.includes('cdn') ||
-         url.includes('stream') ||
-         url.includes('audio') ||
-         url.includes('media');
-};
-
-// Listen for messages from the app (for audio caching)
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'CACHE_AUDIO') {
-    const { url, trackId } = event.data;
-    console.log('[SW] Caching audio for track:', trackId);
-    
-    event.waitUntil(
-      caches.open(AUDIO_CACHE).then(async (cache) => {
-        try {
-          // Check if already cached
-          const existing = await cache.match(url);
-          if (existing) {
-            console.log('[SW] Audio already cached:', trackId);
-            return;
-          }
-          
-          // Fetch and cache
-          const response = await fetch(url, { mode: 'cors' });
-          if (response.ok) {
-            await cache.put(url, response.clone());
-            console.log('[SW] Audio cached successfully:', trackId);
-            
-            // Notify the app
-            const clients = await self.clients.matchAll();
-            clients.forEach(client => {
-              client.postMessage({
-                type: 'AUDIO_CACHED',
-                trackId,
-                url,
-              });
-            });
-          }
-        } catch (error) {
-          console.log('[SW] Failed to cache audio:', trackId, error);
-        }
-      })
-    );
-  }
-  
-  if (event.data && event.data.type === 'GET_CACHED_AUDIO') {
-    const { url } = event.data;
-    
-    event.waitUntil(
-      caches.open(AUDIO_CACHE).then(async (cache) => {
-        const cached = await cache.match(url);
-        const clients = await self.clients.matchAll();
-        
-        clients.forEach(client => {
-          client.postMessage({
-            type: 'CACHED_AUDIO_RESULT',
-            url,
-            isCached: !!cached,
-          });
-        });
-      })
-    );
-  }
-  
-  if (event.data && event.data.type === 'CLEAR_AUDIO_CACHE') {
-    console.log('[SW] Clearing audio cache');
-    event.waitUntil(caches.delete(AUDIO_CACHE));
-  }
-});
-
-// Fetch handler with network-first for HTML, cache-first for assets and audio
+// Fetch handler with network-first for HTML, cache-first for assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -142,34 +63,7 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return;
   
-  // Handle audio requests - cache first for instant playback
-  if (isAudioUrl(request.url)) {
-    event.respondWith(
-      caches.open(AUDIO_CACHE).then(async (cache) => {
-        const cached = await cache.match(request);
-        if (cached) {
-          console.log('[SW] Serving audio from cache');
-          return cached;
-        }
-        
-        // Not cached, fetch from network
-        try {
-          const response = await fetch(request);
-          if (response.ok) {
-            // Cache the audio for future use (clone response)
-            cache.put(request, response.clone()).catch(() => {});
-          }
-          return response;
-        } catch (error) {
-          console.log('[SW] Audio fetch failed:', error);
-          return new Response('Audio not available offline', { status: 503 });
-        }
-      })
-    );
-    return;
-  }
-  
-  // Skip external requests (except audio which is handled above)
+  // Skip external requests
   if (!url.origin.includes(self.location.origin)) return;
   
   // Skip API and Supabase requests

@@ -571,18 +571,11 @@ export const useCrossfade = () => {
     
     return {
       isActive: isActiveRef.current,
-      progress: duration > 0 ? currentTime / duration : 0,
+      progress: isCrossfadingRef.current ? 0 : 0,
       currentTrackDuration: duration,
       remainingTime: Math.max(0, duration - currentTime),
     };
   }, [getCurrentTime]);
-  
-  /**
-   * Get current buffer duration (for Media Session)
-   */
-  const getCurrentDuration = useCallback((): number => {
-    return currentBufferRef.current?.duration || 0;
-  }, []);
   
   /**
    * Get logs
@@ -631,7 +624,6 @@ export const useCrossfade = () => {
     
     // State
     getCurrentTime,
-    getCurrentDuration,
     getState,
     isSupported,
     isCrossfading: () => isCrossfadingRef.current,

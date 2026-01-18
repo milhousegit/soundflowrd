@@ -34,7 +34,7 @@ const Info: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">SoundFlow</p>
-                <p className="text-sm text-muted-foreground">v1.6.3</p>
+                <p className="text-sm text-muted-foreground">v1.6.2</p>
               </div>
               <Button variant="outline" className="gap-2" onClick={async () => {
               try {
@@ -58,7 +58,7 @@ const Info: React.FC = () => {
               </Button>
             </div>
             
-            {/* What's New in v1.6.3 */}
+            {/* What's New in v1.6.2 */}
             <div className="mt-4 pt-4 border-t border-border">
               <h3 className="text-sm font-medium text-foreground mb-2">
                 {isItalian ? "Novità della versione" : "What's new"}

@@ -1,5 +1,5 @@
 // Hook for prefetching entire queue for iOS background playback
-// Uses Service Worker cache + AudioBuffers for gapless transitions
+// Stores AudioBuffers for gapless transitions even when app is in background
 
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { Track } from '@/types/music';
@@ -10,7 +10,6 @@ export interface PrefetchedTrack {
   trackId: string;
   url: string;
   buffer?: AudioBuffer;
-  swCached?: boolean;
   fetchedAt: number;
 }
 
@@ -18,7 +17,6 @@ export interface QueuePrefetchState {
   totalTracks: number;
   fetchedCount: number;
   bufferReadyCount: number;
-  swCachedCount: number;
   currentlyFetching: string | null;
   lastFetchedIndex: number;
   isActive: boolean;
@@ -28,56 +26,6 @@ export interface QueuePrefetchState {
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent);
 const isPWA = () => window.matchMedia('(display-mode: standalone)').matches || 
                     (window.navigator as any).standalone === true;
-
-// Audio cache name (must match sw.js)
-const AUDIO_CACHE = 'soundflow-audio-v1';
-
-// Helper to cache audio in Service Worker
-const cacheAudioInSW = async (url: string, trackId: string): Promise<boolean> => {
-  try {
-    // Check if SW is available
-    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
-      return false;
-    }
-    
-    // Send message to SW to cache
-    navigator.serviceWorker.controller.postMessage({
-      type: 'CACHE_AUDIO',
-      url,
-      trackId,
-    });
-    
-    return true;
-  } catch (e) {
-    console.log('[QueuePrefetch] SW cache failed:', e);
-    return false;
-  }
-};
-
-// Helper to check if audio is cached in SW
-const isAudioCachedInSW = async (url: string): Promise<boolean> => {
-  try {
-    const cache = await caches.open(AUDIO_CACHE);
-    const cached = await cache.match(url);
-    return !!cached;
-  } catch (e) {
-    return false;
-  }
-};
-
-// Helper to load audio from SW cache directly
-const loadFromSWCache = async (url: string): Promise<ArrayBuffer | null> => {
-  try {
-    const cache = await caches.open(AUDIO_CACHE);
-    const cached = await cache.match(url);
-    if (cached) {
-      return await cached.arrayBuffer();
-    }
-    return null;
-  } catch (e) {
-    return null;
-  }
-};
 
 export const useQueuePrefetch = () => {
   const { settings } = useSettings();
@@ -98,7 +46,6 @@ export const useQueuePrefetch = () => {
     totalTracks: 0,
     fetchedCount: 0,
     bufferReadyCount: 0,
-    swCachedCount: 0,
     currentlyFetching: null,
     lastFetchedIndex: -1,
     isActive: false,
@@ -129,9 +76,10 @@ export const useQueuePrefetch = () => {
     }
   }, []);
 
-  // Fetch a single track URL and decode to buffer + cache in SW
+  // Fetch a single track URL and optionally decode to buffer
   const fetchTrack = useCallback(async (
-    track: Track
+    track: Track,
+    decodeBuffer: boolean = true
   ): Promise<PrefetchedTrack | null> => {
     try {
       const tidalQuality = mapQualityToTidal(settings.audioQuality);
@@ -148,44 +96,22 @@ export const useQueuePrefetch = () => {
         fetchedAt: Date.now(),
       };
       
-      // On iOS PWA: fetch, cache in SW, and decode to AudioBuffer
-      if (isIOS() && isPWA()) {
+      // Decode to AudioBuffer for gapless playback
+      if (decodeBuffer && isIOS() && isPWA()) {
         const ctx = await initAudioContext();
-        
-        try {
-          // First check if already in SW cache
-          let arrayBuffer = await loadFromSWCache(result.streamUrl);
-          
-          if (!arrayBuffer) {
-            // Fetch from network
+        if (ctx) {
+          try {
             const response = await fetch(result.streamUrl);
             if (response.ok) {
-              arrayBuffer = await response.arrayBuffer();
-              
-              // Cache in SW (async, don't wait)
-              cacheAudioInSW(result.streamUrl, track.id).then(cached => {
-                if (cached) {
-                  console.log('[QueuePrefetch] Cached in SW:', track.title);
-                  prefetched.swCached = true;
-                }
-              });
+              const arrayBuffer = await response.arrayBuffer();
+              const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+              prefetched.buffer = audioBuffer;
+              console.log('[QueuePrefetch] Buffer ready:', track.title, `(${audioBuffer.duration.toFixed(1)}s)`);
             }
-          } else {
-            console.log('[QueuePrefetch] Loaded from SW cache:', track.title);
-            prefetched.swCached = true;
+          } catch (e) {
+            console.log('[QueuePrefetch] Buffer decode failed:', track.title, e);
+            // URL is still valid, just no buffer
           }
-          
-          // Decode to AudioBuffer
-          if (arrayBuffer && ctx) {
-            // Clone arrayBuffer for decoding (it gets neutered after decode)
-            const bufferCopy = arrayBuffer.slice(0);
-            const audioBuffer = await ctx.decodeAudioData(bufferCopy);
-            prefetched.buffer = audioBuffer;
-            console.log('[QueuePrefetch] Buffer ready:', track.title, `(${audioBuffer.duration.toFixed(1)}s)`);
-          }
-        } catch (e) {
-          console.log('[QueuePrefetch] Buffer decode failed:', track.title, e);
-          // URL is still valid, just no buffer
         }
       }
       
@@ -196,15 +122,14 @@ export const useQueuePrefetch = () => {
     }
   }, [settings.audioQuality, initAudioContext]);
 
-  // Prefetch queue with parallel fetching (2 at a time)
+  // Prefetch queue starting from a specific index
   const prefetchQueue = useCallback(async (
     queue: Track[],
     currentIndex: number,
-    options?: { maxTracks?: number; forceRestart?: boolean; parallelCount?: number }
+    options?: { maxTracks?: number; forceRestart?: boolean }
   ) => {
-    const maxTracks = options?.maxTracks ?? 15;
+    const maxTracks = options?.maxTracks ?? 20; // Default max 20 tracks ahead
     const forceRestart = options?.forceRestart ?? false;
-    const parallelCount = options?.parallelCount ?? 2; // Fetch 2 tracks at a time
     
     // Only on iOS PWA
     if (!isIOS() || !isPWA()) {
@@ -234,88 +159,76 @@ export const useQueuePrefetch = () => {
       return;
     }
     
-    console.log('[QueuePrefetch] Starting prefetch from index', startIndex, 'to', endIndex - 1, `(${parallelCount} parallel)`);
+    console.log('[QueuePrefetch] Starting prefetch from index', startIndex, 'to', endIndex - 1);
     
     isFetchingRef.current = true;
     abortControllerRef.current = new AbortController();
     
-    // Build list of tracks to fetch
-    const tracksToFetch: { track: Track; index: number }[] = [];
+    setState(prev => ({
+      ...prev,
+      totalTracks: endIndex - startIndex,
+      isActive: true,
+    }));
+    
     let fetchedCount = 0;
     let bufferReadyCount = 0;
-    let swCachedCount = 0;
     
+    // Count already cached tracks
     for (let i = startIndex; i < endIndex; i++) {
       const track = queue[i];
       const cached = prefetchedTracksRef.current.get(track.id);
-      
       if (cached) {
         fetchedCount++;
         if (cached.buffer) bufferReadyCount++;
-        if (cached.swCached) swCachedCount++;
-      } else {
-        tracksToFetch.push({ track, index: i });
       }
     }
     
     setState(prev => ({
       ...prev,
-      totalTracks: endIndex - startIndex,
       fetchedCount,
       bufferReadyCount,
-      swCachedCount,
-      isActive: true,
     }));
     
-    // Fetch in parallel batches
-    for (let i = 0; i < tracksToFetch.length; i += parallelCount) {
+    // Fetch remaining tracks
+    for (let i = startIndex; i < endIndex; i++) {
       // Check if aborted
       if (abortControllerRef.current?.signal.aborted) {
         console.log('[QueuePrefetch] Aborted');
         break;
       }
       
-      const batch = tracksToFetch.slice(i, i + parallelCount);
-      const titles = batch.map(b => b.track.title).join(', ');
+      const track = queue[i];
       
-      setState(prev => ({
-        ...prev,
-        currentlyFetching: batch.length > 1 ? `${batch[0].track.title} +${batch.length - 1}` : batch[0].track.title,
-      }));
-      
-      console.log('[QueuePrefetch] Fetching batch:', titles);
-      
-      // Fetch all in batch simultaneously
-      const results = await Promise.allSettled(
-        batch.map(({ track }) => fetchTrack(track))
-      );
-      
-      // Process results
-      results.forEach((result, idx) => {
-        const { track, index } = batch[idx];
-        
-        if (result.status === 'fulfilled' && result.value) {
-          prefetchedTracksRef.current.set(track.id, result.value);
-          fetchedCount++;
-          if (result.value.buffer) bufferReadyCount++;
-          if (result.value.swCached) swCachedCount++;
-        }
-        
-        lastFetchedIndexRef.current = Math.max(lastFetchedIndexRef.current, index);
-      });
-      
-      setState(prev => ({
-        ...prev,
-        fetchedCount,
-        bufferReadyCount,
-        swCachedCount,
-        lastFetchedIndex: lastFetchedIndexRef.current,
-      }));
-      
-      // Small delay between batches to not overwhelm
-      if (i + parallelCount < tracksToFetch.length) {
-        await new Promise(resolve => setTimeout(resolve, 50));
+      // Skip if already cached
+      if (prefetchedTracksRef.current.has(track.id)) {
+        lastFetchedIndexRef.current = i;
+        continue;
       }
+      
+      setState(prev => ({
+        ...prev,
+        currentlyFetching: track.title,
+      }));
+      
+      const prefetched = await fetchTrack(track, true);
+      
+      if (prefetched) {
+        prefetchedTracksRef.current.set(track.id, prefetched);
+        fetchedCount++;
+        if (prefetched.buffer) bufferReadyCount++;
+        
+        setState(prev => ({
+          ...prev,
+          fetchedCount,
+          bufferReadyCount,
+          lastFetchedIndex: i,
+        }));
+      }
+      
+      lastFetchedIndexRef.current = i;
+      
+      // Small delay to not overwhelm network
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     isFetchingRef.current = false;
@@ -325,7 +238,7 @@ export const useQueuePrefetch = () => {
       isActive: fetchedCount < (endIndex - startIndex),
     }));
     
-    console.log('[QueuePrefetch] Complete:', fetchedCount, 'fetched,', bufferReadyCount, 'buffers,', swCachedCount, 'SW cached');
+    console.log('[QueuePrefetch] Complete:', fetchedCount, 'fetched,', bufferReadyCount, 'buffers ready');
   }, [fetchTrack]);
 
   // Get prefetched data for a track
@@ -343,12 +256,6 @@ export const useQueuePrefetch = () => {
   const getBuffer = useCallback((trackId: string): AudioBuffer | null => {
     const cached = prefetchedTracksRef.current.get(trackId);
     return cached?.buffer || null;
-  }, []);
-
-  // Get URL for a track (from cache)
-  const getUrl = useCallback((trackId: string): string | null => {
-    const cached = prefetchedTracksRef.current.get(trackId);
-    return cached?.url || null;
   }, []);
 
   // Clear cache for tracks before a certain index
@@ -386,7 +293,6 @@ export const useQueuePrefetch = () => {
       totalTracks: 0,
       fetchedCount: 0,
       bufferReadyCount: 0,
-      swCachedCount: 0,
       currentlyFetching: null,
       lastFetchedIndex: -1,
       isActive: false,
@@ -408,7 +314,6 @@ export const useQueuePrefetch = () => {
     getPrefetched,
     hasBuffer,
     getBuffer,
-    getUrl,
     clearOldTracks,
     stopPrefetch,
     reset,

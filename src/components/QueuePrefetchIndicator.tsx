@@ -2,7 +2,7 @@
 // Appears in safe area when prefetching is active
 
 import React from 'react';
-import { Download, Check, Loader2, HardDrive } from 'lucide-react';
+import { Download, Check, Loader2 } from 'lucide-react';
 import { QueuePrefetchState } from '@/hooks/useQueuePrefetch';
 import { useSettings } from '@/contexts/SettingsContext';
 
@@ -22,7 +22,7 @@ export const QueuePrefetchIndicator: React.FC<QueuePrefetchIndicatorProps> = ({
     return null;
   }
   
-  const isComplete = state.bufferReadyCount >= state.totalTracks && !state.currentlyFetching;
+  const isComplete = state.fetchedCount >= state.totalTracks && !state.currentlyFetching;
   const progress = state.totalTracks > 0 
     ? Math.round((state.bufferReadyCount / state.totalTracks) * 100) 
     : 0;
@@ -39,12 +39,6 @@ export const QueuePrefetchIndicator: React.FC<QueuePrefetchIndicatorProps> = ({
             <span className="text-xs font-medium text-foreground">
               {state.bufferReadyCount}/{state.totalTracks} {isItalian ? 'pronte' : 'ready'}
             </span>
-            {state.swCachedCount > 0 && (
-              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                <HardDrive className="w-2.5 h-2.5" />
-                {state.swCachedCount}
-              </span>
-            )}
           </>
         ) : state.currentlyFetching ? (
           <>
@@ -52,7 +46,7 @@ export const QueuePrefetchIndicator: React.FC<QueuePrefetchIndicatorProps> = ({
             <span className="text-xs font-medium text-foreground">
               {state.bufferReadyCount}/{state.totalTracks}
             </span>
-            <div className="w-12 h-1 bg-muted rounded-full overflow-hidden">
+            <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
               <div 
                 className="h-full bg-primary transition-all duration-300"
                 style={{ width: `${progress}%` }}
