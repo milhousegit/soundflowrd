@@ -950,15 +950,21 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // ENHANCED: nexttrack handler with AudioContext crossfade support for CarPlay
       navigator.mediaSession.setActionHandler('nexttrack', () => {
         const shouldUseCrossfade = crossfadeEnabledRef.current && isIOS() && isPWA();
+        const hasPreloaded = crossfadeRef.current?.hasPreloadedNext();
+        const isPreloading = crossfadeRef.current?.isPreloading?.();
+        const preloadStatus = crossfadeRef.current?.getPreloadStatus?.();
         
-        if (shouldUseCrossfade && crossfadeRef.current?.hasPreloadedNext()) {
+        iosAudioRef.current.addLog('info', '[MediaSession]', `nexttrack: shouldUseCrossfade=${shouldUseCrossfade}, hasPreloaded=${hasPreloaded}, isPreloading=${isPreloading}`);
+        
+        if (shouldUseCrossfade && hasPreloaded) {
           // Use AudioContext crossfade for gapless transition
           console.log('[MediaSession] Using AudioContext crossfade for nexttrack');
-          iosAudioRef.current.addLog('info', '[MediaSession]', 'nexttrack -> AudioContext crossfade');
+          iosAudioRef.current.addLog('info', '[MediaSession]', `nexttrack -> AudioContext crossfade (buffer: ${preloadStatus?.bufferDuration?.toFixed(1)}s)`);
           crossfadeRef.current.triggerCrossfade();
         } else {
           // Fallback to standard next
-          console.log('[MediaSession] Using standard next for nexttrack');
+          console.log('[MediaSession] Using standard next for nexttrack', { shouldUseCrossfade, hasPreloaded, isPreloading });
+          iosAudioRef.current.addLog('info', '[MediaSession]', `nexttrack -> standard next() (no buffer ready)`);
           nextRef.current();
         }
       });
@@ -2052,7 +2058,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     previousRef.current = previous;
   }, [next, previous]);
 
-  // Pre-fetch next track URL for seamless iOS background playback (SIMPLE VERSION)
+  // Pre-fetch next track URL for seamless iOS background playback (AGGRESSIVE VERSION)
   useEffect(() => {
     const handlePrefetchNextTrack = async () => {
       // Skip if already prefetching or no next track
@@ -2065,10 +2071,30 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (!nextTrack) return;
       
       // Skip if already prefetched this track
-      if (prefetchedTrackIdRef.current === nextTrack.id) return;
+      if (prefetchedTrackIdRef.current === nextTrack.id) {
+        // But check if AudioContext preload also needs to happen
+        const isIOSPWA = isIOS() && isPWA();
+        const shouldPreloadAudioContext = crossfadeEnabledRef.current && isIOSPWA;
+        
+        if (shouldPreloadAudioContext && !crossfade.hasPreloadedNext() && prefetchedNextUrlRef.current) {
+          console.log('[Prefetch] URL cached, but AudioContext needs preload');
+          iosAudioRef.current.addLog('info', '[Prefetch]', 'Starting AudioContext preload for cached URL');
+          
+          const preloadSuccess = await crossfade.preloadNext(prefetchedNextUrlRef.current.url, nextTrack.id);
+          if (preloadSuccess) {
+            addDebugLog('🔊 AudioContext pre-caricato', `"${nextTrack.title}"`, 'success');
+            iosAudioRef.current.addLog('success', '[Prefetch]', `AudioContext preloaded: ${nextTrack.title}`);
+          } else {
+            const status = crossfade.getPreloadStatus();
+            iosAudioRef.current.addLog('error', '[Prefetch]', `AudioContext preload failed: ${status?.error || 'unknown'}`);
+          }
+        }
+        return;
+      }
       
       isPrefetchingRef.current = true;
       console.log('[Prefetch] Starting prefetch for:', nextTrack.title);
+      iosAudioRef.current.addLog('info', '[Prefetch]', `Starting: ${nextTrack.title}`);
       
       try {
         // Simple: Just use Tidal - it's fast and reliable
@@ -2082,23 +2108,40 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             source: 'tidal'
           };
           prefetchedTrackIdRef.current = nextTrack.id;
-          console.log('[Prefetch] Prefetched:', nextTrack.title);
+          console.log('[Prefetch] Prefetched URL:', nextTrack.title);
           addDebugLog('📥 Pre-caricato', `"${nextTrack.title}" pronto`, 'success');
+          iosAudioRef.current.addLog('success', '[Prefetch]', `URL cached: ${nextTrack.title}`);
           
-          // NEW: If crossfade is enabled on iOS PWA, also preload into AudioContext
-          if (settings.crossfadeEnabled && isIOS() && isPWA()) {
+          // CRITICAL: If crossfade is enabled on iOS PWA, IMMEDIATELY preload into AudioContext
+          // This is the key for gapless background playback
+          const isIOSPWA = isIOS() && isPWA();
+          const shouldPreloadAudioContext = crossfadeEnabledRef.current && isIOSPWA;
+          
+          if (shouldPreloadAudioContext) {
             console.log('[Prefetch] Preloading into AudioContext crossfade system');
-            crossfade.preloadNext(tidalResult.streamUrl, nextTrack.id).then(success => {
-              if (success) {
-                addDebugLog('🔊 AudioContext pre-caricato', `"${nextTrack.title}"`, 'success');
-              }
-            }).catch(err => {
-              console.log('[Prefetch] AudioContext preload failed:', err);
-            });
+            iosAudioRef.current.addLog('info', '[Prefetch]', 'Starting AudioContext buffer load');
+            
+            const preloadStart = Date.now();
+            const success = await crossfade.preloadNext(tidalResult.streamUrl, nextTrack.id);
+            const preloadDuration = Date.now() - preloadStart;
+            
+            if (success) {
+              const status = crossfade.getPreloadStatus();
+              addDebugLog('🔊 AudioContext pre-caricato', `"${nextTrack.title}" (${preloadDuration}ms)`, 'success');
+              iosAudioRef.current.addLog('success', '[Prefetch]', `AudioContext ready: ${nextTrack.title} (${status?.bufferDuration?.toFixed(1)}s in ${preloadDuration}ms)`);
+            } else {
+              const status = crossfade.getPreloadStatus();
+              console.log('[Prefetch] AudioContext preload failed:', status?.error);
+              iosAudioRef.current.addLog('error', '[Prefetch]', `AudioContext preload failed: ${status?.error || 'unknown'} after ${preloadDuration}ms`);
+            }
           }
+        } else {
+          console.log('[Prefetch] No stream URL found for:', nextTrack.title);
+          iosAudioRef.current.addLog('warning', '[Prefetch]', `No stream for: ${nextTrack.title}`);
         }
       } catch (error) {
         console.log('[Prefetch] Failed:', error);
+        iosAudioRef.current.addLog('error', '[Prefetch]', `Failed: ${error instanceof Error ? error.message : 'unknown'}`);
       } finally {
         isPrefetchingRef.current = false;
       }

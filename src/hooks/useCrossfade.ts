@@ -26,6 +26,16 @@ interface CrossfadeTrack {
 const CROSSFADE_DURATION_SECONDS = 3;
 const CROSSFADE_START_BEFORE_END_SECONDS = 10;
 
+// Track preload status for better debugging
+interface PreloadStatus {
+  trackId: string;
+  startedAt: number;
+  completedAt?: number;
+  success: boolean;
+  bufferDuration?: number;
+  error?: string;
+}
+
 export const useCrossfade = () => {
   // Single AudioContext (iOS allows only one per tab/PWA)
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -50,6 +60,10 @@ export const useCrossfade = () => {
   
   // Volume control
   const masterVolumeRef = useRef(0.7);
+  
+  // Preload tracking for debugging
+  const preloadStatusRef = useRef<PreloadStatus | null>(null);
+  const preloadInProgressRef = useRef(false);
   
   // Callbacks
   const onTrackEndRef = useRef<(() => void) | null>(null);
@@ -236,8 +250,38 @@ export const useCrossfade = () => {
    * Preload next track for crossfade
    */
   const preloadNext = useCallback(async (url: string, trackId: string): Promise<boolean> => {
-    if (!audioContextRef.current) {
-      addLog('warning', 'No AudioContext for preloading');
+    const startTime = Date.now();
+    
+    // Initialize context if needed (important for background loading)
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      addLog('info', 'Initializing AudioContext for preload');
+      const success = await initialize();
+      if (!success) {
+        addLog('error', 'Failed to initialize AudioContext for preload');
+        preloadStatusRef.current = {
+          trackId,
+          startedAt: startTime,
+          completedAt: Date.now(),
+          success: false,
+          error: 'AudioContext init failed'
+        };
+        return false;
+      }
+    }
+    
+    // Resume if suspended
+    if (audioContextRef.current?.state === 'suspended') {
+      try {
+        await audioContextRef.current.resume();
+        addLog('info', 'AudioContext resumed for preload');
+      } catch (e) {
+        addLog('warning', `Could not resume AudioContext: ${e}`);
+      }
+    }
+    
+    // Prevent concurrent preloads
+    if (preloadInProgressRef.current) {
+      addLog('warning', `Preload already in progress, skipping ${trackId}`);
       return false;
     }
     
@@ -247,27 +291,65 @@ export const useCrossfade = () => {
       return true;
     }
     
-    addLog('info', `Preloading: ${trackId}`);
+    preloadInProgressRef.current = true;
+    preloadStatusRef.current = {
+      trackId,
+      startedAt: startTime,
+      success: false
+    };
     
-    const buffer = await loadBuffer(url);
-    if (!buffer) {
-      addLog('error', 'Failed to preload next track');
+    addLog('info', `Preloading: ${trackId} (URL: ${url.substring(0, 60)}...)`);
+    
+    try {
+      const buffer = await loadBuffer(url);
+      
+      if (!buffer) {
+        addLog('error', 'Failed to preload next track - buffer is null');
+        preloadStatusRef.current = {
+          ...preloadStatusRef.current!,
+          completedAt: Date.now(),
+          success: false,
+          error: 'Buffer null'
+        };
+        preloadInProgressRef.current = false;
+        return false;
+      }
+      
+      // Create gain node (muted initially)
+      const ctx = audioContextRef.current!;
+      const gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(0, ctx.currentTime);
+      gainNode.connect(ctx.destination);
+      
+      nextBufferRef.current = buffer;
+      nextGainRef.current = gainNode;
+      nextTrackIdRef.current = trackId;
+      
+      const loadDuration = Date.now() - startTime;
+      preloadStatusRef.current = {
+        trackId,
+        startedAt: startTime,
+        completedAt: Date.now(),
+        success: true,
+        bufferDuration: buffer.duration
+      };
+      
+      addLog('success', `Preloaded: ${trackId} (${buffer.duration.toFixed(1)}s, loaded in ${loadDuration}ms)`);
+      preloadInProgressRef.current = false;
+      return true;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      addLog('error', `Preload failed: ${errorMsg}`);
+      preloadStatusRef.current = {
+        ...preloadStatusRef.current!,
+        completedAt: Date.now(),
+        success: false,
+        error: errorMsg
+      };
+      preloadInProgressRef.current = false;
       return false;
     }
-    
-    // Create gain node (muted initially)
-    const ctx = audioContextRef.current;
-    const gainNode = ctx.createGain();
-    gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.connect(ctx.destination);
-    
-    nextBufferRef.current = buffer;
-    nextGainRef.current = gainNode;
-    nextTrackIdRef.current = trackId;
-    
-    addLog('success', `Preloaded: ${trackId} (${buffer.duration.toFixed(1)}s)`);
-    return true;
-  }, [loadBuffer, addLog]);
+  }, [loadBuffer, addLog, initialize]);
   
   /**
    * Execute the crossfade transition
@@ -547,6 +629,8 @@ export const useCrossfade = () => {
     isCrossfading: () => isCrossfadingRef.current,
     isPlaying: () => isActiveRef.current,
     hasPreloadedNext: () => !!nextBufferRef.current,
+    getPreloadStatus: () => preloadStatusRef.current,
+    isPreloading: () => preloadInProgressRef.current,
     
     // Logging
     getLogs,
