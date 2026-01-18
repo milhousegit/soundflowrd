@@ -2024,9 +2024,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const nextTrack = state.queue[nextIndex];
       setState((prev) => ({ ...prev, queueIndex: nextIndex, currentTrack: nextTrack }));
       
-      // CHECK: Do we have a prefetched URL for this track?
+      // CHECK: Do we have a prefetched URL for this track? (iOS only optimization)
+      const isIOSPWA = isIOS() && isPWA();
       const prefetched = prefetchedNextUrlRef.current;
-      if (prefetched && prefetched.trackId === nextTrack.id && prefetched.url) {
+      if (isIOSPWA && prefetched && prefetched.trackId === nextTrack.id && prefetched.url) {
         console.log('[Next] Using prefetched URL for:', nextTrack.title);
         
         // Clear prefetch refs
@@ -2113,8 +2114,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     previousRef.current = previous;
   }, [next, previous]);
 
-  // Pre-fetch next track URL for seamless iOS background playback (AGGRESSIVE VERSION)
+  // Pre-fetch next track URL for seamless iOS background playback (iOS ONLY)
   useEffect(() => {
+    // Only run prefetch on iOS PWA - other platforms don't need it
+    const isIOSPWA = isIOS() && isPWA();
+    if (!isIOSPWA) return;
+    
     const handlePrefetchNextTrack = async () => {
       // Skip if already prefetching or no next track
       if (isPrefetchingRef.current) return;
