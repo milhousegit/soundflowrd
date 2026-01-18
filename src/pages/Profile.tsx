@@ -673,25 +673,41 @@ const Settings: React.FC = () => {
               </select>
             </div>
 
-            {/* Crossfade Toggle */}
+            {/* Crossfade Toggle - Auto-enabled on iOS */}
             <div className="flex items-center justify-between pt-3 border-t border-border">
               <div className="flex-1 min-w-0 pr-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-foreground">{t('crossfade')}</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-medium shrink-0">
-                    {settings.language === 'it' ? 'Consigliato iOS' : 'Recommended iOS'}
-                  </span>
+                  {/iPad|iPhone|iPod/.test(navigator.userAgent) ? (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium shrink-0">
+                      {settings.language === 'it' ? 'Sempre attivo su iOS' : 'Always on iOS'}
+                    </span>
+                  ) : (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-medium shrink-0">
+                      {settings.language === 'it' ? 'Consigliato iOS' : 'Recommended iOS'}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {settings.language === 'it' 
-                    ? 'Transizione fluida tra brani per evitare interruzioni' 
-                    : 'Smooth transition between tracks to avoid interruptions'}
+                  {/iPad|iPhone|iPod/.test(navigator.userAgent) 
+                    ? (settings.language === 'it' 
+                        ? 'Attivo automaticamente per transizioni gapless' 
+                        : 'Automatically enabled for gapless transitions')
+                    : (settings.language === 'it' 
+                        ? 'Transizione fluida tra brani per evitare interruzioni' 
+                        : 'Smooth transition between tracks to avoid interruptions')}
                 </p>
               </div>
-              <Switch
-                checked={settings.crossfadeEnabled}
-                onCheckedChange={(checked) => updateSettings({ crossfadeEnabled: checked })}
-              />
+              {/iPad|iPhone|iPod/.test(navigator.userAgent) ? (
+                <div className="w-9 h-5 rounded-full bg-green-500 flex items-center justify-end px-0.5">
+                  <div className="w-4 h-4 rounded-full bg-white" />
+                </div>
+              ) : (
+                <Switch
+                  checked={settings.crossfadeEnabled}
+                  onCheckedChange={(checked) => updateSettings({ crossfadeEnabled: checked })}
+                />
+              )}
             </div>
           </div>
         </section>
