@@ -348,8 +348,13 @@ const fetchTrackMetadata = async (track: Track): Promise<Track> => {
 };
 
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Audio element reference
+  // DUAL AUDIO SYSTEM: Two audio elements for gapless crossfade
+  // audioRef = currently playing, nextAudioRef = preloaded next track
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const nextAudioRef = useRef<HTMLAudioElement | null>(null);
+  const crossfadeInProgressRef = useRef(false);
+  const crossfadeTriggeredForTrackRef = useRef<string | null>(null);
+  
   const { credentials, user } = useAuth();
   const { audioSourceMode, settings } = useSettings();
   // iOS audio session management (uses only refs internally)
@@ -668,15 +673,122 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
 
   useEffect(() => {
+    // Create PRIMARY audio element
     audioRef.current = new Audio();
     audioRef.current.volume = state.volume;
-    // iOS Safari requires these attributes for better background playback
     audioRef.current.setAttribute('playsinline', '');
     audioRef.current.setAttribute('webkit-playsinline', '');
 
-    const audio = audioRef.current;
+    // Create SECONDARY audio element for crossfade
+    nextAudioRef.current = new Audio();
+    nextAudioRef.current.volume = 0; // Start silent for crossfade
+    nextAudioRef.current.setAttribute('playsinline', '');
+    nextAudioRef.current.setAttribute('webkit-playsinline', '');
 
-    // Enhanced time update handler with pre-fetching for background playback
+    const audio = audioRef.current;
+    const nextAudio = nextAudioRef.current;
+
+    // CROSSFADE TRANSITION: Start crossfade 10s before end
+    // This avoids relying on `ended` event which can fail when JS is suspended
+    const CROSSFADE_START_SECONDS = 10;
+    const CROSSFADE_DURATION_MS = 3000; // 3 second crossfade
+
+    const performCrossfade = async (nextTrackId: string) => {
+      if (crossfadeInProgressRef.current) return;
+      crossfadeInProgressRef.current = true;
+
+      const prefetched = prefetchedNextUrlRef.current;
+      if (!prefetched || prefetched.trackId !== nextTrackId) {
+        console.log('[Crossfade] No prefetched URL, falling back to normal next()');
+        crossfadeInProgressRef.current = false;
+        // Don't call next() here - let ended handler do it
+        return;
+      }
+
+      console.log('[Crossfade] Starting crossfade transition');
+      iosAudioRef.current.addLog('info', '[Crossfade]', 'Starting crossfade');
+
+      // Keep iOS session alive during transition
+      iosAudioRef.current.keepAlive({ force: true });
+
+      // Load next track into secondary audio
+      nextAudio.src = prefetched.url;
+      nextAudio.volume = 0;
+      
+      try {
+        await nextAudio.play();
+        console.log('[Crossfade] Next audio playing (volume 0)');
+        
+        // Perform crossfade over CROSSFADE_DURATION_MS
+        const fadeSteps = 30;
+        const stepDuration = CROSSFADE_DURATION_MS / fadeSteps;
+        
+        for (let i = 1; i <= fadeSteps; i++) {
+          await new Promise(resolve => setTimeout(resolve, stepDuration));
+          const progress = i / fadeSteps;
+          
+          // Fade out current, fade in next
+          if (audio) audio.volume = Math.max(0, state.volume * (1 - progress));
+          if (nextAudio) nextAudio.volume = state.volume * progress;
+        }
+
+        console.log('[Crossfade] Crossfade complete, swapping audio elements');
+        
+        // Stop old audio
+        audio.pause();
+        audio.src = '';
+
+        // Swap references: nextAudio becomes the new primary
+        // Copy src to primary element and stop secondary
+        audio.src = nextAudio.src;
+        audio.volume = state.volume;
+        audio.currentTime = nextAudio.currentTime;
+        
+        // Transfer playback to primary
+        try {
+          await audio.play();
+          nextAudio.pause();
+          nextAudio.src = '';
+          nextAudio.volume = 0;
+        } catch (e) {
+          console.log('[Crossfade] Swap failed, keeping nextAudio as primary');
+          // nextAudio is already playing, that's fine
+        }
+
+        // Update state for next track
+        const stateRef = lifecycleRef.current;
+        const nextIndex = stateRef.queueIndex + 1;
+        
+        // Clear prefetch refs
+        prefetchedNextUrlRef.current = null;
+        prefetchedTrackIdRef.current = null;
+        crossfadeTriggeredForTrackRef.current = null;
+
+        // Trigger state update via custom event (will be handled in next effect)
+        window.dispatchEvent(new CustomEvent('crossfade-complete', { 
+          detail: { nextIndex, source: prefetched.source } 
+        }));
+
+        iosAudioRef.current.addLog('info', '[Crossfade]', 'Complete');
+        
+        // Start prefetching the NEXT next track
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('prefetch-next-track'));
+        }, 3000);
+
+      } catch (error) {
+        console.log('[Crossfade] Failed:', error);
+        iosAudioRef.current.addLog('error', '[Crossfade]', `Failed: ${error}`);
+        // Reset and let ended handler take over
+        nextAudio.pause();
+        nextAudio.src = '';
+        nextAudio.volume = 0;
+      } finally {
+        crossfadeInProgressRef.current = false;
+      }
+    };
+
+    // Enhanced time update handler with crossfade logic
     const handleTimeUpdate = () => {
       const currentTime = audio.currentTime;
       const duration = audio.duration;
@@ -684,26 +796,41 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setState((prev) => ({ ...prev, progress: currentTime }));
 
       // iOS/PWA: "bridge" keep-alive during track transition window.
-      // Start when we are within the last 5 seconds of the current track.
-      // We force keepAlive (bypassing throttle) and repeat until ~5s after the next track starts.
       if (duration && Number.isFinite(duration) && duration > 0) {
         const remaining = duration - currentTime;
+        
+        // Keep-alive logic (unchanged)
         if (remaining <= 5 && remaining >= 0 && !transitionArmedRef.current) {
           transitionArmedRef.current = true;
           iosAudioRef.current.addLog('info', '[TransitionKeepAlive] armed', `remaining=${remaining.toFixed(2)}s`);
-
-          // Immediate pulse
           iosAudioRef.current.keepAlive({ force: true });
-
-          // Keep pulsing during the swap (frequency kept reasonable to reduce audibility)
           transitionKeepAliveIntervalRef.current = window.setInterval(() => {
             iosAudioRef.current.keepAlive({ force: true });
           }, 2500);
         }
+
+        // CROSSFADE: Trigger 10s before end (only once per track)
+        if (remaining <= CROSSFADE_START_SECONDS && remaining > CROSSFADE_START_SECONDS - 1) {
+          const { queueIndex } = lifecycleRef.current;
+          const currentTrackId = lifecycleRef.current.track?.id;
+          
+          // Only trigger if not already triggered for this track
+          if (currentTrackId && crossfadeTriggeredForTrackRef.current !== currentTrackId) {
+            crossfadeTriggeredForTrackRef.current = currentTrackId;
+            
+            // Check if we have next track in queue
+            const stateSnapshot = lifecycleRef.current;
+            const nextIndex = queueIndex + 1;
+            
+            // Note: We need to get queue from somewhere... dispatch event to trigger
+            window.dispatchEvent(new CustomEvent('check-crossfade', { 
+              detail: { nextIndex, currentTrackId } 
+            }));
+          }
+        }
       }
 
       // AGGRESSIVE PREFETCH: Start prefetching 3 seconds AFTER playback begins
-      // This gives maximum time for the next track to be ready
       if (currentTime >= 3 && currentTime < 6) {
         if (!isPrefetchingRef.current && !prefetchedNextUrlRef.current) {
           window.dispatchEvent(new CustomEvent('prefetch-next-track'));
@@ -713,9 +840,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
 
-    // Track ended handler - SIMPLE and FAST transition to next track
+    // Track ended handler - FALLBACK if crossfade didn't happen
     const handleEnded = () => {
-      console.log('[PlayerContext] Track ended - transitioning to next');
+      console.log('[PlayerContext] Track ended (fallback - crossfade should have handled this)');
 
       // Keep media session active
       if ('mediaSession' in navigator) {
@@ -725,14 +852,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // iOS: maintain audio session
       const iosAudioInstance = iosAudioRef.current;
       if (iosAudioInstance && !iosAudioInstance.isExternalDevice()) {
-        // Force a pulse right at the boundary to reduce chance of session drop.
         iosAudioInstance.keepAlive({ force: true });
         iosAudioInstance.playPlaceholder().catch(() => {});
       }
 
-      // SIMPLE: Just call next() immediately - let it handle everything
-      // The prefetch is just an optimization, not required
-      nextRef.current();
+      // Only call next() if crossfade isn't in progress
+      if (!crossfadeInProgressRef.current) {
+        nextRef.current();
+      }
     };
 
     // Handle pause events
@@ -740,16 +867,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (!audio.ended) {
         setState((prev) => ({ ...prev, isPlaying: false }));
       }
-
-      // If user pauses, stop the transition keep-alive window.
       stopTransitionKeepAlive();
     };
 
     const handlePlay = () => {
       setState((prev) => ({ ...prev, isPlaying: true }));
 
-      // If we were in the transition window, keep it alive for ~5s after the new track starts,
-      // then stop to reduce any audible artifacts.
       if (transitionArmedRef.current) {
         if (transitionStopTimeoutRef.current) window.clearTimeout(transitionStopTimeoutRef.current);
         transitionStopTimeoutRef.current = window.setTimeout(() => {
@@ -759,14 +882,22 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
     };
 
-    // Simplified error handler
     const handleError = (e: Event) => {
       console.error('[PlayerContext] Audio error:', e);
     };
 
-    // Simplified stalled handler
     const handleStalled = () => {
       console.log('[PlayerContext] Audio stalled');
+    };
+
+    // Listen for crossfade check event
+    const handleCheckCrossfade = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const prefetched = prefetchedNextUrlRef.current;
+      
+      if (prefetched && prefetched.trackId) {
+        performCrossfade(prefetched.trackId);
+      }
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -776,6 +907,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('error', handleError);
     audio.addEventListener('stalled', handleStalled);
+    window.addEventListener('check-crossfade', handleCheckCrossfade);
 
     if ('mediaSession' in navigator) {
       navigator.mediaSession.setActionHandler('play', () => {
@@ -799,14 +931,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       });
       
-      // CRITICAL: On iOS, setting to null doesn't work - we must set explicit handlers
-      // that do the same as prev/next to force iOS to show track buttons instead of seek
       try {
-        // First try setting to null (works on some browsers)
         navigator.mediaSession.setActionHandler('seekbackward', null);
         navigator.mediaSession.setActionHandler('seekforward', null);
       } catch (e) {
-        // If null doesn't work, set explicit handlers that act as prev/next
         try {
           navigator.mediaSession.setActionHandler('seekbackward', () => {
             previousRef.current();
@@ -828,11 +956,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('stalled', handleStalled);
+      window.removeEventListener('check-crossfade', handleCheckCrossfade);
 
       stopTransitionKeepAlive();
 
       audio.pause();
       audio.src = '';
+      nextAudio.pause();
+      nextAudio.src = '';
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1907,17 +2038,45 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
     };
     
-    // Handle when prefetched track starts playing (not used anymore but keep for cleanup)
-    const handlePrefetchPlayed = () => {};
+    // Handle crossfade complete event - update state after successful crossfade
+    const handleCrossfadeComplete = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const { nextIndex, source } = detail;
+      
+      if (nextIndex >= 0 && nextIndex < state.queue.length) {
+        const nextTrack = state.queue[nextIndex];
+        console.log('[Crossfade] Updating state to track:', nextTrack?.title);
+        
+        setState((prev) => ({
+          ...prev,
+          queueIndex: nextIndex,
+          currentTrack: nextTrack,
+          isPlaying: true,
+          progress: 0,
+          duration: nextTrack?.duration || 0,
+        }));
+        
+        // Update audio source
+        setCurrentAudioSource(source === 'tidal' ? 'tidal' : source === 'offline' ? 'offline' : 'real-debrid');
+        setLoadingPhase('idle');
+        
+        // Update media session
+        if (nextTrack) {
+          updateMediaSessionMetadata(nextTrack, true);
+          saveRecentlyPlayedTrack(nextTrack, user?.id);
+          addDebugLog('⚡ Crossfade completo', `"${nextTrack.title}"`, 'success');
+        }
+      }
+    };
     
     window.addEventListener('prefetch-next-track', handlePrefetchNextTrack);
-    window.addEventListener('prefetch-played', handlePrefetchPlayed as EventListener);
+    window.addEventListener('crossfade-complete', handleCrossfadeComplete);
     
     return () => {
       window.removeEventListener('prefetch-next-track', handlePrefetchNextTrack);
-      window.removeEventListener('prefetch-played', handlePrefetchPlayed as EventListener);
+      window.removeEventListener('crossfade-complete', handleCrossfadeComplete);
     };
-  }, [state.queue, state.queueIndex, settings.audioQuality, addDebugLog]);
+  }, [state.queue, state.queueIndex, settings.audioQuality, addDebugLog, user?.id]);
 
   // Note: Media Session next/previous handlers are set up in the audio initialization useEffect
 
