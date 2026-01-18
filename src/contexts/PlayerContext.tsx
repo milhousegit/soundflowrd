@@ -1236,6 +1236,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setDownloadStatus(null);
       setLoadingPhase('idle');
       setCurrentAudioSource(null);
+      
+      // Reset AudioContext crossfade flag - we're starting fresh with HTML audio
+      usingAudioContextCrossfadeRef.current = false;
+      
+      // Stop any ongoing AudioContext playback
+      crossfade.stopCurrent();
 
       // PRIORITY 1: Check for offline availability first (works without network)
       const offlineUrl = await getOfflineTrackUrl(enrichedTrack.id);
@@ -2040,17 +2046,114 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const nextTrack = state.queue[nextIndex];
       setState((prev) => ({ ...prev, queueIndex: nextIndex, currentTrack: nextTrack }));
       
-      // CHECK: Do we have a prefetched URL for this track? (iOS only optimization)
       const isIOSPWA = isIOS() && isPWA();
+      
+      // iOS PWA: Try to use pre-loaded AudioBuffer from queuePrefetch first
+      // This enables background playback even when the app is minimized
+      if (isIOSPWA && crossfadeEnabledRef.current) {
+        const prefetchedBuffer = queuePrefetch.getBuffer(nextTrack.id);
+        const prefetchedUrl = queuePrefetch.getUrl(nextTrack.id);
+        
+        if (prefetchedBuffer) {
+          console.log('[Next-iOS] Using pre-loaded AudioBuffer for:', nextTrack.title);
+          iosAudioRef.current.addLog('success', '[Next-iOS]', `Playing from buffer: ${nextTrack.title}`);
+          
+          // Activate iOS audio session keepalive
+          iosAudioRef.current.playPlaceholder?.();
+          
+          // Play using AudioContext with pre-loaded buffer
+          const duration = await crossfade.playFromBuffer(prefetchedBuffer, nextTrack.id, {
+            onTrackEnd: () => {
+              console.log('[Next-iOS] Buffer track ended, moving to next');
+              iosAudioRef.current.addLog('info', '[Next-iOS]', 'Track ended, calling next()');
+              nextRef.current?.();
+            },
+          });
+          
+          if (duration > 0) {
+            setState((prev) => ({ ...prev, isPlaying: true, duration }));
+            setCurrentAudioSource('tidal');
+            setLoadingPhase('idle');
+            updateMediaSessionMetadata(nextTrack, true);
+            saveRecentlyPlayedTrack(nextTrack, user?.id);
+            addDebugLog('🔊 AudioBuffer', `"${nextTrack.title}" (${duration.toFixed(0)}s)`, 'success');
+            
+            // Mark as using AudioContext crossfade
+            usingAudioContextCrossfadeRef.current = true;
+            
+            // Preload the NEXT track's buffer into crossfade system
+            const nextNextIndex = nextIndex + 1;
+            if (nextNextIndex < state.queue.length) {
+              const nextNextTrack = state.queue[nextNextIndex];
+              const nextNextBuffer = queuePrefetch.getBuffer(nextNextTrack.id);
+              
+              if (nextNextBuffer) {
+                crossfade.preloadNextFromBuffer(nextNextBuffer, nextNextTrack.id);
+                iosAudioRef.current.addLog('info', '[Next-iOS]', `Preloaded next: ${nextNextTrack.title}`);
+              } else {
+                // Try URL preload if buffer not ready yet
+                const nextNextUrl = queuePrefetch.getUrl(nextNextTrack.id);
+                if (nextNextUrl) {
+                  crossfade.preloadNext(nextNextUrl, nextNextTrack.id);
+                }
+              }
+            }
+            
+            // Clear old tracks from cache
+            queuePrefetch.clearOldTracks(state.queue, nextIndex);
+            
+            // Continue prefetching more tracks if needed
+            setTimeout(() => {
+              queuePrefetch.prefetchQueue(state.queue, nextIndex, { 
+                maxTracks: 15, 
+                forceRestart: false 
+              });
+            }, 1000);
+            
+            return;
+          } else {
+            console.log('[Next-iOS] playFromBuffer failed, falling back');
+            iosAudioRef.current.addLog('warning', '[Next-iOS]', 'Buffer playback failed, trying URL');
+          }
+        }
+        
+        // Fallback: Try prefetched URL if buffer not available
+        if (prefetchedUrl) {
+          console.log('[Next-iOS] Using prefetched URL for:', nextTrack.title);
+          iosAudioRef.current.addLog('info', '[Next-iOS]', `Playing from URL: ${nextTrack.title}`);
+          
+          iosAudioRef.current.playPlaceholder?.();
+          
+          const duration = await crossfade.playWithCrossfade(prefetchedUrl, nextTrack.id, {
+            onTrackEnd: () => {
+              console.log('[Next-iOS] URL track ended, moving to next');
+              nextRef.current?.();
+            },
+          });
+          
+          if (duration > 0) {
+            setState((prev) => ({ ...prev, isPlaying: true, duration }));
+            setCurrentAudioSource('tidal');
+            setLoadingPhase('idle');
+            updateMediaSessionMetadata(nextTrack, true);
+            saveRecentlyPlayedTrack(nextTrack, user?.id);
+            addDebugLog('⚡ URL pre-caricato', `"${nextTrack.title}"`, 'success');
+            usingAudioContextCrossfadeRef.current = true;
+            
+            queuePrefetch.clearOldTracks(state.queue, nextIndex);
+            return;
+          }
+        }
+      }
+      
+      // Legacy iOS prefetch (simple URL prefetch for non-crossfade mode)
       const prefetched = prefetchedNextUrlRef.current;
       if (isIOSPWA && prefetched && prefetched.trackId === nextTrack.id && prefetched.url) {
         console.log('[Next] Using prefetched URL for:', nextTrack.title);
         
-        // Clear prefetch refs
         prefetchedNextUrlRef.current = null;
         prefetchedTrackIdRef.current = null;
         
-        // Use prefetched URL directly - SKIP the search!
         if (audioRef.current) {
           audioRef.current.src = prefetched.url;
           updateMediaSessionMetadata(nextTrack, true);
@@ -2063,10 +2166,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setLoadingPhase('idle');
             addDebugLog('⚡ Transizione veloce', `"${nextTrack.title}" (pre-caricato)`, 'success');
             
-            // Save to recently played
             saveRecentlyPlayedTrack(nextTrack, user?.id);
             
-            // Start prefetching the NEXT next track
             setTimeout(() => {
               window.dispatchEvent(new CustomEvent('prefetch-next-track'));
             }, 3000);
@@ -2074,14 +2175,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             return;
           } catch (playError) {
             console.log('[Next] Prefetched play failed:', playError);
-            // CRITICAL: If autoplay blocked, sync state to paused
             if (playError instanceof Error && playError.name === 'NotAllowedError') {
               console.log('[Next] Autoplay blocked - setting isPlaying to false');
               setState((prev) => ({ ...prev, isPlaying: false }));
               addDebugLog('⚠️ Autoplay bloccato', 'Premi play per avviare', 'warning');
-              return; // Don't fallback, just wait for user interaction
+              return;
             }
-            // Fall through to normal playback for other errors
           }
         }
       }
@@ -2109,7 +2208,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         addDebugLog('❌ Autoplay fallito', error instanceof Error ? error.message : 'Errore', 'error');
       });
     }
-  }, [addDebugLog, fetchSimilarTracks, playTrack, state.currentTrack, state.queue, state.queueIndex, user?.id]);
+  }, [addDebugLog, crossfade, fetchSimilarTracks, playTrack, queuePrefetch, state.currentTrack, state.queue, state.queueIndex, user?.id]);
 
   const previous = useCallback(() => {
     if (state.progress > 3) {
@@ -2300,6 +2399,39 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       window.removeEventListener('audiocontext-crossfade-complete', handleAudioContextCrossfadeComplete);
     };
   }, [state.queue, state.queueIndex, settings.audioQuality, settings.crossfadeEnabled, addDebugLog, user?.id, crossfade]);
+
+  // AudioContext progress sync: Update UI progress when using AudioContext playback
+  useEffect(() => {
+    if (!usingAudioContextCrossfadeRef.current || !state.isPlaying) return;
+    
+    const intervalId = setInterval(() => {
+      const currentTime = crossfade.getCurrentTime();
+      const duration = crossfade.getCurrentDuration();
+      
+      if (duration > 0 && currentTime >= 0) {
+        setState((prev) => ({
+          ...prev,
+          progress: currentTime,
+          duration: duration,
+        }));
+        
+        // Update Media Session position state
+        if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: duration,
+              playbackRate: 1.0,
+              position: Math.min(currentTime, duration),
+            });
+          } catch (e) {
+            // Ignore position state errors
+          }
+        }
+      }
+    }, 500); // Update every 500ms
+    
+    return () => clearInterval(intervalId);
+  }, [state.isPlaying, crossfade]);
 
   // iOS Queue Prefetch: When playback starts on iOS PWA, prefetch the entire queue
   // This ensures continuous playback even when the app goes to background
