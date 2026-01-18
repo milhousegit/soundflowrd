@@ -1,6 +1,7 @@
-// Service Worker for Push Notifications and Offline Support - v0.13
-const CACHE_NAME = 'soundflow-v0.13';
-const APP_SHELL_CACHE = 'soundflow-app-shell-v0.13';
+// Service Worker for Push Notifications, Offline Support, and iOS Audio Caching - v0.14
+const CACHE_NAME = 'soundflow-v0.14';
+const APP_SHELL_CACHE = 'soundflow-app-shell-v0.14';
+const AUDIO_CACHE = 'soundflow-audio-v1';
 
 // App shell files to cache for offline access
 const APP_SHELL_FILES = [
@@ -14,16 +15,19 @@ const APP_SHELL_FILES = [
 // Dynamic assets that should be cached when fetched
 const CACHEABLE_EXTENSIONS = ['.js', '.css', '.woff2', '.woff', '.ttf', '.png', '.jpg', '.jpeg', '.svg', '.ico'];
 
+// Audio file extensions for iOS caching
+const AUDIO_EXTENSIONS = ['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.wav'];
+
 self.addEventListener('install', (event) => {
-  console.log('[SW] Service Worker v0.13 installed');
+  console.log('[SW] Service Worker v0.14 installed');
   
   event.waitUntil(
     Promise.all([
-      // Clear old caches
+      // Clear old caches (except audio cache to preserve preloaded tracks)
       caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames
-            .filter((name) => name !== CACHE_NAME && name !== APP_SHELL_CACHE)
+            .filter((name) => name !== CACHE_NAME && name !== APP_SHELL_CACHE && name !== AUDIO_CACHE)
             .map((name) => {
               console.log('[SW] Deleting old cache:', name);
               return caches.delete(name);
@@ -44,7 +48,7 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Service Worker v0.13 activated');
+  console.log('[SW] Service Worker v0.14 activated');
   event.waitUntil(clients.claim());
 });
 
@@ -55,7 +59,84 @@ const shouldCache = (url) => {
          pathname.includes('/assets/');
 };
 
-// Fetch handler with network-first for HTML, cache-first for assets
+// Helper to check if URL is an audio file
+const isAudioFile = (url) => {
+  const pathname = new URL(url).pathname.toLowerCase();
+  return AUDIO_EXTENSIONS.some(ext => pathname.endsWith(ext));
+};
+
+// Message handler for iOS audio preloading
+self.addEventListener('message', (event) => {
+  const { type, urls, url } = event.data || {};
+  
+  if (type === 'PRELOAD_AUDIO' && Array.isArray(urls)) {
+    console.log('[SW] Preloading audio tracks:', urls.length);
+    
+    caches.open(AUDIO_CACHE).then((cache) => {
+      let loaded = 0;
+      const total = urls.length;
+      
+      urls.forEach((audioUrl, index) => {
+        fetch(audioUrl, { mode: 'cors', credentials: 'omit' })
+          .then((response) => {
+            if (response.ok) {
+              cache.put(audioUrl, response);
+              loaded++;
+              console.log(`[SW] Cached audio ${loaded}/${total}`);
+              
+              // Notify all clients of progress
+              self.clients.matchAll().then((clients) => {
+                clients.forEach((client) => {
+                  client.postMessage({
+                    type: 'AUDIO_PRELOAD_PROGRESS',
+                    loaded,
+                    total,
+                  });
+                });
+              });
+            }
+          })
+          .catch((err) => {
+            console.log('[SW] Failed to preload audio:', audioUrl, err);
+          });
+      });
+    });
+  }
+  
+  if (type === 'CACHE_AUDIO' && url) {
+    console.log('[SW] Caching single audio:', url);
+    caches.open(AUDIO_CACHE).then((cache) => {
+      fetch(url, { mode: 'cors', credentials: 'omit' })
+        .then((response) => {
+          if (response.ok) {
+            cache.put(url, response);
+            console.log('[SW] Audio cached successfully');
+          }
+        })
+        .catch((err) => console.log('[SW] Failed to cache audio:', err));
+    });
+  }
+  
+  if (type === 'CLEAR_AUDIO_CACHE') {
+    console.log('[SW] Clearing audio cache');
+    caches.delete(AUDIO_CACHE).then(() => {
+      console.log('[SW] Audio cache cleared');
+    });
+  }
+  
+  if (type === 'GET_AUDIO_CACHE_SIZE') {
+    caches.open(AUDIO_CACHE).then((cache) => {
+      cache.keys().then((keys) => {
+        event.source.postMessage({
+          type: 'AUDIO_CACHE_SIZE',
+          count: keys.length,
+        });
+      });
+    });
+  }
+});
+
+// Fetch handler with network-first for HTML, cache-first for assets and audio
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -63,7 +144,32 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return;
   
-  // Skip external requests
+  // Handle audio files - cache-first strategy for iOS background playback
+  if (isAudioFile(request.url)) {
+    event.respondWith(
+      caches.match(request).then((cachedResponse) => {
+        if (cachedResponse) {
+          console.log('[SW] Audio cache hit:', url.pathname);
+          return cachedResponse;
+        }
+        
+        // Fetch from network and cache
+        return fetch(request).then((networkResponse) => {
+          if (networkResponse.ok) {
+            const responseToCache = networkResponse.clone();
+            caches.open(AUDIO_CACHE).then((cache) => {
+              cache.put(request, responseToCache);
+              console.log('[SW] Audio cached on fetch:', url.pathname);
+            });
+          }
+          return networkResponse;
+        });
+      })
+    );
+    return;
+  }
+  
+  // Skip external requests (except for audio which is handled above)
   if (!url.origin.includes(self.location.origin)) return;
   
   // Skip API and Supabase requests

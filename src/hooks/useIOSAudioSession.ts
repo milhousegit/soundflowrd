@@ -56,6 +56,7 @@ export const isSafari = (): boolean => {
 export const isPWA = (): boolean => {
   if (typeof window === 'undefined') return false;
   return window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches ||
     (window.navigator as any).standalone === true;
 };
 

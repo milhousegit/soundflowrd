@@ -377,7 +377,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Ref to track crossfade mode for callbacks
   const useCrossfadeModeRef = useRef(useCrossfadeMode);
   useCrossfadeModeRef.current = useCrossfadeMode;
-
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
   const [currentStreamId, setCurrentStreamId] = useState<string>();
@@ -1985,6 +1984,60 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const timeout = setTimeout(preSyncNextTrack, 3000);
     return () => clearTimeout(timeout);
   }, [audioSourceMode, credentials, saveFileMapping, state.currentTrack, state.isPlaying, state.queue, state.queueIndex]);
+
+  // iOS Queue Preloading - Dispatch events for IOSPreloadIndicator
+  useEffect(() => {
+    if (!isIOS() || !isPWA()) return;
+    if (!state.isPlaying || state.queue.length === 0) return;
+    
+    const preloadNextTracks = async () => {
+      const maxPreload = 5;
+      const startIndex = state.queueIndex + 1;
+      const endIndex = Math.min(startIndex + maxPreload, state.queue.length);
+      const tracksToPreload = state.queue.slice(startIndex, endIndex);
+      
+      if (tracksToPreload.length === 0) return;
+      
+      console.log('[iOS Preload] Starting batch preload for', tracksToPreload.length, 'tracks');
+      
+      // Dispatch initial status
+      window.dispatchEvent(new CustomEvent('ios-preload-update', {
+        detail: { loaded: 0, total: tracksToPreload.length, cached: 0 }
+      }));
+      
+      let loaded = 0;
+      const tidalQuality = mapQualityToTidal(settings.audioQuality);
+      
+      // Preload sequentially to avoid overwhelming
+      for (const track of tracksToPreload) {
+        try {
+          const result = await getTidalStream(track.title, track.artist, tidalQuality);
+          if ('streamUrl' in result && result.streamUrl) {
+            loaded++;
+            window.dispatchEvent(new CustomEvent('ios-preload-update', {
+              detail: { loaded, total: tracksToPreload.length, cached: loaded }
+            }));
+            
+            // Cache in Service Worker
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({
+                type: 'CACHE_AUDIO',
+                url: result.streamUrl
+              });
+            }
+          }
+        } catch (error) {
+          console.log('[iOS Preload] Failed for:', track.title);
+        }
+      }
+      
+      console.log('[iOS Preload] Complete:', loaded, '/', tracksToPreload.length);
+    };
+    
+    // Delay preload to not interfere with current track
+    const timeout = setTimeout(preloadNextTracks, 5000);
+    return () => clearTimeout(timeout);
+  }, [state.isPlaying, state.queueIndex, state.queue.length, settings.audioQuality]);
 
   return (
     <PlayerContext.Provider
