@@ -1,4 +1,4 @@
-// PlayerContext - Audio playback state management (v2.2 - Enhanced lifecycle logging)
+// PlayerContext - Audio playback state management (v2.3 - AudioContext Crossfade)
 import React, {
   createContext,
   useCallback,
@@ -14,7 +14,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Track, type PlayerState } from '@/types/music';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
-import { useIOSAudioSession } from '@/hooks/useIOSAudioSession';
+import { useIOSAudioSession, isIOS, isPWA } from '@/hooks/useIOSAudioSession';
+import { useCrossfade } from '@/hooks/useCrossfade';
 
 import {
   type AudioFile,
@@ -359,6 +360,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const { audioSourceMode, settings } = useSettings();
   // iOS audio session management (uses only refs internally)
   const iosAudio = useIOSAudioSession();
+  
+  // AudioContext-based crossfade for iOS (new system)
+  const crossfade = useCrossfade();
+  const usingAudioContextCrossfadeRef = useRef(false);
 
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
@@ -975,10 +980,19 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Simplified unlock - only quickUnlock, no aggressive keepAlive
+  // Simplified unlock - also initialize crossfade AudioContext
   const tryUnlockAudioFromUserGesture = useCallback(() => {
     iosAudio.quickUnlock();
-  }, [iosAudio]);
+    
+    // Initialize crossfade AudioContext on user gesture if crossfade is enabled
+    if (settings.crossfadeEnabled && isIOS() && isPWA()) {
+      crossfade.initialize().then(success => {
+        if (success) {
+          console.log('[PlayerContext] Crossfade AudioContext initialized on user gesture');
+        }
+      });
+    }
+  }, [iosAudio, settings.crossfadeEnabled, crossfade]);
 
   const saveFileMapping = useCallback(async (params: {
     track: Track;
@@ -2037,6 +2051,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           prefetchedTrackIdRef.current = nextTrack.id;
           console.log('[Prefetch] Prefetched:', nextTrack.title);
           addDebugLog('📥 Pre-caricato', `"${nextTrack.title}" pronto`, 'success');
+          
+          // NEW: If crossfade is enabled on iOS PWA, also preload into AudioContext
+          if (settings.crossfadeEnabled && isIOS() && isPWA()) {
+            console.log('[Prefetch] Preloading into AudioContext crossfade system');
+            crossfade.preloadNext(tidalResult.streamUrl, nextTrack.id).then(success => {
+              if (success) {
+                addDebugLog('🔊 AudioContext pre-caricato', `"${nextTrack.title}"`, 'success');
+              }
+            }).catch(err => {
+              console.log('[Prefetch] AudioContext preload failed:', err);
+            });
+          }
         }
       } catch (error) {
         console.log('[Prefetch] Failed:', error);
@@ -2076,14 +2102,52 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
     };
     
+    // Handle AudioContext crossfade complete - triggered by useCrossfade hook
+    const handleAudioContextCrossfadeComplete = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const { trackId } = detail;
+      
+      // Find the track index in the queue
+      const trackIndex = state.queue.findIndex(t => t.id === trackId);
+      if (trackIndex >= 0 && trackIndex < state.queue.length) {
+        const track = state.queue[trackIndex];
+        console.log('[AudioContext Crossfade] Updating state to track:', track?.title);
+        
+        setState((prev) => ({
+          ...prev,
+          queueIndex: trackIndex,
+          currentTrack: track,
+          isPlaying: true,
+          progress: 0,
+          duration: track?.duration || 0,
+        }));
+        
+        setCurrentAudioSource('tidal');
+        setLoadingPhase('idle');
+        
+        if (track) {
+          updateMediaSessionMetadata(track, true);
+          saveRecentlyPlayedTrack(track, user?.id);
+          addDebugLog('🔊 AudioContext crossfade completo', `"${track.title}"`, 'success');
+        }
+        
+        // Start prefetching the next track
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('prefetch-next-track'));
+        }, 3000);
+      }
+    };
+    
     window.addEventListener('prefetch-next-track', handlePrefetchNextTrack);
     window.addEventListener('crossfade-complete', handleCrossfadeComplete);
+    window.addEventListener('audiocontext-crossfade-complete', handleAudioContextCrossfadeComplete);
     
     return () => {
       window.removeEventListener('prefetch-next-track', handlePrefetchNextTrack);
       window.removeEventListener('crossfade-complete', handleCrossfadeComplete);
+      window.removeEventListener('audiocontext-crossfade-complete', handleAudioContextCrossfadeComplete);
     };
-  }, [state.queue, state.queueIndex, settings.audioQuality, addDebugLog, user?.id]);
+  }, [state.queue, state.queueIndex, settings.audioQuality, settings.crossfadeEnabled, addDebugLog, user?.id, crossfade]);
 
   // Note: Media Session next/previous handlers are set up in the audio initialization useEffect
 
