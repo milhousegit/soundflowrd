@@ -245,6 +245,91 @@ export const useCrossfade = () => {
     
     return buffer.duration;
   }, [initialize, loadBuffer, createSourceFromBuffer, addLog]);
+
+  /**
+   * Play directly from a pre-loaded AudioBuffer (for iOS background playback)
+   * This bypasses URL fetching entirely - uses buffers from queuePrefetch
+   */
+  const playFromBuffer = useCallback(async (
+    buffer: AudioBuffer,
+    trackId: string,
+    options?: {
+      onTrackEnd?: () => void;
+      onCrossfadeComplete?: (trackId: string) => void;
+    }
+  ): Promise<number> => {
+    // Initialize context if needed
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      const success = await initialize();
+      if (!success) {
+        addLog('error', 'Failed to initialize AudioContext for buffer playback');
+        return 0;
+      }
+    }
+    
+    const ctx = audioContextRef.current!;
+    
+    // Resume if suspended
+    if (ctx.state === 'suspended') {
+      try {
+        await ctx.resume();
+        addLog('info', 'AudioContext resumed for buffer playback');
+      } catch (e) {
+        addLog('error', `Failed to resume: ${e}`);
+        return 0;
+      }
+    }
+    
+    // Store callbacks
+    onTrackEndRef.current = options?.onTrackEnd || null;
+    onCrossfadeCompleteRef.current = options?.onCrossfadeComplete || null;
+    
+    // Stop current playback
+    stopCurrent();
+    
+    // Create gain node
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(masterVolumeRef.current, ctx.currentTime);
+    gainNode.connect(ctx.destination);
+    
+    // Create source from provided buffer
+    const source = createSourceFromBuffer(buffer, gainNode);
+    
+    // Store refs
+    currentSourceRef.current = source;
+    currentGainRef.current = gainNode;
+    currentBufferRef.current = buffer;
+    currentStartTimeRef.current = ctx.currentTime;
+    
+    // Start playback
+    source.start(0);
+    isActiveRef.current = true;
+    addLog('success', `Playing from buffer: ${trackId} (duration: ${buffer.duration.toFixed(1)}s)`);
+    
+    // Set up crossfade timer (start crossfade X seconds before end)
+    const crossfadeStartTime = (buffer.duration - CROSSFADE_START_BEFORE_END_SECONDS) * 1000;
+    
+    if (crossfadeStartTime > 0) {
+      clearCrossfadeTimer();
+      
+      crossfadeTimerRef.current = window.setTimeout(() => {
+        addLog('info', 'Crossfade timer triggered (buffer playback)');
+        triggerCrossfade();
+      }, crossfadeStartTime);
+      
+      addLog('info', `Crossfade scheduled in ${(crossfadeStartTime / 1000).toFixed(1)}s`);
+    }
+    
+    // Handle track end (fallback if crossfade doesn't happen)
+    source.onended = () => {
+      if (!isCrossfadingRef.current && isActiveRef.current) {
+        addLog('info', 'Buffer track ended naturally (no crossfade)');
+        onTrackEndRef.current?.();
+      }
+    };
+    
+    return buffer.duration;
+  }, [initialize, createSourceFromBuffer, addLog]);
   
   /**
    * Preload next track for crossfade
@@ -618,11 +703,43 @@ export const useCrossfade = () => {
     };
   }, [stopCurrent, clearCrossfadeTimer]);
   
+  /**
+   * Preload next track from an existing AudioBuffer (for queuePrefetch integration)
+   */
+  const preloadNextFromBuffer = useCallback((buffer: AudioBuffer, trackId: string): boolean => {
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      addLog('error', 'No AudioContext for buffer preload');
+      return false;
+    }
+    
+    // Already preloaded?
+    if (nextTrackIdRef.current === trackId && nextBufferRef.current) {
+      addLog('info', `Track ${trackId} already preloaded`);
+      return true;
+    }
+    
+    const ctx = audioContextRef.current;
+    
+    // Create gain node (muted initially)
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    gainNode.connect(ctx.destination);
+    
+    nextBufferRef.current = buffer;
+    nextGainRef.current = gainNode;
+    nextTrackIdRef.current = trackId;
+    
+    addLog('success', `Preloaded from buffer: ${trackId} (${buffer.duration.toFixed(1)}s)`);
+    return true;
+  }, [addLog]);
+
   return {
     // Core functions
     initialize,
     playWithCrossfade,
+    playFromBuffer,
     preloadNext,
+    preloadNextFromBuffer,
     triggerCrossfade,
     stopCurrent,
     pause,
