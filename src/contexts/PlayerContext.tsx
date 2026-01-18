@@ -572,6 +572,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
   }, [state.isPlaying, state.queueIndex, state.currentTrack]);
 
+  // Crossfade enabled ref (synced with settings for use in event handlers)
+  const crossfadeEnabledRef = useRef(settings.crossfadeEnabled);
+  useEffect(() => {
+    crossfadeEnabledRef.current = settings.crossfadeEnabled;
+  }, [settings.crossfadeEnabled]);
+
   useEffect(() => {
     const getMediaSessionSnapshot = () => {
       if (!('mediaSession' in navigator)) return null;
@@ -690,6 +696,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     // CROSSFADE TRANSITION: Start crossfade 10s before end
     // This avoids relying on `ended` event which can fail when JS is suspended
+    // Only active when settings.crossfadeEnabled is true (checked via crossfadeEnabledRef)
     const CROSSFADE_START_SECONDS = 10;
     const CROSSFADE_DURATION_MS = 3000; // 3 second crossfade
 
@@ -809,8 +816,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }, 2500);
         }
 
-        // CROSSFADE: Trigger 10s before end (only once per track)
-        if (remaining <= CROSSFADE_START_SECONDS && remaining > CROSSFADE_START_SECONDS - 1) {
+        // CROSSFADE: Trigger 10s before end (only once per track, only if enabled)
+        if (crossfadeEnabledRef.current && remaining <= CROSSFADE_START_SECONDS && remaining > CROSSFADE_START_SECONDS - 1) {
           const { queueIndex } = lifecycleRef.current;
           const currentTrackId = lifecycleRef.current.track?.id;
           
