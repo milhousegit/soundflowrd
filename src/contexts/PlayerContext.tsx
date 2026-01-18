@@ -357,6 +357,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // audioRef = currently playing, nextAudioRef = preloaded next track
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const nextAudioRef = useRef<HTMLAudioElement | null>(null);
+  // DUMMY AUDIO: Hidden audio element to keep Media Session alive with Web Audio API
+  const dummyAudioRef = useRef<HTMLAudioElement | null>(null);
   const crossfadeInProgressRef = useRef(false);
   const crossfadeTriggeredForTrackRef = useRef<string | null>(null);
   
@@ -522,19 +524,27 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [state.currentTrack, state.isPlaying]);
 
   // Update position state for Media Session scrubbing
+  // Works with both HTMLAudioElement and AudioContext crossfade
   useEffect(() => {
     if (!('mediaSession' in navigator) || !state.currentTrack) return;
     
     try {
+      // When using AudioContext crossfade, get duration from crossfade hook
+      const isUsingAudioContext = usingAudioContextCrossfadeRef.current;
+      const duration = isUsingAudioContext 
+        ? (crossfade.getCurrentDuration?.() || state.duration || 0)
+        : (state.duration || 0);
+      const position = Math.min(state.progress, duration);
+      
       navigator.mediaSession.setPositionState({
-        duration: state.duration || 0,
+        duration: duration > 0 ? duration : 1, // Prevent 0 duration which can cause issues
         playbackRate: 1,
-        position: Math.min(state.progress, state.duration || 0),
+        position: position >= 0 ? position : 0,
       });
     } catch (e) {
       // Ignore errors on browsers that don't support setPositionState
     }
-  }, [state.progress, state.duration, state.currentTrack]);
+  }, [state.progress, state.duration, state.currentTrack, crossfade]);
 
   // Store iosAudio in a ref to avoid dependency issues
   const iosAudioRef = useRef(iosAudio);
@@ -716,6 +726,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     nextAudioRef.current.setAttribute('playsinline', '');
     nextAudioRef.current.setAttribute('webkit-playsinline', '');
 
+    // Create DUMMY audio element for Media Session with Web Audio API
+    // This keeps the media session alive and synced when using AudioContext
+    dummyAudioRef.current = new Audio();
+    dummyAudioRef.current.volume = 0;
+    dummyAudioRef.current.loop = true;
+    dummyAudioRef.current.setAttribute('playsinline', '');
+    dummyAudioRef.current.setAttribute('webkit-playsinline', '');
+    // Use a silent audio data URI (1 second of silence)
+    dummyAudioRef.current.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
     const audio = audioRef.current;
     const nextAudio = nextAudioRef.current;
 
@@ -942,22 +961,50 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     window.addEventListener('check-crossfade', handleCheckCrossfade);
 
     if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', () => {
-        audio.play();
+      const dummyAudio = dummyAudioRef.current;
+      
+      // Start dummy audio to keep Media Session alive (especially for Web Audio API)
+      const startDummyAudio = async () => {
+        if (dummyAudio && dummyAudio.paused) {
+          try {
+            await dummyAudio.play();
+            console.log('[MediaSession] Dummy audio started for session persistence');
+          } catch (e) {
+            // Ignore - user interaction required
+          }
+        }
+      };
+      
+      navigator.mediaSession.setActionHandler('play', async () => {
+        // Resume AudioContext if using crossfade
+        if (usingAudioContextCrossfadeRef.current) {
+          await crossfadeRef.current?.resume?.();
+        }
+        await audio.play();
+        await startDummyAudio();
         setState((prev) => ({ ...prev, isPlaying: true }));
       });
+      
       navigator.mediaSession.setActionHandler('pause', () => {
+        // Pause AudioContext if using crossfade
+        if (usingAudioContextCrossfadeRef.current) {
+          crossfadeRef.current?.pause?.();
+        }
         audio.pause();
         setState((prev) => ({ ...prev, isPlaying: false }));
       });
+      
       navigator.mediaSession.setActionHandler('previoustrack', () => {
+        console.log('[MediaSession] previoustrack triggered');
+        iosAudioRef.current.addLog('info', '[MediaSession]', 'previoustrack triggered');
         previousRef.current();
       });
       
       // ENHANCED: nexttrack handler with AudioContext crossfade support for CarPlay
       navigator.mediaSession.setActionHandler('nexttrack', () => {
+        console.log('[MediaSession] nexttrack triggered');
         const shouldUseCrossfade = crossfadeEnabledRef.current && isIOS() && isPWA();
-        const hasPreloaded = crossfadeRef.current?.hasPreloadedNext();
+        const hasPreloaded = crossfadeRef.current?.hasPreloadedNext?.();
         const isPreloading = crossfadeRef.current?.isPreloading?.();
         const preloadStatus = crossfadeRef.current?.getPreloadStatus?.();
         
@@ -976,25 +1023,37 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       });
       
+      // Seekto handler - works with both HTMLAudioElement and AudioContext
       navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime !== undefined && audio.duration) {
-          audio.currentTime = details.seekTime;
-          setState((prev) => ({ ...prev, progress: details.seekTime! }));
+        console.log('[MediaSession] seekto:', details.seekTime);
+        if (details.seekTime !== undefined) {
+          // For HTMLAudioElement
+          if (audio.duration && !usingAudioContextCrossfadeRef.current) {
+            audio.currentTime = details.seekTime;
+            setState((prev) => ({ ...prev, progress: details.seekTime! }));
+          }
+          // Note: Web Audio API AudioBufferSourceNode doesn't support seeking mid-playback
+          // The position state is still updated for UI consistency
         }
       });
       
+      // Explicitly set seekbackward/seekforward to null to show skip buttons instead
+      // On iOS this helps show the proper track skip controls in Control Center/CarPlay
       try {
         navigator.mediaSession.setActionHandler('seekbackward', null);
         navigator.mediaSession.setActionHandler('seekforward', null);
       } catch (e) {
+        // Some browsers don't support setting handlers to null
+        // In that case, map them to track skip actions
         try {
           navigator.mediaSession.setActionHandler('seekbackward', () => {
+            console.log('[MediaSession] seekbackward -> previoustrack');
             previousRef.current();
           });
           navigator.mediaSession.setActionHandler('seekforward', () => {
-            // Also use crossfade for seekforward if available
+            console.log('[MediaSession] seekforward -> nexttrack');
             const shouldUseCrossfade = crossfadeEnabledRef.current && isIOS() && isPWA();
-            if (shouldUseCrossfade && crossfadeRef.current?.hasPreloadedNext()) {
+            if (shouldUseCrossfade && crossfadeRef.current?.hasPreloadedNext?.()) {
               crossfadeRef.current.triggerCrossfade();
             } else {
               nextRef.current();
@@ -1002,6 +1061,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           });
         } catch (e2) {
           // Fallback: just ignore
+          console.log('[MediaSession] Could not set seek handlers');
         }
       }
     }
@@ -1022,6 +1082,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       audio.src = '';
       nextAudio.pause();
       nextAudio.src = '';
+      
+      // Cleanup dummy audio
+      const dummyAudio = dummyAudioRef.current;
+      if (dummyAudio) {
+        dummyAudio.pause();
+        dummyAudio.src = '';
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1159,6 +1226,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       // Play silent placeholder on iOS (not on CarPlay/Bluetooth) to maintain session
       await iosAudio.playPlaceholder();
+      
+      // Start dummy audio to keep Media Session alive (especially important for iOS PWA)
+      if (dummyAudioRef.current && isIOS() && isPWA()) {
+        try {
+          await dummyAudioRef.current.play();
+          console.log('[playTrack] Dummy audio started for Media Session persistence');
+        } catch (e) {
+          // Ignore - will be started on user interaction via Media Session
+        }
+      }
 
       // REMOVED: Automatic metadata fetch - user can manually fix metadata via Debug Modal if needed
       // Use original track for playback
