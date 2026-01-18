@@ -16,6 +16,7 @@ import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 import { useIOSAudioSession, isIOS, isPWA } from '@/hooks/useIOSAudioSession';
 import { useCrossfade } from '@/hooks/useCrossfade';
+import { useQueuePrefetch, type QueuePrefetchState } from '@/hooks/useQueuePrefetch';
 
 import {
   type AudioFile,
@@ -116,6 +117,9 @@ interface PlayerContextType extends PlayerState {
   currentAudioSource: AudioSource;
   
   updateTrackMetadata: (oldTrackId: string, newData: { id: string; title: string; artist: string; album?: string; coverUrl?: string; duration?: number }) => void;
+  
+  // Queue prefetch state for iOS
+  queuePrefetchState: QueuePrefetchState;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -365,6 +369,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const crossfade = useCrossfade();
   const crossfadeRef = useRef(crossfade);
   const usingAudioContextCrossfadeRef = useRef(false);
+  
+  // Queue prefetch for iOS background playback
+  const queuePrefetch = useQueuePrefetch();
   
   // Keep crossfadeRef updated
   useEffect(() => {
@@ -2225,6 +2232,52 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
   }, [state.queue, state.queueIndex, settings.audioQuality, settings.crossfadeEnabled, addDebugLog, user?.id, crossfade]);
 
+  // iOS Queue Prefetch: When playback starts on iOS PWA, prefetch the entire queue
+  // This ensures continuous playback even when the app goes to background
+  useEffect(() => {
+    if (!isIOS() || !isPWA()) return;
+    if (!state.isPlaying || !state.currentTrack) return;
+    if (state.queue.length <= 1) return;
+    
+    // Trigger queue prefetch after a short delay (let current track start playing)
+    const timeout = setTimeout(() => {
+      console.log('[QueuePrefetch] Triggering full queue prefetch for iOS background playback');
+      iosAudioRef.current.addLog('info', '[QueuePrefetch]', `Starting full queue prefetch (${state.queue.length - state.queueIndex - 1} tracks ahead)`);
+      
+      queuePrefetch.prefetchQueue(state.queue, state.queueIndex, {
+        maxTracks: 15, // Prefetch up to 15 tracks ahead
+        forceRestart: false, // Resume from where we left off
+      });
+    }, 2000);
+    
+    return () => clearTimeout(timeout);
+  }, [state.isPlaying, state.currentTrack?.id, state.queue, state.queueIndex, queuePrefetch]);
+
+  // Resume queue prefetch when app comes back to foreground
+  useEffect(() => {
+    if (!isIOS() || !isPWA()) return;
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && state.isPlaying && state.queue.length > 1) {
+        // Resume prefetching if there are still tracks to prefetch
+        const { fetchedCount, totalTracks, isActive } = queuePrefetch.state;
+        
+        if (!isActive && fetchedCount < totalTracks) {
+          console.log('[QueuePrefetch] Resuming prefetch on visibility change');
+          iosAudioRef.current.addLog('info', '[QueuePrefetch]', 'Resuming prefetch (app visible)');
+          
+          queuePrefetch.prefetchQueue(state.queue, state.queueIndex, {
+            maxTracks: 15,
+            forceRestart: false, // Important: resume, not restart
+          });
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [state.isPlaying, state.queue, state.queueIndex, queuePrefetch]);
+
   // Note: Media Session next/previous handlers are set up in the audio initialization useEffect
 
   // Auto-poll downloading torrents (kept, without YouTube interplay)
@@ -2408,6 +2461,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         toggleShuffle,
         currentAudioSource,
         updateTrackMetadata,
+        queuePrefetchState: queuePrefetch.state,
       }}
     >
       {children}
@@ -2471,6 +2525,15 @@ export const usePlayer = () => {
       currentAudioSource: null,
 
       updateTrackMetadata: () => {},
+      
+      queuePrefetchState: {
+        totalTracks: 0,
+        fetchedCount: 0,
+        bufferReadyCount: 0,
+        currentlyFetching: null,
+        lastFetchedIndex: -1,
+        isActive: false,
+      },
     } as any;
   }
 

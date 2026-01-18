@@ -4,10 +4,19 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Player from './Player';
 import MobileNav from './MobileNav';
+import { QueuePrefetchIndicator } from './QueuePrefetchIndicator';
 import { usePlayer } from '@/contexts/PlayerContext';
 
+// Check if iOS PWA
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent);
+const isPWA = () => window.matchMedia('(display-mode: standalone)').matches || 
+                    (window.navigator as any).standalone === true;
+
 const Layout: React.FC = () => {
-  const { currentTrack } = usePlayer();
+  const { currentTrack, queuePrefetchState } = usePlayer();
+  
+  // Only show prefetch indicator on iOS PWA when playing
+  const showPrefetchIndicator = isIOS() && isPWA() && currentTrack && queuePrefetchState.totalTracks > 0;
 
   return (
     <div className="flex h-screen bg-background overflow-hidden pt-[env(safe-area-inset-top)]">
@@ -17,6 +26,10 @@ const Layout: React.FC = () => {
       </main>
       <Player />
       <MobileNav />
+      <QueuePrefetchIndicator 
+        state={queuePrefetchState} 
+        isVisible={showPrefetchIndicator} 
+      />
     </div>
   );
 };

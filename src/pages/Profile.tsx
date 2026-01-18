@@ -64,6 +64,7 @@ const Settings: React.FC = () => {
   const [showCloudSection, setShowCloudSection] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showPaymentPendingBanner, setShowPaymentPendingBanner] = useState(false);
+  const [showCrossfadeInfo, setShowCrossfadeInfo] = useState(false);
 
   // Check if user has active premium (respect simulation mode)
   const isPremiumActive = !simulateFreeUser && profile?.is_premium && (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at)));
@@ -679,9 +680,17 @@ const Settings: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-foreground">{t('crossfade')}</span>
                   {/iPad|iPhone|iPod/.test(navigator.userAgent) ? (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium shrink-0">
-                      {settings.language === 'it' ? 'Sempre attivo su iOS' : 'Always on iOS'}
-                    </span>
+                    <>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium shrink-0">
+                        {settings.language === 'it' ? 'Sempre attivo su iOS' : 'Always on iOS'}
+                      </span>
+                      <button
+                        onClick={() => setShowCrossfadeInfo(true)}
+                        className="w-4 h-4 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground hover:bg-muted/80 transition-colors"
+                      >
+                        i
+                      </button>
+                    </>
                   ) : (
                     <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-medium shrink-0">
                       {settings.language === 'it' ? 'Consigliato iOS' : 'Recommended iOS'}
@@ -691,8 +700,8 @@ const Settings: React.FC = () => {
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {/iPad|iPhone|iPod/.test(navigator.userAgent) 
                     ? (settings.language === 'it' 
-                        ? 'Attivo automaticamente per transizioni gapless' 
-                        : 'Automatically enabled for gapless transitions')
+                        ? 'Pre-carica la coda per riproduzione in background' 
+                        : 'Preloads queue for background playback')
                     : (settings.language === 'it' 
                         ? 'Transizione fluida tra brani per evitare interruzioni' 
                         : 'Smooth transition between tracks to avoid interruptions')}
@@ -709,6 +718,47 @@ const Settings: React.FC = () => {
                 />
               )}
             </div>
+
+            {/* Crossfade Info Modal for iOS */}
+            {showCrossfadeInfo && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCrossfadeInfo(false)}>
+                <div className="bg-card rounded-2xl p-5 mx-4 max-w-sm shadow-2xl border border-border" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                      <span className="text-sm font-bold text-primary">i</span>
+                    </div>
+                    <h3 className="text-base font-semibold text-foreground">
+                      {settings.language === 'it' ? 'Perché sempre attivo?' : 'Why always on?'}
+                    </h3>
+                  </div>
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <p>
+                      {settings.language === 'it' 
+                        ? 'iOS ha limitazioni che bloccano il caricamento audio quando l\'app è in background o lo schermo è bloccato.'
+                        : 'iOS has limitations that block audio loading when the app is in background or the screen is locked.'}
+                    </p>
+                    <p>
+                      {settings.language === 'it'
+                        ? 'Per garantire la riproduzione continua, l\'app pre-carica automaticamente tutte le tracce della coda quando inizi a riprodurre.'
+                        : 'To ensure continuous playback, the app automatically preloads all tracks in the queue when you start playing.'}
+                    </p>
+                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <p className="text-amber-400 text-xs font-medium">
+                        {settings.language === 'it'
+                          ? '💡 Consiglio: Attendi qualche secondo che la barra di pre-caricamento si completi prima di bloccare lo schermo o uscire dall\'app.'
+                          : '💡 Tip: Wait a few seconds for the preload bar to complete before locking the screen or leaving the app.'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowCrossfadeInfo(false)}
+                    className="mt-4 w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm"
+                  >
+                    {settings.language === 'it' ? 'Ho capito' : 'Got it'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
