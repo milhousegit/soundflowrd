@@ -452,6 +452,25 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const success = await crossfade.playFromUrl(url);
         if (success) {
           setState((prev) => ({ ...prev, isPlaying: true }));
+
+          // iOS widget anchor: keep a silent <audio> playing so the system shows the widget
+          // and keeps a stable media session while WebAudio is running.
+          const anchor = audioRef.current;
+          if (anchor && isIOS() && isPWA() && !iosAudio.isExternalDevice()) {
+            // Only initialize once per session
+            if (!anchor.src) {
+              anchor.loop = true;
+              anchor.volume = 0.001;
+              anchor.preload = 'auto';
+              anchor.src =
+                'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNAAAAAAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNAAAAAAAAAAAAAAAAAAAA';
+            }
+
+            // Best-effort: may fail if not initiated by gesture; ignore.
+            if (anchor.paused) {
+              anchor.play().catch(() => {});
+            }
+          }
         }
         return success;
       } catch (error) {
@@ -459,14 +478,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         return false;
       }
     }
-    
+
     // Standard mode: use HTMLAudioElement
     if (audioRef.current) {
       audioRef.current.src = url;
       return safePlay(audioRef.current);
     }
     return false;
-  }, [crossfade, safePlay]);
+  }, [crossfade, safePlay, iosAudio]);
 
   const [state, setState] = useState<PlayerState>({
     currentTrack: null,
@@ -636,10 +655,23 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     if ('mediaSession' in navigator) {
       navigator.mediaSession.setActionHandler('play', () => {
+        if (useCrossfadeModeRef.current) {
+          void crossfade.resume().then((ok) => {
+            if (ok) setState((prev) => ({ ...prev, isPlaying: true }));
+          });
+          return;
+        }
         audio.play();
         setState((prev) => ({ ...prev, isPlaying: true }));
       });
       navigator.mediaSession.setActionHandler('pause', () => {
+        if (useCrossfadeModeRef.current) {
+          crossfade.pause();
+          // Also pause the iOS widget anchor if it is running
+          audio.pause();
+          setState((prev) => ({ ...prev, isPlaying: false }));
+          return;
+        }
         audio.pause();
         setState((prev) => ({ ...prev, isPlaying: false }));
       });
@@ -650,7 +682,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         nextRef.current();
       });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime !== undefined && audio.duration) {
+        if (details.seekTime === undefined) return;
+
+        if (useCrossfadeModeRef.current) {
+          void crossfade.seek(details.seekTime);
+          setState((prev) => ({ ...prev, progress: details.seekTime! }));
+          return;
+        }
+
+        if (audio.duration) {
           audio.currentTime = details.seekTime;
           setState((prev) => ({ ...prev, progress: details.seekTime! }));
         }
