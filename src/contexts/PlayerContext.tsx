@@ -357,8 +357,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // audioRef = currently playing, nextAudioRef = preloaded next track
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const nextAudioRef = useRef<HTMLAudioElement | null>(null);
-  // DUMMY AUDIO: Hidden audio element to keep Media Session alive with Web Audio API
-  const dummyAudioRef = useRef<HTMLAudioElement | null>(null);
   const crossfadeInProgressRef = useRef(false);
   const crossfadeTriggeredForTrackRef = useRef<string | null>(null);
   
@@ -726,15 +724,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     nextAudioRef.current.setAttribute('playsinline', '');
     nextAudioRef.current.setAttribute('webkit-playsinline', '');
 
-    // DUMMY AUDIO: Optional - for keeping Media Session alive on iOS with Web Audio
-    // Only create if needed to avoid potential interference with main playback
-    if (isIOS() && isPWA()) {
-      dummyAudioRef.current = new Audio();
-      dummyAudioRef.current.volume = 0.001; // Near-silent but not muted (iOS requires audible audio)
-      dummyAudioRef.current.loop = true;
-      dummyAudioRef.current.setAttribute('playsinline', '');
-      dummyAudioRef.current.setAttribute('webkit-playsinline', '');
-    }
+    // Note: Dummy audio removed - the existing iOS audio session keep-alive handles this
     
     const audio = audioRef.current;
     const nextAudio = nextAudioRef.current;
@@ -1075,12 +1065,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       nextAudio.pause();
       nextAudio.src = '';
       
-      // Cleanup dummy audio
-      const dummyAudio = dummyAudioRef.current;
-      if (dummyAudio) {
-        dummyAudio.pause();
-        dummyAudio.src = '';
-      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
