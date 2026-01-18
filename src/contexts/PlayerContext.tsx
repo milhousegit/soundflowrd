@@ -522,19 +522,27 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [state.currentTrack, state.isPlaying]);
 
   // Update position state for Media Session scrubbing
+  // Works with both HTMLAudioElement and AudioContext crossfade
   useEffect(() => {
     if (!('mediaSession' in navigator) || !state.currentTrack) return;
     
     try {
+      // When using AudioContext crossfade, get duration from crossfade hook
+      const isUsingAudioContext = usingAudioContextCrossfadeRef.current;
+      const duration = isUsingAudioContext 
+        ? (crossfade.getCurrentDuration?.() || state.duration || 0)
+        : (state.duration || 0);
+      const position = Math.min(state.progress, duration);
+      
       navigator.mediaSession.setPositionState({
-        duration: state.duration || 0,
+        duration: duration > 0 ? duration : 1, // Prevent 0 duration which can cause issues
         playbackRate: 1,
-        position: Math.min(state.progress, state.duration || 0),
+        position: position >= 0 ? position : 0,
       });
     } catch (e) {
       // Ignore errors on browsers that don't support setPositionState
     }
-  }, [state.progress, state.duration, state.currentTrack]);
+  }, [state.progress, state.duration, state.currentTrack, crossfade]);
 
   // Store iosAudio in a ref to avoid dependency issues
   const iosAudioRef = useRef(iosAudio);
@@ -716,6 +724,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     nextAudioRef.current.setAttribute('playsinline', '');
     nextAudioRef.current.setAttribute('webkit-playsinline', '');
 
+    // Note: Dummy audio removed - the existing iOS audio session keep-alive handles this
+    
     const audio = audioRef.current;
     const nextAudio = nextAudioRef.current;
 
@@ -916,10 +926,26 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const handleError = (e: Event) => {
       console.error('[PlayerContext] Audio error:', e);
+      const audioElement = e.target as HTMLAudioElement;
+      const errorCode = audioElement?.error?.code;
+      const errorMessage = audioElement?.error?.message;
+      
+      console.log('[PlayerContext] Error details:', { errorCode, errorMessage });
+      iosAudioRef.current.addLog('error', '[Audio]', `Error code: ${errorCode}, message: ${errorMessage}`);
+      
+      // Auto-skip to next track on certain errors (network errors, decode errors)
+      if (errorCode && errorCode !== MediaError.MEDIA_ERR_ABORTED) {
+        console.log('[PlayerContext] Auto-skipping to next track due to audio error');
+        // Small delay to avoid rapid skipping
+        setTimeout(() => {
+          nextRef.current();
+        }, 1000);
+      }
     };
 
     const handleStalled = () => {
       console.log('[PlayerContext] Audio stalled');
+      iosAudioRef.current.addLog('warning', '[Audio]', 'Playback stalled');
     };
 
     // Listen for crossfade check event
@@ -942,22 +968,41 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     window.addEventListener('check-crossfade', handleCheckCrossfade);
 
     if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', () => {
-        audio.play();
-        setState((prev) => ({ ...prev, isPlaying: true }));
+      navigator.mediaSession.setActionHandler('play', async () => {
+        console.log('[MediaSession] play triggered');
+        // Resume AudioContext if using crossfade
+        if (usingAudioContextCrossfadeRef.current) {
+          await crossfadeRef.current?.resume?.();
+        }
+        try {
+          await audio.play();
+          setState((prev) => ({ ...prev, isPlaying: true }));
+        } catch (e) {
+          console.log('[MediaSession] play failed:', e);
+        }
       });
+      
       navigator.mediaSession.setActionHandler('pause', () => {
+        console.log('[MediaSession] pause triggered');
+        // Pause AudioContext if using crossfade
+        if (usingAudioContextCrossfadeRef.current) {
+          crossfadeRef.current?.pause?.();
+        }
         audio.pause();
         setState((prev) => ({ ...prev, isPlaying: false }));
       });
+      
       navigator.mediaSession.setActionHandler('previoustrack', () => {
+        console.log('[MediaSession] previoustrack triggered');
+        iosAudioRef.current.addLog('info', '[MediaSession]', 'previoustrack triggered');
         previousRef.current();
       });
       
       // ENHANCED: nexttrack handler with AudioContext crossfade support for CarPlay
       navigator.mediaSession.setActionHandler('nexttrack', () => {
+        console.log('[MediaSession] nexttrack triggered');
         const shouldUseCrossfade = crossfadeEnabledRef.current && isIOS() && isPWA();
-        const hasPreloaded = crossfadeRef.current?.hasPreloadedNext();
+        const hasPreloaded = crossfadeRef.current?.hasPreloadedNext?.();
         const isPreloading = crossfadeRef.current?.isPreloading?.();
         const preloadStatus = crossfadeRef.current?.getPreloadStatus?.();
         
@@ -976,25 +1021,37 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       });
       
+      // Seekto handler - works with both HTMLAudioElement and AudioContext
       navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime !== undefined && audio.duration) {
-          audio.currentTime = details.seekTime;
-          setState((prev) => ({ ...prev, progress: details.seekTime! }));
+        console.log('[MediaSession] seekto:', details.seekTime);
+        if (details.seekTime !== undefined) {
+          // For HTMLAudioElement
+          if (audio.duration && !usingAudioContextCrossfadeRef.current) {
+            audio.currentTime = details.seekTime;
+            setState((prev) => ({ ...prev, progress: details.seekTime! }));
+          }
+          // Note: Web Audio API AudioBufferSourceNode doesn't support seeking mid-playback
+          // The position state is still updated for UI consistency
         }
       });
       
+      // Explicitly set seekbackward/seekforward to null to show skip buttons instead
+      // On iOS this helps show the proper track skip controls in Control Center/CarPlay
       try {
         navigator.mediaSession.setActionHandler('seekbackward', null);
         navigator.mediaSession.setActionHandler('seekforward', null);
       } catch (e) {
+        // Some browsers don't support setting handlers to null
+        // In that case, map them to track skip actions
         try {
           navigator.mediaSession.setActionHandler('seekbackward', () => {
+            console.log('[MediaSession] seekbackward -> previoustrack');
             previousRef.current();
           });
           navigator.mediaSession.setActionHandler('seekforward', () => {
-            // Also use crossfade for seekforward if available
+            console.log('[MediaSession] seekforward -> nexttrack');
             const shouldUseCrossfade = crossfadeEnabledRef.current && isIOS() && isPWA();
-            if (shouldUseCrossfade && crossfadeRef.current?.hasPreloadedNext()) {
+            if (shouldUseCrossfade && crossfadeRef.current?.hasPreloadedNext?.()) {
               crossfadeRef.current.triggerCrossfade();
             } else {
               nextRef.current();
@@ -1002,6 +1059,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           });
         } catch (e2) {
           // Fallback: just ignore
+          console.log('[MediaSession] Could not set seek handlers');
         }
       }
     }
@@ -1022,6 +1080,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       audio.src = '';
       nextAudio.pause();
       nextAudio.src = '';
+      
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1130,9 +1189,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const playTrack = useCallback(
     async (track: Track, queue?: Track[]) => {
+      console.log('[playTrack] Starting playback:', track.title, 'by', track.artist);
       tryUnlockAudioFromUserGesture();
 
       if (audioRef.current) {
+        console.log('[playTrack] Stopping current audio');
         audioRef.current.pause();
         audioRef.current.src = '';
       }
@@ -1159,6 +1220,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       // Play silent placeholder on iOS (not on CarPlay/Bluetooth) to maintain session
       await iosAudio.playPlaceholder();
+      
+      // Note: Dummy audio for Media Session is handled by the keep-alive system
+      // Don't start it here to avoid interference with main playback
 
       // REMOVED: Automatic metadata fetch - user can manually fix metadata via Debug Modal if needed
       // Use original track for playback
@@ -1976,9 +2040,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const nextTrack = state.queue[nextIndex];
       setState((prev) => ({ ...prev, queueIndex: nextIndex, currentTrack: nextTrack }));
       
-      // CHECK: Do we have a prefetched URL for this track?
+      // CHECK: Do we have a prefetched URL for this track? (iOS only optimization)
+      const isIOSPWA = isIOS() && isPWA();
       const prefetched = prefetchedNextUrlRef.current;
-      if (prefetched && prefetched.trackId === nextTrack.id && prefetched.url) {
+      if (isIOSPWA && prefetched && prefetched.trackId === nextTrack.id && prefetched.url) {
         console.log('[Next] Using prefetched URL for:', nextTrack.title);
         
         // Clear prefetch refs
@@ -2065,8 +2130,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     previousRef.current = previous;
   }, [next, previous]);
 
-  // Pre-fetch next track URL for seamless iOS background playback (AGGRESSIVE VERSION)
+  // Pre-fetch next track URL for seamless iOS background playback (iOS ONLY)
   useEffect(() => {
+    // Only run prefetch on iOS PWA - other platforms don't need it
+    const isIOSPWA = isIOS() && isPWA();
+    if (!isIOSPWA) return;
+    
     const handlePrefetchNextTrack = async () => {
       // Skip if already prefetching or no next track
       if (isPrefetchingRef.current) return;
@@ -2530,6 +2599,7 @@ export const usePlayer = () => {
         totalTracks: 0,
         fetchedCount: 0,
         bufferReadyCount: 0,
+        swCachedCount: 0,
         currentlyFetching: null,
         lastFetchedIndex: -1,
         isActive: false,
