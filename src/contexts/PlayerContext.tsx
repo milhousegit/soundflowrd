@@ -585,8 +585,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // Crossfade enabled ref (synced with settings for use in event handlers)
   const crossfadeEnabledRef = useRef(settings.crossfadeEnabled);
+  // Crossfade is AUTOMATICALLY enabled on iOS, regardless of manual setting
+  // On other platforms, it respects the user's setting
   useEffect(() => {
-    crossfadeEnabledRef.current = settings.crossfadeEnabled;
+    const isIOSDevice = isIOS();
+    crossfadeEnabledRef.current = isIOSDevice || settings.crossfadeEnabled;
+    
+    if (isIOSDevice) {
+      console.log('[PlayerContext] Crossfade auto-enabled on iOS device');
+    }
   }, [settings.crossfadeEnabled]);
 
   useEffect(() => {
