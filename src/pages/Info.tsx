@@ -34,7 +34,7 @@ const Info: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">SoundFlow</p>
-                <p className="text-sm text-muted-foreground">v1.6.1</p>
+                <p className="text-sm text-muted-foreground">v1.6.2</p>
               </div>
               <Button variant="outline" className="gap-2" onClick={async () => {
               try {
@@ -58,7 +58,7 @@ const Info: React.FC = () => {
               </Button>
             </div>
             
-            {/* What's New in v1.6.1 */}
+            {/* What's New in v1.6.2 */}
             <div className="mt-4 pt-4 border-t border-border">
               <h3 className="text-sm font-medium text-foreground mb-2">
                 {isItalian ? "Novità della versione" : "What's new"}
@@ -66,15 +66,15 @@ const Info: React.FC = () => {
               <ul className="text-sm text-muted-foreground space-y-1.5">
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "Crossfade AudioContext: sistema completamente riscritto per iOS PWA gapless" : "AudioContext crossfade: completely rewritten system for iOS PWA gapless playback"}
+                  {isItalian ? "Preload AudioContext più aggressivo e sincrono per background stabile" : "More aggressive and synchronous AudioContext preload for stable background"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Un solo AudioContext con AudioBufferSourceNode + GainNode per fade perfetti" : "Single AudioContext with AudioBufferSourceNode + GainNode for perfect fades"}
+                  {isItalian ? "Inizializzazione AudioContext automatica durante il preload" : "Automatic AudioContext initialization during preload"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Timer-based crossfade: non si affida all'evento 'ended'" : "Timer-based crossfade: doesn't rely on 'ended' event"}
+                  {isItalian ? "Logging dettagliato per debug transizioni CarPlay" : "Detailed logging for CarPlay transition debugging"}
                 </li>
               </ul>
             </div>
