@@ -333,10 +333,15 @@ const Player: React.FC = () => {
               )}
 
               {/* Always On hint - only on iOS */}
-              {isIOS && !loadingPhase && (
-                <div className="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none">
-                  <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center gap-1.5 animate-pulse">
-                    <span className="text-white/70 text-[10px]">3× tap → Always On</span>
+              {isIOS && !loadingPhase && isExpanded && (
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none animate-fade-in">
+                  <div className="bg-black/70 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-2 shadow-lg border border-white/10">
+                    <div className="flex gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '100ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '200ms' }} />
+                    </div>
+                    <span className="text-white text-xs font-medium">Always On</span>
                   </div>
                 </div>
               )}
