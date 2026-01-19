@@ -3,6 +3,7 @@ import { Plus, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CreatePostModal from '@/components/social/CreatePostModal';
 import FeedCard from '@/components/social/FeedCard';
+import FeedSkeleton from '@/components/skeletons/FeedSkeleton';
 import { useFeed, FeedPost, AlbumRelease, AlbumComment } from '@/hooks/useFeed';
 import { useSettings } from '@/contexts/SettingsContext';
 
@@ -54,9 +55,7 @@ const Feed: React.FC = () => {
 
         {/* Feed Items */}
         {isLoading && feedItems.length === 0 ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
+          <FeedSkeleton />
         ) : feedItems.length === 0 ? (
           <div className="text-center py-12 space-y-4">
             <p className="text-muted-foreground">
