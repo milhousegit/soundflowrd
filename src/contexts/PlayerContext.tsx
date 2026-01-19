@@ -519,6 +519,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     audioRef.current = new Audio();
     audioRef.current.volume = state.volume;
+    audioRef.current.loop = false; // CRITICAL: Prevent single-track loop
     // iOS Safari requires these attributes for better background playback
     audioRef.current.setAttribute('playsinline', '');
     audioRef.current.setAttribute('webkit-playsinline', '');
@@ -607,9 +608,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setState((prev) => ({ ...prev, isPlaying: true }));
     };
 
-    // Simplified error handler
+    // Error handler - skip to next track after error
     const handleError = (e: Event) => {
       console.error('[PlayerContext] Audio error:', e);
+      // Auto-skip to next track after 1 second to avoid getting stuck
+      setTimeout(() => {
+        nextRef.current();
+      }, 1000);
     };
 
     // Simplified stalled handler
