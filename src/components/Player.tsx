@@ -332,6 +332,15 @@ const Player: React.FC = () => {
                 </div>
               )}
 
+              {/* Always On hint - only on iOS */}
+              {isIOS && !loadingPhase && (
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none">
+                  <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center gap-1.5 animate-pulse">
+                    <span className="text-white/70 text-[10px]">3× tap → Always On</span>
+                  </div>
+                </div>
+              )}
+
               {loadingPhase === 'searching' && (
                 <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">

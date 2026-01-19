@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { Button } from '@/components/ui/button';
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 
 interface AlwaysOnDisplayProps {
@@ -11,11 +10,11 @@ const AlwaysOnDisplay: React.FC<AlwaysOnDisplayProps> = ({ onClose }) => {
   const { currentTrack, isPlaying, toggle, next, previous } = usePlayer();
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
-  // Triple tap to close
+  // Triple tap to close - only on cover
   const tapCountRef = useRef(0);
   const lastTapRef = useRef(0);
 
-  const handleTripleTap = () => {
+  const handleCoverTap = () => {
     const now = Date.now();
     if (now - lastTapRef.current < 400) {
       tapCountRef.current += 1;
@@ -64,30 +63,54 @@ const AlwaysOnDisplay: React.FC<AlwaysOnDisplayProps> = ({ onClose }) => {
 
   if (!currentTrack) return null;
 
+  // Simple touch handlers for iOS - these respond immediately
+  const handlePrevious = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    previous();
+  };
+
+  const handleToggle = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggle();
+  };
+
+  const handleNext = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    next();
+  };
+
   return (
     <div 
-      className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none"
+      className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none touch-manipulation"
       style={{ 
         WebkitUserSelect: 'none',
         userSelect: 'none',
+        WebkitTapHighlightColor: 'transparent',
       }}
     >
       {/* Close hint */}
-      <div className="absolute top-0 left-0 right-0 flex justify-center" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 24px)' }}>
-        <p className="text-white/15 text-xs">Triplo tap per chiudere</p>
+      <div 
+        className="absolute top-0 left-0 right-0 flex justify-center" 
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 24px)' }}
+      >
+        <p className="text-white/20 text-xs">Triplo tap sulla cover per chiudere</p>
       </div>
 
-      {/* Album cover - dimmed, tappable */}
+      {/* Album cover - dimmed, tappable for triple-tap close */}
       <div 
-        className="w-56 h-56 rounded-2xl overflow-hidden mb-8 cursor-pointer"
+        className="w-56 h-56 rounded-2xl overflow-hidden mb-8 active:scale-95 transition-transform"
         style={{ filter: 'brightness(0.35)' }}
-        onClick={handleTripleTap}
+        onTouchEnd={handleCoverTap}
+        onClick={handleCoverTap}
       >
         {currentTrack.coverUrl ? (
           <img 
             src={currentTrack.coverUrl} 
             alt={currentTrack.album} 
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover pointer-events-none"
             draggable={false}
           />
         ) : (
@@ -107,42 +130,42 @@ const AlwaysOnDisplay: React.FC<AlwaysOnDisplayProps> = ({ onClose }) => {
         </p>
       </div>
 
-      {/* Controls - dimmed */}
+      {/* Controls - using native divs for better iOS touch response */}
       <div 
-        className="flex items-center gap-10"
-        style={{ filter: 'brightness(0.4)' }}
+        className="flex items-center gap-8"
+        style={{ filter: 'brightness(0.5)' }}
       >
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-14 w-14 text-white/70 hover:text-white hover:bg-white/5 active:bg-white/10"
-          onClick={(e) => { e.stopPropagation(); previous(); }}
+        {/* Previous button */}
+        <div
+          className="h-14 w-14 flex items-center justify-center rounded-full text-white/80 active:text-white active:bg-white/20 active:scale-90 transition-all cursor-pointer touch-manipulation"
+          onTouchEnd={handlePrevious}
+          onClick={handlePrevious}
         >
           <SkipBack className="w-7 h-7" />
-        </Button>
+        </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-18 w-18 rounded-full border border-white/20 text-white hover:text-white hover:bg-white/5 active:bg-white/10"
+        {/* Play/Pause button */}
+        <div
+          className="flex items-center justify-center rounded-full border border-white/30 text-white active:bg-white/20 active:scale-90 transition-all cursor-pointer touch-manipulation"
           style={{ width: '72px', height: '72px' }}
-          onClick={(e) => { e.stopPropagation(); toggle(); }}
+          onTouchEnd={handleToggle}
+          onClick={handleToggle}
         >
           {isPlaying ? (
             <Pause className="w-9 h-9" />
           ) : (
             <Play className="w-9 h-9 ml-1" />
           )}
-        </Button>
+        </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-14 w-14 text-white/70 hover:text-white hover:bg-white/5 active:bg-white/10"
-          onClick={(e) => { e.stopPropagation(); next(); }}
+        {/* Next button */}
+        <div
+          className="h-14 w-14 flex items-center justify-center rounded-full text-white/80 active:text-white active:bg-white/20 active:scale-90 transition-all cursor-pointer touch-manipulation"
+          onTouchEnd={handleNext}
+          onClick={handleNext}
         >
           <SkipForward className="w-7 h-7" />
-        </Button>
+        </div>
       </div>
     </div>
   );
