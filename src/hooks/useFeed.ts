@@ -167,16 +167,23 @@ export function useFeed() {
           // Fetch latest releases for each artist from Deezer API (retroactive - no time limit)
           const artistPromises = artistIds.slice(0, 30).map(async (artistId) => {
             try {
-              const { data: releases } = await supabase.functions.invoke('deezer', {
-                body: { action: 'getArtistAlbums', artistId, limit: 5 }
+              const { data: artistData } = await supabase.functions.invoke('deezer', {
+                body: { action: 'get-artist', id: artistId }
               });
 
-              if (releases?.data) {
-                return releases.data.map((album: any) => ({
+              if (artistData?.releases) {
+                return artistData.releases.slice(0, 5).map((album: any) => ({
                   type: 'release' as const,
                   id: `release-${album.id}`,
-                  created_at: album.release_date,
-                  data: album as AlbumRelease
+                  created_at: album.releaseDate || album.release_date,
+                  data: {
+                    id: album.id,
+                    title: album.title,
+                    artist: { id: artistData.id, name: artistData.name },
+                    cover_medium: album.coverUrl,
+                    release_date: album.releaseDate || album.release_date,
+                    record_type: album.recordType || 'album',
+                  } as AlbumRelease
                 }));
               }
               return [];
