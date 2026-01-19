@@ -115,7 +115,7 @@ const AdminArtistEditor: React.FC<AdminArtistEditorProps> = ({
     setOrderedPlaylists(playlists);
   }, [playlists]);
 
-  // Search for playlists to add
+  // Search for playlists to add - prioritize SoundFlow playlists
   useEffect(() => {
     const searchPlaylists = async () => {
       if (!debouncedSearch.trim() || debouncedSearch.length < 2) {
@@ -125,10 +125,32 @@ const AdminArtistEditor: React.FC<AdminArtistEditorProps> = ({
 
       setIsSearching(true);
       try {
-        const results = await searchDeezerPlaylists(debouncedSearch);
-        // Filter out playlists that are already in the artist's list
         const existingIds = orderedPlaylists.map(p => String(p.id));
-        setSearchResults(results.filter(p => !existingIds.includes(String(p.id))));
+        
+        // First, search local SoundFlow public playlists
+        const { data: localPlaylists } = await supabase
+          .from('playlists')
+          .select('id, name, cover_url, track_count, is_public')
+          .eq('is_public', true)
+          .ilike('name', `%${debouncedSearch}%`)
+          .limit(10);
+        
+        const localResults: DeezerPlaylist[] = (localPlaylists || [])
+          .filter(p => !existingIds.includes(`local-${p.id}`))
+          .map(p => ({
+            id: `local-${p.id}`,
+            title: p.name,
+            coverUrl: p.cover_url || '',
+            trackCount: p.track_count || 0,
+            creator: 'SoundFlow',
+          }));
+        
+        // Then search Deezer playlists
+        const deezerResults = await searchDeezerPlaylists(debouncedSearch);
+        const filteredDeezer = deezerResults.filter(p => !existingIds.includes(String(p.id)));
+        
+        // Combine: SoundFlow first, then Deezer
+        setSearchResults([...localResults, ...filteredDeezer]);
       } catch (error) {
         console.error('Error searching playlists:', error);
       } finally {
