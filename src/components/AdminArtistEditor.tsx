@@ -522,11 +522,10 @@ const AdminArtistEditor: React.FC<AdminArtistEditorProps> = ({
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button variant="outline" size="icon" className="relative">
           <EyeOff className="w-4 h-4" />
-          Gestisci contenuti
           {hiddenCount > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-destructive text-destructive-foreground">
+            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 text-xs rounded-full bg-destructive text-destructive-foreground flex items-center justify-center">
               {hiddenCount}
             </span>
           )}
