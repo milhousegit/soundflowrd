@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { verifyApiKey } from '@/lib/realdebrid';
-import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, ChevronRight, ChevronDown, Info, Globe, Crown, Download, Car, Share2, Gift, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2 } from 'lucide-react';
+import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, ChevronRight, ChevronDown, Info, Globe, Crown, Download, Car, Share2, Gift, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2, MessageSquare } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -147,6 +147,15 @@ const Settings: React.FC = () => {
       homeDisplayOptions: {
         ...settings.homeDisplayOptions,
         [key]: !settings.homeDisplayOptions[key]
+      }
+    });
+  };
+
+  const toggleFeedOption = (key: keyof typeof settings.feedDisplayOptions) => {
+    updateSettings({
+      feedDisplayOptions: {
+        ...settings.feedDisplayOptions,
+        [key]: !settings.feedDisplayOptions[key]
       }
     });
   };
@@ -708,6 +717,34 @@ const Settings: React.FC = () => {
               <div key={key} className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm text-foreground">{label}</span>
                 <Switch checked={settings.homeDisplayOptions[key as keyof typeof settings.homeDisplayOptions]} onCheckedChange={() => toggleHomeOption(key as keyof typeof settings.homeDisplayOptions)} />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Feed Display Section */}
+        <section className="rounded-xl bg-card overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
+            <MessageSquare className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">
+              {settings.language === 'it' ? 'Display Feed' : 'Feed Display'}
+            </h2>
+          </div>
+          
+          <div className="divide-y divide-border">
+            {[{
+              key: 'showArtistReleases',
+              label: settings.language === 'it' ? 'Novità Artisti che mi piacciono' : 'New releases from liked artists'
+            }, {
+              key: 'showFollowingPosts',
+              label: settings.language === 'it' ? 'Post degli utenti che seguo' : 'Posts from users I follow'
+            }, {
+              key: 'showAlbumComments',
+              label: settings.language === 'it' ? 'Commenti agli album che mi piacciono' : 'Comments on albums I like'
+            }].map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm text-foreground">{label}</span>
+                <Switch checked={settings.feedDisplayOptions[key as keyof typeof settings.feedDisplayOptions]} onCheckedChange={() => toggleFeedOption(key as keyof typeof settings.feedDisplayOptions)} />
               </div>
             ))}
           </div>

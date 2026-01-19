@@ -9,6 +9,11 @@ export interface AppSettings {
     showPopularArtists: boolean;
     showTopCharts: boolean;
   };
+  feedDisplayOptions: {
+    showArtistReleases: boolean;
+    showFollowingPosts: boolean;
+    showAlbumComments: boolean;
+  };
   audioQuality: 'high' | 'medium' | 'low';
   crossfade: number; // seconds, 0 = off
   realDebridApiKey?: string;
@@ -23,6 +28,11 @@ export const defaultSettings: AppSettings = {
     showNewReleases: true,
     showPopularArtists: true,
     showTopCharts: true,
+  },
+  feedDisplayOptions: {
+    showArtistReleases: true,
+    showFollowingPosts: true,
+    showAlbumComments: true,
   },
   audioQuality: 'high',
   crossfade: 0,
