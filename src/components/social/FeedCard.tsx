@@ -203,6 +203,8 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
   const [newComment, setNewComment] = useState('');
   const [albumCommentsCount, setAlbumCommentsCount] = useState(0);
   const [albumSavesCount, setAlbumSavesCount] = useState(0);
+  const [trackSavesCount, setTrackSavesCount] = useState(0);
+  const [playlistSavesCount, setPlaylistSavesCount] = useState(0);
   
   // Favorites hook for saving albums/tracks
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -238,35 +240,58 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
     postId: postId || undefined 
   });
 
-  // Fetch album comments count and saves count
+  // Fetch counts based on type
   useEffect(() => {
-    const fetchAlbumCounts = async () => {
-      if (!albumId) return;
+    const fetchCounts = async () => {
+      // Album counts
+      if (albumId) {
+        try {
+          const [commentsResult, savesResult] = await Promise.all([
+            supabase.from('comments').select('*', { count: 'exact', head: true }).eq('album_id', albumId),
+            supabase.from('favorites').select('*', { count: 'exact', head: true }).eq('item_id', albumId).eq('item_type', 'album'),
+          ]);
+          setAlbumCommentsCount(commentsResult.count || 0);
+          setAlbumSavesCount(savesResult.count || 0);
+        } catch (error) {
+          console.error('Error fetching album counts:', error);
+        }
+      }
 
-      try {
-        // Fetch comments count
-        const { count: totalComments } = await supabase
-          .from('comments')
-          .select('*', { count: 'exact', head: true })
-          .eq('album_id', albumId);
+      // Track saves count for posts
+      if (type === 'post') {
+        const post = data as FeedPost;
+        if (post.track_id) {
+          try {
+            const { count } = await supabase
+              .from('favorites')
+              .select('*', { count: 'exact', head: true })
+              .eq('item_id', post.track_id)
+              .eq('item_type', 'track');
+            setTrackSavesCount(count || 0);
+          } catch (error) {
+            console.error('Error fetching track saves count:', error);
+          }
+        }
+      }
 
-        setAlbumCommentsCount(totalComments || 0);
-
-        // Fetch saves count (from favorites table)
-        const { count: totalSaves } = await supabase
-          .from('favorites')
-          .select('*', { count: 'exact', head: true })
-          .eq('item_id', albumId)
-          .eq('item_type', 'album');
-
-        setAlbumSavesCount(totalSaves || 0);
-      } catch (error) {
-        console.error('Error fetching album counts:', error);
+      // Playlist saves count
+      if (type === 'playlist') {
+        const playlist = data as FeedPlaylist;
+        try {
+          const { count } = await supabase
+            .from('favorites')
+            .select('*', { count: 'exact', head: true })
+            .eq('item_id', playlist.id)
+            .eq('item_type', 'playlist');
+          setPlaylistSavesCount(count || 0);
+        } catch (error) {
+          console.error('Error fetching playlist saves count:', error);
+        }
       }
     };
 
-    fetchAlbumCounts();
-  }, [albumId]);
+    fetchCounts();
+  }, [albumId, type, data]);
 
   const formatDate = (dateStr: string) => {
     return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale });
@@ -305,7 +330,24 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
       coverUrl: trackData.coverUrl || '',
       duration: trackData.duration || 0,
     };
+    const wasSaved = isFavorite('track', trackData.id);
     await toggleFavorite('track', track as any);
+    setTrackSavesCount(prev => wasSaved ? Math.max(0, prev - 1) : prev + 1);
+  };
+
+  // Handle saving playlist to library
+  const handlePlaylistSaveToggle = async () => {
+    if (type !== 'playlist') return;
+    const playlist = data as FeedPlaylist;
+    const playlistData = {
+      id: playlist.id,
+      title: playlist.name,
+      artist: playlist.profile?.display_name || '',
+      coverUrl: playlist.cover_url || '',
+    };
+    const wasSaved = isFavorite('playlist', playlist.id);
+    await toggleFavorite('playlist', playlistData as any);
+    setPlaylistSavesCount(prev => wasSaved ? Math.max(0, prev - 1) : prev + 1);
   };
 
   const getAlbumInfo = () => {
@@ -417,20 +459,43 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
           </div>
         </button>
 
-        {/* Actions */}
+        {/* Actions - same as albums: save, comment, share */}
         <div className="flex items-center gap-4 pt-1">
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleShare}
+            onClick={handlePlaylistSaveToggle}
+            className={`gap-1.5 ${isFavorite('playlist', playlist.id) ? 'text-primary' : 'text-muted-foreground'}`}
+          >
+            <Bookmark className={`w-4 h-4 ${isFavorite('playlist', playlist.id) ? 'fill-current' : ''}`} />
+            <span className="text-xs">{playlistSavesCount}</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/playlist/${playlist.id}`)}
+            className="gap-1.5 text-muted-foreground"
+          >
+            <MessageCircle className="w-4 h-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const url = `${window.location.origin}/playlist/${playlist.id}`;
+              if (navigator.share) {
+                navigator.share({ title: playlist.name, url }).catch(() => {});
+              } else {
+                navigator.clipboard.writeText(url);
+                toast.success(settings.language === 'it' ? 'Link copiato!' : 'Link copied!');
+              }
+            }}
             className="gap-1.5 text-muted-foreground"
           >
             <Share2 className="w-4 h-4" />
-            <span className="text-xs">{settings.language === 'it' ? 'Condividi' : 'Share'}</span>
           </Button>
-          <span className="text-xs text-muted-foreground">
-            {formatDate(playlist.created_at)}
-          </span>
         </div>
       </>
     );
@@ -538,7 +603,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
             <span className="text-xs">{post.likes_count || 0}</span>
           </Button>
 
-          {/* Save track button - only if post has a track */}
+          {/* Save track button - always show since tracks are required */}
           {post.track_id && (
             <Button
               variant="ghost"
@@ -554,7 +619,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
               className={`gap-1.5 ${isFavorite('track', post.track_id) ? 'text-primary' : 'text-muted-foreground'}`}
             >
               <Bookmark className={`w-4 h-4 ${isFavorite('track', post.track_id) ? 'fill-current' : ''}`} />
-              <span className="text-xs">{settings.language === 'it' ? 'Salva' : 'Save'}</span>
+              <span className="text-xs">{trackSavesCount}</span>
             </Button>
           )}
 
