@@ -9,6 +9,7 @@ import DebugModal from './DebugModal';
 import QueueModal from './QueueModal';
 import FavoriteButton from './FavoriteButton';
 import LyricsModal from './LyricsModal';
+import AlwaysOnDisplay from './AlwaysOnDisplay';
 import { useToast } from '@/hooks/use-toast';
 import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 import { isPast } from 'date-fns';
@@ -99,12 +100,34 @@ const Player: React.FC = () => {
   const [showLyricsModal, setShowLyricsModal] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showAlwaysOn, setShowAlwaysOn] = useState(false);
 
   // Swipe to close state
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const startY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Triple tap detection for Always On display (iOS only)
+  const coverTapCountRef = useRef(0);
+  const coverLastTapRef = useRef(0);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  const handleCoverTripleTap = useCallback(() => {
+    if (!isIOS) return;
+    
+    const now = Date.now();
+    if (now - coverLastTapRef.current < 400) {
+      coverTapCountRef.current += 1;
+      if (coverTapCountRef.current >= 3) {
+        coverTapCountRef.current = 0;
+        setShowAlwaysOn(true);
+      }
+    } else {
+      coverTapCountRef.current = 1;
+    }
+    coverLastTapRef.current = now;
+  }, [isIOS]);
 
   // Visibility handling moved to useIOSAudioSession - removed empty handler
 
@@ -291,7 +314,10 @@ const Player: React.FC = () => {
           </div>
 
           <div className="flex-1 flex items-center justify-center px-8 pt-2 pb-1">
-            <div className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none">
+            <div 
+              className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none cursor-pointer"
+              onClick={handleCoverTripleTap}
+            >
               {currentTrack.coverUrl ? (
                 <img 
                   src={currentTrack.coverUrl} 
@@ -646,6 +672,11 @@ const Player: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Always On Display - iOS only */}
+      {showAlwaysOn && isIOS && (
+        <AlwaysOnDisplay onClose={() => setShowAlwaysOn(false)} />
       )}
     </>
   );
