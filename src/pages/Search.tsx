@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Search as SearchIcon, X, Music, Clock, History, Trash2 } from 'lucide-react';
+import { Search as SearchIcon, X, Music, Clock, History, Trash2, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
+import UserCard from '@/components/social/UserCard';
 import TapArea from '@/components/TapArea';
 import SearchResultsSkeleton from '@/components/skeletons/SearchResultsSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -12,6 +13,8 @@ import { searchAll, searchPlaylists, DeezerPlaylist } from '@/lib/deezer';
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
+import { useUserSearch } from '@/hooks/useUserSearch';
+import { SocialProfile } from '@/hooks/useSocialProfile';
 
 const genres = [
   { name: 'Pop', color: 'from-pink-500 to-rose-500' },
@@ -48,10 +51,12 @@ const Search: React.FC = () => {
     albums: Album[];
     tracks: Track[];
     playlists: DeezerPlaylist[];
+    users: SocialProfile[];
   } | null>(null);
   const { t, settings } = useSettings();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  const { users: searchedUsers, searchUsers, clearResults: clearUserResults } = useUserSearch();
 
   // Load recent searches and items from localStorage
   useEffect(() => {
@@ -130,15 +135,20 @@ const Search: React.FC = () => {
   const performSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults(null);
+      clearUserResults();
       return;
     }
 
     setIsLoading(true);
     try {
+      // Search music and users in parallel
       const [data, playlists] = await Promise.all([
         searchAll(searchQuery),
         searchPlaylists(searchQuery).catch(() => []),
       ]);
+
+      // Also search users
+      searchUsers(searchQuery);
 
       // Filter results (keep API ranking/order)
       // Exclude "collaboration" artist pages (names like "thasup, Nitro") 
@@ -176,6 +186,7 @@ const Search: React.FC = () => {
         albums: filteredAlbums,
         tracks: filteredTracks,
         playlists: playlists,
+        users: [],
       });
 
       // Save to recent searches when we get results
@@ -184,11 +195,11 @@ const Search: React.FC = () => {
       }
     } catch (error) {
       console.error('Search error:', error);
-      setResults({ artists: [], albums: [], tracks: [], playlists: [] });
+      setResults({ artists: [], albums: [], tracks: [], playlists: [], users: [] });
     } finally {
       setIsLoading(false);
     }
-  }, [saveRecentSearch]);
+  }, [saveRecentSearch, searchUsers, clearUserResults]);
 
   const debouncedSearch = useDebounce(performSearch, 500);
 
@@ -497,8 +508,22 @@ const Search: React.FC = () => {
             </section>
           )}
 
+          {/* Users */}
+          {searchedUsers.length > 0 && (
+            <section>
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">
+                {settings.language === 'it' ? 'Utenti' : 'Users'}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {searchedUsers.slice(0, 6).map((user) => (
+                  <UserCard key={user.id} user={user} />
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* No results */}
-          {results.tracks.length === 0 && results.albums.length === 0 && results.artists.length === 0 && results.playlists.length === 0 && query && (
+          {results.tracks.length === 0 && results.albums.length === 0 && results.artists.length === 0 && results.playlists.length === 0 && searchedUsers.length === 0 && query && (
             <div className="text-center py-12">
               <p className="text-muted-foreground text-base md:text-lg">
                 {t('noResults')} "{query}"
