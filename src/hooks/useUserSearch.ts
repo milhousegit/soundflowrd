@@ -15,10 +15,13 @@ export function useUserSearch() {
     setIsSearching(true);
 
     try {
+      // Search by display_name (username) - case insensitive, partial match
+      const searchTerm = query.toLowerCase().trim();
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .or(`display_name.ilike.%${query}%,email.ilike.%${query}%`)
+        .or(`display_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
+        .not('display_name', 'is', null)
         .limit(10);
 
       if (error) throw error;
