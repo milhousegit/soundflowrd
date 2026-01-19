@@ -13,7 +13,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { getArtist, getArtistPlaylists, DeezerPlaylist } from '@/lib/deezer';
+import { getArtist, getArtistPlaylists, getSpotifyArtistPlaylists, DeezerPlaylist, SpotifyPlaylist } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
 import { Artist as ArtistType, Album, Track } from '@/types/music';
 
@@ -35,6 +35,7 @@ const Artist: React.FC = () => {
   const [topTracks, setTopTracks] = useState<Track[]>([]);
   const [relatedArtists, setRelatedArtists] = useState<ArtistType[]>([]);
   const [artistPlaylists, setArtistPlaylists] = useState<DeezerPlaylist[]>([]);
+  const [spotifyPlaylists, setSpotifyPlaylists] = useState<SpotifyPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAllTracks, setShowAllTracks] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -108,12 +109,14 @@ const Artist: React.FC = () => {
         // Fetch artist playlists (100% Artist, This is Artist, etc.)
         // Also includes playlists from merged artists
         if (artistData.name) {
-          try {
-            const playlists = await getArtistPlaylists(artistData.name, id);
-            setArtistPlaylists(playlists);
-          } catch (e) {
-            console.error('Failed to fetch artist playlists:', e);
-          }
+          // Fetch Deezer and Spotify playlists in parallel
+          const [deezerPlaylists, spotifyPlaylists] = await Promise.all([
+            getArtistPlaylists(artistData.name, id).catch(() => []),
+            getSpotifyArtistPlaylists(artistData.name).catch(() => []),
+          ]);
+          
+          setArtistPlaylists(deezerPlaylists);
+          setSpotifyPlaylists(spotifyPlaylists);
         }
       } catch (error) {
         console.error('Failed to fetch artist:', error);
@@ -332,6 +335,60 @@ const Artist: React.FC = () => {
                       )}
                     </div>
                     <p className="text-sm font-medium text-foreground truncate">{playlist.title}</p>
+                    <p className="text-xs text-muted-foreground">{playlist.trackCount} brani</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+        </section>
+      )}
+
+      {/* Spotify Playlists - Horizontal scroll */}
+      {spotifyPlaylists.length > 0 && (
+        <section className="px-4 md:px-8 mb-8 md:mb-10">
+          <h2 className="text-lg md:text-2xl font-bold text-foreground mb-3 md:mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+            Playlist Spotify
+          </h2>
+          <ScrollArea className="w-full whitespace-nowrap">
+            <div className="flex gap-3 md:gap-4 pb-4">
+              {spotifyPlaylists.map((playlist) => (
+                <div 
+                  key={`spotify-${playlist.id}`} 
+                  className="flex-shrink-0 w-32 md:w-40"
+                  onClick={() => {
+                    const spotifyUrl = `https://open.spotify.com/playlist/${playlist.id}`;
+                    navigator.clipboard.writeText(spotifyUrl);
+                    import('sonner').then(({ toast }) => {
+                      toast.success('Link copiato! Vai in Libreria → Crea Playlist → Importa');
+                    });
+                  }}
+                >
+                  <div className="group relative cursor-pointer">
+                    <div className="relative aspect-square rounded-lg overflow-hidden bg-muted mb-2">
+                      {playlist.coverUrl ? (
+                        <img 
+                          src={playlist.coverUrl} 
+                          alt={playlist.name} 
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Music className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                      )}
+                      {/* Spotify badge */}
+                      <div className="absolute top-2 right-2 bg-[#1DB954] rounded-full p-1">
+                        <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                        </svg>
+                      </div>
+                    </div>
+                    <p className="text-sm font-medium text-foreground truncate">{playlist.name}</p>
                     <p className="text-xs text-muted-foreground">{playlist.trackCount} brani</p>
                   </div>
                 </div>

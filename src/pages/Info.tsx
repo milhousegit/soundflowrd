@@ -34,7 +34,7 @@ const Info: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">SoundFlow</p>
-                <p className="text-sm text-muted-foreground">v1.5</p>
+                <p className="text-sm text-muted-foreground">v1.6</p>
               </div>
               <Button variant="outline" className="gap-2" onClick={async () => {
               try {
@@ -66,15 +66,15 @@ const Info: React.FC = () => {
               <ul className="text-sm text-muted-foreground space-y-1.5">
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "Autoplay: a fine coda la musica continua con brani simili" : "Autoplay: music continues with similar tracks at end of queue"}
+                  {isItalian ? "Importazione Spotify senza API key: usa le API GraphQL interne" : "Spotify import without API key: uses internal GraphQL APIs"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Risolto problema audio a scatti con CarPlay e dispositivi Bluetooth" : "Fixed stuttering audio with CarPlay and Bluetooth devices"}
+                  {isItalian ? "Feed migliorato: mostra le tue playlist pubblicate" : "Improved feed: shows your published playlists"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Semplificato sistema di riproduzione per maggiore stabilità" : "Simplified playback system for better stability"}
+                  {isItalian ? "Azioni playlist nel feed: salva, commenta e condividi" : "Playlist actions in feed: save, comment and share"}
                 </li>
               </ul>
             </div>
