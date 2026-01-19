@@ -25,7 +25,24 @@ export function useUserSearch() {
         .limit(10);
 
       if (error) throw error;
-      setUsers((data || []) as SocialProfile[]);
+      
+      // Fetch admin roles for found users
+      const userIds = (data || []).map(u => u.id);
+      const { data: adminRoles } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('user_id', userIds)
+        .eq('role', 'admin');
+      
+      const adminUserIds = new Set(adminRoles?.map(r => r.user_id) || []);
+      
+      // Map users with is_admin flag
+      const usersWithRoles = (data || []).map(user => ({
+        ...user,
+        is_admin: adminUserIds.has(user.id),
+      })) as SocialProfile[];
+      
+      setUsers(usersWithRoles);
     } catch (error) {
       console.error('Error searching users:', error);
       setUsers([]);
