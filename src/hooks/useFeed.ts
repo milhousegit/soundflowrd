@@ -241,24 +241,27 @@ export function useFeed() {
         })());
       }
 
-      // 4. Fetch public playlists from followed users (if enabled)
-      if (showFollowingPlaylists && followingIds.length > 0) {
+      // 4. Fetch public playlists from followed users AND own playlists (if enabled)
+      if (showFollowingPlaylists) {
         fetchPromises.push((async () => {
+          // Include both followed users and current user's playlists
+          const playlistUserIds = [...followingIds, user.id];
+          
           const { data: playlists } = await supabase
             .from('playlists')
             .select('*')
-            .in('user_id', followingIds)
+            .in('user_id', playlistUserIds)
             .eq('is_public', true)
             .order('created_at', { ascending: false })
             .limit(20);
 
           if (!playlists || playlists.length === 0) return;
 
-          const playlistUserIds = [...new Set(playlists.map(p => p.user_id))];
+          const uniquePlaylistUserIds = [...new Set(playlists.map(p => p.user_id))];
 
           const [profilesResult, adminRolesResult] = await Promise.all([
-            supabase.from('profiles').select('*').in('id', playlistUserIds),
-            supabase.from('user_roles').select('user_id').in('user_id', playlistUserIds).eq('role', 'admin'),
+            supabase.from('profiles').select('*').in('id', uniquePlaylistUserIds),
+            supabase.from('user_roles').select('user_id').in('user_id', uniquePlaylistUserIds).eq('role', 'admin'),
           ]);
 
           const adminUserIds = new Set(adminRolesResult.data?.map(r => r.user_id) || []);
