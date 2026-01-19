@@ -276,19 +276,21 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
           {/* Stats */}
           <div className="flex items-center gap-6">
             <button 
-              className="text-center"
+              type="button"
+              className="text-center hover:opacity-70 transition-opacity"
               onClick={() => setFollowListType('followers')}
             >
-              <p className="text-lg font-bold text-foreground">{profile.followers_count}</p>
+              <p className="text-lg font-bold text-foreground">{profile.followers_count ?? 0}</p>
               <p className="text-xs text-muted-foreground">
                 {settings.language === 'it' ? 'Follower' : 'Followers'}
               </p>
             </button>
             <button 
-              className="text-center"
+              type="button"
+              className="text-center hover:opacity-70 transition-opacity"
               onClick={() => setFollowListType('following')}
             >
-              <p className="text-lg font-bold text-foreground">{profile.following_count}</p>
+              <p className="text-lg font-bold text-foreground">{profile.following_count ?? 0}</p>
               <p className="text-xs text-muted-foreground">
                 {settings.language === 'it' ? 'Seguiti' : 'Following'}
               </p>
