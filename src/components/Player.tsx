@@ -111,7 +111,8 @@ const Player: React.FC = () => {
   // Triple tap detection for Always On display (iOS only)
   const coverTapCountRef = useRef(0);
   const coverLastTapRef = useRef(0);
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   const handleCoverTripleTap = useCallback(() => {
     if (!isIOS) return;
