@@ -27,6 +27,7 @@ const Profile: React.FC = () => {
     title: string;
     artist: string;
     album?: string;
+    albumId?: string;
     coverUrl?: string;
     duration?: number;
   }) => {

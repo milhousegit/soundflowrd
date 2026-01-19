@@ -16,6 +16,7 @@ export interface SocialProfile {
   followers_count: number;
   following_count: number;
   is_premium: boolean | null;
+  is_admin?: boolean;
 }
 
 export interface UserPost {
@@ -58,7 +59,16 @@ export function useSocialProfile(userId?: string) {
         .single();
 
       if (error) throw error;
-      setProfile(data as SocialProfile);
+
+      // Check if user is admin
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', targetUserId)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      setProfile({ ...data, is_admin: !!roleData } as SocialProfile);
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {

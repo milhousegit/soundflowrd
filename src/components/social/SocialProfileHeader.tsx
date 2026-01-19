@@ -214,6 +214,12 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
                 {profile.display_name || profile.email?.split('@')[0] || 'Utente'}
               </h1>
               {profile.is_private && <Lock className="w-4 h-4 text-muted-foreground" />}
+              {(profile as any).is_admin && (
+                <Crown className="w-4 h-4 text-amber-500" />
+              )}
+              {!(profile as any).is_admin && profile.is_premium && (
+                <Crown className="w-4 h-4 text-[#8B5CF6]" />
+              )}
             </div>
             {profile.bio && (
               <p className="text-sm text-muted-foreground max-w-xs">{profile.bio}</p>

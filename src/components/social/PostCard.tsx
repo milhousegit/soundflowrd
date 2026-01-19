@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, Play, MoreHorizontal, Trash2, User } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Play, MoreHorizontal, Trash2, User, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FeedPost } from '@/hooks/useFeed';
@@ -27,6 +27,9 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onUnlike, onDelete, o
 
   const isOwner = user?.id === post.user_id;
   const locale = settings.language === 'it' ? it : enUS;
+
+  // Check if profile is admin
+  const isProfileAdmin = post.profile?.is_admin || false;
 
   const handleLikeToggle = async () => {
     if (isLiking) return;
@@ -86,9 +89,17 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onUnlike, onDelete, o
             )}
           </div>
           <div>
-            <p className="font-medium text-sm text-foreground">
-              {post.profile?.display_name || post.profile?.email?.split('@')[0] || 'Utente'}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-medium text-sm text-foreground">
+                {post.profile?.display_name || post.profile?.email?.split('@')[0] || 'Utente'}
+              </p>
+              {isProfileAdmin && (
+                <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              )}
+              {!isProfileAdmin && post.profile?.is_premium && (
+                <Crown className="w-3.5 h-3.5 text-[#8B5CF6] shrink-0" />
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale })}
             </p>

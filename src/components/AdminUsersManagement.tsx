@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,8 @@ import {
   User as UserIcon,
   Calendar,
   Check,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 import { addYears, addMonths, format, isPast } from 'date-fns';
 import { it, enUS } from 'date-fns/locale';
@@ -29,6 +31,7 @@ interface AdminUsersManagementProps {
 }
 
 const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language }) => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -200,14 +203,20 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                 key={user.id} 
                 className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
               >
-                <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0">
+                <button 
+                  onClick={() => navigate(`/profile/${user.id}`)}
+                  className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0 hover:ring-2 hover:ring-primary/50 transition-all"
+                >
                   <UserIcon className="w-4 h-4 text-muted-foreground" />
-                </div>
+                </button>
                 
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
+                  <button 
+                    onClick={() => navigate(`/profile/${user.id}`)}
+                    className="text-sm font-medium text-foreground truncate hover:text-primary transition-colors text-left block"
+                  >
                     {user.email || 'No email'}
-                  </p>
+                  </button>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{t.registeredAt} {formatDate(user.created_at)}</span>
                     {isActive && user.premium_expires_at && (
