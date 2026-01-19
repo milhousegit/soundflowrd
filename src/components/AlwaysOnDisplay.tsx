@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 
@@ -10,67 +10,112 @@ const AlwaysOnDisplay: React.FC<AlwaysOnDisplayProps> = ({ onClose }) => {
   const { currentTrack, isPlaying, toggle, next, previous } = usePlayer();
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
-  // Triple tap tracking for each element
-  const createTripleTapHandler = (action: () => void) => {
-    let tapCount = 0;
-    let lastTap = 0;
-
-    return () => {
-      const now = Date.now();
-      if (now - lastTap < 400) {
-        tapCount += 1;
-        if (tapCount >= 3) {
-          tapCount = 0;
-          action();
-        }
-      } else {
-        tapCount = 1;
-      }
-      lastTap = now;
-    };
-  };
-
-  // Create handlers with refs to maintain state
-  const coverTapRef = useRef(createTripleTapHandler(onClose));
-  const prevTapRef = useRef(createTripleTapHandler(previous));
-  const toggleTapRef = useRef(createTripleTapHandler(toggle));
-  const nextTapRef = useRef(createTripleTapHandler(next));
-
-  // Visual feedback for taps
+  // Tap tracking state
   const [coverTaps, setCoverTaps] = useState(0);
   const [prevTaps, setPrevTaps] = useState(0);
   const [toggleTaps, setToggleTaps] = useState(0);
   const [nextTaps, setNextTaps] = useState(0);
 
-  const handleCoverTap = () => {
-    setCoverTaps(prev => (prev >= 2 ? 0 : prev + 1));
-    coverTapRef.current();
+  // Tap timing refs
+  const coverLastTap = useRef(0);
+  const prevLastTap = useRef(0);
+  const toggleLastTap = useRef(0);
+  const nextLastTap = useRef(0);
+
+  const handleCoverTap = useCallback(() => {
+    const now = Date.now();
+    const timeDiff = now - coverLastTap.current;
+    
+    if (timeDiff < 400) {
+      setCoverTaps(prev => {
+        const newCount = prev + 1;
+        if (newCount >= 3) {
+          onClose();
+          return 0;
+        }
+        return newCount;
+      });
+    } else {
+      setCoverTaps(1);
+    }
+    coverLastTap.current = now;
+    
+    // Reset after timeout
     setTimeout(() => setCoverTaps(0), 500);
-  };
+  }, [onClose]);
 
-  const handlePrevTap = (e: React.TouchEvent | React.MouseEvent) => {
+  const handlePrevTap = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setPrevTaps(prev => (prev >= 2 ? 0 : prev + 1));
-    prevTapRef.current();
+    
+    const now = Date.now();
+    const timeDiff = now - prevLastTap.current;
+    
+    if (timeDiff < 400) {
+      setPrevTaps(prev => {
+        const newCount = prev + 1;
+        if (newCount >= 3) {
+          previous();
+          return 0;
+        }
+        return newCount;
+      });
+    } else {
+      setPrevTaps(1);
+    }
+    prevLastTap.current = now;
+    
     setTimeout(() => setPrevTaps(0), 500);
-  };
+  }, [previous]);
 
-  const handleToggleTap = (e: React.TouchEvent | React.MouseEvent) => {
+  const handleToggleTap = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setToggleTaps(prev => (prev >= 2 ? 0 : prev + 1));
-    toggleTapRef.current();
+    
+    const now = Date.now();
+    const timeDiff = now - toggleLastTap.current;
+    
+    if (timeDiff < 400) {
+      setToggleTaps(prev => {
+        const newCount = prev + 1;
+        if (newCount >= 3) {
+          console.log('[AlwaysOn] Triple tap detected, calling toggle()');
+          toggle();
+          return 0;
+        }
+        return newCount;
+      });
+    } else {
+      setToggleTaps(1);
+    }
+    toggleLastTap.current = now;
+    
     setTimeout(() => setToggleTaps(0), 500);
-  };
+  }, [toggle]);
 
-  const handleNextTap = (e: React.TouchEvent | React.MouseEvent) => {
+  const handleNextTap = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setNextTaps(prev => (prev >= 2 ? 0 : prev + 1));
-    nextTapRef.current();
+    
+    const now = Date.now();
+    const timeDiff = now - nextLastTap.current;
+    
+    if (timeDiff < 400) {
+      setNextTaps(prev => {
+        const newCount = prev + 1;
+        if (newCount >= 3) {
+          next();
+          return 0;
+        }
+        return newCount;
+      });
+    } else {
+      setNextTaps(1);
+    }
+    nextLastTap.current = now;
+    
     setTimeout(() => setNextTaps(0), 500);
-  };
+  }, [next]);
 
   // Request Wake Lock to keep screen on
   useEffect(() => {
