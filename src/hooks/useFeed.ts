@@ -164,32 +164,31 @@ export function useFeed() {
         if (favorites && favorites.length > 0) {
           const artistIds = [...new Set(favorites.map(f => f.item_id))];
           
-          // Fetch latest releases for each artist from Deezer API
-          for (const artistId of artistIds.slice(0, 10)) { // Limit to 10 artists for performance
+          // Fetch latest releases for each artist from Deezer API (retroactive - no time limit)
+          const artistPromises = artistIds.slice(0, 30).map(async (artistId) => {
             try {
               const { data: releases } = await supabase.functions.invoke('deezer', {
-                body: { action: 'getArtistAlbums', artistId, limit: 3 }
+                body: { action: 'getArtistAlbums', artistId, limit: 5 }
               });
 
               if (releases?.data) {
-                const sevenDaysAgo = new Date();
-                sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 30); // Last 30 days
-
-                for (const album of releases.data) {
-                  const releaseDate = new Date(album.release_date);
-                  if (releaseDate >= sevenDaysAgo) {
-                    allItems.push({
-                      type: 'release',
-                      id: `release-${album.id}`,
-                      created_at: album.release_date,
-                      data: album as AlbumRelease
-                    });
-                  }
-                }
+                return releases.data.map((album: any) => ({
+                  type: 'release' as const,
+                  id: `release-${album.id}`,
+                  created_at: album.release_date,
+                  data: album as AlbumRelease
+                }));
               }
+              return [];
             } catch (error) {
               console.error('Error fetching artist releases:', error);
+              return [];
             }
+          });
+
+          const artistResults = await Promise.all(artistPromises);
+          for (const releases of artistResults) {
+            allItems.push(...releases);
           }
         }
       }
