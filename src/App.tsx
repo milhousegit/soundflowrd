@@ -19,8 +19,10 @@ import AutoModePrompt from "@/components/auto/AutoModePrompt";
 import AutoModeLayout from "@/components/auto/AutoModeLayout";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
+import Feed from "@/pages/Feed";
 import Library from "@/pages/Library";
 import Profile from "@/pages/Profile";
+import UserProfile from "@/pages/UserProfile";
 import Info from "@/pages/Info";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
@@ -78,8 +80,10 @@ const AppRoutes = () => {
       >
         <Route index element={<Home />} />
         <Route path="search" element={<Search />} />
+        <Route path="feed" element={<Feed />} />
         <Route path="library" element={<Library />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="profile/:id" element={<UserProfile />} />
         <Route path="info" element={<Info />} />
         <Route path="artist/:id" element={<Artist />} />
         <Route path="album/:id" element={<Album />} />

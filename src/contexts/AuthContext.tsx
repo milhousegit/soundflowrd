@@ -12,6 +12,17 @@ interface Profile {
   is_premium: boolean | null;
   premium_expires_at: string | null;
   telegram_chat_id: string | null;
+  // Social profile fields
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  bio_track_id: string | null;
+  bio_track_title: string | null;
+  bio_track_artist: string | null;
+  bio_track_cover_url: string | null;
+  is_private: boolean | null;
+  followers_count: number | null;
+  following_count: number | null;
 }
 
 interface AuthContextType {
