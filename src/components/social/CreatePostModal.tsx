@@ -18,6 +18,7 @@ interface CreatePostModalProps {
     title: string;
     artist: string;
     album?: string;
+    albumId?: string;
     coverUrl?: string;
     duration?: number;
   }) => Promise<any>;
@@ -77,6 +78,7 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSu
           title: selectedTrack.title,
           artist: selectedTrack.artist,
           album: selectedTrack.album,
+          albumId: selectedTrack.albumId,
           coverUrl: selectedTrack.coverUrl,
           duration: selectedTrack.duration,
         } : undefined

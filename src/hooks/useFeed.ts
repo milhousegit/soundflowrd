@@ -29,18 +29,65 @@ export function useFeed() {
 
       const followingIds = follows?.map(f => f.following_id) || [];
       
+      // Get albums I follow (from album_likes)
+      const { data: likedAlbums } = await supabase
+        .from('album_likes')
+        .select('album_id')
+        .eq('user_id', user.id);
+      
+      const likedAlbumIds = likedAlbums?.map(a => a.album_id) || [];
+      
       // Include my own posts + followed users posts
       const allUserIds = [...followingIds, user.id];
 
       // Fetch posts from followed users and self
-      const { data: postsData, error } = await supabase
+      let postsQuery = supabase
+        .from('posts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + 19);
+
+      // We need to get posts where:
+      // 1. user_id is in allUserIds (my posts or followed users)
+      // 2. OR track_album_id is in likedAlbumIds (posts with tracks from albums I follow)
+      
+      const { data: postsFromFollowing, error: error1 } = await supabase
         .from('posts')
         .select('*')
         .in('user_id', allUserIds)
         .order('created_at', { ascending: false })
         .range(offset, offset + 19);
 
-      if (error) throw error;
+      if (error1) throw error1;
+
+      // Also get posts with tracks from albums I follow
+      let postsFromAlbums: any[] = [];
+      if (likedAlbumIds.length > 0) {
+        const { data: albumPosts } = await supabase
+          .from('posts')
+          .select('*')
+          .in('track_album_id', likedAlbumIds)
+          .order('created_at', { ascending: false })
+          .range(0, 19);
+        
+        postsFromAlbums = albumPosts || [];
+      }
+
+      // Merge and deduplicate posts
+      const allPosts = [...(postsFromFollowing || [])];
+      const seenIds = new Set(allPosts.map(p => p.id));
+      
+      for (const post of postsFromAlbums) {
+        if (!seenIds.has(post.id)) {
+          allPosts.push(post);
+          seenIds.add(post.id);
+        }
+      }
+
+      // Sort by created_at descending
+      allPosts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      const postsData = allPosts.slice(0, 20);
 
       if (!postsData || postsData.length < 20) {
         setHasMore(false);
@@ -53,7 +100,16 @@ export function useFeed() {
         .select('*')
         .in('id', userIds);
 
-      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+      // Check which users are admins
+      const { data: adminRoles } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('user_id', userIds)
+        .eq('role', 'admin');
+      
+      const adminUserIds = new Set(adminRoles?.map(r => r.user_id) || []);
+
+      const profileMap = new Map(profiles?.map(p => [p.id, { ...p, is_admin: adminUserIds.has(p.id) }]) || []);
 
       // Check which posts I've liked
       const postIds = postsData?.map(p => p.id) || [];
@@ -98,6 +154,7 @@ export function useFeed() {
     title: string;
     artist: string;
     album?: string;
+    albumId?: string;
     coverUrl?: string;
     duration?: number;
   }) => {
@@ -113,6 +170,7 @@ export function useFeed() {
           track_title: track?.title,
           track_artist: track?.artist,
           track_album: track?.album,
+          track_album_id: track?.albumId,
           track_cover_url: track?.coverUrl,
           track_duration: track?.duration,
         })

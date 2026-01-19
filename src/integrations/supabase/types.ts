@@ -652,6 +652,7 @@ export type Database = {
           id: string
           likes_count: number | null
           track_album: string | null
+          track_album_id: string | null
           track_artist: string | null
           track_cover_url: string | null
           track_duration: number | null
@@ -667,6 +668,7 @@ export type Database = {
           id?: string
           likes_count?: number | null
           track_album?: string | null
+          track_album_id?: string | null
           track_artist?: string | null
           track_cover_url?: string | null
           track_duration?: number | null
@@ -682,6 +684,7 @@ export type Database = {
           id?: string
           likes_count?: number | null
           track_album?: string | null
+          track_album_id?: string | null
           track_artist?: string | null
           track_cover_url?: string | null
           track_duration?: number | null

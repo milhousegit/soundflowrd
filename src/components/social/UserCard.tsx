@@ -26,12 +26,15 @@ const UserCard: React.FC<UserCardProps> = ({ user }) => {
       </div>
       
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <p className="font-medium text-sm text-foreground truncate">
             {user.display_name || user.email?.split('@')[0] || 'Utente'}
           </p>
-          {user.is_premium && (
-            <Crown className="w-3.5 h-3.5 text-primary shrink-0" />
+          {user.is_admin && (
+            <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          )}
+          {!user.is_admin && user.is_premium && (
+            <Crown className="w-3.5 h-3.5 text-[#8B5CF6] shrink-0" />
           )}
         </div>
         {user.bio && (
