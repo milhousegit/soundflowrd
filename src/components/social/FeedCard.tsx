@@ -209,13 +209,19 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
   const getAlbumId = (): string | null => {
     if (type === 'release') return (data as AlbumRelease).id;
     if (type === 'comment') return (data as AlbumComment).album_id;
-    // Posts don't have direct album IDs for comments
+    return null;
+  };
+
+  // Get post ID for post type
+  const getPostId = (): string | null => {
+    if (type === 'post') return (data as FeedPost).id;
     return null;
   };
 
   const albumId = getAlbumId();
+  const postId = getPostId();
 
-  // Use comments hook for album
+  // Use comments hook - for albums or posts
   const { 
     comments, 
     isLoading: isLoadingComments, 
@@ -225,7 +231,10 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
     unlikeComment, 
     fetchReplies,
     refetch: refetchComments 
-  } = useComments({ albumId: albumId || undefined });
+  } = useComments({ 
+    albumId: albumId || undefined,
+    postId: postId || undefined 
+  });
 
   // Fetch album social status
   useEffect(() => {
@@ -332,10 +341,12 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
   };
 
   const handleSubmitComment = async () => {
-    if (!newComment.trim() || !albumId) return;
+    if (!newComment.trim() || (!albumId && !postId)) return;
     await addComment(newComment);
     setNewComment('');
-    setAlbumCommentsCount(prev => prev + 1);
+    if (albumId) {
+      setAlbumCommentsCount(prev => prev + 1);
+    }
   };
 
   // Render based on type
@@ -631,7 +642,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
       {renderContent()}
 
       {/* Comments section - inline expandable */}
-      {showComments && albumId && (
+      {showComments && (albumId || postId) && (
         <div className="pt-3 border-t border-border space-y-3">
           {/* Comment input */}
           {user && (
@@ -672,7 +683,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
                   locale={locale}
                 />
               ))}
-              {comments.length > 5 && (
+              {comments.length > 5 && albumId && (
                 <button 
                   onClick={() => navigate(`/album/${albumId}`)}
                   className="text-xs text-primary hover:underline"
