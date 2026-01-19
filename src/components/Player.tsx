@@ -74,6 +74,7 @@ const Player: React.FC = () => {
     currentMappedFileId,
     playQueueIndex,
     clearQueue,
+    reorderQueue,
     loadingPhase,
     isShuffled,
     toggleShuffle,
@@ -650,6 +651,7 @@ const Player: React.FC = () => {
         currentIndex={queueIndex}
         onPlayTrack={playQueueIndex}
         onClearQueue={clearQueue}
+        onReorderQueue={reorderQueue}
       />
 
       <LyricsModal
