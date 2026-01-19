@@ -10,6 +10,13 @@ const GENIUS_API = 'https://api.genius.com';
 const LYRICS_OVH_API = 'https://api.lyrics.ovh/v1';
 const LRCLIB_API = 'https://lrclib.net/api';
 
+// Words that indicate a translation page on Genius (should be excluded)
+const TRANSLATION_KEYWORDS = [
+  'traduzione', 'traducción', 'übersetzung', 'traduction', 'translation',
+  'tradução', 'перевод', 'tłumaczenie', 'çeviri', 'traduceri',
+  'traduzioni italiane', 'traduções', 'genius traduzioni'
+];
+
 // Clean up artist and title for better matching
 function cleanForSearch(text: string): string {
   return text
@@ -19,6 +26,21 @@ function cleanForSearch(text: string): string {
     .replace(/\s*-\s*.*$/, '') // Remove everything after dash
     .replace(/\s+/g, ' ') // Normalize spaces
     .trim();
+}
+
+// Check if a Genius result is a translation page
+function isTranslationPage(result: any): boolean {
+  const title = (result.title || '').toLowerCase();
+  const artist = (result.primary_artist?.name || '').toLowerCase();
+  const fullTitle = (result.full_title || '').toLowerCase();
+  
+  for (const keyword of TRANSLATION_KEYWORDS) {
+    if (title.includes(keyword) || artist.includes(keyword) || fullTitle.includes(keyword)) {
+      console.log('Skipping translation page:', result.full_title);
+      return true;
+    }
+  }
+  return false;
 }
 
 // Try LRCLIB for synced lyrics (karaoke style)
@@ -66,6 +88,59 @@ async function getLyricsFromLRCLIB(artist: string, title: string): Promise<{ lyr
   }
 }
 
+// Try LRCLIB search as fallback (more flexible matching)
+async function searchLRCLIB(artist: string, title: string): Promise<{ lyrics: string; syncedLyrics: string | null; } | null> {
+  try {
+    const cleanArtist = cleanForSearch(artist);
+    const cleanTitle = cleanForSearch(title);
+    const query = `${cleanArtist} ${cleanTitle}`;
+    
+    console.log('Searching LRCLIB with:', query);
+    
+    const url = `${LRCLIB_API}/search?q=${encodeURIComponent(query)}`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.log('LRCLIB search returned:', response.status);
+      return null;
+    }
+    
+    const results = await response.json();
+    
+    if (Array.isArray(results) && results.length > 0) {
+      // Find best match - prefer results with synced lyrics
+      const withSync = results.find((r: any) => r.syncedLyrics);
+      const best = withSync || results[0];
+      
+      if (best.syncedLyrics || best.plainLyrics) {
+        console.log('Found match in LRCLIB search:', best.trackName, '-', best.artistName);
+        return {
+          lyrics: best.plainLyrics || best.syncedLyrics?.replace(/\[\d+:\d+\.\d+\]/g, '').trim(),
+          syncedLyrics: best.syncedLyrics || null,
+        };
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('LRCLIB search timed out');
+    } else {
+      console.error('LRCLIB search error:', error);
+    }
+    return null;
+  }
+}
+
 // Try Lyrics.ovh as fallback
 async function getLyricsFromLyricsOvh(artist: string, title: string): Promise<string | null> {
   try {
@@ -106,14 +181,20 @@ async function getLyricsFromLyricsOvh(artist: string, title: string): Promise<st
   }
 }
 
-// Search Genius for song info (metadata only)
+// Search Genius for song info (metadata only) - excludes translation pages
 async function searchGeniusSong(query: string, accessToken: string): Promise<any | null> {
   try {
     const url = `${GENIUS_API}/search?q=${encodeURIComponent(query)}`;
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
     const response = await fetch(url, {
       headers: { 'Authorization': `Bearer ${accessToken}` },
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.error('Genius search error:', response.status);
@@ -125,9 +206,23 @@ async function searchGeniusSong(query: string, accessToken: string): Promise<any
     
     if (hits.length === 0) return null;
     
-    return hits[0].result;
+    // Filter out translation pages and find best match
+    for (const hit of hits) {
+      const result = hit.result;
+      if (!isTranslationPage(result)) {
+        console.log('Using Genius result:', result.full_title);
+        return result;
+      }
+    }
+    
+    console.log('All Genius results were translation pages');
+    return null;
   } catch (error) {
-    console.error('Genius search error:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('Genius search timed out');
+    } else {
+      console.error('Genius search error:', error);
+    }
     return null;
   }
 }
@@ -160,7 +255,17 @@ serve(async (req) => {
       console.log('Got lyrics from LRCLIB', syncedLyrics ? '(with sync)' : '(plain only)');
     }
     
-    // 2. Fallback to Lyrics.ovh if LRCLIB fails
+    // 2. Try LRCLIB search if direct lookup fails
+    if (!lyrics) {
+      const searchResult = await searchLRCLIB(artist, title);
+      if (searchResult) {
+        lyrics = searchResult.lyrics;
+        syncedLyrics = searchResult.syncedLyrics;
+        console.log('Got lyrics from LRCLIB search', syncedLyrics ? '(with sync)' : '(plain only)');
+      }
+    }
+    
+    // 3. Fallback to Lyrics.ovh if LRCLIB fails
     if (!lyrics) {
       lyrics = await getLyricsFromLyricsOvh(artist, title);
       if (lyrics) {
@@ -168,15 +273,16 @@ serve(async (req) => {
       }
     }
     
-    // 3. Try with original title if still no lyrics
+    // 4. Try with original title if still no lyrics
     if (!lyrics) {
       console.log('Retrying with original title...');
-      const lrclibRetry = await getLyricsFromLRCLIB(artist, title.split(/[(-]/)[0].trim());
+      const cleanedTitle = title.split(/[(-]/)[0].trim();
+      const lrclibRetry = await getLyricsFromLRCLIB(artist, cleanedTitle);
       if (lrclibRetry) {
         lyrics = lrclibRetry.lyrics;
         syncedLyrics = lrclibRetry.syncedLyrics;
       } else {
-        lyrics = await getLyricsFromLyricsOvh(artist, title.split(/[(-]/)[0].trim());
+        lyrics = await getLyricsFromLyricsOvh(artist, cleanedTitle);
       }
     }
 
