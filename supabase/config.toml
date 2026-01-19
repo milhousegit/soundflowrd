@@ -28,5 +28,3 @@ verify_jwt = false
 [functions.spotify-import]
 verify_jwt = false
 
-[functions.spotify-search]
-verify_jwt = false
