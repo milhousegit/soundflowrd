@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Download, Loader2 } from 'lucide-react';
+import { Play, Clock, Music, Download, Loader2, Heart, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
+import CommentSection from '@/components/social/CommentSection';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,18 +16,20 @@ import { mockAlbums, mockTracks } from '@/data/mockData';
 import { Album as AlbumType, Track } from '@/types/music';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
 import { useDownloadAll } from '@/hooks/useDownloadAll';
+import { useAlbumSocial } from '@/hooks/useAlbumSocial';
 import { isPast } from 'date-fns';
 
 const Album: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
   const { profile, isAdmin } = useAuth();
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
   const [album, setAlbum] = useState<AlbumType | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('tracks');
   
   // Check if user can download (premium or admin)
   const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
@@ -34,6 +38,14 @@ const Album: React.FC = () => {
   // Get track IDs for sync status checking
   const trackIds = useMemo(() => tracks.map(t => t.id), [tracks]);
   const { isSynced, isSyncing, isDownloading } = useSyncedTracks(trackIds);
+  
+  // Social features for album
+  const { isLiked, likesCount, commentsCount, toggleLike } = useAlbumSocial(
+    id || '',
+    album?.title || '',
+    album?.artist || '',
+    album?.coverUrl
+  );
 
   useEffect(() => {
     const fetchAlbum = async () => {
@@ -157,6 +169,26 @@ const Album: React.FC = () => {
           variant="ghost"
         />
 
+        {/* Social like button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleLike}
+          className={`w-12 h-12 ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+        >
+          <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
+        </Button>
+
+        {/* Comment button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setActiveTab('comments')}
+          className="w-12 h-12 text-muted-foreground"
+        >
+          <MessageCircle className="w-5 h-5" />
+        </Button>
+
         {/* Download button - Premium only */}
         {canDownload && displayTracks.length > 0 && (
           <Button
@@ -173,33 +205,66 @@ const Album: React.FC = () => {
             )}
           </Button>
         )}
+
+        {/* Stats */}
+        <div className="flex items-center gap-4 ml-auto text-sm text-muted-foreground">
+          {likesCount > 0 && (
+            <span className="flex items-center gap-1">
+              <Heart className="w-4 h-4" />
+              {likesCount}
+            </span>
+          )}
+          {commentsCount > 0 && (
+            <span className="flex items-center gap-1">
+              <MessageCircle className="w-4 h-4" />
+              {commentsCount}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Track List */}
+      {/* Tabs: Tracks / Comments */}
       <div className="px-4 md:px-8">
-        {/* Header - Hidden on mobile */}
-        <div className="hidden md:grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 text-sm text-muted-foreground border-b border-border mb-2">
-          <span className="w-8 text-center">#</span>
-          <span>Titolo</span>
-          <Clock className="w-4 h-4" />
-        </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="mb-4">
+            <TabsTrigger value="tracks">
+              {t('tracks')} ({displayTracks.length})
+            </TabsTrigger>
+            <TabsTrigger value="comments">
+              {settings.language === 'it' ? 'Commenti' : 'Comments'} ({commentsCount})
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Tracks */}
-        <div className="space-y-1">
-          {displayTracks.map((track, index) => (
-            <TrackCard 
-              key={track.id} 
-              track={track}
-              queue={displayTracks}
-              index={index}
-              showArtist={true}
-              showSyncStatus={true}
-              isSynced={isSynced(track.id)}
-              isSyncing={isSyncing(track.id)}
-              isDownloading={isDownloading(track.id)}
-            />
-          ))}
-        </div>
+          <TabsContent value="tracks">
+            {/* Header - Hidden on mobile */}
+            <div className="hidden md:grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 text-sm text-muted-foreground border-b border-border mb-2">
+              <span className="w-8 text-center">#</span>
+              <span>Titolo</span>
+              <Clock className="w-4 h-4" />
+            </div>
+
+            {/* Tracks */}
+            <div className="space-y-1">
+              {displayTracks.map((track, index) => (
+                <TrackCard 
+                  key={track.id} 
+                  track={track}
+                  queue={displayTracks}
+                  index={index}
+                  showArtist={true}
+                  showSyncStatus={true}
+                  isSynced={isSynced(track.id)}
+                  isSyncing={isSyncing(track.id)}
+                  isDownloading={isDownloading(track.id)}
+                />
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="comments">
+            <CommentSection albumId={id} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
