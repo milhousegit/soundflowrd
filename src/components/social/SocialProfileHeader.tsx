@@ -13,6 +13,7 @@ import { usePlayer } from '@/contexts/PlayerContext';
 import { searchAll } from '@/lib/deezer';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Track } from '@/types/music';
+import FollowListModal from './FollowListModal';
 
 interface SocialProfileHeaderProps {
   userId?: string;
@@ -38,6 +39,7 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
   const [bioTrackQuery, setBioTrackQuery] = useState('');
   const [bioTrackResults, setBioTrackResults] = useState<Track[]>([]);
   const [isSearchingTrack, setIsSearchingTrack] = useState(false);
+  const [followListType, setFollowListType] = useState<'followers' | 'following' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isOwnProfile = !userId || userId === user?.id;
@@ -273,13 +275,19 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
 
           {/* Stats */}
           <div className="flex items-center gap-6">
-            <button className="text-center">
+            <button 
+              className="text-center"
+              onClick={() => setFollowListType('followers')}
+            >
               <p className="text-lg font-bold text-foreground">{profile.followers_count}</p>
               <p className="text-xs text-muted-foreground">
                 {settings.language === 'it' ? 'Follower' : 'Followers'}
               </p>
             </button>
-            <button className="text-center">
+            <button 
+              className="text-center"
+              onClick={() => setFollowListType('following')}
+            >
               <p className="text-lg font-bold text-foreground">{profile.following_count}</p>
               <p className="text-xs text-muted-foreground">
                 {settings.language === 'it' ? 'Seguiti' : 'Following'}
@@ -398,6 +406,14 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Follow list modal */}
+      <FollowListModal
+        open={!!followListType}
+        onOpenChange={(open) => !open && setFollowListType(null)}
+        userId={profile.id}
+        type={followListType || 'followers'}
+      />
     </>
   );
 };
