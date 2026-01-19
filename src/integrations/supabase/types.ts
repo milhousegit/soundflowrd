@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      album_likes: {
+        Row: {
+          album_artist: string
+          album_cover_url: string | null
+          album_id: string
+          album_title: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          album_artist: string
+          album_cover_url?: string | null
+          album_id: string
+          album_title: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          album_artist?: string
+          album_cover_url?: string | null
+          album_id?: string
+          album_title?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       album_torrent_mappings: {
         Row: {
           album_id: string
@@ -163,6 +193,89 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      comment_likes: {
+        Row: {
+          comment_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_likes_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comments: {
+        Row: {
+          album_id: string | null
+          content: string
+          created_at: string
+          id: string
+          likes_count: number | null
+          parent_id: string | null
+          post_id: string | null
+          replies_count: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          album_id?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          likes_count?: number | null
+          parent_id?: string | null
+          post_id?: string | null
+          replies_count?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          album_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          likes_count?: number | null
+          parent_id?: string | null
+          post_id?: string | null
+          replies_count?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       deezer_playlist_covers: {
         Row: {
@@ -502,13 +615,100 @@ export type Database = {
         }
         Relationships: []
       }
+      post_likes: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      posts: {
+        Row: {
+          comments_count: number | null
+          content: string | null
+          created_at: string
+          id: string
+          likes_count: number | null
+          track_album: string | null
+          track_artist: string | null
+          track_cover_url: string | null
+          track_duration: number | null
+          track_id: string | null
+          track_title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comments_count?: number | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          likes_count?: number | null
+          track_album?: string | null
+          track_artist?: string | null
+          track_cover_url?: string | null
+          track_duration?: number | null
+          track_id?: string | null
+          track_title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          comments_count?: number | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          likes_count?: number | null
+          track_album?: string | null
+          track_artist?: string | null
+          track_cover_url?: string | null
+          track_duration?: number | null
+          track_id?: string | null
+          track_title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           audio_source_mode: string | null
+          avatar_url: string | null
+          bio: string | null
+          bio_track_artist: string | null
+          bio_track_cover_url: string | null
+          bio_track_id: string | null
+          bio_track_title: string | null
           created_at: string
+          display_name: string | null
           email: string | null
+          followers_count: number | null
+          following_count: number | null
           id: string
           is_premium: boolean | null
+          is_private: boolean | null
           preferred_language: string | null
           premium_expires_at: string | null
           real_debrid_api_key: string | null
@@ -517,10 +717,20 @@ export type Database = {
         }
         Insert: {
           audio_source_mode?: string | null
+          avatar_url?: string | null
+          bio?: string | null
+          bio_track_artist?: string | null
+          bio_track_cover_url?: string | null
+          bio_track_id?: string | null
+          bio_track_title?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string | null
+          followers_count?: number | null
+          following_count?: number | null
           id: string
           is_premium?: boolean | null
+          is_private?: boolean | null
           preferred_language?: string | null
           premium_expires_at?: string | null
           real_debrid_api_key?: string | null
@@ -529,10 +739,20 @@ export type Database = {
         }
         Update: {
           audio_source_mode?: string | null
+          avatar_url?: string | null
+          bio?: string | null
+          bio_track_artist?: string | null
+          bio_track_cover_url?: string | null
+          bio_track_id?: string | null
+          bio_track_title?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string | null
+          followers_count?: number | null
+          following_count?: number | null
           id?: string
           is_premium?: boolean | null
+          is_private?: boolean | null
           preferred_language?: string | null
           premium_expires_at?: string | null
           real_debrid_api_key?: string | null
@@ -635,6 +855,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
