@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Eye, Crown, AlertTriangle, Sparkles, Download, Car, Music, Mic2, Zap, X, Clock, CheckCircle2, Mail, Share2, Gift } from 'lucide-react';
+import { ChevronDown, Eye, Crown, AlertTriangle, Sparkles, Download, Car, Music, Mic2, Zap, X, Clock, CheckCircle2, Mail, BadgeCheck } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import PremiumExpiredBanner from './PremiumExpiredBanner';
 
@@ -155,8 +155,8 @@ const TestUnlockPremiumModal: React.FC<{ onClose: () => void; onPayment: () => v
     { icon: Download, label: isItalian ? 'Download Offline' : 'Offline Downloads', desc: isItalian ? 'Scarica brani in locale' : 'Download tracks locally' },
     { icon: Car, label: isItalian ? 'Modalità Auto' : 'Auto Mode', desc: isItalian ? 'UI ottimizzata per guida' : 'Driving-optimized UI' },
     { icon: Crown, label: isItalian ? 'Riproduzione Ibrida' : 'Hybrid Playback', desc: isItalian ? 'Mai interrompere la musica' : 'Never interrupt music' },
-    { icon: Share2, label: isItalian ? 'Condividi Playlist' : 'Share Playlists', desc: isItalian ? 'Con i tuoi amici' : 'With friends' },
-    { icon: Gift, label: 'Wrapper', desc: isItalian ? 'Il tuo anno in musica' : 'Your year in music' },
+    { icon: Mic2, label: isItalian ? 'Testi Sincronizzati' : 'Synced Lyrics', desc: isItalian ? 'Karaoke automatico' : 'Automatic karaoke' },
+    { icon: BadgeCheck, label: isItalian ? 'Profilo Verificato' : 'Verified Profile', desc: isItalian ? 'Coroncina esclusiva' : 'Exclusive crown badge' },
     { icon: Sparkles, label: isItalian ? 'Accesso Anticipato' : 'Early Access', desc: isItalian ? 'Novità in anteprima' : 'New features first' },
   ];
 
