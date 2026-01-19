@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, Play, MoreHorizontal, Trash2, User, Crown, Disc, ChevronDown, ChevronUp, Send, Loader2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Play, MoreHorizontal, Trash2, User, Crown, Disc, ChevronDown, ChevronUp, Send, Loader2, Bookmark } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useComments, Comment } from '@/hooks/useComments';
+import { useFavorites } from '@/hooks/useFavorites';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { it, enUS } from 'date-fns/locale';
@@ -200,10 +201,10 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
   
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState('');
-  const [isLikingAlbum, setIsLikingAlbum] = useState(false);
-  const [albumIsLiked, setAlbumIsLiked] = useState(false);
-  const [albumLikesCount, setAlbumLikesCount] = useState(0);
   const [albumCommentsCount, setAlbumCommentsCount] = useState(0);
+  
+  // Favorites hook for saving albums/tracks
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   // Get album ID based on type
   const getAlbumId = (): string | null => {
@@ -236,93 +237,61 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
     postId: postId || undefined 
   });
 
-  // Fetch album social status
+  // Fetch album comments count
   useEffect(() => {
-    const fetchAlbumStatus = async () => {
+    const fetchAlbumCommentsCount = async () => {
       if (!albumId) return;
 
       try {
-        const { count: totalLikes } = await supabase
-          .from('album_likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('album_id', albumId);
-
-        setAlbumLikesCount(totalLikes || 0);
-
         const { count: totalComments } = await supabase
           .from('comments')
           .select('*', { count: 'exact', head: true })
           .eq('album_id', albumId);
 
         setAlbumCommentsCount(totalComments || 0);
-
-        if (user?.id) {
-          const { data: likeData } = await supabase
-            .from('album_likes')
-            .select('id')
-            .eq('album_id', albumId)
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-          setAlbumIsLiked(!!likeData);
-        }
       } catch (error) {
-        console.error('Error fetching album status:', error);
+        console.error('Error fetching album comments count:', error);
       }
     };
 
-    fetchAlbumStatus();
-  }, [albumId, user?.id]);
+    fetchAlbumCommentsCount();
+  }, [albumId]);
 
   const formatDate = (dateStr: string) => {
     return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale });
   };
 
-  const handleAlbumLikeToggle = async () => {
-    if (!user?.id || !albumId || isLikingAlbum) return;
-    setIsLikingAlbum(true);
+  // Handle saving album to library
+  const handleAlbumSaveToggle = async () => {
+    if (!albumId) return;
+    const albumInfo = getAlbumInfo();
+    const album = {
+      id: albumId,
+      title: albumInfo.title,
+      artist: albumInfo.artist,
+      coverUrl: albumInfo.cover || '',
+    };
+    await toggleFavorite('album', album as any);
+  };
 
-    try {
-      if (albumIsLiked) {
-        await supabase
-          .from('album_likes')
-          .delete()
-          .eq('album_id', albumId)
-          .eq('user_id', user.id);
-        setAlbumIsLiked(false);
-        setAlbumLikesCount(prev => Math.max(0, prev - 1));
-      } else {
-        const albumInfo = getAlbumInfo();
-        await supabase
-          .from('album_likes')
-          .insert({
-            album_id: albumId,
-            album_title: albumInfo.title,
-            album_artist: albumInfo.artist,
-            album_cover_url: albumInfo.cover,
-            user_id: user.id,
-          });
-        setAlbumIsLiked(true);
-        setAlbumLikesCount(prev => prev + 1);
-        
-        // Show toast notification for adding to favorites
-        toast.success(
-          settings.language === 'it' 
-            ? `"${albumInfo.title}" aggiunto ai preferiti` 
-            : `"${albumInfo.title}" added to favorites`,
-          { 
-            duration: 3000,
-            style: { 
-              marginTop: 'max(env(safe-area-inset-top, 0px), 16px)' 
-            }
-          }
-        );
-      }
-    } catch (error) {
-      console.error('Error toggling album like:', error);
-    } finally {
-      setIsLikingAlbum(false);
-    }
+  // Handle saving track to library
+  const handleTrackSaveToggle = async (trackData: {
+    id: string;
+    title: string;
+    artist: string;
+    album?: string;
+    coverUrl?: string;
+    duration?: number;
+  }) => {
+    const track = {
+      id: trackData.id,
+      title: trackData.title,
+      artist: trackData.artist,
+      album: trackData.album || '',
+      coverUrl: trackData.coverUrl || '',
+      duration: trackData.duration || 0,
+    };
+    await toggleFavorite('track', track as any);
   };
 
   const getAlbumInfo = () => {
@@ -460,7 +429,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
           </button>
         )}
 
-        {/* Post actions - like/unlike post */}
+        {/* Post actions - like/unlike post + save track */}
         <div className="flex items-center gap-4 pt-1">
           <Button
             variant="ghost"
@@ -477,6 +446,26 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
             <Heart className={`w-4 h-4 ${post.is_liked ? 'fill-current' : ''}`} />
             <span className="text-xs">{post.likes_count || 0}</span>
           </Button>
+
+          {/* Save track button - only if post has a track */}
+          {post.track_id && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleTrackSaveToggle({
+                id: post.track_id!,
+                title: post.track_title || '',
+                artist: post.track_artist || '',
+                album: post.track_album || '',
+                coverUrl: post.track_cover_url || '',
+                duration: post.track_duration || 0,
+              })}
+              className={`gap-1.5 ${isFavorite('track', post.track_id) ? 'text-primary' : 'text-muted-foreground'}`}
+            >
+              <Bookmark className={`w-4 h-4 ${isFavorite('track', post.track_id) ? 'fill-current' : ''}`} />
+              <span className="text-xs">{settings.language === 'it' ? 'Salva' : 'Save'}</span>
+            </Button>
+          )}
 
           <Button
             variant="ghost"
@@ -537,12 +526,11 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleAlbumLikeToggle}
-            disabled={isLikingAlbum}
-            className={`gap-1.5 ${albumIsLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+            onClick={handleAlbumSaveToggle}
+            className={`gap-1.5 ${isFavorite('album', albumId || '') ? 'text-primary' : 'text-muted-foreground'}`}
           >
-            <Heart className={`w-4 h-4 ${albumIsLiked ? 'fill-current' : ''}`} />
-            <span className="text-xs">{albumLikesCount}</span>
+            <Bookmark className={`w-4 h-4 ${isFavorite('album', albumId || '') ? 'fill-current' : ''}`} />
+            <span className="text-xs">{settings.language === 'it' ? 'Salva' : 'Save'}</span>
           </Button>
 
           <Button
@@ -624,12 +612,11 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleAlbumLikeToggle}
-            disabled={isLikingAlbum}
-            className={`gap-1.5 ${albumIsLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+            onClick={handleAlbumSaveToggle}
+            className={`gap-1.5 ${isFavorite('album', albumId || '') ? 'text-primary' : 'text-muted-foreground'}`}
           >
-            <Heart className={`w-4 h-4 ${albumIsLiked ? 'fill-current' : ''}`} />
-            <span className="text-xs">{albumLikesCount}</span>
+            <Bookmark className={`w-4 h-4 ${isFavorite('album', albumId || '') ? 'fill-current' : ''}`} />
+            <span className="text-xs">{settings.language === 'it' ? 'Salva' : 'Save'}</span>
           </Button>
 
           <Button

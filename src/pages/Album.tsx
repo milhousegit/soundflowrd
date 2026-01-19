@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Download, Loader2, Heart, MessageCircle } from 'lucide-react';
+import { Play, Clock, Music, Download, Loader2, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
@@ -39,8 +39,8 @@ const Album: React.FC = () => {
   const trackIds = useMemo(() => tracks.map(t => t.id), [tracks]);
   const { isSynced, isSyncing, isDownloading } = useSyncedTracks(trackIds);
   
-  // Social features for album
-  const { isLiked, likesCount, commentsCount, toggleLike } = useAlbumSocial(
+  // Social features for album (comments only now)
+  const { commentsCount } = useAlbumSocial(
     id || '',
     album?.title || '',
     album?.artist || '',
@@ -169,16 +169,6 @@ const Album: React.FC = () => {
           variant="ghost"
         />
 
-        {/* Social like button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleLike}
-          className={`w-12 h-12 ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
-        >
-          <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
-        </Button>
-
         {/* Comment button */}
         <Button
           variant="ghost"
@@ -208,12 +198,6 @@ const Album: React.FC = () => {
 
         {/* Stats */}
         <div className="flex items-center gap-4 ml-auto text-sm text-muted-foreground">
-          {likesCount > 0 && (
-            <span className="flex items-center gap-1">
-              <Heart className="w-4 h-4" />
-              {likesCount}
-            </span>
-          )}
           {commentsCount > 0 && (
             <span className="flex items-center gap-1">
               <MessageCircle className="w-4 h-4" />
