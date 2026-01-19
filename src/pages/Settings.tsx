@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { verifyApiKey } from '@/lib/realdebrid';
-import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, ChevronRight, ChevronDown, Info, Globe, Crown, Download, Car, Share2, Gift, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2, MessageSquare } from 'lucide-react';
+import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, ChevronRight, ChevronDown, Info, Globe, Crown, Download, Car, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2, MessageSquare, Mic2, BadgeCheck } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -352,13 +352,13 @@ const Settings: React.FC = () => {
                       label: settings.language === 'it' ? 'Riproduzione Ibrida' : 'Hybrid Playback',
                       desc: settings.language === 'it' ? 'Mai interrompere la musica' : 'Never interrupt music'
                     }, {
-                      icon: Share2,
-                      label: settings.language === 'it' ? 'Condividi Playlist' : 'Share Playlists',
-                      desc: settings.language === 'it' ? 'Con i tuoi amici' : 'With friends'
+                      icon: Mic2,
+                      label: settings.language === 'it' ? 'Testi Sincronizzati' : 'Synced Lyrics',
+                      desc: settings.language === 'it' ? 'Karaoke automatico' : 'Automatic karaoke'
                     }, {
-                      icon: Gift,
-                      label: 'Wrapper',
-                      desc: settings.language === 'it' ? 'Il tuo anno in musica' : 'Your year in music'
+                      icon: BadgeCheck,
+                      label: settings.language === 'it' ? 'Profilo Verificato' : 'Verified Profile',
+                      desc: settings.language === 'it' ? 'Coroncina esclusiva' : 'Exclusive crown badge'
                     }, {
                       icon: Sparkles,
                       label: settings.language === 'it' ? 'Accesso Anticipato' : 'Early Access',
