@@ -67,13 +67,14 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSu
   };
 
   const handleSubmit = async () => {
-    if (!content.trim() && !selectedTrack) return;
+    // Track is required
+    if (!selectedTrack) return;
 
     setIsSubmitting(true);
     try {
       await onSubmit(
         content,
-        selectedTrack ? {
+        {
           id: selectedTrack.id,
           title: selectedTrack.title,
           artist: selectedTrack.artist,
@@ -81,7 +82,7 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSu
           albumId: selectedTrack.albumId,
           coverUrl: selectedTrack.coverUrl,
           duration: selectedTrack.duration,
-        } : undefined
+        }
       );
       setContent('');
       setSelectedTrack(null);
@@ -207,19 +208,25 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSu
 
           {/* Actions */}
           <div className="flex items-center justify-between pt-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowTrackSearch(!showTrackSearch)}
-              className="gap-2"
-            >
-              <Music className="w-4 h-4" />
-              {settings.language === 'it' ? 'Aggiungi brano' : 'Add track'}
-            </Button>
+            {!selectedTrack ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowTrackSearch(!showTrackSearch)}
+                className="gap-2"
+              >
+                <Music className="w-4 h-4" />
+                {settings.language === 'it' ? 'Seleziona brano *' : 'Select track *'}
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {settings.language === 'it' ? 'Brano selezionato ✓' : 'Track selected ✓'}
+              </span>
+            )}
 
             <Button
               onClick={handleSubmit}
-              disabled={isSubmitting || (!content.trim() && !selectedTrack)}
+              disabled={isSubmitting || !selectedTrack}
             >
               {isSubmitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -228,6 +235,12 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSu
               )}
             </Button>
           </div>
+
+          {!selectedTrack && (
+            <p className="text-xs text-muted-foreground text-center">
+              {settings.language === 'it' ? 'Devi selezionare un brano per pubblicare' : 'You must select a track to post'}
+            </p>
+          )}
         </div>
       </DialogContent>
     </Dialog>
