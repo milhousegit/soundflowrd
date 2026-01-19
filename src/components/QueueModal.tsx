@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { X, Music, Play, Trash2, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -27,20 +27,27 @@ const QueueModal: React.FC<QueueModalProps> = ({
 }) => {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
+  const touchStartY = useRef<number>(0);
+  const dragThreshold = 10; // pixels to move before considering it a drag
 
   if (!isOpen) return null;
 
   const upNext = queue.slice(currentIndex + 1);
   const currentTrack = queue[currentIndex];
 
-  const handleDragStart = (index: number) => {
+  // Desktop drag handlers
+  const handleDragStart = (index: number, e: React.DragEvent) => {
     dragItem.current = index;
     setDraggedIndex(index);
+    setIsDragging(true);
+    e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragEnter = (index: number) => {
+    if (!isDragging) return;
     dragOverItem.current = index;
     setDragOverIndex(index);
   };
@@ -53,17 +60,27 @@ const QueueModal: React.FC<QueueModalProps> = ({
     dragOverItem.current = null;
     setDraggedIndex(null);
     setDragOverIndex(null);
+    setIsDragging(false);
   };
 
-  const handleTouchStart = (index: number, e: React.TouchEvent) => {
+  // Touch handlers - only on grip handle
+  const handleGripTouchStart = (index: number, e: React.TouchEvent) => {
+    e.stopPropagation();
+    touchStartY.current = e.touches[0].clientY;
     dragItem.current = index;
     setDraggedIndex(index);
+    setIsDragging(true);
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
+  const handleGripTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || dragItem.current === null) return;
+    
+    e.preventDefault(); // Prevent scroll while dragging
+    
     const touch = e.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
     const trackItem = element?.closest('[data-queue-index]');
+    
     if (trackItem) {
       const index = parseInt(trackItem.getAttribute('data-queue-index') || '-1', 10);
       if (index >= 0 && index !== dragOverItem.current) {
@@ -73,7 +90,7 @@ const QueueModal: React.FC<QueueModalProps> = ({
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleGripTouchEnd = () => {
     if (dragItem.current !== null && dragOverItem.current !== null && dragItem.current !== dragOverItem.current) {
       onReorderQueue?.(dragItem.current, dragOverItem.current);
     }
@@ -81,6 +98,7 @@ const QueueModal: React.FC<QueueModalProps> = ({
     dragOverItem.current = null;
     setDraggedIndex(null);
     setDragOverIndex(null);
+    setIsDragging(false);
   };
 
   return (
@@ -145,7 +163,7 @@ const QueueModal: React.FC<QueueModalProps> = ({
           {/* Up Next */}
           <div className="p-4">
             <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
-              Prossime ({upNext.length}) {onReorderQueue && '• Trascina per riordinare'}
+              Prossime ({upNext.length}) {onReorderQueue && '• Trascina ⋮⋮ per riordinare'}
             </p>
             
             {upNext.length === 0 ? (
@@ -157,31 +175,38 @@ const QueueModal: React.FC<QueueModalProps> = ({
               <div className="space-y-1">
                 {upNext.map((track, idx) => {
                   const actualIndex = currentIndex + 1 + idx;
-                  const isDragging = draggedIndex === idx;
-                  const isDragOver = dragOverIndex === idx;
+                  const isItemDragging = draggedIndex === idx;
+                  const isDragOver = dragOverIndex === idx && draggedIndex !== idx;
                   
                   return (
                     <div
                       key={`${track.id}-${actualIndex}`}
                       data-queue-index={idx}
-                      draggable={!!onReorderQueue}
-                      onDragStart={() => handleDragStart(idx)}
                       onDragEnter={() => handleDragEnter(idx)}
-                      onDragEnd={handleDragEnd}
                       onDragOver={(e) => e.preventDefault()}
-                      onTouchStart={(e) => handleTouchStart(idx, e)}
-                      onTouchMove={handleTouchMove}
-                      onTouchEnd={handleTouchEnd}
                       className={cn(
-                        "flex items-center gap-2 p-2 rounded-lg transition-all",
-                        "hover:bg-secondary/50 active:bg-secondary",
-                        isDragging && "opacity-50 scale-95",
-                        isDragOver && !isDragging && "border-t-2 border-primary",
-                        onReorderQueue ? "cursor-grab active:cursor-grabbing" : ""
+                        "flex items-center gap-2 p-2 rounded-lg transition-all duration-200",
+                        "hover:bg-secondary/50",
+                        isItemDragging && "opacity-50 scale-[0.98] bg-secondary/30 shadow-lg",
+                        isDragOver && "bg-primary/10 border-l-2 border-primary translate-x-1"
                       )}
                     >
                       {onReorderQueue && (
-                        <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0 touch-none" />
+                        <div
+                          draggable
+                          onDragStart={(e) => handleDragStart(idx, e)}
+                          onDragEnd={handleDragEnd}
+                          onTouchStart={(e) => handleGripTouchStart(idx, e)}
+                          onTouchMove={handleGripTouchMove}
+                          onTouchEnd={handleGripTouchEnd}
+                          className={cn(
+                            "p-1.5 -ml-1 rounded cursor-grab active:cursor-grabbing touch-none",
+                            "hover:bg-secondary/80 active:bg-secondary",
+                            "transition-colors duration-150"
+                          )}
+                        >
+                          <GripVertical className="w-4 h-4 text-muted-foreground" />
+                        </div>
                       )}
                       <TapArea
                         onTap={() => onPlayTrack(actualIndex)}
