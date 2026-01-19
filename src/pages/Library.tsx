@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, ListMusic, Disc, Heart, User, Music, Loader2, Download, Wifi, WifiOff, Trash2, Crown, Info } from 'lucide-react';
+import { Plus, ListMusic, Disc, Bookmark, User, Music, Loader2, Download, Wifi, WifiOff, Trash2, Crown, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
@@ -64,7 +64,7 @@ const Library: React.FC = () => {
   const allTabs: Tab[] = showOfflineTab ? [...baseTabs, 'offline'] : baseTabs;
   
   const tabs = [
-    { id: 'tracks' as Tab, label: t('likedSongs'), icon: Heart, isPro: false },
+    { id: 'tracks' as Tab, label: t('savedSongs'), icon: Bookmark, isPro: false },
     { id: 'albums' as Tab, label: t('albums'), icon: Disc, isPro: false },
     { id: 'artists' as Tab, label: t('artists'), icon: User, isPro: false },
     { id: 'playlists' as Tab, label: 'Playlist', icon: ListMusic, isPro: false },
@@ -159,9 +159,9 @@ const Library: React.FC = () => {
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-        <Heart className="w-16 h-16 text-muted-foreground mb-4" />
+        <Bookmark className="w-16 h-16 text-muted-foreground mb-4" />
         <h2 className="text-xl font-bold mb-2">Accedi per vedere la tua libreria</h2>
-        <p className="text-muted-foreground mb-4">I tuoi brani, album e artisti preferiti saranno qui</p>
+        <p className="text-muted-foreground mb-4">I tuoi brani, album e artisti salvati saranno qui</p>
         <Button onClick={() => navigate('/login')}>Accedi</Button>
       </div>
     );
@@ -246,11 +246,11 @@ const Library: React.FC = () => {
               {/* Liked Songs Header */}
               <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-6 md:mb-8 p-4 md:p-6 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20">
                 <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                  <Heart className="w-12 md:w-16 h-12 md:h-16 text-white fill-white" />
+                  <Bookmark className="w-12 md:w-16 h-12 md:h-16 text-white fill-white" />
                 </div>
                 <div className="text-center sm:text-left">
                   <p className="text-xs md:text-sm text-muted-foreground uppercase tracking-wider">{t('playlist')}</p>
-                  <h2 className="text-2xl md:text-4xl font-bold text-foreground mb-1 md:mb-2">{t('likedSongs')}</h2>
+                  <h2 className="text-2xl md:text-4xl font-bold text-foreground mb-1 md:mb-2">{t('savedSongs')}</h2>
                   <p className="text-sm md:text-base text-muted-foreground">{tracks.length} {t('tracks').toLowerCase()}</p>
                 </div>
                 {tracks.length > 0 && (
@@ -279,9 +279,9 @@ const Library: React.FC = () => {
                 </div>
               ) : (
                 <div className="text-center py-12 text-muted-foreground">
-                  <Heart className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Nessun brano nei preferiti</p>
-                  <p className="text-sm">Aggiungi brani con il cuoricino</p>
+                  <Bookmark className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Nessun brano salvato</p>
+                  <p className="text-sm">Salva brani con il segnalibro</p>
                 </div>
               )}
             </div>
@@ -344,8 +344,8 @@ const Library: React.FC = () => {
               {favoritePlaylists.length > 0 && (
                 <div className="mb-8">
                   <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-primary fill-primary" />
-                    Playlist preferite
+                    <Bookmark className="w-4 h-4 text-primary fill-primary" />
+                    Playlist salvate
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
                     {favoritePlaylists.map((fav) => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, Shuffle, ListMusic, Heart, Music } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Shuffle, ListMusic, Bookmark, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useFavorites } from '@/hooks/useFavorites';
@@ -18,7 +18,7 @@ const AutoPlaybackView: React.FC = () => {
   } = usePlayer();
   const { isFavorite, toggleFavorite } = useFavorites();
 
-  const isLiked = currentTrack ? isFavorite('track', currentTrack.id) : false;
+  const isSaved = currentTrack ? isFavorite('track', currentTrack.id) : false;
 
   const handleToggleFavorite = async () => {
     if (currentTrack) {
@@ -116,10 +116,10 @@ const AutoPlaybackView: React.FC = () => {
             onClick={handleToggleFavorite}
             className="w-14 h-14 rounded-full"
           >
-            <Heart 
+            <Bookmark 
               className={cn(
                 "w-7 h-7",
-                isLiked ? "fill-primary text-primary" : "text-muted-foreground"
+                isSaved ? "fill-primary text-primary" : "text-muted-foreground"
               )} 
             />
           </Button>
