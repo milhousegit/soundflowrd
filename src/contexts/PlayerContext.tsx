@@ -87,6 +87,7 @@ interface PlayerContextType extends PlayerState {
   playTrack: (track: Track, queue?: Track[]) => void;
   playQueueIndex: (index: number) => void;
   clearQueue: () => void;
+  reorderQueue: (fromIndex: number, toIndex: number) => void;
 
   alternativeStreams: StreamResult[];
   availableTorrents: TorrentInfo[];
@@ -1523,6 +1524,27 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setIsShuffled(false);
   }, []);
 
+  const reorderQueue = useCallback((fromIndex: number, toIndex: number) => {
+    setState((prev) => {
+      // Convert from "upNext" indices (relative to currentIndex + 1) to actual queue indices
+      const actualFromIndex = prev.queueIndex + 1 + fromIndex;
+      const actualToIndex = prev.queueIndex + 1 + toIndex;
+      
+      if (actualFromIndex >= prev.queue.length || actualToIndex >= prev.queue.length) return prev;
+      
+      const newQueue = [...prev.queue];
+      const [movedItem] = newQueue.splice(actualFromIndex, 1);
+      newQueue.splice(actualToIndex, 0, movedItem);
+      
+      // Also update original queue ref if not shuffled
+      if (!isShuffled) {
+        originalQueueRef.current = newQueue;
+      }
+      
+      return { ...prev, queue: newQueue };
+    });
+  }, [isShuffled]);
+
   const shuffleArray = <T,>(array: T[]): T[] => {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -1976,6 +1998,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         playTrack,
         playQueueIndex,
         clearQueue,
+        reorderQueue,
         alternativeStreams,
         availableTorrents,
         selectStream,

@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Music, Play, Trash2 } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, Music, Play, Trash2, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Track } from '@/types/music';
@@ -13,6 +13,7 @@ interface QueueModalProps {
   currentIndex: number;
   onPlayTrack: (index: number) => void;
   onClearQueue: () => void;
+  onReorderQueue?: (fromIndex: number, toIndex: number) => void;
 }
 
 const QueueModal: React.FC<QueueModalProps> = ({
@@ -22,11 +23,65 @@ const QueueModal: React.FC<QueueModalProps> = ({
   currentIndex,
   onPlayTrack,
   onClearQueue,
+  onReorderQueue,
 }) => {
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+
   if (!isOpen) return null;
 
   const upNext = queue.slice(currentIndex + 1);
   const currentTrack = queue[currentIndex];
+
+  const handleDragStart = (index: number) => {
+    dragItem.current = index;
+    setDraggedIndex(index);
+  };
+
+  const handleDragEnter = (index: number) => {
+    dragOverItem.current = index;
+    setDragOverIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    if (dragItem.current !== null && dragOverItem.current !== null && dragItem.current !== dragOverItem.current) {
+      onReorderQueue?.(dragItem.current, dragOverItem.current);
+    }
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleTouchStart = (index: number, e: React.TouchEvent) => {
+    dragItem.current = index;
+    setDraggedIndex(index);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    const trackItem = element?.closest('[data-queue-index]');
+    if (trackItem) {
+      const index = parseInt(trackItem.getAttribute('data-queue-index') || '-1', 10);
+      if (index >= 0 && index !== dragOverItem.current) {
+        dragOverItem.current = index;
+        setDragOverIndex(index);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (dragItem.current !== null && dragOverItem.current !== null && dragItem.current !== dragOverItem.current) {
+      onReorderQueue?.(dragItem.current, dragOverItem.current);
+    }
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
@@ -90,7 +145,7 @@ const QueueModal: React.FC<QueueModalProps> = ({
           {/* Up Next */}
           <div className="p-4">
             <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
-              Prossime ({upNext.length})
+              Prossime ({upNext.length}) {onReorderQueue && '• Trascina per riordinare'}
             </p>
             
             {upNext.length === 0 ? (
@@ -102,36 +157,58 @@ const QueueModal: React.FC<QueueModalProps> = ({
               <div className="space-y-1">
                 {upNext.map((track, idx) => {
                   const actualIndex = currentIndex + 1 + idx;
+                  const isDragging = draggedIndex === idx;
+                  const isDragOver = dragOverIndex === idx;
+                  
                   return (
-                    <TapArea
+                    <div
                       key={`${track.id}-${actualIndex}`}
-                      onTap={() => onPlayTrack(actualIndex)}
+                      data-queue-index={idx}
+                      draggable={!!onReorderQueue}
+                      onDragStart={() => handleDragStart(idx)}
+                      onDragEnter={() => handleDragEnter(idx)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => e.preventDefault()}
+                      onTouchStart={(e) => handleTouchStart(idx, e)}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
                       className={cn(
-                        "flex items-center gap-3 p-2 rounded-lg",
-                        "hover:bg-secondary/50 active:bg-secondary transition-colors"
+                        "flex items-center gap-2 p-2 rounded-lg transition-all",
+                        "hover:bg-secondary/50 active:bg-secondary",
+                        isDragging && "opacity-50 scale-95",
+                        isDragOver && !isDragging && "border-t-2 border-primary",
+                        onReorderQueue ? "cursor-grab active:cursor-grabbing" : ""
                       )}
                     >
-                      <span className="w-6 text-center text-sm text-muted-foreground">
-                        {idx + 1}
-                      </span>
-                      <div className="w-10 h-10 rounded bg-secondary overflow-hidden flex-shrink-0">
-                        {track.coverUrl ? (
-                          <img 
-                            src={track.coverUrl} 
-                            alt={track.album}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Music className="w-4 h-4 text-muted-foreground" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{track.title}</p>
-                        <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
-                      </div>
-                    </TapArea>
+                      {onReorderQueue && (
+                        <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0 touch-none" />
+                      )}
+                      <TapArea
+                        onTap={() => onPlayTrack(actualIndex)}
+                        className="flex items-center gap-3 flex-1 min-w-0"
+                      >
+                        <span className="w-5 text-center text-sm text-muted-foreground flex-shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="w-10 h-10 rounded bg-secondary overflow-hidden flex-shrink-0">
+                          {track.coverUrl ? (
+                            <img 
+                              src={track.coverUrl} 
+                              alt={track.album}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Music className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{track.title}</p>
+                          <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
+                        </div>
+                      </TapArea>
+                    </div>
                   );
                 })}
               </div>
