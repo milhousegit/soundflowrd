@@ -200,12 +200,13 @@ const QueueModal: React.FC<QueueModalProps> = ({
                           onTouchMove={handleGripTouchMove}
                           onTouchEnd={handleGripTouchEnd}
                           className={cn(
-                            "p-1.5 -ml-1 rounded cursor-grab active:cursor-grabbing touch-none",
+                            "p-2 -ml-1 rounded cursor-grab active:cursor-grabbing",
                             "hover:bg-secondary/80 active:bg-secondary",
                             "transition-colors duration-150"
                           )}
+                          style={{ touchAction: 'none' }}
                         >
-                          <GripVertical className="w-4 h-4 text-muted-foreground" />
+                          <GripVertical className="w-5 h-5 text-muted-foreground pointer-events-none" />
                         </div>
                       )}
                       <TapArea
