@@ -22,6 +22,7 @@ import Search from "@/pages/Search";
 import Feed from "@/pages/Feed";
 import Library from "@/pages/Library";
 import Profile from "@/pages/Profile";
+import Settings from "@/pages/Settings";
 import UserProfile from "@/pages/UserProfile";
 import Info from "@/pages/Info";
 import Artist from "@/pages/Artist";
@@ -83,6 +84,7 @@ const AppRoutes = () => {
         <Route path="feed" element={<Feed />} />
         <Route path="library" element={<Library />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="settings" element={<Settings />} />
         <Route path="profile/:id" element={<UserProfile />} />
         <Route path="info" element={<Info />} />
         <Route path="artist/:id" element={<Artist />} />
