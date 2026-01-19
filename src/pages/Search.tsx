@@ -388,10 +388,10 @@ const Search: React.FC = () => {
       )}
 
       {/* Results */}
-      {!isLoading && results && (
+      {!isLoading && (results || searchedUsers.length > 0) && (
         <div className="space-y-8 md:space-y-10">
           {/* Artists */}
-          {results.artists.length > 0 && (
+          {results?.artists && results.artists.length > 0 && (
             <section>
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">{t('artists')}</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
@@ -413,7 +413,7 @@ const Search: React.FC = () => {
           )}
 
           {/* Albums */}
-          {results.albums.length > 0 && (
+          {results?.albums && results.albums.length > 0 && (
             <section>
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">{t('albums')}</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
@@ -436,7 +436,7 @@ const Search: React.FC = () => {
           )}
 
           {/* Playlists */}
-          {results.playlists.length > 0 && (
+          {results?.playlists && results.playlists.length > 0 && (
             <section>
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">Playlist</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
@@ -482,7 +482,7 @@ const Search: React.FC = () => {
           )}
 
           {/* Tracks */}
-          {results.tracks.length > 0 && (
+          {results?.tracks && results.tracks.length > 0 && (
             <section>
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">{t('tracks')}</h2>
               <div className="space-y-1">
@@ -523,7 +523,7 @@ const Search: React.FC = () => {
           )}
 
           {/* No results */}
-          {results.tracks.length === 0 && results.albums.length === 0 && results.artists.length === 0 && results.playlists.length === 0 && searchedUsers.length === 0 && query && (
+          {(results?.tracks?.length || 0) === 0 && (results?.albums?.length || 0) === 0 && (results?.artists?.length || 0) === 0 && (results?.playlists?.length || 0) === 0 && searchedUsers.length === 0 && query && (
             <div className="text-center py-12">
               <p className="text-muted-foreground text-base md:text-lg">
                 {t('noResults')} "{query}"
