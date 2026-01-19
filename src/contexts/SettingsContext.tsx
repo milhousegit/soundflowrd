@@ -27,7 +27,14 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         // Remove deprecated fields
         delete parsed.streamingMode;
         delete parsed.audioSourceMode; // Remove from localStorage - now in DB
-        setSettings({ ...defaultSettings, ...parsed });
+        // Ensure feedDisplayOptions has defaults
+        const feedDisplayOptions = {
+          showArtistReleases: true,
+          showFollowingPosts: true,
+          showAlbumComments: true,
+          ...(parsed.feedDisplayOptions || {})
+        };
+        setSettings({ ...defaultSettings, ...parsed, feedDisplayOptions });
       } catch {
         // Use defaults
       }
