@@ -41,11 +41,7 @@ export async function getTidalStream(
   artist: string,
   quality = 'LOSSLESS'
 ): Promise<TidalStreamResult | TidalStreamError> {
-  const startTime = Date.now();
-  console.log(`[Tidal] Starting search: "${title}" by ${artist} (${quality})`);
-  
   try {
-    const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke('squidwtf', {
       body: { 
         action: 'search-and-stream', 
@@ -54,8 +50,6 @@ export async function getTidalStream(
         quality,
       },
     });
-    const invokeDuration = Date.now() - invokeStart;
-    console.log(`[Tidal] Edge function responded in ${invokeDuration}ms`);
 
     if (error) {
       console.error('[Tidal] Supabase function error:', error);
@@ -68,11 +62,9 @@ export async function getTidalStream(
     }
 
     if (!data?.streamUrl) {
-      console.log(`[Tidal] No stream URL returned (total: ${Date.now() - startTime}ms)`);
       return { error: 'No stream URL returned' };
     }
 
-    console.log(`[Tidal] Success! Stream ready in ${Date.now() - startTime}ms`);
     return {
       streamUrl: data.streamUrl,
       tidalId: data.tidalId,
@@ -82,7 +74,7 @@ export async function getTidalStream(
       matchScore: data.matchScore,
     };
   } catch (err) {
-    console.error(`[Tidal] Unexpected error after ${Date.now() - startTime}ms:`, err);
+    console.error('[Tidal] Unexpected error:', err);
     return { 
       error: err instanceof Error ? err.message : 'Unexpected error getting Tidal stream' 
     };

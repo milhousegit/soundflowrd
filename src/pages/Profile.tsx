@@ -202,7 +202,7 @@ const Settings: React.FC = () => {
                   <RefreshCw className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-foreground">SoundFlow v1.7.3</p>
+                  <p className="text-base font-semibold text-foreground">SoundFlow v1.3</p>
                   <p className="text-xs text-muted-foreground">
                     {settings.language === 'it' ? 'Verifica aggiornamenti' : 'Check for updates'}
                   </p>
@@ -672,30 +672,6 @@ const Settings: React.FC = () => {
                 <option value="low">{t('low')}</option>
               </select>
             </div>
-
-            {/* iOS Crossfade Debug Indicator - Only visible on iOS PWA */}
-            {typeof window !== 'undefined' && 
-             /iPad|iPhone|iPod/.test(navigator.userAgent) && 
-             (window.matchMedia('(display-mode: standalone)').matches || 
-              window.matchMedia('(display-mode: minimal-ui)').matches ||
-              (window.navigator as any).standalone === true) && (
-              <div className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20 mt-3">
-                <div className="flex items-center gap-2">
-                  <Smartphone className="w-4 h-4 text-green-500" />
-                  <div>
-                    <p className="text-sm font-medium text-green-500">
-                      {settings.language === 'it' ? 'Crossfade iOS applicato correttamente' : 'iOS Crossfade applied correctly'}
-                    </p>
-                    <p className="text-xs text-green-500/70">
-                      {settings.language === 'it' 
-                        ? 'AudioContext unificato + Preload automatico'
-                        : 'Unified AudioContext + Auto preload'}
-                    </p>
-                  </div>
-                </div>
-                <Check className="w-4 h-4 text-green-500" />
-              </div>
-            )}
           </div>
         </section>
 

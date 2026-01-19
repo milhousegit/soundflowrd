@@ -34,7 +34,7 @@ const Info: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">SoundFlow</p>
-                <p className="text-sm text-muted-foreground">v1.7.3</p>
+                <p className="text-sm text-muted-foreground">v1.3</p>
               </div>
               <Button variant="outline" className="gap-2" onClick={async () => {
               try {
@@ -66,19 +66,15 @@ const Info: React.FC = () => {
               <ul className="text-sm text-muted-foreground space-y-1.5">
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "Web Audio crossfade per transizioni fluide su iOS" : "Web Audio crossfade for smooth iOS transitions"}
+                  {isItalian ? "Autoplay: a fine coda la musica continua con brani simili" : "Autoplay: music continues with similar tracks at end of queue"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Precaricamento tracce con indicatore di stato" : "Track preloading with status indicator"}
+                  {isItalian ? "Risolto problema audio a scatti con CarPlay e dispositivi Bluetooth" : "Fixed stuttering audio with CarPlay and Bluetooth devices"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Cache audio Service Worker per riproduzione offline" : "Service Worker audio cache for offline playback"}
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Controlli widget iOS migliorati (play/pause/next/prev)" : "Improved iOS widget controls (play/pause/next/prev)"}
+                  {isItalian ? "Semplificato sistema di riproduzione per maggiore stabilità" : "Simplified playback system for better stability"}
                 </li>
               </ul>
             </div>

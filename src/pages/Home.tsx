@@ -7,9 +7,8 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getNewReleases, getPopularArtists, getArtist, getCountryChart } from '@/lib/deezer';
+import { getNewReleases, getPopularArtists, searchAlbums, getArtist, getCountryChart } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
-import { useDeezerPlaylistCovers, getEffectiveCover } from '@/hooks/useDeezerPlaylistCovers';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import PlaylistCard from '@/components/PlaylistCard';
@@ -57,147 +56,84 @@ const Home: React.FC = () => {
   
   const { settings, t } = useSettings();
   const { currentTrack, isPlaying, playTrack, toggle, addToQueue } = usePlayer();
-  const { favorites, isLoading: isLoadingFavorites, getFavoritesByType } = useFavorites();
+  const { favorites, getFavoritesByType } = useFavorites();
   const { playlists, isLoading: isLoadingPlaylists, addTrackToPlaylist } = usePlaylists();
   const { recentTracks, isLoading: isLoadingRecent } = useRecentlyPlayed();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  
-  // Get Deezer playlist IDs for custom covers lookup
-  const deezerPlaylistIds = chartConfigs
-    .map(c => c.playlist_id)
-    .filter(id => !id.startsWith('sf:') && id.length > 6);
-  const { data: customCoversMap } = useDeezerPlaylistCovers(deezerPlaylistIds);
 
   // Get all favorites to extract unique artist names
   const favoriteArtists = getFavoritesByType('artist');
   const favoriteTracks = getFavoritesByType('track');
   const favoriteAlbums = getFavoritesByType('album');
 
-
-  // recentTracks now comes from useRecentlyPlayed hook (synced with database)
-
-  // Get unique artist IDs from favorites
-  const getUniqueArtistIds = (): string[] => {
+  // Extract unique artist names from all favorites
+  const getUniqueArtistNames = (): string[] => {
     const artistSet = new Set<string>();
     
-    // From favorite artists - use item_id as the artist ID
+    // From favorite artists
     favoriteArtists.forEach(f => {
-      if (f.item_id) artistSet.add(f.item_id);
+      if (f.item_title) artistSet.add(f.item_title);
     });
     
-    // From favorite tracks (artistId from item_data if available)
+    // From favorite tracks (artist name is in item_artist)
     favoriteTracks.forEach(f => {
-      const data = f.item_data as { artistId?: string } | null;
-      if (data?.artistId) artistSet.add(data.artistId);
+      if (f.item_artist) artistSet.add(f.item_artist);
     });
     
-    // From favorite albums (artistId from item_data if available)
+    // From favorite albums (artist name is in item_artist)
     favoriteAlbums.forEach(f => {
-      const data = f.item_data as { artistId?: string } | null;
-      if (data?.artistId) artistSet.add(data.artistId);
+      if (f.item_artist) artistSet.add(f.item_artist);
     });
     
     return Array.from(artistSet);
   };
 
-  // Cache key for new releases based on favorite artist IDs
-  const getNewReleasesCacheKey = (artistIds: string[]): string => {
-    if (artistIds.length === 0) return 'newReleases_generic';
-    return `newReleases_${artistIds.sort().join('_')}`;
-  };
+  // recentTracks now comes from useRecentlyPlayed hook (synced with database)
 
   useEffect(() => {
-    // Wait until we know if user has favorites before fetching
-    if (isLoadingFavorites) return;
-    
     const fetchNewReleases = async () => {
-      const uniqueArtistIds = getUniqueArtistIds();
-      const cacheKey = getNewReleasesCacheKey(uniqueArtistIds);
-      
-      // Try to load from sessionStorage first for instant display
-      try {
-        const cached = sessionStorage.getItem(cacheKey);
-        if (cached) {
-          const { data, timestamp } = JSON.parse(cached);
-          const cacheAge = Date.now() - timestamp;
-          // Use cache if less than 30 minutes old
-          if (cacheAge < 30 * 60 * 1000 && data?.length > 0) {
-            setNewReleases(data);
-            setIsLoadingReleases(false);
-            return;
-          }
-        }
-      } catch (e) {
-        console.error('Error reading cache:', e);
-      }
-      
       setIsLoadingReleases(true);
       try {
-        // If user has favorites, get releases from those artists via getArtist
-        if (uniqueArtistIds.length > 0) {
+        const uniqueArtistNames = getUniqueArtistNames();
+        
+        // If user has favorites, search for releases from those artists
+        if (uniqueArtistNames.length > 0) {
           const allReleases: Album[] = [];
-          const seenIds = new Set<string>();
           
-          // Fetch releases for up to 8 favorite artists using getArtist (which returns releases sorted by date)
-          const artistPromises = uniqueArtistIds.slice(0, 8).map(async (artistId) => {
+          // Search releases for up to 5 artists using Deezer
+          for (const artistName of uniqueArtistNames.slice(0, 5)) {
             try {
-              const artistData = await getArtist(artistId);
-              // artistData.releases contains albums sorted by release date
-              return (artistData.releases || []).slice(0, 6);
+              const albums = await searchAlbums(artistName);
+              // Filter to only include releases that match the artist name
+              const artistReleases = albums.filter((album: Album) => 
+                album.artist?.toLowerCase().includes(artistName.toLowerCase()) ||
+                artistName.toLowerCase().includes(album.artist?.toLowerCase() || '')
+              );
+              allReleases.push(...artistReleases.slice(0, 6));
             } catch (e) {
-              console.error('Error fetching releases for artist', artistId, e);
-              return [];
+              console.error('Error fetching releases for', artistName, e);
             }
-          });
-          
-          const releasesArrays = await Promise.all(artistPromises);
-          
-          // Dedupe while adding to allReleases
-          releasesArrays.forEach(releases => {
-            releases.forEach(album => {
-              if (!seenIds.has(album.id)) {
-                seenIds.add(album.id);
-                allReleases.push(album);
-              }
-            });
-          });
-          
-          // Sort by release date (newest first)
-          const sortedReleases = allReleases.sort((a, b) => {
-            const dateA = a.releaseDate ? new Date(a.releaseDate).getTime() : 0;
-            const dateB = b.releaseDate ? new Date(b.releaseDate).getTime() : 0;
-            return dateB - dateA;
-          });
-          
-          const finalReleases = sortedReleases.slice(0, 12);
-          setNewReleases(finalReleases);
-          
-          // Cache the results
-          try {
-            sessionStorage.setItem(cacheKey, JSON.stringify({
-              data: finalReleases,
-              timestamp: Date.now()
-            }));
-          } catch (e) {
-            console.error('Error caching releases:', e);
           }
+          
+          // Sort by release date (newest first) and dedupe
+          const uniqueReleases = allReleases
+            .reduce((acc, album) => {
+              if (!acc.find(a => a.id === album.id)) acc.push(album);
+              return acc;
+            }, [] as Album[])
+            .sort((a, b) => {
+              const dateA = a.releaseDate ? new Date(a.releaseDate).getTime() : 0;
+              const dateB = b.releaseDate ? new Date(b.releaseDate).getTime() : 0;
+              return dateB - dateA;
+            });
+          
+          setNewReleases(uniqueReleases.slice(0, 12));
         } else {
           // No favorites - get new releases from Deezer
           try {
             const releases = await getNewReleases();
-            const finalReleases = releases.slice(0, 12);
-            setNewReleases(finalReleases);
-            
-            // Cache generic releases too
-            try {
-              sessionStorage.setItem(cacheKey, JSON.stringify({
-                data: finalReleases,
-                timestamp: Date.now()
-              }));
-            } catch (e) {
-              console.error('Error caching releases:', e);
-            }
+            setNewReleases(releases.slice(0, 12));
           } catch (cacheError) {
             console.error('Failed to fetch new releases:', cacheError);
             setNewReleases([]);
@@ -211,12 +147,9 @@ const Home: React.FC = () => {
     };
 
     fetchNewReleases();
-  }, [isLoadingFavorites, favorites.length]);
+  }, [favorites.length]);
 
   useEffect(() => {
-    // Wait until we know if user has favorites before fetching
-    if (isLoadingFavorites) return;
-    
     const fetchArtistsForYou = async () => {
       setIsLoadingArtists(true);
       try {
@@ -273,7 +206,7 @@ const Home: React.FC = () => {
     };
 
     fetchArtistsForYou();
-  }, [isLoadingFavorites, favorites.length]);
+  }, [favorites.length]);
 
   // Fetch chart configurations and their display data
   useEffect(() => {
@@ -713,12 +646,7 @@ const Home: React.FC = () => {
                 
                 const displayData = chartDisplayData[chart.id];
                 const trackCount = displayData?.trackCount || 0;
-                // Use custom cover from deezer_playlist_covers if available
-                const playlistId = chart.playlist_id;
-                const originalCoverUrl = displayData?.coverUrl;
-                const coverUrl = !playlistId.startsWith('sf:') && playlistId.length > 6
-                  ? getEffectiveCover(playlistId, originalCoverUrl || undefined, customCoversMap)
-                  : originalCoverUrl;
+                const coverUrl = displayData?.coverUrl;
                 
                 return (
                   <TapArea

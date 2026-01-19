@@ -164,33 +164,6 @@ export type Database = {
         }
         Relationships: []
       }
-      deezer_playlist_covers: {
-        Row: {
-          cover_url: string
-          created_at: string
-          deezer_playlist_id: string
-          id: string
-          updated_at: string
-          updated_by: string
-        }
-        Insert: {
-          cover_url: string
-          created_at?: string
-          deezer_playlist_id: string
-          id?: string
-          updated_at?: string
-          updated_by: string
-        }
-        Update: {
-          cover_url?: string
-          created_at?: string
-          deezer_playlist_id?: string
-          id?: string
-          updated_at?: string
-          updated_by?: string
-        }
-        Relationships: []
-      }
       favorites: {
         Row: {
           created_at: string

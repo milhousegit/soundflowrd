@@ -4,7 +4,7 @@
   "description": "Stream your music with SoundFlow",
   "theme_color": "#0d1117",
   "background_color": "#0d1117",
-  "display": "minimal-ui",
+  "display": "standalone",
   "orientation": "any",
   "scope": "/",
   "start_url": "/",
