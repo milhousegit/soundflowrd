@@ -413,11 +413,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
         // NotAllowedError: Autoplay blocked - user needs to interact first
         if (error.name === 'NotAllowedError') {
-          console.log('[PlayerContext] Autoplay blocked');
+          console.log('[PlayerContext] Autoplay blocked - syncing state to paused');
+          // Sync UI state to reflect actual paused state
+          setState((prev) => ({ ...prev, isPlaying: false }));
           return false;
         }
       }
       console.error('[PlayerContext] Play error:', error);
+      // Sync state on any error
+      setState((prev) => ({ ...prev, isPlaying: false }));
       return false;
     }
   }, []);
