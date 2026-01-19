@@ -304,6 +304,19 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
           });
         setAlbumIsLiked(true);
         setAlbumLikesCount(prev => prev + 1);
+        
+        // Show toast notification for adding to favorites
+        toast.success(
+          settings.language === 'it' 
+            ? `"${albumInfo.title}" aggiunto ai preferiti` 
+            : `"${albumInfo.title}" added to favorites`,
+          { 
+            duration: 3000,
+            style: { 
+              marginTop: 'max(env(safe-area-inset-top, 0px), 16px)' 
+            }
+          }
+        );
       }
     } catch (error) {
       console.error('Error toggling album like:', error);
