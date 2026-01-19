@@ -1,9 +1,10 @@
 import React from 'react';
-import { Heart } from 'lucide-react';
+import { Bookmark } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFavorites } from '@/hooks/useFavorites';
 import { Track, Album, Artist } from '@/types/music';
 import { cn } from '@/lib/utils';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface FavoriteButtonProps {
   itemType: 'track' | 'album' | 'artist' | 'playlist';
@@ -21,7 +22,8 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
   variant = 'ghost',
 }) => {
   const { isFavorite, toggleFavorite } = useFavorites();
-  const isLiked = isFavorite(itemType, item.id);
+  const { settings } = useSettings();
+  const isSaved = isFavorite(itemType, item.id);
 
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -41,19 +43,23 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
     lg: 'w-6 h-6',
   };
 
+  const saveLabel = settings.language === 'it' 
+    ? (isSaved ? 'Rimuovi dalla libreria' : 'Salva nella libreria')
+    : (isSaved ? 'Remove from library' : 'Save to library');
+
   return (
     <Button
       variant={variant}
       size="icon"
       className={cn(sizeClasses[size], "border-0", className)}
       onClick={handleClick}
-      title={isLiked ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
+      title={saveLabel}
     >
-      <Heart
+      <Bookmark
         className={cn(
           iconSizes[size],
           'transition-all',
-          isLiked ? 'fill-primary text-primary' : 'text-muted-foreground'
+          isSaved ? 'fill-primary text-primary' : 'text-muted-foreground'
         )}
       />
     </Button>

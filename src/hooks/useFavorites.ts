@@ -59,7 +59,7 @@ export function useFavorites() {
     item: Track | Album | Artist
   ) => {
     if (!user) {
-      toast.error('Devi effettuare il login per aggiungere ai preferiti');
+      toast.error('Devi effettuare il login per salvare');
       return false;
     }
 
@@ -83,7 +83,7 @@ export function useFavorites() {
       if (error) throw error;
       
       await fetchFavorites();
-      toast.success('Aggiunto ai preferiti');
+      toast.success('Salvato in libreria');
 
       // Auto-sync track to Real-Debrid in background when favoriting
       if (itemType === 'track' && credentials?.realDebridApiKey) {
@@ -114,7 +114,7 @@ export function useFavorites() {
       return true;
     } catch (error) {
       console.error('Error adding favorite:', error);
-      toast.error('Errore durante l\'aggiunta ai preferiti');
+      toast.error('Errore durante il salvataggio');
       return false;
     }
   }, [user, fetchFavorites, credentials]);
@@ -133,11 +133,11 @@ export function useFavorites() {
       if (error) throw error;
       
       await fetchFavorites();
-      toast.success('Rimosso dai preferiti');
+      toast.success('Rimosso dalla libreria');
       return true;
     } catch (error) {
       console.error('Error removing favorite:', error);
-      toast.error('Errore durante la rimozione dai preferiti');
+      toast.error('Errore durante la rimozione');
       return false;
     }
   }, [user, fetchFavorites]);

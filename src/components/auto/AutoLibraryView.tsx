@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Heart, Disc, User, ListMusic, Music, Loader2 } from 'lucide-react';
+import { Bookmark, Disc, User, ListMusic, Music, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
@@ -25,7 +25,7 @@ const AutoLibraryView: React.FC = () => {
   const { playTrack } = usePlayer();
 
   const tabs = [
-    { id: 'tracks' as LibraryTab, label: 'Brani', icon: Heart },
+    { id: 'tracks' as LibraryTab, label: 'Brani salvati', icon: Bookmark },
     { id: 'albums' as LibraryTab, label: 'Album', icon: Disc },
     { id: 'artists' as LibraryTab, label: 'Artisti', icon: User },
     { id: 'playlists' as LibraryTab, label: 'Playlist', icon: ListMusic },
@@ -147,8 +147,8 @@ const AutoLibraryView: React.FC = () => {
                   ))
                 ) : (
                   <div className="col-span-full text-center py-8 text-muted-foreground">
-                    <Heart className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-base">Nessun brano nei preferiti</p>
+                    <Bookmark className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-base">Nessun brano salvato</p>
                   </div>
                 )}
               </div>
