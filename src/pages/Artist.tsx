@@ -81,6 +81,10 @@ const Artist: React.FC = () => {
     setHiddenItems(items);
   }, []);
 
+  const handlePlaylistsChange = useCallback((playlists: DeezerPlaylist[]) => {
+    setArtistPlaylists(playlists);
+  }, []);
+
   useEffect(() => {
     const fetchArtist = async () => {
       if (!id) return;
@@ -227,6 +231,7 @@ const Artist: React.FC = () => {
               albums={releases}
               playlists={artistPlaylists}
               onHiddenItemsChange={handleHiddenItemsChange}
+              onPlaylistsChange={handlePlaylistsChange}
             />
           </div>
         )}
