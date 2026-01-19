@@ -741,6 +741,9 @@ const Settings: React.FC = () => {
             }, {
               key: 'showAlbumComments',
               label: settings.language === 'it' ? 'Commenti agli album che mi piacciono' : 'Comments on albums I like'
+            }, {
+              key: 'showFollowingPlaylists',
+              label: settings.language === 'it' ? 'Playlist degli utenti che seguo' : 'Playlists from users I follow'
             }].map(({ key, label }) => (
               <div key={key} className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm text-foreground">{label}</span>

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import CreatePostModal from '@/components/social/CreatePostModal';
 import FeedCard from '@/components/social/FeedCard';
 import FeedSkeleton from '@/components/skeletons/FeedSkeleton';
-import { useFeed, FeedPost, AlbumRelease, AlbumComment } from '@/hooks/useFeed';
+import { useFeed, FeedPost, AlbumRelease, AlbumComment, FeedPlaylist, FeedItem } from '@/hooks/useFeed';
 import { useSettings } from '@/contexts/SettingsContext';
 
 const Feed: React.FC = () => {
@@ -12,7 +12,7 @@ const Feed: React.FC = () => {
   const { feedItems, isLoading, hasMore, loadMore, createPost, deletePost, likePost, unlikePost, refetch } = useFeed();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const renderFeedItem = (item: { type: string; id: string; data: FeedPost | AlbumRelease | AlbumComment }) => {
+  const renderFeedItem = (item: FeedItem) => {
     if (item.type === 'post') {
       const post = item.data as FeedPost;
       return (
@@ -30,7 +30,7 @@ const Feed: React.FC = () => {
     return (
       <FeedCard
         key={item.id}
-        type={item.type as 'release' | 'comment'}
+        type={item.type as 'release' | 'comment' | 'playlist'}
         data={item.data}
       />
     );

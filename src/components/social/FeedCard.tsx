@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, Play, MoreHorizontal, Trash2, User, Crown, Disc, ChevronDown, ChevronUp, Send, Loader2, Bookmark } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Play, MoreHorizontal, Trash2, User, Crown, Disc, ChevronDown, ChevronUp, Send, Loader2, Bookmark, ListMusic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { FeedPost, AlbumRelease, AlbumComment } from '@/hooks/useFeed';
+import { FeedPost, AlbumRelease, AlbumComment, FeedPlaylist } from '@/hooks/useFeed';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -17,8 +17,8 @@ import { it, enUS } from 'date-fns/locale';
 import { toast } from 'sonner';
 
 interface FeedCardProps {
-  type: 'post' | 'release' | 'comment';
-  data: FeedPost | AlbumRelease | AlbumComment;
+  type: 'post' | 'release' | 'comment' | 'playlist';
+  data: FeedPost | AlbumRelease | AlbumComment | FeedPlaylist;
   onLikePost?: () => Promise<boolean>;
   onUnlikePost?: () => Promise<boolean>;
   onDeletePost?: () => Promise<boolean>;
@@ -354,9 +354,86 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
         return renderRelease();
       case 'comment':
         return renderAlbumComment();
+      case 'playlist':
+        return renderPlaylist();
       default:
         return null;
     }
+  };
+
+  const renderPlaylist = () => {
+    const playlist = data as FeedPlaylist;
+    const isProfileAdmin = playlist.profile?.is_admin || false;
+
+    return (
+      <>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <button 
+            onClick={() => navigate(`/profile/${playlist.user_id}`)}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
+            <Avatar className="w-10 h-10">
+              <AvatarImage src={playlist.profile?.avatar_url || undefined} />
+              <AvatarFallback><User className="w-5 h-5" /></AvatarFallback>
+            </Avatar>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <p className="font-medium text-sm text-foreground">
+                  {playlist.profile?.display_name || 'Utente'}
+                </p>
+                {isProfileAdmin && <Crown className="w-3.5 h-3.5 text-amber-500" />}
+                {!isProfileAdmin && playlist.profile?.is_premium && <Crown className="w-3.5 h-3.5 text-[#8B5CF6]" />}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {settings.language === 'it' ? 'Ha pubblicato una playlist' : 'Published a playlist'}
+              </p>
+            </div>
+          </button>
+        </div>
+
+        {/* Playlist card */}
+        <button
+          onClick={() => navigate(`/playlist/${playlist.id}`)}
+          className="w-full flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-left"
+        >
+          <div className="relative w-16 h-16 rounded-lg bg-muted overflow-hidden shrink-0">
+            {playlist.cover_url ? (
+              <img src={playlist.cover_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/40">
+                <ListMusic className="w-6 h-6 text-primary" />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground truncate">{playlist.name}</p>
+            {playlist.description && (
+              <p className="text-xs text-muted-foreground truncate">{playlist.description}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              {playlist.track_count || 0} {settings.language === 'it' ? 'brani' : 'tracks'}
+            </p>
+          </div>
+        </button>
+
+        {/* Actions */}
+        <div className="flex items-center gap-4 pt-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleShare}
+            className="gap-1.5 text-muted-foreground"
+          >
+            <Share2 className="w-4 h-4" />
+            <span className="text-xs">{settings.language === 'it' ? 'Condividi' : 'Share'}</span>
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {formatDate(playlist.created_at)}
+          </span>
+        </div>
+      </>
+    );
   };
 
   const renderPost = () => {
