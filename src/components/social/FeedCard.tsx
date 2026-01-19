@@ -460,43 +460,51 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
         </button>
 
         {/* Actions - same as albums: save, comment, share */}
-        <div className="flex items-center gap-4 pt-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handlePlaylistSaveToggle}
-            className={`gap-1.5 ${isFavorite('playlist', playlist.id) ? 'text-primary' : 'text-muted-foreground'}`}
-          >
-            <Bookmark className={`w-4 h-4 ${isFavorite('playlist', playlist.id) ? 'fill-current' : ''}`} />
-            <span className="text-xs">{playlistSavesCount}</span>
-          </Button>
+        {(() => {
+          const isOwner = user?.id === playlist.user_id;
+          const isSaved = isOwner || isFavorite('playlist', playlist.id);
+          
+          return (
+            <div className="flex items-center gap-4 pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={isOwner ? undefined : handlePlaylistSaveToggle}
+                disabled={isOwner}
+                className={`gap-1.5 ${isSaved ? 'text-primary' : 'text-muted-foreground'}`}
+              >
+                <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+                <span className="text-xs">{playlistSavesCount}</span>
+              </Button>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(`/playlist/${playlist.id}`)}
-            className="gap-1.5 text-muted-foreground"
-          >
-            <MessageCircle className="w-4 h-4" />
-          </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate(`/playlist/${playlist.id}`)}
+                className="gap-1.5 text-muted-foreground"
+              >
+                <MessageCircle className="w-4 h-4" />
+              </Button>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              const url = `${window.location.origin}/playlist/${playlist.id}`;
-              if (navigator.share) {
-                navigator.share({ title: playlist.name, url }).catch(() => {});
-              } else {
-                navigator.clipboard.writeText(url);
-                toast.success(settings.language === 'it' ? 'Link copiato!' : 'Link copied!');
-              }
-            }}
-            className="gap-1.5 text-muted-foreground"
-          >
-            <Share2 className="w-4 h-4" />
-          </Button>
-        </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const url = `${window.location.origin}/playlist/${playlist.id}`;
+                  if (navigator.share) {
+                    navigator.share({ title: playlist.name, url }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(url);
+                    toast.success(settings.language === 'it' ? 'Link copiato!' : 'Link copied!');
+                  }
+                }}
+                className="gap-1.5 text-muted-foreground"
+              >
+                <Share2 className="w-4 h-4" />
+              </Button>
+            </div>
+          );
+        })()}
       </>
     );
   };
