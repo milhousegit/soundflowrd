@@ -24,3 +24,9 @@ schedule = "0 8 * * *"
 
 [functions.send-broadcast-notification]
 verify_jwt = false
+
+[functions.spotify-import]
+verify_jwt = false
+
+[functions.spotify-search]
+verify_jwt = false
