@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Search, Newspaper, Library, User } from 'lucide-react';
+import { Home, Search, MessageSquare, Library, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 import appLogo from '@/assets/logo.png';
@@ -12,7 +12,7 @@ const Sidebar: React.FC = () => {
   const navItems = [
     { icon: Home, label: t('home'), path: '/' },
     { icon: Search, label: t('search'), path: '/search' },
-    { icon: Newspaper, label: 'Feed', path: '/feed' },
+    { icon: MessageSquare, label: 'Feed', path: '/feed' },
     { icon: Library, label: t('library'), path: '/library' },
     { icon: User, label: t('profile'), path: '/profile' },
   ];
