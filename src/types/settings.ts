@@ -13,6 +13,7 @@ export interface AppSettings {
     showArtistReleases: boolean;
     showFollowingPosts: boolean;
     showAlbumComments: boolean;
+    showFollowingPlaylists: boolean;
   };
   audioQuality: 'high' | 'medium' | 'low';
   crossfade: number; // seconds, 0 = off
@@ -33,6 +34,7 @@ export const defaultSettings: AppSettings = {
     showArtistReleases: true,
     showFollowingPosts: true,
     showAlbumComments: true,
+    showFollowingPlaylists: true,
   },
   audioQuality: 'high',
   crossfade: 0,
