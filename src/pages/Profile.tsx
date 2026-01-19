@@ -7,8 +7,7 @@ import { useFeed, FeedPost } from '@/hooks/useFeed';
 import SocialProfileHeader from '@/components/social/SocialProfileHeader';
 import PostCard from '@/components/social/PostCard';
 import CreatePostModal from '@/components/social/CreatePostModal';
-import { Button } from '@/components/ui/button';
-import { Plus, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
@@ -70,16 +69,6 @@ const Profile: React.FC = () => {
       {/* Profile Header with Settings button */}
       <SocialProfileHeader onSettingsClick={handleSettingsClick} />
 
-      {/* Create Post Button */}
-      <div className="mt-6 mb-4">
-        <Button 
-          onClick={() => setShowCreatePost(true)}
-          className="w-full gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          {settings.language === 'it' ? 'Crea un post' : 'Create a post'}
-        </Button>
-      </div>
 
       {/* Posts Section */}
       <div className="space-y-4">

@@ -156,7 +156,19 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
   return (
     <>
       <div className="relative">
-        {/* Settings button for own profile */}
+        {/* Edit button for own profile - top left */}
+        {isOwnProfile && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleEditOpen}
+            className="absolute top-0 left-0 z-10"
+          >
+            <Pencil className="w-5 h-5" />
+          </Button>
+        )}
+
+        {/* Settings button for own profile - top right */}
         {isOwnProfile && onSettingsClick && (
           <Button
             variant="ghost"
@@ -224,6 +236,39 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
             {profile.bio && (
               <p className="text-sm text-muted-foreground max-w-xs">{profile.bio}</p>
             )}
+            
+            {/* Minimal bio track - right under bio */}
+            {profile.bio_track_id && (
+              <button
+                onClick={handlePlayBioTrack}
+                className="flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
+              >
+                <Play className="w-3 h-3 fill-current" />
+                <span className="truncate max-w-[200px]">
+                  {profile.bio_track_title} • {profile.bio_track_artist}
+                </span>
+                {isOwnProfile && (
+                  <X 
+                    className="w-3 h-3 ml-1 hover:text-destructive" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveBioTrack();
+                    }}
+                  />
+                )}
+              </button>
+            )}
+            
+            {/* Add bio track button - only show if no track and own profile */}
+            {!profile.bio_track_id && isOwnProfile && (
+              <button
+                onClick={() => setShowBioTrackSearch(true)}
+                className="flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
+              >
+                <Play className="w-3 h-3" />
+                {settings.language === 'it' ? 'Aggiungi brano' : 'Add track'}
+              </button>
+            )}
           </div>
 
           {/* Stats */}
@@ -242,53 +287,8 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
             </button>
           </div>
 
-          {/* Bio track */}
-          {profile.bio_track_id ? (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 w-full max-w-xs">
-              <button
-                onClick={handlePlayBioTrack}
-                className="relative w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0"
-              >
-                {profile.bio_track_cover_url ? (
-                  <img src={profile.bio_track_cover_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Play className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                  <Play className="w-5 h-5 text-white fill-white" />
-                </div>
-              </button>
-              <div className="min-w-0 flex-1 text-left">
-                <p className="text-sm font-medium truncate">{profile.bio_track_title}</p>
-                <p className="text-xs text-muted-foreground truncate">{profile.bio_track_artist}</p>
-              </div>
-              {isOwnProfile && (
-                <Button variant="ghost" size="iconSm" onClick={handleRemoveBioTrack}>
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-          ) : isOwnProfile ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowBioTrackSearch(true)}
-              className="gap-2"
-            >
-              <Play className="w-4 h-4" />
-              {settings.language === 'it' ? 'Aggiungi brano preferito' : 'Add favorite track'}
-            </Button>
-          ) : null}
-
-          {/* Action buttons */}
-          {isOwnProfile ? (
-            <Button variant="outline" onClick={handleEditOpen} className="gap-2">
-              <Pencil className="w-4 h-4" />
-              {settings.language === 'it' ? 'Modifica profilo' : 'Edit profile'}
-            </Button>
-          ) : (
+          {/* Follow button for other profiles */}
+          {!isOwnProfile && (
             <Button
               variant={isFollowing ? 'outline' : 'default'}
               onClick={handleFollowToggle}
