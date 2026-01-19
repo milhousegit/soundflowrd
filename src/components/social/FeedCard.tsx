@@ -202,6 +202,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [albumCommentsCount, setAlbumCommentsCount] = useState(0);
+  const [albumSavesCount, setAlbumSavesCount] = useState(0);
   
   // Favorites hook for saving albums/tracks
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -237,24 +238,34 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
     postId: postId || undefined 
   });
 
-  // Fetch album comments count
+  // Fetch album comments count and saves count
   useEffect(() => {
-    const fetchAlbumCommentsCount = async () => {
+    const fetchAlbumCounts = async () => {
       if (!albumId) return;
 
       try {
+        // Fetch comments count
         const { count: totalComments } = await supabase
           .from('comments')
           .select('*', { count: 'exact', head: true })
           .eq('album_id', albumId);
 
         setAlbumCommentsCount(totalComments || 0);
+
+        // Fetch saves count (from favorites table)
+        const { count: totalSaves } = await supabase
+          .from('favorites')
+          .select('*', { count: 'exact', head: true })
+          .eq('item_id', albumId)
+          .eq('item_type', 'album');
+
+        setAlbumSavesCount(totalSaves || 0);
       } catch (error) {
-        console.error('Error fetching album comments count:', error);
+        console.error('Error fetching album counts:', error);
       }
     };
 
-    fetchAlbumCommentsCount();
+    fetchAlbumCounts();
   }, [albumId]);
 
   const formatDate = (dateStr: string) => {
@@ -271,7 +282,10 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
       artist: albumInfo.artist,
       coverUrl: albumInfo.cover || '',
     };
+    const wasSaved = isFavorite('album', albumId);
     await toggleFavorite('album', album as any);
+    // Update local count
+    setAlbumSavesCount(prev => wasSaved ? Math.max(0, prev - 1) : prev + 1);
   };
 
   // Handle saving track to library
@@ -530,7 +544,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
             className={`gap-1.5 ${isFavorite('album', albumId || '') ? 'text-primary' : 'text-muted-foreground'}`}
           >
             <Bookmark className={`w-4 h-4 ${isFavorite('album', albumId || '') ? 'fill-current' : ''}`} />
-            <span className="text-xs">{settings.language === 'it' ? 'Salva' : 'Save'}</span>
+            <span className="text-xs">{albumSavesCount}</span>
           </Button>
 
           <Button
@@ -616,7 +630,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
             className={`gap-1.5 ${isFavorite('album', albumId || '') ? 'text-primary' : 'text-muted-foreground'}`}
           >
             <Bookmark className={`w-4 h-4 ${isFavorite('album', albumId || '') ? 'fill-current' : ''}`} />
-            <span className="text-xs">{settings.language === 'it' ? 'Salva' : 'Save'}</span>
+            <span className="text-xs">{albumSavesCount}</span>
           </Button>
 
           <Button
