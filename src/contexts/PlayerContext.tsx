@@ -608,13 +608,17 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setState((prev) => ({ ...prev, isPlaying: true }));
     };
 
-    // Error handler - skip to next track after error
+    // Error handler - only skip on actual source errors, not on abort/empty
     const handleError = (e: Event) => {
-      console.error('[PlayerContext] Audio error:', e);
-      // Auto-skip to next track after 1 second to avoid getting stuck
-      setTimeout(() => {
-        nextRef.current();
-      }, 1000);
+      const mediaError = audio.error;
+      // Only auto-skip on network/decode errors, not on aborted loads (user skipped)
+      if (mediaError && mediaError.code !== MediaError.MEDIA_ERR_ABORTED) {
+        console.error('[PlayerContext] Audio error:', mediaError.code, mediaError.message);
+        // Auto-skip to next track after 1 second to avoid getting stuck
+        setTimeout(() => {
+          nextRef.current();
+        }, 1000);
+      }
     };
 
     // Simplified stalled handler
