@@ -413,15 +413,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
         // NotAllowedError: Autoplay blocked - user needs to interact first
         if (error.name === 'NotAllowedError') {
-          console.log('[PlayerContext] Autoplay blocked - syncing state to paused');
-          // Sync UI state to reflect actual paused state
-          setState((prev) => ({ ...prev, isPlaying: false }));
+          console.log('[PlayerContext] Autoplay blocked');
           return false;
         }
       }
       console.error('[PlayerContext] Play error:', error);
-      // Sync state on any error
-      setState((prev) => ({ ...prev, isPlaying: false }));
       return false;
     }
   }, []);
@@ -519,7 +515,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     audioRef.current = new Audio();
     audioRef.current.volume = state.volume;
-    audioRef.current.loop = false; // CRITICAL: Prevent single-track loop
     // iOS Safari requires these attributes for better background playback
     audioRef.current.setAttribute('playsinline', '');
     audioRef.current.setAttribute('webkit-playsinline', '');
@@ -608,17 +603,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setState((prev) => ({ ...prev, isPlaying: true }));
     };
 
-    // Error handler - only skip on actual source errors, not on abort/empty
+    // Simplified error handler
     const handleError = (e: Event) => {
-      const mediaError = audio.error;
-      // Only auto-skip on network/decode errors, not on aborted loads (user skipped)
-      if (mediaError && mediaError.code !== MediaError.MEDIA_ERR_ABORTED) {
-        console.error('[PlayerContext] Audio error:', mediaError.code, mediaError.message);
-        // Auto-skip to next track after 1 second to avoid getting stuck
-        setTimeout(() => {
-          nextRef.current();
-        }, 1000);
-      }
+      console.error('[PlayerContext] Audio error:', e);
     };
 
     // Simplified stalled handler
