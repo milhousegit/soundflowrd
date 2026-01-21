@@ -1626,27 +1626,62 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [state.queue]);
 
+  // Use refs to always have the latest queue state for async operations
+  const queueRef = useRef(state.queue);
+  const queueIndexRef = useRef(state.queueIndex);
+  
+  useEffect(() => {
+    queueRef.current = state.queue;
+    queueIndexRef.current = state.queueIndex;
+  }, [state.queue, state.queueIndex]);
+
   const next = useCallback(async () => {
-    const nextIndex = state.queueIndex + 1;
-    if (nextIndex < state.queue.length) {
-      const nextTrack = state.queue[nextIndex];
-      setState((prev) => ({ ...prev, queueIndex: nextIndex }));
-      playTrack(nextTrack, state.queue);
+    // Always use the latest state from refs to avoid stale closures
+    const currentQueue = queueRef.current;
+    const currentIndex = queueIndexRef.current;
+    const nextIndex = currentIndex + 1;
+    
+    console.log('[Queue] next() called - currentIndex:', currentIndex, 'nextIndex:', nextIndex, 'queueLength:', currentQueue.length);
+    
+    if (nextIndex < currentQueue.length) {
+      const nextTrack = currentQueue[nextIndex];
+      console.log('[Queue] Playing next track:', nextTrack.title, 'at index', nextIndex);
+      
+      // Update index FIRST, then play track with the SAME queue
+      // This ensures the queue and index are in sync
+      setState((prev) => ({ 
+        ...prev, 
+        queueIndex: nextIndex,
+        currentTrack: nextTrack,
+        progress: 0 
+      }));
+      
+      // Play the track - pass the queue explicitly
+      playTrack(nextTrack, currentQueue);
     } else if (state.currentTrack) {
       // End of queue - fetch similar tracks and continue playing
-      // Do this async to not block - if it fails, just stop playing
       console.log('[Autoplay] Queue ended, fetching similar tracks...');
       addDebugLog('🔄 Autoplay', 'Carico brani simili...', 'info');
       
       // Don't await here - let it run in background to not block iOS
       fetchSimilarTracks(state.currentTrack).then((similarTracks) => {
         if (similarTracks.length > 0) {
-          // Add similar tracks to queue and play first one
-          const currentQueue = state.queue; // Use captured state
-          const newQueue = [...currentQueue, ...similarTracks];
-          setState((prev) => ({ ...prev, queue: newQueue }));
+          const latestQueue = queueRef.current;
+          const newQueue = [...latestQueue, ...similarTracks];
+          const newIndex = latestQueue.length;
+          
+          console.log('[Autoplay] Adding', similarTracks.length, 'tracks, playing at index', newIndex);
+          
+          // Update queue and index atomically, then play
+          setState((prev) => ({ 
+            ...prev, 
+            queue: newQueue,
+            queueIndex: newIndex,
+            currentTrack: similarTracks[0],
+            progress: 0
+          }));
+          
           playTrack(similarTracks[0], newQueue);
-          setState((prev) => ({ ...prev, queueIndex: currentQueue.length }));
           addDebugLog('✅ Autoplay avviato', `${similarTracks.length} brani aggiunti`, 'success');
         } else {
           addDebugLog('ℹ️ Autoplay', 'Nessun brano simile trovato', 'info');
@@ -1656,7 +1691,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         addDebugLog('❌ Autoplay fallito', error instanceof Error ? error.message : 'Errore', 'error');
       });
     }
-  }, [addDebugLog, fetchSimilarTracks, playTrack, state.currentTrack, state.queue, state.queueIndex]);
+  }, [addDebugLog, fetchSimilarTracks, playTrack, state.currentTrack]);
 
   const previous = useCallback(() => {
     if (state.progress > 3) {
@@ -1664,12 +1699,27 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return;
     }
 
-    const prevIndex = state.queueIndex - 1;
+    const currentQueue = queueRef.current;
+    const currentIndex = queueIndexRef.current;
+    const prevIndex = currentIndex - 1;
+    
+    console.log('[Queue] previous() called - currentIndex:', currentIndex, 'prevIndex:', prevIndex);
+    
     if (prevIndex >= 0) {
-      playTrack(state.queue[prevIndex], state.queue);
-      setState((prev) => ({ ...prev, queueIndex: prevIndex }));
+      const prevTrack = currentQueue[prevIndex];
+      console.log('[Queue] Playing previous track:', prevTrack.title, 'at index', prevIndex);
+      
+      // Update index FIRST, then play
+      setState((prev) => ({ 
+        ...prev, 
+        queueIndex: prevIndex,
+        currentTrack: prevTrack,
+        progress: 0 
+      }));
+      
+      playTrack(prevTrack, currentQueue);
     }
-  }, [playTrack, seek, state.progress, state.queue, state.queueIndex]);
+  }, [playTrack, seek, state.progress]);
 
   // Keep refs updated for Media Session handlers
   useEffect(() => {
@@ -1680,17 +1730,29 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Pre-fetch next track URL for seamless iOS background playback
   useEffect(() => {
     const handlePrefetchNextTrack = async () => {
-      // Skip if already prefetching or no next track
+      // Skip if already prefetching
       if (isPrefetchingRef.current) return;
       
-      const nextIndex = state.queueIndex + 1;
-      if (nextIndex >= state.queue.length) return;
+      // Use refs to get latest queue state
+      const currentQueue = queueRef.current;
+      const currentIndex = queueIndexRef.current;
+      const nextIndex = currentIndex + 1;
       
-      const nextTrack = state.queue[nextIndex];
+      console.log('[Prefetch] Checking next track - currentIndex:', currentIndex, 'nextIndex:', nextIndex, 'queueLength:', currentQueue.length);
+      
+      if (nextIndex >= currentQueue.length) {
+        console.log('[Prefetch] No next track in queue');
+        return;
+      }
+      
+      const nextTrack = currentQueue[nextIndex];
       if (!nextTrack) return;
       
       // Skip if already prefetched this track
-      if (prefetchedTrackIdRef.current === nextTrack.id) return;
+      if (prefetchedTrackIdRef.current === nextTrack.id) {
+        console.log('[Prefetch] Already prefetched:', nextTrack.title);
+        return;
+      }
       
       isPrefetchingRef.current = true;
       console.log('[Prefetch] Starting prefetch for:', nextTrack.title);
@@ -1808,12 +1870,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Handle when prefetched track starts playing
     const handlePrefetchPlayed = (event: CustomEvent) => {
       const { trackId, source } = event.detail;
-      const nextIndex = state.queueIndex + 1;
       
-      if (nextIndex < state.queue.length) {
-        const nextTrack = state.queue[nextIndex];
+      // Use refs to get latest state - avoids stale closure issues
+      const currentQueue = queueRef.current;
+      const currentIndex = queueIndexRef.current;
+      const nextIndex = currentIndex + 1;
+      
+      console.log('[Prefetch] handlePrefetchPlayed - trackId:', trackId, 'currentIndex:', currentIndex, 'nextIndex:', nextIndex);
+      
+      if (nextIndex < currentQueue.length) {
+        const nextTrack = currentQueue[nextIndex];
         if (nextTrack && nextTrack.id === trackId) {
-          console.log('[Prefetch] Updating state for prefetched track');
+          console.log('[Prefetch] Updating state for prefetched track:', nextTrack.title);
           setState((prev) => ({
             ...prev,
             currentTrack: nextTrack,
@@ -1824,7 +1892,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setCurrentAudioSource(source);
           updateMediaSessionMetadata(nextTrack, true);
           saveRecentlyPlayedTrack(nextTrack, user?.id);
+        } else {
+          console.log('[Prefetch] Track ID mismatch or no next track. Expected:', nextTrack?.id, 'Got:', trackId);
         }
+      } else {
+        console.log('[Prefetch] No next track in queue at index', nextIndex);
       }
     };
     
@@ -1835,7 +1907,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       window.removeEventListener('prefetch-next-track', handlePrefetchNextTrack);
       window.removeEventListener('prefetch-played', handlePrefetchPlayed as EventListener);
     };
-  }, [state.queue, state.queueIndex, settings.audioQuality, addDebugLog, user?.id, credentials?.realDebridApiKey, saveFileMapping]);
+  }, [settings.audioQuality, addDebugLog, user?.id, credentials?.realDebridApiKey, saveFileMapping]);
 
   // Note: Media Session next/previous handlers are set up in the audio initialization useEffect
 
