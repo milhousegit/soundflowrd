@@ -1,7 +1,6 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState } from 'react';
 import { X, Music, Play, Trash2, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Track } from '@/types/music';
 import { cn } from '@/lib/utils';
 import TapArea from './TapArea';
@@ -28,10 +27,9 @@ const QueueModal: React.FC<QueueModalProps> = ({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
-  const touchStartY = useRef<number>(0);
-  const dragThreshold = 10; // pixels to move before considering it a drag
 
   if (!isOpen) return null;
 
@@ -66,7 +64,6 @@ const QueueModal: React.FC<QueueModalProps> = ({
   // Touch handlers - only on grip handle
   const handleGripTouchStart = (index: number, e: React.TouchEvent) => {
     e.stopPropagation();
-    touchStartY.current = e.touches[0].clientY;
     dragItem.current = index;
     setDraggedIndex(index);
     setIsDragging(true);
@@ -74,8 +71,6 @@ const QueueModal: React.FC<QueueModalProps> = ({
 
   const handleGripTouchMove = (e: React.TouchEvent) => {
     if (!isDragging || dragItem.current === null) return;
-    
-    e.preventDefault(); // Prevent scroll while dragging
     
     const touch = e.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -112,7 +107,7 @@ const QueueModal: React.FC<QueueModalProps> = ({
       {/* Modal */}
       <div className="relative w-full md:w-[480px] max-h-[85vh] bg-card rounded-t-2xl md:rounded-2xl shadow-xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
+        <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
           <h2 className="text-lg font-semibold text-foreground">Coda di riproduzione</h2>
           <div className="flex items-center gap-2">
             {upNext.length > 0 && (
@@ -132,7 +127,16 @@ const QueueModal: React.FC<QueueModalProps> = ({
           </div>
         </div>
 
-        <ScrollArea className="flex-1 max-h-[60vh]">
+        {/* Scrollable content - using native scroll */}
+        <div 
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain"
+          style={{ 
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'hsl(var(--border)) transparent'
+          }}
+        >
           {/* Now Playing */}
           {currentTrack && (
             <div className="p-4 border-b border-border">
@@ -155,7 +159,7 @@ const QueueModal: React.FC<QueueModalProps> = ({
                   <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
                   <p className="text-sm text-muted-foreground truncate">{currentTrack.artist}</p>
                 </div>
-                <Play className="w-5 h-5 text-primary" />
+                <Play className="w-5 h-5 text-primary flex-shrink-0" />
               </div>
             </div>
           )}
@@ -239,7 +243,7 @@ const QueueModal: React.FC<QueueModalProps> = ({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
     </div>
   );
