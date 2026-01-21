@@ -1593,33 +1593,92 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     [playTrack, state.queue]
   );
 
-  // Fetch similar tracks based on current track's artist
+  // Track all played track IDs to avoid repetition in autoplay
+  const playedTrackIdsRef = useRef<Set<string>>(new Set());
+  
+  // Update played tracks when track changes
+  useEffect(() => {
+    if (state.currentTrack?.id) {
+      playedTrackIdsRef.current.add(state.currentTrack.id);
+    }
+  }, [state.currentTrack?.id]);
+  
+  // Fetch similar tracks - mix of same artists from queue + related artists
   const fetchSimilarTracks = useCallback(async (currentTrack: Track): Promise<Track[]> => {
     try {
-      // Get top tracks from the same artist
-      const artistTopTracks = await getArtistTopTracks(currentTrack.artistId || '');
+      // Collect all played and queued track IDs to avoid
+      const avoidIds = new Set([
+        ...playedTrackIdsRef.current,
+        ...state.queue.map(t => t.id),
+        currentTrack.id
+      ]);
       
-      // Filter out tracks already in queue and current track
-      const queueIds = new Set(state.queue.map(t => t.id));
-      const newTracks = artistTopTracks.filter(t => !queueIds.has(t.id) && t.id !== currentTrack.id);
+      // Get unique artists from the entire queue for variety
+      const queueArtists = [...new Set(state.queue.map(t => ({ 
+        id: t.artistId || '', 
+        name: t.artist 
+      })).filter(a => a.id))];
       
-      // If we got enough from same artist, use those
-      if (newTracks.length >= 5) {
-        console.log('[Autoplay] Found', newTracks.length, 'similar tracks from', currentTrack.artist);
-        return newTracks.slice(0, 10);
+      // Shuffle artists and pick up to 3 different ones
+      const shuffledArtists = queueArtists
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3);
+      
+      const allTracks: Track[] = [];
+      const seenTrackIds = new Set<string>();
+      
+      // 1. Get tracks from artists in the queue (variety)
+      for (const artist of shuffledArtists) {
+        try {
+          const artistTracks = await getArtistTopTracks(artist.id);
+          for (const track of artistTracks) {
+            if (!avoidIds.has(track.id) && !seenTrackIds.has(track.id)) {
+              allTracks.push(track);
+              seenTrackIds.add(track.id);
+            }
+          }
+        } catch (e) {
+          console.log('[Autoplay] Failed to get tracks for artist:', artist.name, e);
+        }
       }
       
-      // Otherwise search for related tracks
-      const searchResults = await searchTracks(`${currentTrack.artist}`);
-      const additionalTracks = searchResults.filter(t => 
-        !queueIds.has(t.id) && 
-        t.id !== currentTrack.id &&
-        !newTracks.find(nt => nt.id === t.id)
-      );
+      // 2. Add more from current artist if we don't have enough
+      if (allTracks.length < 15 && currentTrack.artistId) {
+        try {
+          const currentArtistTracks = await getArtistTopTracks(currentTrack.artistId);
+          for (const track of currentArtistTracks) {
+            if (!avoidIds.has(track.id) && !seenTrackIds.has(track.id)) {
+              allTracks.push(track);
+              seenTrackIds.add(track.id);
+            }
+          }
+        } catch (e) {
+          console.log('[Autoplay] Failed to get current artist tracks:', e);
+        }
+      }
       
-      const combined = [...newTracks, ...additionalTracks].slice(0, 15);
-      console.log('[Autoplay] Found', combined.length, 'tracks for autoplay');
-      return combined;
+      // 3. Search for related tracks by genre/style if still not enough
+      if (allTracks.length < 10) {
+        try {
+          // Search by current artist name to find related tracks
+          const searchResults = await searchTracks(currentTrack.artist);
+          for (const track of searchResults) {
+            if (!avoidIds.has(track.id) && !seenTrackIds.has(track.id)) {
+              allTracks.push(track);
+              seenTrackIds.add(track.id);
+              if (allTracks.length >= 20) break;
+            }
+          }
+        } catch (e) {
+          console.log('[Autoplay] Search failed:', e);
+        }
+      }
+      
+      // Shuffle final result for variety
+      const shuffled = allTracks.sort(() => Math.random() - 0.5);
+      console.log('[Autoplay] Found', shuffled.length, 'unique tracks for autoplay');
+      
+      return shuffled.slice(0, 15);
     } catch (error) {
       console.error('[Autoplay] Failed to fetch similar tracks:', error);
       return [];
