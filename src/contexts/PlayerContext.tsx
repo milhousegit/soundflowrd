@@ -585,8 +585,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         return;
       }
       
-      // Fallback: Use normal next() flow
-      console.log('[PlayerContext] No prefetch available, using next()');
+      // Fallback: No prefetch available - clear audio source to prevent replay, then call next()
+      // This is critical for end-of-queue: prevents the audio element from trying to replay
+      console.log('[PlayerContext] No prefetch available, clearing audio and calling next()');
+      audio.pause();
+      audio.src = '';
+      audio.load(); // Reset the audio element state
+      
       setTimeout(() => {
         nextRef.current();
       }, 50);
@@ -1688,16 +1693,19 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Use refs to always have the latest queue state for async operations
   const queueRef = useRef(state.queue);
   const queueIndexRef = useRef(state.queueIndex);
+  const currentTrackRef = useRef(state.currentTrack);
   
   useEffect(() => {
     queueRef.current = state.queue;
     queueIndexRef.current = state.queueIndex;
-  }, [state.queue, state.queueIndex]);
+    currentTrackRef.current = state.currentTrack;
+  }, [state.queue, state.queueIndex, state.currentTrack]);
 
   const next = useCallback(async () => {
     // Always use the latest state from refs to avoid stale closures
     const currentQueue = queueRef.current;
     const currentIndex = queueIndexRef.current;
+    const currentTrack = currentTrackRef.current;
     const nextIndex = currentIndex + 1;
     
     console.log('[Queue] next() called - currentIndex:', currentIndex, 'nextIndex:', nextIndex, 'queueLength:', currentQueue.length);
@@ -1717,13 +1725,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       // Play the track - pass the queue explicitly
       playTrack(nextTrack, currentQueue);
-    } else if (state.currentTrack) {
+    } else if (currentTrack) {
       // End of queue - fetch similar tracks and continue playing
       console.log('[Autoplay] Queue ended, fetching similar tracks...');
       addDebugLog('🔄 Autoplay', 'Carico brani simili...', 'info');
       
-      // Don't await here - let it run in background to not block iOS
-      fetchSimilarTracks(state.currentTrack).then((similarTracks) => {
+      // Fetch similar tracks - use await to ensure we get them before playing
+      try {
+        const similarTracks = await fetchSimilarTracks(currentTrack);
         if (similarTracks.length > 0) {
           const latestQueue = queueRef.current;
           const newQueue = [...latestQueue, ...similarTracks];
@@ -1745,12 +1754,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         } else {
           addDebugLog('ℹ️ Autoplay', 'Nessun brano simile trovato', 'info');
         }
-      }).catch((error) => {
+      } catch (error) {
         console.error('[Autoplay] Error fetching similar tracks:', error);
         addDebugLog('❌ Autoplay fallito', error instanceof Error ? error.message : 'Errore', 'error');
-      });
+      }
     }
-  }, [addDebugLog, fetchSimilarTracks, playTrack, state.currentTrack]);
+  }, [addDebugLog, fetchSimilarTracks, playTrack]);
 
   const previous = useCallback(() => {
     if (state.progress > 3) {
@@ -1952,10 +1961,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           updateMediaSessionMetadata(nextTrack, true);
           saveRecentlyPlayedTrack(nextTrack, user?.id);
         } else {
-          console.log('[Prefetch] Track ID mismatch or no next track. Expected:', nextTrack?.id, 'Got:', trackId);
+          console.log('[Prefetch] Track ID mismatch. Expected:', nextTrack?.id, 'Got:', trackId);
         }
       } else {
-        console.log('[Prefetch] No next track in queue at index', nextIndex);
+        // End of queue reached - trigger autoplay via next()
+        console.log('[Prefetch] End of queue reached, triggering autoplay...');
+        nextRef.current();
       }
     };
     
