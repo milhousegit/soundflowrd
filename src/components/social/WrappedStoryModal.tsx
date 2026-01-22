@@ -1,67 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { ChevronLeft, ChevronRight, Music, Clock, Heart, Mic2, MessageCircle, Share2, Sparkles, Disc3, Volume2, VolumeX } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Music, Clock, Heart, Mic2, MessageCircle, Share2, Sparkles, Disc3, Volume2, VolumeX, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
+import { useWrappedStats } from '@/hooks/useWrappedStats';
 import { cn } from '@/lib/utils';
 import { searchAll } from '@/lib/deezer';
 import { Track } from '@/types/music';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface WrappedStoryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   displayName?: string;
 }
-
-// Mock data for Wrapped
-const wrappedData = {
-  totalMinutes: 42680,
-  topArtist: {
-    name: 'Drake',
-    imageUrl: 'https://e-cdns-images.dzcdn.net/images/artist/5d2fa7f140a6bdc2c864c3465a61fc71/500x500-000000-80-0-0.jpg',
-    minutesListened: 8420,
-    songsPlayed: 347
-  },
-  topTracks: [
-    { title: 'Hotline Bling', artist: 'Drake', plays: 127 },
-    { title: 'One Dance', artist: 'Drake', plays: 98 },
-    { title: 'God\'s Plan', artist: 'Drake', plays: 87 },
-    { title: 'Blinding Lights', artist: 'The Weeknd', plays: 76 },
-    { title: 'Shape of You', artist: 'Ed Sheeran', plays: 65 }
-  ],
-  topGenres: [
-    { name: 'Hip-Hop', percentage: 42, color: 'from-primary to-cyan-400' },
-    { name: 'Pop', percentage: 28, color: 'from-purple-500 to-pink-500' },
-    { name: 'R&B', percentage: 18, color: 'from-orange-500 to-red-500' },
-    { name: 'Electronic', percentage: 12, color: 'from-blue-500 to-indigo-500' }
-  ],
-  socialStats: {
-    posts: 34,
-    comments: 156,
-    likes: 892
-  },
-  topAlbums: [
-    { 
-      title: 'Scorpion', 
-      artist: 'Drake',
-      coverUrl: 'https://e-cdns-images.dzcdn.net/images/cover/d6ecb33aa82e5ea3890f65bf6f1d8ee3/500x500-000000-80-0-0.jpg',
-      plays: 234
-    },
-    { 
-      title: 'After Hours', 
-      artist: 'The Weeknd',
-      coverUrl: 'https://e-cdns-images.dzcdn.net/images/cover/3c2e59ad0be1d4effe78c1f80c7f51e1/500x500-000000-80-0-0.jpg',
-      plays: 187
-    },
-    { 
-      title: 'Divide', 
-      artist: 'Ed Sheeran',
-      coverUrl: 'https://e-cdns-images.dzcdn.net/images/cover/4f56c7c4b3fcff83a8ae61d2c7e3e460/500x500-000000-80-0-0.jpg',
-      plays: 156
-    }
-  ]
-};
 
 const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
   open,
@@ -70,18 +23,19 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
 }) => {
   const { settings } = useSettings();
   const { playTrack, currentTrack, isPlaying, toggle } = usePlayer();
+  const wrappedStats = useWrappedStats();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
   const [wrappedTrack, setWrappedTrack] = useState<Track | null>(null);
   const previousTrackRef = useRef<Track | null>(null);
   const wasPlayingRef = useRef(false);
-  const totalSlides = 7; // Added 1 more slide for albums
+  const totalSlides = 8; // Added 1 more slide for top artists
   const slideDuration = 6000;
 
   // Load and play background music when modal opens
   useEffect(() => {
-    if (open && !wrappedTrack) {
+    if (open && !wrappedTrack && wrappedStats.topTracks.length > 0) {
       // Save current playback state
       previousTrackRef.current = currentTrack;
       wasPlayingRef.current = isPlaying;
@@ -89,7 +43,7 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
       // Search for top track to play as background
       const loadBackgroundMusic = async () => {
         try {
-          const topTrack = wrappedData.topTracks[0];
+          const topTrack = wrappedStats.topTracks[0];
           const results = await searchAll(`${topTrack.title} ${topTrack.artist}`);
           if (results.tracks.length > 0) {
             const track = results.tracks[0];
@@ -109,7 +63,7 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
       setWrappedTrack(null);
       setIsMusicPlaying(false);
     }
-  }, [open]);
+  }, [open, wrappedStats.topTracks]);
 
   // Sync music playing state with player
   useEffect(() => {
@@ -172,6 +126,7 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
       'from-primary/20 via-purple-500/20 to-pink-500/20',
       'from-blue-600/30 via-cyan-500/20 to-primary/20',
       'from-purple-600/30 via-pink-500/20 to-orange-500/20',
+      'from-violet-600/30 via-fuchsia-500/20 to-pink-500/20',
       'from-green-600/30 via-emerald-500/20 to-cyan-500/20',
       'from-amber-600/30 via-orange-500/20 to-red-500/20',
       'from-orange-600/30 via-red-500/20 to-pink-500/20',
@@ -180,7 +135,35 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
     return gradients[currentSlide] || gradients[0];
   };
 
+  // Format hours nicely
+  const formatHours = (minutes: number) => {
+    const hours = minutes / 60;
+    if (hours >= 1) {
+      return Math.round(hours);
+    }
+    return Math.round(minutes);
+  };
+
+  const getHoursLabel = (minutes: number) => {
+    const hours = minutes / 60;
+    if (hours >= 1) {
+      return settings.language === 'it' ? 'ore' : 'hours';
+    }
+    return settings.language === 'it' ? 'minuti' : 'minutes';
+  };
+
   const renderSlide = () => {
+    // Show loading state
+    if (wrappedStats.isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center p-6">
+          <Skeleton className="w-32 h-32 rounded-full mb-4" />
+          <Skeleton className="w-48 h-8 mb-2" />
+          <Skeleton className="w-32 h-4" />
+        </div>
+      );
+    }
+
     switch (currentSlide) {
       case 0:
         return (
@@ -217,16 +200,23 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
               {settings.language === 'it' ? 'Hai ascoltato musica per' : 'You listened to music for'}
             </p>
             <h2 className="text-6xl font-black bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-2 animate-number-pop">
-              {Math.round(wrappedData.totalMinutes / 60).toLocaleString()}
+              {formatHours(wrappedStats.totalMinutes).toLocaleString()}
             </h2>
             <p className="text-2xl text-primary font-bold">
-              {settings.language === 'it' ? 'ore' : 'hours'} 🎧
+              {getHoursLabel(wrappedStats.totalMinutes)} 🎧
             </p>
             <p className="text-sm text-muted-foreground mt-4 bg-secondary/50 px-4 py-2 rounded-full">
               {settings.language === 'it' 
-                ? `🔥 Circa ${Math.round(wrappedData.totalMinutes / 60 / 24)} giorni di musica non-stop!`
-                : `🔥 That's about ${Math.round(wrappedData.totalMinutes / 60 / 24)} days of non-stop music!`}
+                ? `🎵 ${wrappedStats.totalSongs} brani riprodotti!`
+                : `🎵 ${wrappedStats.totalSongs} songs played!`}
             </p>
+            {wrappedStats.totalMinutes >= 60 && (
+              <p className="text-xs text-muted-foreground mt-2 bg-secondary/30 px-3 py-1 rounded-full">
+                {settings.language === 'it' 
+                  ? `🔥 Circa ${Math.round(wrappedStats.totalMinutes / 60 / 24)} giorni di musica non-stop!`
+                  : `🔥 That's about ${Math.round(wrappedStats.totalMinutes / 60 / 24)} days of non-stop music!`}
+              </p>
+            )}
           </div>
         );
 
@@ -239,31 +229,108 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
             <p className="text-muted-foreground mb-4">
               {settings.language === 'it' ? 'Il tuo artista #1' : 'Your #1 artist'} 👑
             </p>
-            <div className="relative mb-4">
-              <div className="absolute -inset-2 rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 animate-spin-slow blur-sm" />
-              <div className="relative w-36 h-36 rounded-full overflow-hidden ring-4 ring-background">
-                <img 
-                  src={wrappedData.topArtist.imageUrl} 
-                  alt={wrappedData.topArtist.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-            <h2 className="text-3xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              {wrappedData.topArtist.name}
-            </h2>
-            <div className="flex gap-4 mt-3">
-              <div className="bg-secondary/50 px-3 py-1.5 rounded-full text-sm">
-                ⏱️ {Math.round(wrappedData.topArtist.minutesListened / 60)} {settings.language === 'it' ? 'ore' : 'hrs'}
-              </div>
-              <div className="bg-secondary/50 px-3 py-1.5 rounded-full text-sm">
-                🎵 {wrappedData.topArtist.songsPlayed} {settings.language === 'it' ? 'brani' : 'songs'}
-              </div>
-            </div>
+            {wrappedStats.topArtist ? (
+              <>
+                <div className="relative mb-4">
+                  <div className="absolute -inset-2 rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 animate-spin-slow blur-sm" />
+                  <div className="relative w-36 h-36 rounded-full overflow-hidden ring-4 ring-background">
+                    <img 
+                      src={wrappedStats.topArtist.imageUrl} 
+                      alt={wrappedStats.topArtist.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/placeholder.svg';
+                      }}
+                    />
+                  </div>
+                </div>
+                <h2 className="text-3xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  {wrappedStats.topArtist.name}
+                </h2>
+                <div className="flex gap-4 mt-3">
+                  <div className="bg-secondary/50 px-3 py-1.5 rounded-full text-sm">
+                    ⏱️ {Math.round(wrappedStats.topArtist.minutesListened / 60) || wrappedStats.topArtist.minutesListened} {wrappedStats.topArtist.minutesListened >= 60 ? (settings.language === 'it' ? 'ore' : 'hrs') : 'min'}
+                  </div>
+                  <div className="bg-secondary/50 px-3 py-1.5 rounded-full text-sm">
+                    🎵 {wrappedStats.topArtist.songsPlayed} {settings.language === 'it' ? 'brani' : 'songs'}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground">
+                {settings.language === 'it' ? 'Nessun artista trovato' : 'No artist found'}
+              </p>
+            )}
           </div>
         );
 
       case 3:
+        // Top 5 Artists slide
+        const otherTopArtists = wrappedStats.topArtists.slice(1, 6);
+        return (
+          <div className="flex flex-col h-full p-6 animate-wrapped-slide-in">
+            <div className="text-center mb-4">
+              <div className="inline-flex p-2 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 mb-2">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold">
+                {settings.language === 'it' ? 'I tuoi top 5 artisti' : 'Your top 5 artists'} 🌟
+              </h2>
+            </div>
+            <div className="space-y-2.5 flex-1">
+              {otherTopArtists.length > 0 ? (
+                otherTopArtists.map((artist, index) => (
+                  <div 
+                    key={artist.id}
+                    className="flex items-center gap-3 p-2.5 rounded-xl bg-gradient-to-r from-secondary/80 to-secondary/40 backdrop-blur-sm animate-slide-in-stagger"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    <span className={cn(
+                      "text-lg font-black w-7 h-7 rounded-full flex items-center justify-center shrink-0",
+                      index === 0 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800",
+                      index === 1 && "bg-gradient-to-br from-orange-600 to-orange-700 text-white",
+                      index > 1 && "bg-secondary text-muted-foreground"
+                    )}>
+                      {index + 2}
+                    </span>
+                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 ring-2 ring-primary/20">
+                      <img 
+                        src={artist.imageUrl} 
+                        alt={artist.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/placeholder.svg';
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate text-sm">{artist.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {artist.songsPlayed} {settings.language === 'it' ? 'brani' : 'songs'}
+                      </p>
+                    </div>
+                    <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full">
+                      {artist.minutesListened >= 60 
+                        ? `${Math.round(artist.minutesListened / 60)}h`
+                        : `${artist.minutesListened}m`
+                      }
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-muted-foreground text-center">
+                    {settings.language === 'it' 
+                      ? 'Ascolta più artisti per vedere le statistiche!' 
+                      : 'Listen to more artists to see stats!'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 4:
         return (
           <div className="flex flex-col h-full p-6 animate-wrapped-slide-in">
             <div className="text-center mb-4">
@@ -275,35 +342,54 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
               </h2>
             </div>
             <div className="space-y-2.5 flex-1">
-              {wrappedData.topTracks.map((track, index) => (
-                <div 
-                  key={index}
-                  className="flex items-center gap-3 p-2.5 rounded-xl bg-gradient-to-r from-secondary/80 to-secondary/40 backdrop-blur-sm animate-slide-in-stagger"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <span className={cn(
-                    "text-xl font-black w-8 h-8 rounded-full flex items-center justify-center",
-                    index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500 text-white",
-                    index === 1 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800",
-                    index === 2 && "bg-gradient-to-br from-orange-600 to-orange-700 text-white",
-                    index > 2 && "bg-secondary text-muted-foreground"
-                  )}>
-                    {index + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate text-sm">{track.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
+              {wrappedStats.topTracks.length > 0 ? (
+                wrappedStats.topTracks.map((track, index) => (
+                  <div 
+                    key={track.id}
+                    className="flex items-center gap-3 p-2.5 rounded-xl bg-gradient-to-r from-secondary/80 to-secondary/40 backdrop-blur-sm animate-slide-in-stagger"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    <span className={cn(
+                      "text-xl font-black w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                      index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500 text-white",
+                      index === 1 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800",
+                      index === 2 && "bg-gradient-to-br from-orange-600 to-orange-700 text-white",
+                      index > 2 && "bg-secondary text-muted-foreground"
+                    )}>
+                      {index + 1}
+                    </span>
+                    {track.coverUrl && (
+                      <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0">
+                        <img 
+                          src={track.coverUrl} 
+                          alt={track.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate text-sm">{track.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
+                    </div>
+                    <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full">
+                      {track.plays}×
+                    </span>
                   </div>
-                  <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full">
-                    {track.plays}×
-                  </span>
+                ))
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-muted-foreground text-center">
+                    {settings.language === 'it' 
+                      ? 'Ascolta più musica per vedere le statistiche!' 
+                      : 'Listen to more music to see stats!'}
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         );
 
-      case 4:
+      case 5:
         return (
           <div className="flex flex-col h-full p-6 animate-wrapped-slide-in">
             <div className="text-center mb-4">
@@ -315,52 +401,62 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
               </h2>
             </div>
             <div className="flex-1 flex flex-col justify-center space-y-4">
-              {wrappedData.topAlbums.map((album, index) => (
-                <div 
-                  key={index}
-                  className="flex items-center gap-4 p-3 rounded-2xl bg-gradient-to-r from-secondary/80 to-secondary/40 backdrop-blur-sm animate-slide-in-stagger"
-                  style={{ animationDelay: `${index * 150}ms` }}
-                >
-                  <div className="relative">
-                    <div className={cn(
-                      "absolute -inset-1 rounded-xl blur-sm",
-                      index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500",
-                      index === 1 && "bg-gradient-to-br from-gray-300 to-gray-500",
-                      index === 2 && "bg-gradient-to-br from-orange-600 to-amber-700"
-                    )} />
-                    <div className="relative w-16 h-16 rounded-lg overflow-hidden">
-                      <img 
-                        src={album.coverUrl} 
-                        alt={album.title}
-                        className="w-full h-full object-cover"
-                      />
+              {wrappedStats.topAlbums.length > 0 ? (
+                wrappedStats.topAlbums.map((album, index) => (
+                  <div 
+                    key={album.id}
+                    className="flex items-center gap-4 p-3 rounded-2xl bg-gradient-to-r from-secondary/80 to-secondary/40 backdrop-blur-sm animate-slide-in-stagger"
+                    style={{ animationDelay: `${index * 150}ms` }}
+                  >
+                    <div className="relative">
+                      <div className={cn(
+                        "absolute -inset-1 rounded-xl blur-sm",
+                        index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500",
+                        index === 1 && "bg-gradient-to-br from-gray-300 to-gray-500",
+                        index === 2 && "bg-gradient-to-br from-orange-600 to-amber-700"
+                      )} />
+                      <div className="relative w-16 h-16 rounded-lg overflow-hidden">
+                        <img 
+                          src={album.coverUrl || '/placeholder.svg'} 
+                          alt={album.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className={cn(
+                        "absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                        index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500 text-white",
+                        index === 1 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800",
+                        index === 2 && "bg-gradient-to-br from-orange-600 to-orange-700 text-white"
+                      )}>
+                        {index + 1}
+                      </div>
                     </div>
-                    <div className={cn(
-                      "absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-                      index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500 text-white",
-                      index === 1 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800",
-                      index === 2 && "bg-gradient-to-br from-orange-600 to-orange-700 text-white"
-                    )}>
-                      {index + 1}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold truncate">{album.title}</p>
+                      <p className="text-sm text-muted-foreground truncate">{album.artist}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-primary">{album.plays}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {settings.language === 'it' ? 'ascolti' : 'plays'}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold truncate">{album.title}</p>
-                    <p className="text-sm text-muted-foreground truncate">{album.artist}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-primary">{album.plays}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {settings.language === 'it' ? 'ascolti' : 'plays'}
-                    </p>
-                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-center">
+                  <p className="text-muted-foreground text-center">
+                    {settings.language === 'it' 
+                      ? 'Nessun album trovato' 
+                      : 'No albums found'}
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         );
 
-      case 5:
+      case 6:
         return (
           <div className="flex flex-col items-center justify-center h-full p-6 animate-wrapped-slide-in">
             <div className="p-3 rounded-full bg-gradient-to-br from-orange-500 to-red-500 mb-4">
@@ -370,30 +466,38 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
               {settings.language === 'it' ? 'I tuoi generi preferiti' : 'Your favorite genres'} 💖
             </h2>
             <div className="w-full max-w-xs space-y-4">
-              {wrappedData.topGenres.map((genre, index) => (
-                <div key={index} className="animate-slide-in-stagger" style={{ animationDelay: `${index * 150}ms` }}>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span className="font-semibold">{genre.name}</span>
-                    <span className="text-muted-foreground font-medium">{genre.percentage}%</span>
+              {wrappedStats.topGenres.length > 0 ? (
+                wrappedStats.topGenres.map((genre, index) => (
+                  <div key={genre.name} className="animate-slide-in-stagger" style={{ animationDelay: `${index * 150}ms` }}>
+                    <div className="flex justify-between text-sm mb-1.5">
+                      <span className="font-semibold">{genre.name}</span>
+                      <span className="text-muted-foreground font-medium">{genre.percentage}%</span>
+                    </div>
+                    <div className="h-4 bg-secondary/50 rounded-full overflow-hidden backdrop-blur-sm">
+                      <div 
+                        className={cn(
+                          "h-full rounded-full transition-all duration-1000 bg-gradient-to-r",
+                          genre.color
+                        )}
+                        style={{ 
+                          width: `${genre.percentage}%`,
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-4 bg-secondary/50 rounded-full overflow-hidden backdrop-blur-sm">
-                    <div 
-                      className={cn(
-                        "h-full rounded-full transition-all duration-1000 bg-gradient-to-r",
-                        genre.color
-                      )}
-                      style={{ 
-                        width: `${genre.percentage}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-muted-foreground text-center">
+                  {settings.language === 'it' 
+                    ? 'Ascolta più musica per vedere le statistiche!' 
+                    : 'Listen to more music to see stats!'}
+                </p>
+              )}
             </div>
           </div>
         );
 
-      case 6:
+      case 7:
         return (
           <div className="flex flex-col items-center justify-center h-full p-6 animate-wrapped-slide-in">
             <div className="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 mb-4">
@@ -404,17 +508,17 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
             </h2>
             <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
               <div className="text-center p-4 rounded-2xl bg-gradient-to-br from-pink-500/20 to-purple-500/20 backdrop-blur-sm">
-                <p className="text-3xl font-black text-pink-400">{wrappedData.socialStats.posts}</p>
+                <p className="text-3xl font-black text-pink-400">{wrappedStats.socialStats.posts}</p>
                 <p className="text-xs text-muted-foreground mt-1">Post</p>
               </div>
               <div className="text-center p-4 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 backdrop-blur-sm">
-                <p className="text-3xl font-black text-cyan-400">{wrappedData.socialStats.comments}</p>
+                <p className="text-3xl font-black text-cyan-400">{wrappedStats.socialStats.comments}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {settings.language === 'it' ? 'Commenti' : 'Comments'}
                 </p>
               </div>
               <div className="text-center p-4 rounded-2xl bg-gradient-to-br from-red-500/20 to-orange-500/20 backdrop-blur-sm">
-                <p className="text-3xl font-black text-orange-400">{wrappedData.socialStats.likes}</p>
+                <p className="text-3xl font-black text-orange-400">{wrappedStats.socialStats.likes}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {settings.language === 'it' ? 'Like' : 'Likes'}
                 </p>
