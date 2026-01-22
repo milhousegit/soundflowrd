@@ -209,7 +209,7 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                 WRAPPED 2026
               </h1>
             </div>
-            <p className="text-xl text-foreground/90 mb-2">
+            <p className="text-xl text-foreground/90 mb-2 truncate max-w-full px-2">
               {settings.language === 'it' ? 'Ciao' : 'Hey'}, {displayName || 'User'}! ✨
             </p>
             <p className="text-muted-foreground">
@@ -278,7 +278,7 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                     />
                   </div>
                 </div>
-                <h2 className="text-3xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                <h2 className="text-3xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent truncate max-w-full px-2">
                   {wrappedStats.topArtist.name}
                 </h2>
                 <div className="flex gap-4 mt-3">
@@ -339,11 +339,11 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate text-sm">{artist.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground truncate">
                         {artist.songsPlayed} {settings.language === 'it' ? 'brani' : 'songs'}
                       </p>
                     </div>
-                    <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full">
+                    <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full shrink-0">
                       {artist.minutesListened >= 60 
                         ? `${Math.round(artist.minutesListened / 60)}h`
                         : `${artist.minutesListened}m`
@@ -405,7 +405,7 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                       <p className="font-semibold truncate text-sm">{track.title}</p>
                       <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
                     </div>
-                    <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full">
+                    <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full shrink-0">
                       {track.plays}×
                     </span>
                   </div>
@@ -465,11 +465,11 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                         {index + 1}
                       </div>
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 overflow-hidden">
                       <p className="font-bold truncate">{album.title}</p>
                       <p className="text-sm text-muted-foreground truncate">{album.artist}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <p className="text-lg font-bold text-primary">{album.plays}</p>
                       <p className="text-xs text-muted-foreground">
                         {settings.language === 'it' ? 'ascolti' : 'plays'}
@@ -503,9 +503,9 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
               {wrappedStats.topGenres.length > 0 ? (
                 wrappedStats.topGenres.map((genre, index) => (
                   <div key={genre.name} className="animate-slide-in-stagger" style={{ animationDelay: `${index * 150}ms` }}>
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span className="font-semibold">{genre.name}</span>
-                      <span className="text-muted-foreground font-medium">{genre.percentage}%</span>
+                    <div className="flex justify-between text-sm mb-1.5 gap-2">
+                      <span className="font-semibold truncate">{genre.name}</span>
+                      <span className="text-muted-foreground font-medium shrink-0">{genre.percentage}%</span>
                     </div>
                     <div className="h-4 bg-secondary/50 rounded-full overflow-hidden backdrop-blur-sm">
                       <div 
