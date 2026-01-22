@@ -110,10 +110,36 @@ const AdminArtistEditor: React.FC<AdminArtistEditorProps> = ({
     }
   }, [artistId, onHiddenItemsChange]);
 
-  // Update ordered playlists when playlists prop changes
+  // Fetch saved playlists for this artist from database
   useEffect(() => {
-    setOrderedPlaylists(playlists);
-  }, [playlists]);
+    const fetchSavedPlaylists = async () => {
+      if (!artistId) return;
+      
+      const { data, error } = await supabase
+        .from('artist_playlists')
+        .select('*')
+        .eq('artist_id', artistId)
+        .order('position', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        // Convert DB records to DeezerPlaylist format
+        const savedPlaylists: DeezerPlaylist[] = data.map((p: any) => ({
+          id: p.playlist_type === 'local' ? `local-${p.playlist_id}` : p.playlist_id,
+          title: p.playlist_title,
+          coverUrl: p.playlist_cover_url || '',
+          trackCount: p.playlist_track_count || 0,
+          creator: p.playlist_type === 'local' ? 'SoundFlow' : 'Deezer',
+        }));
+        setOrderedPlaylists(savedPlaylists);
+        onPlaylistsChange?.(savedPlaylists);
+      } else {
+        // If no saved playlists, use the ones from props (Deezer API)
+        setOrderedPlaylists(playlists);
+      }
+    };
+
+    fetchSavedPlaylists();
+  }, [artistId]);
 
   // Search for playlists to add - prioritize SoundFlow playlists
   useEffect(() => {
@@ -239,7 +265,7 @@ const AdminArtistEditor: React.FC<AdminArtistEditorProps> = ({
     dragOverItem.current = index;
   };
 
-  const handleDragEnd = () => {
+  const handleDragEnd = async () => {
     if (dragItem.current === null || dragOverItem.current === null) {
       setIsReordering(false);
       return;
@@ -257,14 +283,37 @@ const AdminArtistEditor: React.FC<AdminArtistEditorProps> = ({
     dragOverItem.current = null;
     setIsReordering(false);
 
-    toast({
-      title: 'Ordine aggiornato',
-      description: 'L\'ordine delle playlist è stato modificato.',
-    });
+    // Save new order to database
+    try {
+      // Update positions for all playlists
+      for (let i = 0; i < newPlaylists.length; i++) {
+        const playlist = newPlaylists[i];
+        const playlistIdStr = String(playlist.id);
+        const isLocal = playlistIdStr.startsWith('local-');
+        const dbPlaylistId = isLocal ? playlistIdStr.replace('local-', '') : playlistIdStr;
+        
+        await supabase
+          .from('artist_playlists')
+          .update({ position: i })
+          .eq('artist_id', artistId)
+          .eq('playlist_id', dbPlaylistId);
+      }
+
+      toast({
+        title: 'Ordine salvato',
+        description: 'L\'ordine delle playlist è stato salvato.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Errore',
+        description: 'Impossibile salvare l\'ordine.',
+        variant: 'destructive',
+      });
+    }
   };
 
-  // Add playlist to artist
-  const addPlaylist = (playlist: DeezerPlaylist) => {
+  // Add playlist to artist - save to database
+  const addPlaylist = async (playlist: DeezerPlaylist) => {
     const newPlaylists = [...orderedPlaylists, playlist];
     setOrderedPlaylists(newPlaylists);
     onPlaylistsChange?.(newPlaylists);
@@ -272,23 +321,73 @@ const AdminArtistEditor: React.FC<AdminArtistEditorProps> = ({
     setSearchResults([]);
     setShowAddPlaylist(false);
 
-    toast({
-      title: 'Playlist aggiunta',
-      description: `"${playlist.title}" è stata aggiunta all'artista.`,
-    });
+    // Save to database
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const playlistIdStr = String(playlist.id);
+      const isLocal = playlistIdStr.startsWith('local-');
+      const dbPlaylistId = isLocal ? playlistIdStr.replace('local-', '') : playlistIdStr;
+
+      await supabase
+        .from('artist_playlists')
+        .insert({
+          artist_id: artistId,
+          artist_name: artistName,
+          playlist_id: dbPlaylistId,
+          playlist_title: playlist.title,
+          playlist_cover_url: playlist.coverUrl || null,
+          playlist_track_count: playlist.trackCount || 0,
+          playlist_type: isLocal ? 'local' : 'deezer',
+          position: newPlaylists.length - 1,
+          created_by: user.id,
+        });
+
+      toast({
+        title: 'Playlist aggiunta',
+        description: `"${playlist.title}" è stata salvata per l'artista.`,
+      });
+    } catch (error: any) {
+      console.error('Error saving playlist:', error);
+      toast({
+        title: 'Errore',
+        description: 'Impossibile salvare la playlist.',
+        variant: 'destructive',
+      });
+    }
   };
 
-  // Remove playlist from artist
-  const removePlaylist = (playlistId: string) => {
+  // Remove playlist from artist - delete from database
+  const removePlaylist = async (playlistId: string) => {
     const playlist = orderedPlaylists.find(p => String(p.id) === playlistId);
     const newPlaylists = orderedPlaylists.filter(p => String(p.id) !== playlistId);
     setOrderedPlaylists(newPlaylists);
     onPlaylistsChange?.(newPlaylists);
 
-    if (playlist) {
+    // Delete from database
+    try {
+      const isLocal = playlistId.startsWith('local-');
+      const dbPlaylistId = isLocal ? playlistId.replace('local-', '') : playlistId;
+
+      await supabase
+        .from('artist_playlists')
+        .delete()
+        .eq('artist_id', artistId)
+        .eq('playlist_id', dbPlaylistId);
+
+      if (playlist) {
+        toast({
+          title: 'Playlist rimossa',
+          description: `"${playlist.title}" è stata rimossa dall'artista.`,
+        });
+      }
+    } catch (error: any) {
+      console.error('Error removing playlist:', error);
       toast({
-        title: 'Playlist rimossa',
-        description: `"${playlist.title}" è stata rimossa dall'artista.`,
+        title: 'Errore',
+        description: 'Impossibile rimuovere la playlist.',
+        variant: 'destructive',
       });
     }
   };
