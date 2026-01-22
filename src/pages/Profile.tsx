@@ -9,12 +9,13 @@ import SocialProfileHeader from '@/components/social/SocialProfileHeader';
 import PostCard from '@/components/social/PostCard';
 import PlaylistCard from '@/components/PlaylistCard';
 import CreatePostModal from '@/components/social/CreatePostModal';
-import { Loader2, Grid3X3, ListMusic, Plus } from 'lucide-react';
+import { Loader2, Grid3X3, ListMusic, Share2, User, Crown } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/integrations/supabase/client';
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const { user, profile: authProfile } = useAuth();
+  const { user, profile: authProfile, isAdmin } = useAuth();
   const { settings } = useSettings();
   const { posts, isLoading } = useSocialProfile();
   const { playlists, isLoading: playlistsLoading } = usePlaylists();
@@ -174,24 +175,92 @@ const Profile: React.FC = () => {
                     />
                   );
                 } else {
+                  const playlist = item.data;
                   return (
                     <div 
-                      key={`playlist-${item.data.id}`}
-                      className="bg-card rounded-xl border border-border p-4"
+                      key={`playlist-${playlist.id}`}
+                      className="bg-card rounded-xl border border-border p-4 space-y-3"
                     >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <ListMusic className="w-4 h-4 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-muted-foreground">
-                            {settings.language === 'it' 
-                              ? 'Ha pubblicato una playlist' 
-                              : 'Published a playlist'}
+                      {/* Header - same style as FeedCard */}
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={authProfile?.avatar_url || undefined} className="object-cover" />
+                          <AvatarFallback><User className="w-5 h-5" /></AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-sm text-foreground">
+                              {authProfile?.display_name || 'Utente'}
+                            </p>
+                            {isAdmin && <Crown className="w-3.5 h-3.5 text-amber-500" />}
+                            {!isAdmin && authProfile?.is_premium && <Crown className="w-3.5 h-3.5 text-[#8B5CF6]" />}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {settings.language === 'it' ? 'Ha pubblicato una playlist' : 'Published a playlist'}
                           </p>
                         </div>
                       </div>
-                      <PlaylistCard playlist={item.data} />
+
+                      {/* Playlist card - large image on mobile */}
+                      <button
+                        onClick={() => navigate(`/playlist/${playlist.id}`)}
+                        className="w-full text-left"
+                      >
+                        {/* Large cover on mobile */}
+                        <div className="relative w-full aspect-square rounded-lg bg-muted overflow-hidden mb-3 md:hidden">
+                          {playlist.cover_url ? (
+                            <img src={playlist.cover_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/40">
+                              <ListMusic className="w-16 h-16 text-primary" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Compact row on desktop */}
+                        <div className="hidden md:flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                          <div className="relative w-16 h-16 rounded-lg bg-muted overflow-hidden shrink-0">
+                            {playlist.cover_url ? (
+                              <img src={playlist.cover_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/40">
+                                <ListMusic className="w-6 h-6 text-primary" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground truncate">{playlist.name}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {playlist.track_count || 0} {settings.language === 'it' ? 'brani' : 'tracks'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Title on mobile (below image) */}
+                        <div className="md:hidden">
+                          <p className="text-sm font-medium text-foreground truncate">{playlist.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {playlist.track_count || 0} {settings.language === 'it' ? 'brani' : 'tracks'}
+                          </p>
+                        </div>
+                      </button>
+
+                      {/* Share action */}
+                      <div className="flex items-center gap-4 pt-1">
+                        <button
+                          onClick={() => {
+                            const url = `${window.location.origin}/playlist/${playlist.id}`;
+                            if (navigator.share) {
+                              navigator.share({ title: playlist.name, url }).catch(() => {});
+                            } else {
+                              navigator.clipboard.writeText(url);
+                            }
+                          }}
+                          className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   );
                 }
