@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { ChevronLeft, ChevronRight, Music, Clock, Heart, Mic2, MessageCircle, Share2, Sparkles, Disc3, Volume2, VolumeX, Users } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight, Music, Clock, Heart, Mic2, MessageCircle, Sparkles, Disc3, Volume2, VolumeX, Users, ChevronDown } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useWrappedStats } from '@/hooks/useWrappedStats';
@@ -16,6 +15,8 @@ interface WrappedStoryModalProps {
   displayName?: string;
 }
 
+const SWIPE_THRESHOLD = 100;
+
 const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
   open,
   onOpenChange,
@@ -28,10 +29,43 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
   const [progress, setProgress] = useState(0);
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
   const [wrappedTrack, setWrappedTrack] = useState<Track | null>(null);
+  const [swipeY, setSwipeY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const previousTrackRef = useRef<Track | null>(null);
   const wasPlayingRef = useRef(false);
-  const totalSlides = 8; // Added 1 more slide for top artists
+  const totalSlides = 8;
   const slideDuration = 6000;
+
+  // Swipe down to close handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+    setIsDragging(true);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    
+    const deltaY = e.touches[0].clientY - touchStartRef.current.y;
+    const deltaX = Math.abs(e.touches[0].clientX - touchStartRef.current.x);
+    
+    // Only allow vertical swipe if it's more vertical than horizontal
+    if (deltaY > 0 && deltaY > deltaX) {
+      setSwipeY(deltaY);
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (swipeY > SWIPE_THRESHOLD) {
+      onOpenChange(false);
+    }
+    setSwipeY(0);
+    setIsDragging(false);
+    touchStartRef.current = null;
+  }, [swipeY, onOpenChange]);
 
   // Load and play background music when modal opens
   useEffect(() => {
@@ -524,18 +558,10 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                 </p>
               </div>
             </div>
-            <div className="mt-8">
-              <Button 
-                className="gap-2 bg-gradient-to-r from-primary via-purple-500 to-pink-500 hover:opacity-90 border-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // TODO: Share functionality
-                }}
-              >
-                <Share2 className="w-4 h-4" />
-                {settings.language === 'it' ? 'Condividi' : 'Share'}
-              </Button>
-            </div>
+            <p className="mt-8 text-sm text-muted-foreground flex items-center gap-1">
+              <ChevronDown className="w-4 h-4 animate-bounce" />
+              {settings.language === 'it' ? 'Scorri verso il basso per chiudere' : 'Swipe down to close'}
+            </p>
           </div>
         );
 
@@ -546,10 +572,24 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(
-        "max-w-sm h-[85vh] p-0 overflow-hidden border-none [&>button]:hidden",
-        "bg-gradient-to-b from-card via-background to-card"
-      )}>
+      <DialogContent 
+        className={cn(
+          "p-0 overflow-hidden border-none [&>button]:hidden",
+          "bg-gradient-to-b from-card via-background to-card",
+          // Full screen on mobile with safe areas
+          "fixed inset-0 w-full h-full max-w-full max-h-full rounded-none",
+          "sm:relative sm:inset-auto sm:max-w-sm sm:h-[85vh] sm:rounded-lg",
+          isDragging && "transition-none",
+          !isDragging && "transition-transform duration-300"
+        )}
+        style={{
+          transform: swipeY > 0 ? `translateY(${swipeY}px)` : undefined,
+          opacity: swipeY > 0 ? Math.max(0.5, 1 - swipeY / 300) : 1,
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Animated background gradient */}
         <div className={cn(
           "absolute inset-0 bg-gradient-to-br transition-all duration-700",
@@ -572,8 +612,11 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
           ))}
         </div>
 
-        {/* Progress bars */}
-        <div className="absolute top-0 left-0 right-0 z-20 flex gap-1 p-3">
+        {/* Progress bars - with safe area */}
+        <div 
+          className="absolute left-0 right-0 z-20 flex gap-1 px-3"
+          style={{ top: 'max(env(safe-area-inset-top, 0px), 12px)' }}
+        >
           {Array.from({ length: totalSlides }).map((_, index) => (
             <div key={index} className="flex-1 h-1 bg-white/20 rounded-full overflow-hidden backdrop-blur-sm">
               <div 
@@ -589,10 +632,11 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
           ))}
         </div>
 
-        {/* Music toggle button */}
+        {/* Music toggle button - with safe area */}
         <button
           onClick={toggleBackgroundMusic}
-          className="absolute top-7 right-3 z-30 p-2 rounded-full bg-background/50 hover:bg-background/70 transition-all backdrop-blur-sm"
+          className="absolute right-3 z-30 p-2 rounded-full bg-background/50 hover:bg-background/70 transition-all backdrop-blur-sm"
+          style={{ top: 'calc(max(env(safe-area-inset-top, 0px), 12px) + 20px)' }}
         >
           {isMusicPlaying ? (
             <Volume2 className="w-4 h-4 text-primary animate-pulse" />
@@ -610,14 +654,23 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
           <div className="flex-1" />
         </div>
 
-        {/* Content */}
-        <div className="relative h-full pt-8 z-[5]">
+        {/* Content - with safe area padding */}
+        <div 
+          className="relative h-full z-[5]"
+          style={{ 
+            paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 12px) + 32px)',
+            paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)'
+          }}
+        >
           {renderSlide()}
         </div>
 
-        {/* Now playing indicator */}
+        {/* Now playing indicator - with safe area */}
         {wrappedTrack && isMusicPlaying && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/70 backdrop-blur-sm">
+          <div 
+            className="absolute left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/70 backdrop-blur-sm"
+            style={{ bottom: 'calc(max(env(safe-area-inset-bottom, 0px), 8px) + 8px)' }}
+          >
             <div className="flex gap-0.5">
               {[...Array(3)].map((_, i) => (
                 <div 
