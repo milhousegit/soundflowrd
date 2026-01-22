@@ -23,6 +23,9 @@ interface Profile {
   is_private: boolean | null;
   followers_count: number | null;
   following_count: number | null;
+  // Rate limiting fields
+  comments_blocked_until: string | null;
+  posts_blocked_until: string | null;
 }
 
 interface AuthContextType {
@@ -40,6 +43,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   updateApiKey: (apiKey: string) => Promise<{ error: Error | null }>;
   updateAudioSourceMode: (mode: string) => Promise<{ error: Error | null }>;
+  refreshProfile: () => Promise<void>;
   // Legacy support for existing code
   login: (credentials: UserCredentials) => void;
   logout: () => void;
@@ -383,6 +387,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await signOut();
   };
 
+  // Refresh profile data
+  const refreshProfile = async () => {
+    if (user?.id) {
+      await fetchProfile(user.id);
+    }
+  };
+
   const isAuthenticated = !!user;
 
   // Effective admin status (disabled when simulating free user)
@@ -404,6 +415,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       signOut,
       updateApiKey,
       updateAudioSourceMode,
+      refreshProfile,
       login,
       logout,
     }}>

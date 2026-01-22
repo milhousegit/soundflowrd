@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { SocialProfile, UserPost } from './useSocialProfile';
+import { useRateLimiter } from './useRateLimiter';
+import { toast } from 'sonner';
 
 export interface FeedPost extends UserPost {
   profile: SocialProfile;
@@ -53,6 +55,7 @@ export interface FeedPlaylist {
 export function useFeed() {
   const { user } = useAuth();
   const { settings } = useSettings();
+  const { checkPostRateLimit, isPostsBlocked } = useRateLimiter();
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
@@ -339,6 +342,18 @@ export function useFeed() {
     duration?: number;
   }) => {
     if (!user?.id) return null;
+
+    // Check if blocked
+    const blockStatus = isPostsBlocked();
+    if (blockStatus.blocked) {
+      const hours = Math.ceil((blockStatus.until!.getTime() - Date.now()) / 3600000);
+      toast.error(`Post bloccati per ancora ${hours} ore`);
+      return null;
+    }
+
+    // Check rate limit
+    const allowed = await checkPostRateLimit();
+    if (!allowed) return null;
 
     try {
       const { data, error } = await supabase

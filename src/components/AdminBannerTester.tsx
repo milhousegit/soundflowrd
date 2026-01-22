@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Eye, Crown, AlertTriangle, Sparkles, Download, Car, Music, Mic2, Zap, X, Clock, CheckCircle2, Mail, BadgeCheck } from 'lucide-react';
+import { ChevronDown, Eye, Crown, AlertTriangle, Sparkles, Download, Car, Music, Mic2, Zap, X, Clock, CheckCircle2, Mail, BadgeCheck, MessageCircle, FileText } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useRateLimiter } from '@/hooks/useRateLimiter';
 import PremiumExpiredBanner from './PremiumExpiredBanner';
 
 interface AdminBannerTesterProps {
@@ -13,8 +14,20 @@ const AdminBannerTester: React.FC<AdminBannerTesterProps> = ({ language }) => {
   const [showWelcomeBanner, setShowWelcomeBanner] = useState(false);
   const [showExpiredBanner, setShowExpiredBanner] = useState(false);
   const [showPendingBanner, setShowPendingBanner] = useState(false);
+  
+  const { 
+    simulateCommentBlock, 
+    simulatePostBlock, 
+    removeCommentBlock, 
+    removePostBlock,
+    isCommentsBlocked,
+    isPostsBlocked 
+  } = useRateLimiter();
 
   const isItalian = language === 'it';
+  
+  const commentsBlockStatus = isCommentsBlocked();
+  const postsBlockStatus = isPostsBlocked();
 
   return (
     <>
@@ -119,6 +132,71 @@ const AdminBannerTester: React.FC<AdminBannerTesterProps> = ({ language }) => {
               </div>
               <Clock className="w-4 h-4 text-amber-500" />
             </Button>
+
+            {/* Rate Limiting Tests */}
+            <div className="border-t border-border pt-3 mt-3">
+              <p className="text-xs text-muted-foreground mb-2 font-medium">
+                {isItalian ? 'Test Rate Limiting' : 'Rate Limiting Tests'}
+              </p>
+              
+              {/* Comment Block Test */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2 h-10 mb-2"
+                onClick={() => commentsBlockStatus.blocked ? removeCommentBlock() : simulateCommentBlock()}
+              >
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                  commentsBlockStatus.blocked 
+                    ? 'bg-gradient-to-r from-red-500 to-rose-600' 
+                    : 'bg-gradient-to-r from-blue-500 to-cyan-600'
+                }`}>
+                  <MessageCircle className="w-3 h-3 text-white" />
+                </div>
+                <div className="text-left flex-1">
+                  <p className="text-sm font-medium">
+                    {commentsBlockStatus.blocked 
+                      ? (isItalian ? 'Rimuovi Blocco Commenti' : 'Remove Comment Block')
+                      : (isItalian ? 'Simula Blocco Commenti' : 'Simulate Comment Block')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {commentsBlockStatus.blocked 
+                      ? (isItalian ? 'Attualmente bloccato' : 'Currently blocked')
+                      : (isItalian ? 'Blocca per 15 minuti' : 'Block for 15 minutes')}
+                  </p>
+                </div>
+                <MessageCircle className={`w-4 h-4 ${commentsBlockStatus.blocked ? 'text-red-500' : 'text-blue-500'}`} />
+              </Button>
+
+              {/* Post Block Test */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2 h-10"
+                onClick={() => postsBlockStatus.blocked ? removePostBlock() : simulatePostBlock()}
+              >
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                  postsBlockStatus.blocked 
+                    ? 'bg-gradient-to-r from-red-500 to-rose-600' 
+                    : 'bg-gradient-to-r from-purple-500 to-pink-600'
+                }`}>
+                  <FileText className="w-3 h-3 text-white" />
+                </div>
+                <div className="text-left flex-1">
+                  <p className="text-sm font-medium">
+                    {postsBlockStatus.blocked 
+                      ? (isItalian ? 'Rimuovi Blocco Post' : 'Remove Post Block')
+                      : (isItalian ? 'Simula Blocco Post' : 'Simulate Post Block')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {postsBlockStatus.blocked 
+                      ? (isItalian ? 'Attualmente bloccato' : 'Currently blocked')
+                      : (isItalian ? 'Blocca per 48 ore' : 'Block for 48 hours')}
+                  </p>
+                </div>
+                <FileText className={`w-4 h-4 ${postsBlockStatus.blocked ? 'text-red-500' : 'text-purple-500'}`} />
+              </Button>
+            </div>
           </div>
         </div>
       </details>
