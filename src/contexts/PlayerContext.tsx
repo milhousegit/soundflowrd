@@ -381,6 +381,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const prefetchedNextUrlRef = useRef<{ trackId: string; url: string; source: AudioSource } | null>(null);
   const isPrefetchingRef = useRef(false);
   const prefetchedTrackIdRef = useRef<string | null>(null);
+  
+  // Track actual listening time
+  const playbackStartTimeRef = useRef<number | null>(null);
+  const lastSavedTrackRef = useRef<{ track: Track; startTime: number } | null>(null);
 
   // Auto-skip to next track when current track is unavailable
   const autoSkipToNext = useCallback(() => {
@@ -543,6 +547,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const handleEnded = () => {
       console.log('[PlayerContext] Track ended');
       
+      // Save actual listening time for the track that just ended
+      if (lastSavedTrackRef.current) {
+        const { track: prevTrack, startTime } = lastSavedTrackRef.current;
+        const actualSecondsListened = Math.round((Date.now() - startTime) / 1000);
+        saveRecentlyPlayedTrack(prevTrack, user?.id, actualSecondsListened);
+        lastSavedTrackRef.current = null;
+      }
+      
       // Keep media session showing "playing" during track transition
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'playing';
@@ -597,15 +609,33 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }, 50);
     };
 
-    // Handle pause events
+    // Handle pause events - save actual listening time
     const handlePause = () => {
       if (!audio.ended) {
         setState((prev) => ({ ...prev, isPlaying: false }));
+        
+        // Save actual listening time when paused
+        if (lastSavedTrackRef.current) {
+          const { track: prevTrack, startTime } = lastSavedTrackRef.current;
+          const actualSecondsListened = Math.round((Date.now() - startTime) / 1000);
+          if (actualSecondsListened >= 10) {
+            saveRecentlyPlayedTrack(prevTrack, user?.id, actualSecondsListened);
+          }
+          lastSavedTrackRef.current = null;
+        }
       }
     };
 
     const handlePlay = () => {
       setState((prev) => ({ ...prev, isPlaying: true }));
+      
+      // Resume tracking playback time when play resumes
+      if (state.currentTrack && !lastSavedTrackRef.current) {
+        lastSavedTrackRef.current = {
+          track: state.currentTrack,
+          startTime: Date.now(),
+        };
+      }
     };
 
     // Simplified error handler
@@ -780,6 +810,17 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     async (track: Track, queue?: Track[]) => {
       tryUnlockAudioFromUserGesture();
 
+      // Save actual listening time for the previous track before switching
+      if (lastSavedTrackRef.current && audioRef.current) {
+        const { track: prevTrack, startTime } = lastSavedTrackRef.current;
+        const actualSecondsListened = Math.round((Date.now() - startTime) / 1000);
+        // Only save if track actually played (not just loaded)
+        if (actualSecondsListened >= 10) {
+          saveRecentlyPlayedTrack(prevTrack, user?.id, actualSecondsListened);
+        }
+        lastSavedTrackRef.current = null;
+      }
+
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = '';
@@ -831,7 +872,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setState((prev) => ({ ...prev, isPlaying: true }));
           setLoadingPhase('idle');
           setCurrentAudioSource('offline');
-          saveRecentlyPlayedTrack(enrichedTrack, user?.id);
+          lastSavedTrackRef.current = { track: enrichedTrack, startTime: Date.now() };
           addDebugLog('✅ Riproduzione offline', `"${enrichedTrack.title}" avviato`, 'success');
           updateMediaSessionMetadata(enrichedTrack, true);
           return;
@@ -842,9 +883,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const isHybridMode = audioSourceMode === 'hybrid_priority';
       const hasRdKey = !!credentials?.realDebridApiKey;
 
-      // Helper to save recently played (uses database if user is logged in)
-      const saveRecentlyPlayed = () => {
-        saveRecentlyPlayedTrack(enrichedTrack, user?.id);
+      // Helper to start tracking playback time (called when playback actually starts)
+      const startTrackingPlayback = () => {
+        lastSavedTrackRef.current = {
+          track: enrichedTrack,
+          startTime: Date.now(),
+        };
       };
 
       // Helper function for Tidal fallback (used in hybrid mode)
@@ -871,7 +915,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setState((prev) => ({ ...prev, isPlaying: true }));
               setLoadingPhase('idle');
               setCurrentAudioSource('tidal');
-              saveRecentlyPlayed();
+              startTrackingPlayback();
               
               const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
                 ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
@@ -971,7 +1015,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               setCurrentAudioSource('tidal');
               
               // Save to recently played for Deezer/Tidal mode
-              saveRecentlyPlayed();
+              startTrackingPlayback();
               
               const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
                 ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
@@ -990,7 +1034,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 setState((prev) => ({ ...prev, isPlaying: false }));
                 setLoadingPhase('idle');
                 setCurrentAudioSource('tidal');
-                saveRecentlyPlayed();
+                startTrackingPlayback();
                 return;
               }
               throw playError;
@@ -1039,7 +1083,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 setCurrentAudioSource('real-debrid');
                 setCurrentMappedFileId(trackMapping.file_id);
                 addDebugLog('✅ Riproduzione RD (cache)', 'Stream da mappatura salvata', 'success');
-                saveRecentlyPlayed();
+                startTrackingPlayback();
                 return;
               }
             } catch (error) {
@@ -1073,7 +1117,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 setLoadingPhase('idle');
                 setCurrentAudioSource('real-debrid');
                 addDebugLog('✅ Riproduzione RD', selected.title, 'success');
-                saveRecentlyPlayed();
+                startTrackingPlayback();
                 return;
               }
             }
@@ -1116,7 +1160,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
                 setLoadingPhase('idle');
                 setCurrentAudioSource('real-debrid');
-                saveRecentlyPlayed();
+                startTrackingPlayback();
                 return;
               }
 
@@ -1194,7 +1238,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 }
                 setLoadingPhase('idle');
                 setCurrentAudioSource('real-debrid');
-                saveRecentlyPlayed();
+                startTrackingPlayback();
                 return;
               }
 
@@ -1230,14 +1274,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
                 setLoadingPhase('idle');
                 setCurrentAudioSource('real-debrid');
-                saveRecentlyPlayed();
+                startTrackingPlayback();
                 return;
               } else if (['downloading', 'queued', 'magnet_conversion'].includes(result.status)) {
                 addDebugLog('📥 RD in download', `${result.progress}%`, 'info');
                 setLoadingPhase('downloading');
                 setDownloadProgress(result.progress ?? null);
                 setDownloadStatus(result.status);
-                saveRecentlyPlayed();
+                startTrackingPlayback();
                 return;
               }
             }
@@ -1274,7 +1318,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setLoadingPhase('idle');
             setCurrentAudioSource('real-debrid');
             addDebugLog('🔊 Riproduzione', selected.title, 'success');
-            saveRecentlyPlayed();
+            startTrackingPlayback();
             return;
           }
         }
@@ -1318,7 +1362,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setLoadingPhase('idle');
             setIsSearchingStreams(false);
             setCurrentAudioSource('real-debrid');
-            saveRecentlyPlayed();
+            startTrackingPlayback();
             return;
           }
 
@@ -1327,7 +1371,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setDownloadProgress(selectResult.progress ?? null);
             setDownloadStatus(selectResult.status);
             setIsSearchingStreams(false);
-            saveRecentlyPlayed();
+            startTrackingPlayback();
             return;
           }
         }
@@ -1959,7 +2003,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }));
           setCurrentAudioSource(source);
           updateMediaSessionMetadata(nextTrack, true);
-          saveRecentlyPlayedTrack(nextTrack, user?.id);
+          // Start tracking playback time for the new track
+          lastSavedTrackRef.current = { track: nextTrack, startTime: Date.now() };
         } else {
           console.log('[Prefetch] Track ID mismatch. Expected:', nextTrack?.id, 'Got:', trackId);
         }

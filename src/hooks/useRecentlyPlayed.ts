@@ -190,10 +190,22 @@ export const useRecentlyPlayed = () => {
 };
 
 // Standalone function for use in PlayerContext (doesn't need hook)
-export const saveRecentlyPlayedTrack = async (track: Track, userId?: string) => {
+// actualSecondsListened: the real time the user listened to the track
+export const saveRecentlyPlayedTrack = async (
+  track: Track, 
+  userId?: string,
+  actualSecondsListened?: number
+) => {
+  // Only save if listened for at least 10 seconds
+  const secondsListened = actualSecondsListened ?? track.duration ?? 0;
+  if (secondsListened < 10) {
+    console.log('[RecentlyPlayed] Skipped save - listened less than 10 seconds');
+    return;
+  }
+
   try {
     if (userId) {
-      // Insert new record for each play (not upsert, so repeated plays are counted)
+      // Insert new record for each play with actual listening time
       await supabase.from('recently_played').insert({
         user_id: userId,
         track_id: track.id,
@@ -202,7 +214,7 @@ export const saveRecentlyPlayedTrack = async (track: Track, userId?: string) => 
         track_album: track.album || null,
         track_album_id: track.albumId || null,
         track_cover_url: track.coverUrl || null,
-        track_duration: track.duration || null,
+        track_duration: Math.round(secondsListened), // Store actual seconds listened
         artist_id: track.artistId || null,
         played_at: new Date().toISOString(),
       });
