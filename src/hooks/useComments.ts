@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { SocialProfile } from './useSocialProfile';
+import { useRateLimiter } from './useRateLimiter';
+import { toast } from 'sonner';
 
 export interface Comment {
   id: string;
@@ -25,6 +27,7 @@ interface UseCommentsOptions {
 
 export function useComments({ postId, albumId }: UseCommentsOptions) {
   const { user } = useAuth();
+  const { checkCommentRateLimit, isCommentsBlocked } = useRateLimiter();
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -137,6 +140,18 @@ export function useComments({ postId, albumId }: UseCommentsOptions) {
 
   const addComment = async (content: string, parentId?: string) => {
     if (!user?.id || (!postId && !albumId)) return null;
+
+    // Check if blocked
+    const blockStatus = isCommentsBlocked();
+    if (blockStatus.blocked) {
+      const mins = Math.ceil((blockStatus.until!.getTime() - Date.now()) / 60000);
+      toast.error(`Commenti bloccati per ancora ${mins} minuti`);
+      return null;
+    }
+
+    // Check rate limit
+    const allowed = await checkCommentRateLimit();
+    if (!allowed) return null;
 
     try {
       const { data, error } = await supabase
