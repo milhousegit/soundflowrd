@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Download, Loader2, MessageCircle } from 'lucide-react';
+import { Play, Clock, Music, Download, Loader2, ListMusic, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
 import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
@@ -29,7 +28,7 @@ const Album: React.FC = () => {
   const [album, setAlbum] = useState<AlbumType | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('tracks');
+  const [activeTab, setActiveTab] = useState<'tracks' | 'comments'>('tracks');
   
   // Check if user can download (premium or admin)
   const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
@@ -169,16 +168,6 @@ const Album: React.FC = () => {
           variant="ghost"
         />
 
-        {/* Comment button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setActiveTab('comments')}
-          className="w-12 h-12 text-muted-foreground"
-        >
-          <MessageCircle className="w-5 h-5" />
-        </Button>
-
         {/* Download button - Premium only */}
         {canDownload && displayTracks.length > 0 && (
           <Button
@@ -195,31 +184,46 @@ const Album: React.FC = () => {
             )}
           </Button>
         )}
+      </div>
 
-        {/* Stats */}
-        <div className="flex items-center gap-4 ml-auto text-sm text-muted-foreground">
-          {commentsCount > 0 && (
-            <span className="flex items-center gap-1">
-              <MessageCircle className="w-4 h-4" />
-              {commentsCount}
-            </span>
-          )}
+      {/* Tab Bar - Instagram/TikTok style */}
+      <div className="border-t border-border">
+        <div className="flex">
+          <button
+            onClick={() => setActiveTab('tracks')}
+            className={`flex-1 py-3 flex items-center justify-center gap-2 transition-colors relative ${
+              activeTab === 'tracks' 
+                ? 'text-foreground' 
+                : 'text-muted-foreground'
+            }`}
+          >
+            <ListMusic className="w-5 h-5" />
+            <span className="text-sm font-medium">{displayTracks.length}</span>
+            {activeTab === 'tracks' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('comments')}
+            className={`flex-1 py-3 flex items-center justify-center gap-2 transition-colors relative ${
+              activeTab === 'comments' 
+                ? 'text-foreground' 
+                : 'text-muted-foreground'
+            }`}
+          >
+            <MessageCircle className="w-5 h-5" />
+            <span className="text-sm font-medium">{commentsCount}</span>
+            {activeTab === 'comments' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Tabs: Tracks / Comments */}
-      <div className="px-4 md:px-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-4">
-            <TabsTrigger value="tracks">
-              {t('tracks')} ({displayTracks.length})
-            </TabsTrigger>
-            <TabsTrigger value="comments">
-              {settings.language === 'it' ? 'Commenti' : 'Comments'} ({commentsCount})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="tracks">
+      {/* Tab Content */}
+      <div className="px-4 md:px-8 pt-4">
+        {activeTab === 'tracks' ? (
+          <>
             {/* Header - Hidden on mobile */}
             <div className="hidden md:grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 text-sm text-muted-foreground border-b border-border mb-2">
               <span className="w-8 text-center">#</span>
@@ -243,12 +247,10 @@ const Album: React.FC = () => {
                 />
               ))}
             </div>
-          </TabsContent>
-
-          <TabsContent value="comments">
-            <CommentSection albumId={id} />
-          </TabsContent>
-        </Tabs>
+          </>
+        ) : (
+          <CommentSection albumId={id} />
+        )}
       </div>
     </div>
   );
