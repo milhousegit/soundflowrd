@@ -51,12 +51,12 @@ const WrappedRing: React.FC<WrappedRingProps> = ({
         </div>
 
         {/* Wrapped 2026 text rotating in opposite direction */}
-        <div className="absolute -inset-4 rounded-full animate-spin-reverse-slow">
-          <svg viewBox="0 0 140 140" className="w-full h-full">
+        <div className="absolute -inset-6 rounded-full animate-spin-reverse-slow">
+          <svg viewBox="0 0 160 160" className="w-full h-full">
             <defs>
               <path
                 id="wrappedTextPath"
-                d="M 70,70 m -58,0 a 58,58 0 1,1 116,0 a 58,58 0 1,1 -116,0"
+                d="M 80,80 m -68,0 a 68,68 0 1,1 136,0 a 68,68 0 1,1 -136,0"
               />
             </defs>
             <text className="fill-primary text-[9px] font-semibold uppercase tracking-[0.3em]">
