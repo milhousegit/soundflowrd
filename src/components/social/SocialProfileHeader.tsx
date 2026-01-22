@@ -157,14 +157,14 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
 
   return (
     <>
-      <div className="relative">
+      <div className="relative p-4 pt-4">
         {/* Edit button for own profile - top left */}
         {isOwnProfile && (
           <Button
             variant="ghost"
             size="icon"
             onClick={handleEditOpen}
-            className="absolute top-0 left-0 z-10"
+            className="absolute top-4 left-4 z-10"
           >
             <Pencil className="w-5 h-5" />
           </Button>
@@ -176,20 +176,16 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
             variant="ghost"
             size="icon"
             onClick={onSettingsClick}
-            className="absolute top-0 right-0 z-10"
+            className="absolute top-4 right-4 z-10"
           >
             <Settings className="w-5 h-5" />
           </Button>
         )}
 
-        <div className="flex flex-col items-center text-center space-y-4">
-          {/* Avatar */}
+        <div className="flex flex-col items-center text-center space-y-4 pt-8">
+          {/* Avatar - no click interaction, photo changed via edit modal */}
           <div className="relative">
-            <button
-              onClick={handleAvatarClick}
-              disabled={!isOwnProfile || isUploading}
-              className="relative w-24 h-24 rounded-full bg-muted overflow-hidden ring-4 ring-background"
-            >
+            <div className="relative w-24 h-24 rounded-full bg-muted overflow-hidden ring-4 ring-background">
               {profile.avatar_url ? (
                 <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -197,16 +193,7 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
                   <User className="w-10 h-10 text-muted-foreground" />
                 </div>
               )}
-              {isOwnProfile && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                  {isUploading ? (
-                    <Loader2 className="w-6 h-6 text-white animate-spin" />
-                  ) : (
-                    <Camera className="w-6 h-6 text-white" />
-                  )}
-                </div>
-              )}
-            </button>
+            </div>
             <input
               ref={fileInputRef}
               type="file"
@@ -320,6 +307,33 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Avatar change in edit modal */}
+            <div className="flex flex-col items-center">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="relative w-20 h-20 rounded-full bg-muted overflow-hidden ring-2 ring-border group"
+              >
+                {profile.avatar_url ? (
+                  <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <User className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  {isUploading ? (
+                    <Loader2 className="w-5 h-5 text-white animate-spin" />
+                  ) : (
+                    <Camera className="w-5 h-5 text-white" />
+                  )}
+                </div>
+              </button>
+              <p className="text-xs text-muted-foreground mt-2">
+                {settings.language === 'it' ? 'Tocca per cambiare' : 'Tap to change'}
+              </p>
+            </div>
+
             <div>
               <label className="text-sm font-medium">
                 {settings.language === 'it' ? 'Nome visualizzato' : 'Display name'}
