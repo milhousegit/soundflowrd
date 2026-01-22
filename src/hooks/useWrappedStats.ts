@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-
+import { searchArtists } from '@/lib/deezer';
 interface ArtistStats {
   id: string;
   name: string;
@@ -243,11 +243,33 @@ export const useWrappedStats = () => {
         .sort((a, b) => b.minutesListened - a.minutesListened)
         .slice(0, 6);
 
-      // Build artist stats with images from Deezer
-      const topArtists: ArtistStats[] = sortedArtists.map(artist => ({
+      // Fetch real artist images from Deezer API
+      const artistImagePromises = sortedArtists.map(async (artist) => {
+        try {
+          const results = await searchArtists(artist.name);
+          const matchedArtist = results.find(
+            a => a.name.toLowerCase() === artist.name.toLowerCase()
+          ) || results[0];
+          return {
+            ...artist,
+            imageUrl: matchedArtist?.imageUrl || '/placeholder.svg',
+            deezerArtistId: matchedArtist?.id,
+          };
+        } catch {
+          return {
+            ...artist,
+            imageUrl: '/placeholder.svg',
+          };
+        }
+      });
+
+      const artistsWithImages = await Promise.all(artistImagePromises);
+
+      // Build artist stats with real Deezer images
+      const topArtists: ArtistStats[] = artistsWithImages.map(artist => ({
         id: artist.id,
         name: artist.name,
-        imageUrl: `https://e-cdns-images.dzcdn.net/images/artist/${artist.id}/500x500-000000-80-0-0.jpg`,
+        imageUrl: artist.imageUrl,
         minutesListened: Math.round(artist.minutesListened),
         songsPlayed: artist.songsPlayed,
       }));
