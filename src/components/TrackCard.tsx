@@ -338,9 +338,20 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
           )}
         </div>
 
-        {/* Actions container */}
+        {/* Actions container - Order: Favorite → More menu → Duration */}
         <div className="flex items-center gap-1">
-          {/* More menu - DESKTOP ONLY */}
+          {/* Favorite button - FIRST */}
+          {showFavorite && (
+            <FavoriteButton
+              itemType="track"
+              item={track}
+              size="sm"
+              className="md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+              variant="ghost"
+            />
+          )}
+
+          {/* More menu - DESKTOP ONLY - SECOND */}
           {!isMobile && (
             <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -358,21 +369,10 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
             </DropdownMenu>
           )}
 
-          {/* Duration */}
+          {/* Duration - LAST */}
           <span className="text-xs md:text-sm text-muted-foreground flex-shrink-0 min-w-[36px] text-right">
             {formatDuration(track.duration)}
           </span>
-
-          {/* Favorite button */}
-          {showFavorite && (
-            <FavoriteButton
-              itemType="track"
-              item={track}
-              size="sm"
-              className="md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-              variant="ghost"
-            />
-          )}
         </div>
       </div>
     );
