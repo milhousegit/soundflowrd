@@ -576,9 +576,12 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
         className={cn(
           "p-0 overflow-hidden border-none [&>button]:hidden",
           "bg-gradient-to-b from-card via-background to-card",
-          // Full screen on mobile with safe areas
-          "fixed inset-0 w-full h-full max-w-full max-h-full rounded-none",
-          "sm:relative sm:inset-auto sm:max-w-sm sm:h-[85vh] sm:rounded-lg",
+          // Full screen on mobile - override default dialog positioning
+          "!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0",
+          "!w-screen !h-screen !max-w-none !max-h-none !rounded-none",
+          // Desktop: centered modal
+          "sm:!left-[50%] sm:!top-[50%] sm:!translate-x-[-50%] sm:!translate-y-[-50%]",
+          "sm:!w-full sm:!max-w-sm sm:!h-[85vh] sm:!max-h-[85vh] sm:!rounded-lg",
           isDragging && "transition-none",
           !isDragging && "transition-transform duration-300"
         )}
