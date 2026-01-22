@@ -749,6 +749,7 @@ export type Database = {
           bio_track_cover_url: string | null
           bio_track_id: string | null
           bio_track_title: string | null
+          comments_blocked_until: string | null
           created_at: string
           display_name: string | null
           email: string | null
@@ -757,6 +758,7 @@ export type Database = {
           id: string
           is_premium: boolean | null
           is_private: boolean | null
+          posts_blocked_until: string | null
           preferred_language: string | null
           premium_expires_at: string | null
           real_debrid_api_key: string | null
@@ -771,6 +773,7 @@ export type Database = {
           bio_track_cover_url?: string | null
           bio_track_id?: string | null
           bio_track_title?: string | null
+          comments_blocked_until?: string | null
           created_at?: string
           display_name?: string | null
           email?: string | null
@@ -779,6 +782,7 @@ export type Database = {
           id: string
           is_premium?: boolean | null
           is_private?: boolean | null
+          posts_blocked_until?: string | null
           preferred_language?: string | null
           premium_expires_at?: string | null
           real_debrid_api_key?: string | null
@@ -793,6 +797,7 @@ export type Database = {
           bio_track_cover_url?: string | null
           bio_track_id?: string | null
           bio_track_title?: string | null
+          comments_blocked_until?: string | null
           created_at?: string
           display_name?: string | null
           email?: string | null
@@ -801,6 +806,7 @@ export type Database = {
           id?: string
           is_premium?: boolean | null
           is_private?: boolean | null
+          posts_blocked_until?: string | null
           preferred_language?: string | null
           premium_expires_at?: string | null
           real_debrid_api_key?: string | null

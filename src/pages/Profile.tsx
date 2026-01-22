@@ -130,8 +130,8 @@ const Profile: React.FC = () => {
       <SocialProfileHeader onSettingsClick={handleSettingsClick} />
 
       {/* Tab Bar - Instagram/TikTok style */}
-      <div className="border-t border-border mt-4">
-        <div className="flex">
+      <div className="border-t border-b border-border mt-4">
+        <div className="flex max-w-xl mx-auto">
           <button
             onClick={() => setActiveTab('feed')}
             className={`flex-1 py-3 flex items-center justify-center transition-colors relative ${

@@ -187,8 +187,8 @@ const Album: React.FC = () => {
       </div>
 
       {/* Tab Bar - Instagram/TikTok style */}
-      <div className="border-t border-border">
-        <div className="flex">
+      <div className="border-t border-b border-border">
+        <div className="flex max-w-xl mx-auto">
           <button
             onClick={() => setActiveTab('tracks')}
             className={`flex-1 py-3 flex items-center justify-center gap-2 transition-colors relative ${
