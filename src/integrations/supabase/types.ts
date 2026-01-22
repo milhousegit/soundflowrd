@@ -137,6 +137,51 @@ export type Database = {
         }
         Relationships: []
       }
+      artist_playlists: {
+        Row: {
+          artist_id: string
+          artist_name: string
+          created_at: string
+          created_by: string
+          id: string
+          playlist_cover_url: string | null
+          playlist_id: string
+          playlist_title: string
+          playlist_track_count: number | null
+          playlist_type: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          artist_id: string
+          artist_name: string
+          created_at?: string
+          created_by: string
+          id?: string
+          playlist_cover_url?: string | null
+          playlist_id: string
+          playlist_title: string
+          playlist_track_count?: number | null
+          playlist_type?: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          artist_id?: string
+          artist_name?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          playlist_cover_url?: string | null
+          playlist_id?: string
+          playlist_title?: string
+          playlist_track_count?: number | null
+          playlist_type?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       artist_release_tracking: {
         Row: {
           artist_id: string

@@ -109,9 +109,25 @@ const Artist: React.FC = () => {
         // Related artists
         setRelatedArtists((artistData.relatedArtists || []).slice(0, 10));
         
-        // Fetch artist playlists (100% Artist, This is Artist, etc.)
-        // Also includes playlists from merged artists
-        if (artistData.name) {
+        // Fetch artist playlists - first check database for saved playlists
+        const { data: savedPlaylists } = await supabase
+          .from('artist_playlists')
+          .select('*')
+          .eq('artist_id', id)
+          .order('position', { ascending: true });
+
+        if (savedPlaylists && savedPlaylists.length > 0) {
+          // Use saved playlists from database
+          const dbPlaylists: DeezerPlaylist[] = savedPlaylists.map((p: any) => ({
+            id: p.playlist_type === 'local' ? `local-${p.playlist_id}` : p.playlist_id,
+            title: p.playlist_title,
+            coverUrl: p.playlist_cover_url || '',
+            trackCount: p.playlist_track_count || 0,
+            creator: p.playlist_type === 'local' ? 'SoundFlow' : 'Deezer',
+          }));
+          setArtistPlaylists(dbPlaylists);
+        } else if (artistData.name) {
+          // Fallback: fetch from Deezer API
           const deezerPlaylists = await getArtistPlaylists(artistData.name, id).catch(() => []);
           setArtistPlaylists(deezerPlaylists);
         }
