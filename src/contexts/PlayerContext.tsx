@@ -826,6 +826,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // Only save if track actually played (not just loaded)
         if (actualSecondsListened >= 10) {
           saveRecentlyPlayedTrack(prevTrack, user?.id, actualSecondsListened);
+          // Update aggregated stats for Wrapped
+          if (user?.id) {
+            updateListeningStats(prevTrack, user.id, actualSecondsListened);
+          }
         }
         lastSavedTrackRef.current = null;
       }
