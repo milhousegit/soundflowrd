@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { ChevronLeft, ChevronRight, Music, Clock, Heart, Mic2, MessageCircle, Share2, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Music, Clock, Heart, Mic2, MessageCircle, Share2, Sparkles, Disc3, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
+import { usePlayer } from '@/contexts/PlayerContext';
 import { cn } from '@/lib/utils';
+import { searchAll } from '@/lib/deezer';
+import { Track } from '@/types/music';
 
 interface WrappedStoryModalProps {
   open: boolean;
@@ -39,9 +42,24 @@ const wrappedData = {
     likes: 892
   },
   topAlbums: [
-    { title: 'Scorpion', artist: 'Drake' },
-    { title: 'After Hours', artist: 'The Weeknd' },
-    { title: 'Divide', artist: 'Ed Sheeran' }
+    { 
+      title: 'Scorpion', 
+      artist: 'Drake',
+      coverUrl: 'https://e-cdns-images.dzcdn.net/images/cover/d6ecb33aa82e5ea3890f65bf6f1d8ee3/500x500-000000-80-0-0.jpg',
+      plays: 234
+    },
+    { 
+      title: 'After Hours', 
+      artist: 'The Weeknd',
+      coverUrl: 'https://e-cdns-images.dzcdn.net/images/cover/3c2e59ad0be1d4effe78c1f80c7f51e1/500x500-000000-80-0-0.jpg',
+      plays: 187
+    },
+    { 
+      title: 'Divide', 
+      artist: 'Ed Sheeran',
+      coverUrl: 'https://e-cdns-images.dzcdn.net/images/cover/4f56c7c4b3fcff83a8ae61d2c7e3e460/500x500-000000-80-0-0.jpg',
+      plays: 156
+    }
   ]
 };
 
@@ -51,10 +69,61 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
   displayName
 }) => {
   const { settings } = useSettings();
+  const { playTrack, currentTrack, isPlaying, toggle } = usePlayer();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [progress, setProgress] = useState(0);
-  const totalSlides = 6;
-  const slideDuration = 6000; // 6 seconds per slide
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [wrappedTrack, setWrappedTrack] = useState<Track | null>(null);
+  const previousTrackRef = useRef<Track | null>(null);
+  const wasPlayingRef = useRef(false);
+  const totalSlides = 7; // Added 1 more slide for albums
+  const slideDuration = 6000;
+
+  // Load and play background music when modal opens
+  useEffect(() => {
+    if (open && !wrappedTrack) {
+      // Save current playback state
+      previousTrackRef.current = currentTrack;
+      wasPlayingRef.current = isPlaying;
+      
+      // Search for top track to play as background
+      const loadBackgroundMusic = async () => {
+        try {
+          const topTrack = wrappedData.topTracks[0];
+          const results = await searchAll(`${topTrack.title} ${topTrack.artist}`);
+          if (results.tracks.length > 0) {
+            const track = results.tracks[0];
+            setWrappedTrack(track);
+            playTrack(track, results.tracks.slice(0, 5));
+            setIsMusicPlaying(true);
+          }
+        } catch (error) {
+          console.error('Failed to load wrapped background music:', error);
+        }
+      };
+      loadBackgroundMusic();
+    }
+    
+    // Cleanup when modal closes
+    if (!open && wrappedTrack) {
+      setWrappedTrack(null);
+      setIsMusicPlaying(false);
+    }
+  }, [open]);
+
+  // Sync music playing state with player
+  useEffect(() => {
+    if (wrappedTrack && currentTrack?.id === wrappedTrack.id) {
+      setIsMusicPlaying(isPlaying);
+    }
+  }, [isPlaying, currentTrack, wrappedTrack]);
+
+  const toggleBackgroundMusic = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (wrappedTrack) {
+      toggle();
+    }
+  };
 
   useEffect(() => {
     if (!open) {
@@ -104,6 +173,7 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
       'from-blue-600/30 via-cyan-500/20 to-primary/20',
       'from-purple-600/30 via-pink-500/20 to-orange-500/20',
       'from-green-600/30 via-emerald-500/20 to-cyan-500/20',
+      'from-amber-600/30 via-orange-500/20 to-red-500/20',
       'from-orange-600/30 via-red-500/20 to-pink-500/20',
       'from-indigo-600/30 via-purple-500/20 to-pink-500/20',
     ];
@@ -235,6 +305,63 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
 
       case 4:
         return (
+          <div className="flex flex-col h-full p-6 animate-wrapped-slide-in">
+            <div className="text-center mb-4">
+              <div className="inline-flex p-2 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 mb-2">
+                <Disc3 className="w-6 h-6 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold">
+                {settings.language === 'it' ? 'I tuoi album preferiti' : 'Your top albums'} 💿
+              </h2>
+            </div>
+            <div className="flex-1 flex flex-col justify-center space-y-4">
+              {wrappedData.topAlbums.map((album, index) => (
+                <div 
+                  key={index}
+                  className="flex items-center gap-4 p-3 rounded-2xl bg-gradient-to-r from-secondary/80 to-secondary/40 backdrop-blur-sm animate-slide-in-stagger"
+                  style={{ animationDelay: `${index * 150}ms` }}
+                >
+                  <div className="relative">
+                    <div className={cn(
+                      "absolute -inset-1 rounded-xl blur-sm",
+                      index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500",
+                      index === 1 && "bg-gradient-to-br from-gray-300 to-gray-500",
+                      index === 2 && "bg-gradient-to-br from-orange-600 to-amber-700"
+                    )} />
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden">
+                      <img 
+                        src={album.coverUrl} 
+                        alt={album.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className={cn(
+                      "absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                      index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500 text-white",
+                      index === 1 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800",
+                      index === 2 && "bg-gradient-to-br from-orange-600 to-orange-700 text-white"
+                    )}>
+                      {index + 1}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold truncate">{album.title}</p>
+                    <p className="text-sm text-muted-foreground truncate">{album.artist}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-primary">{album.plays}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {settings.language === 'it' ? 'ascolti' : 'plays'}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case 5:
+        return (
           <div className="flex flex-col items-center justify-center h-full p-6 animate-wrapped-slide-in">
             <div className="p-3 rounded-full bg-gradient-to-br from-orange-500 to-red-500 mb-4">
               <Heart className="w-8 h-8 text-white" />
@@ -266,7 +393,7 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
           </div>
         );
 
-      case 5:
+      case 6:
         return (
           <div className="flex flex-col items-center justify-center h-full p-6 animate-wrapped-slide-in">
             <div className="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 mb-4">
@@ -358,6 +485,18 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
           ))}
         </div>
 
+        {/* Music toggle button */}
+        <button
+          onClick={toggleBackgroundMusic}
+          className="absolute top-7 right-3 z-30 p-2 rounded-full bg-background/50 hover:bg-background/70 transition-all backdrop-blur-sm"
+        >
+          {isMusicPlaying ? (
+            <Volume2 className="w-4 h-4 text-primary animate-pulse" />
+          ) : (
+            <VolumeX className="w-4 h-4 text-muted-foreground" />
+          )}
+        </button>
+
         {/* Navigation areas */}
         <div 
           className="absolute inset-0 z-10 flex"
@@ -371,6 +510,27 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
         <div className="relative h-full pt-8 z-[5]">
           {renderSlide()}
         </div>
+
+        {/* Now playing indicator */}
+        {wrappedTrack && isMusicPlaying && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/70 backdrop-blur-sm">
+            <div className="flex gap-0.5">
+              {[...Array(3)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className="w-0.5 bg-primary rounded-full animate-music-bar"
+                  style={{ 
+                    height: '12px',
+                    animationDelay: `${i * 0.15}s` 
+                  }}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground truncate max-w-[150px]">
+              {wrappedTrack.title}
+            </span>
+          </div>
+        )}
 
         {/* Navigation arrows - desktop only */}
         <div className="hidden sm:flex absolute inset-y-0 left-0 items-center z-20">
