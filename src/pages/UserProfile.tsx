@@ -5,12 +5,15 @@ import PostCard from '@/components/social/PostCard';
 import PlaylistCard from '@/components/PlaylistCard';
 import { useSocialProfile } from '@/hooks/useSocialProfile';
 import { useFeed } from '@/hooks/useFeed';
+import { useFavorites } from '@/hooks/useFavorites';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Grid3X3, ListMusic, Share2, User, Crown } from 'lucide-react';
+import { Loader2, Grid3X3, ListMusic, Share2, User, Crown, Bookmark, MessageCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import BackButton from '@/components/BackButton';
+import { toast } from 'sonner';
 
 interface ProfilePageProps {
   onSettingsClick?: () => void;
@@ -22,11 +25,13 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
   const { user } = useAuth();
   const { settings } = useSettings();
   const { likePost, unlikePost, deletePost } = useFeed();
+  const { isFavorite, toggleFavorite } = useFavorites();
   const { profile, posts, isLoading } = useSocialProfile(id);
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [publicPlaylists, setPublicPlaylists] = useState<any[]>([]);
   const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
   const [activeTab, setActiveTab] = useState<'feed' | 'playlists'>('feed');
+  const [playlistSavesCounts, setPlaylistSavesCounts] = useState<Record<string, number>>({});
 
   const isOwnProfile = !id || id === user?.id;
 
@@ -61,6 +66,20 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
           .order('created_at', { ascending: false });
 
         setPublicPlaylists(publicData || []);
+
+        // Fetch saves counts for each public playlist
+        if (publicData && publicData.length > 0) {
+          const counts: Record<string, number> = {};
+          await Promise.all(publicData.map(async (pl) => {
+            const { count } = await supabase
+              .from('favorites')
+              .select('*', { count: 'exact', head: true })
+              .eq('item_id', pl.id)
+              .eq('item_type', 'playlist');
+            counts[pl.id] = count || 0;
+          }));
+          setPlaylistSavesCounts(counts);
+        }
       } catch (error) {
         console.error('Error fetching playlists:', error);
       } finally {
@@ -245,22 +264,74 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
                         </div>
                       </button>
 
-                      {/* Share action */}
-                      <div className="flex items-center gap-4 pt-1">
-                        <button
-                          onClick={() => {
-                            const url = `${window.location.origin}/playlist/${playlist.id}`;
-                            if (navigator.share) {
-                              navigator.share({ title: playlist.name, url }).catch(() => {});
-                            } else {
-                              navigator.clipboard.writeText(url);
-                            }
-                          }}
-                          className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {/* Actions - same as FeedCard: Save, Comment, Share */}
+                      {(() => {
+                        const isPlaylistOwner = user?.id === playlist.user_id;
+                        const isSaved = isPlaylistOwner || isFavorite('playlist', playlist.id);
+                        
+                        const handlePlaylistSaveToggle = async () => {
+                          const playlistData = {
+                            id: playlist.id,
+                            title: playlist.name,
+                            artist: profile?.display_name || '',
+                            coverUrl: playlist.cover_url || '',
+                          };
+                          const wasSaved = isFavorite('playlist', playlist.id);
+                          await toggleFavorite('playlist', playlistData as any);
+                          setPlaylistSavesCounts(prev => ({
+                            ...prev,
+                            [playlist.id]: wasSaved ? Math.max(0, (prev[playlist.id] || 0) - 1) : (prev[playlist.id] || 0) + 1
+                          }));
+                          toast.success(wasSaved 
+                            ? (settings.language === 'it' ? 'Rimosso dalla libreria' : 'Removed from library')
+                            : (settings.language === 'it' ? 'Aggiunto alla libreria' : 'Added to library')
+                          );
+                        };
+
+                        return (
+                          <div className="flex items-center gap-4 pt-1">
+                            {/* Save button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={isPlaylistOwner ? undefined : handlePlaylistSaveToggle}
+                              disabled={isPlaylistOwner}
+                              className={`gap-1.5 ${isSaved ? 'text-primary' : 'text-muted-foreground'}`}
+                            >
+                              <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+                              <span className="text-xs">{playlistSavesCounts[playlist.id] || 0}</span>
+                            </Button>
+
+                            {/* Comment - navigates to playlist */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/playlist/${playlist.id}`)}
+                              className="gap-1.5 text-muted-foreground"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </Button>
+
+                            {/* Share */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const url = `${window.location.origin}/playlist/${playlist.id}`;
+                                if (navigator.share) {
+                                  navigator.share({ title: playlist.name, url }).catch(() => {});
+                                } else {
+                                  navigator.clipboard.writeText(url);
+                                  toast.success(settings.language === 'it' ? 'Link copiato!' : 'Link copied!');
+                                }
+                              }}
+                              className="gap-1.5 text-muted-foreground"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 }
