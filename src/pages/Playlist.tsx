@@ -9,7 +9,7 @@ import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import PlaylistRecommendations from '@/components/PlaylistRecommendations';
-import CoverImageUploader from '@/components/CoverImageUploader';
+import { usePlaylistCoverUpload } from '@/hooks/usePlaylistCoverUpload';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -58,6 +58,9 @@ const PlaylistPage: React.FC = () => {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isCoverDragOver, setIsCoverDragOver] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const coverInputRef = React.useRef<HTMLInputElement>(null);
   
   // Check if user can download (premium or admin)
   const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
@@ -175,19 +178,6 @@ const PlaylistPage: React.FC = () => {
     };
   }, []);
 
-  const handleSaveEdit = async () => {
-    if (!playlist || !editedName.trim()) return;
-    
-    await updatePlaylist(playlist.id, {
-      name: editedName.trim(),
-      cover_url: editedCoverUrl || undefined,
-      is_public: editedIsPublic,
-    });
-    
-    setPlaylist({ ...playlist, name: editedName.trim(), cover_url: editedCoverUrl || null, is_public: editedIsPublic });
-    setIsEditing(false);
-    toast.success('Playlist aggiornata');
-  };
 
   const handleCopyShareLink = () => {
     const shareUrl = `${window.location.origin}/playlist/${playlist?.id}`;
@@ -251,10 +241,65 @@ const PlaylistPage: React.FC = () => {
     setDragOverIndex(null);
   };
 
-  const handleExitEditMode = () => {
+  const handleExitEditMode = async () => {
+    // Save all changes when exiting edit mode
+    if (playlist && editedName.trim()) {
+      await updatePlaylist(playlist.id, {
+        name: editedName.trim(),
+        cover_url: editedCoverUrl || undefined,
+        is_public: editedIsPublic,
+      });
+      setPlaylist({ ...playlist, name: editedName.trim(), cover_url: editedCoverUrl || null, is_public: editedIsPublic });
+      toast.success('Playlist aggiornata');
+    }
     setIsEditing(false);
     setDraggedIndex(null);
     setDragOverIndex(null);
+  };
+
+  // Cover upload handlers
+  const { uploadCover } = usePlaylistCoverUpload();
+
+  const handleCoverFileSelect = async (file: File) => {
+    if (!file || !user) return;
+    setIsUploadingCover(true);
+    try {
+      const url = await uploadCover(file, user.id);
+      if (url) {
+        setEditedCoverUrl(url);
+      }
+    } finally {
+      setIsUploadingCover(false);
+    }
+  };
+
+  const handleCoverDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsCoverDragOver(true);
+  };
+
+  const handleCoverDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsCoverDragOver(false);
+  };
+
+  const handleCoverDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsCoverDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      handleCoverFileSelect(files[0]);
+    }
+  };
+
+  const handleCoverInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      handleCoverFileSelect(files[0]);
+    }
   };
 
   if (isLoading) {
@@ -314,14 +359,62 @@ const PlaylistPage: React.FC = () => {
       
       {/* Header */}
       <div className="relative p-4 md:p-8 pt-12 md:pt-16 flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-8 bg-gradient-to-b from-primary/10 to-transparent">
-        {/* Cover */}
-        <div className="w-40 h-40 md:w-56 md:h-56 rounded-xl overflow-hidden bg-muted shadow-2xl flex-shrink-0">
-          {playlist.cover_url ? (
-            <img src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
+        {/* Cover - clickable in edit mode */}
+        <div 
+          className={`w-40 h-40 md:w-56 md:h-56 rounded-xl overflow-hidden bg-muted shadow-2xl flex-shrink-0 relative ${
+            isEditing && canEdit ? 'cursor-pointer group' : ''
+          } ${isCoverDragOver ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+          onClick={() => isEditing && canEdit && !isUploadingCover && coverInputRef.current?.click()}
+          onDragOver={isEditing && canEdit ? handleCoverDragOver : undefined}
+          onDragLeave={isEditing && canEdit ? handleCoverDragLeave : undefined}
+          onDrop={isEditing && canEdit ? handleCoverDrop : undefined}
+        >
+          {/* Hidden file input */}
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleCoverInputChange}
+            className="hidden"
+            disabled={isUploadingCover}
+          />
+          
+          {isUploadingCover ? (
+            <div className="w-full h-full flex items-center justify-center bg-muted">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : (editedCoverUrl || playlist.cover_url) ? (
+            <img 
+              src={isEditing ? editedCoverUrl || playlist.cover_url : playlist.cover_url} 
+              alt={playlist.name} 
+              className="w-full h-full object-cover" 
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
               <Music className="w-16 md:w-24 h-16 md:h-24 text-primary/50" />
             </div>
+          )}
+          
+          {/* Edit overlay */}
+          {isEditing && canEdit && !isUploadingCover && (
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white">
+              <Upload className="w-8 h-8 mb-2" />
+              <p className="text-sm font-medium">Cambia cover</p>
+              <p className="text-xs opacity-70">Clicca o trascina</p>
+            </div>
+          )}
+
+          {/* Remove cover button */}
+          {isEditing && canEdit && editedCoverUrl && !isUploadingCover && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditedCoverUrl('');
+              }}
+              className="absolute bottom-2 right-2 w-7 h-7 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center shadow-lg hover:bg-destructive/90 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
           )}
         </div>
 
@@ -337,16 +430,6 @@ const PlaylistPage: React.FC = () => {
                 placeholder="Nome playlist"
                 className="text-xl font-bold"
               />
-              
-              {/* Cover uploader */}
-              {user && (
-                <CoverImageUploader
-                  currentUrl={editedCoverUrl}
-                  onUrlChange={setEditedCoverUrl}
-                  userId={user.id}
-                  previewSize="md"
-                />
-              )}
               
               {/* Public/Private toggle */}
               <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
@@ -372,10 +455,6 @@ const PlaylistPage: React.FC = () => {
                   checked={editedIsPublic}
                   onCheckedChange={setEditedIsPublic}
                 />
-              </div>
-              
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleSaveEdit}>Salva Info</Button>
               </div>
             </div>
           ) : (
