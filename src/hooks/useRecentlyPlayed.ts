@@ -64,24 +64,21 @@ export const useRecentlyPlayed = () => {
   const saveRecentTrack = useCallback(async (track: Track) => {
     try {
       if (user?.id) {
-        // Save to database with upsert (updates played_at if track exists)
+        // Insert new record for each play (so repeated plays are counted separately)
         const { error } = await supabase
           .from('recently_played')
-          .upsert(
-            {
-              user_id: user.id,
-              track_id: track.id,
-              track_title: track.title,
-              track_artist: track.artist,
-              track_album: track.album || null,
-              track_album_id: track.albumId || null,
-              track_cover_url: track.coverUrl || null,
-              track_duration: track.duration || null,
-              artist_id: track.artistId || null,
-              played_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id,track_id' }
-          );
+          .insert({
+            user_id: user.id,
+            track_id: track.id,
+            track_title: track.title,
+            track_artist: track.artist,
+            track_album: track.album || null,
+            track_album_id: track.albumId || null,
+            track_cover_url: track.coverUrl || null,
+            track_duration: track.duration || null,
+            artist_id: track.artistId || null,
+            played_at: new Date().toISOString(),
+          });
 
         if (error) {
           console.error('Failed to save recently played to DB:', error);
@@ -196,25 +193,34 @@ export const useRecentlyPlayed = () => {
 export const saveRecentlyPlayedTrack = async (track: Track, userId?: string) => {
   try {
     if (userId) {
-      // Save to database
-      await supabase.from('recently_played').upsert(
-        {
-          user_id: userId,
-          track_id: track.id,
-          track_title: track.title,
-          track_artist: track.artist,
-          track_album: track.album || null,
-          track_album_id: track.albumId || null,
-          track_cover_url: track.coverUrl || null,
-          track_duration: track.duration || null,
-          artist_id: track.artistId || null,
-          played_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,track_id' }
-      );
+      // Insert new record for each play (not upsert, so repeated plays are counted)
+      await supabase.from('recently_played').insert({
+        user_id: userId,
+        track_id: track.id,
+        track_title: track.title,
+        track_artist: track.artist,
+        track_album: track.album || null,
+        track_album_id: track.albumId || null,
+        track_cover_url: track.coverUrl || null,
+        track_duration: track.duration || null,
+        artist_id: track.artistId || null,
+        played_at: new Date().toISOString(),
+      });
+
+      // Clean up old entries to keep only MAX_RECENT_TRACKS
+      const { data: allRecords } = await supabase
+        .from('recently_played')
+        .select('id, played_at')
+        .eq('user_id', userId)
+        .order('played_at', { ascending: false });
+
+      if (allRecords && allRecords.length > MAX_RECENT_TRACKS) {
+        const idsToDelete = allRecords.slice(MAX_RECENT_TRACKS).map((r) => r.id);
+        await supabase.from('recently_played').delete().in('id', idsToDelete);
+      }
     }
 
-    // Always update localStorage
+    // Always update localStorage (keeps unique tracks only for quick access)
     const stored = localStorage.getItem(RECENTLY_PLAYED_KEY);
     const recent: Track[] = stored ? JSON.parse(stored) : [];
     const filtered = recent.filter((t) => t.id !== track.id);
