@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle, Download, GripVertical, X, Check, Globe, Lock, Share2, Copy, CheckCircle, Upload, ImageIcon } from 'lucide-react';
+import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle, Download, GripVertical, X, Check, Globe, Lock, Share2, Copy, CheckCircle, Upload, ImageIcon, ListMusic, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -9,6 +9,7 @@ import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import PlaylistRecommendations from '@/components/PlaylistRecommendations';
+import CommentSection from '@/components/social/CommentSection';
 import { usePlaylistCoverUpload } from '@/hooks/usePlaylistCoverUpload';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
@@ -60,6 +61,8 @@ const PlaylistPage: React.FC = () => {
   const [linkCopied, setLinkCopied] = useState(false);
   const [isCoverDragOver, setIsCoverDragOver] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [activeTab, setActiveTab] = useState<'tracks' | 'comments'>('tracks');
+  const [commentsCount, setCommentsCount] = useState(0);
   const coverInputRef = React.useRef<HTMLInputElement>(null);
   
   // Check if user can download (premium or admin)
@@ -149,6 +152,19 @@ const PlaylistPage: React.FC = () => {
     };
 
     fetchPlaylist();
+  }, [id]);
+
+  // Fetch comments count for playlist
+  useEffect(() => {
+    const fetchCommentsCount = async () => {
+      if (!id) return;
+      const { count } = await supabase
+        .from('comments')
+        .select('*', { count: 'exact', head: true })
+        .eq('album_id', id); // We reuse album_id for playlist comments
+      setCommentsCount(count || 0);
+    };
+    fetchCommentsCount();
   }, [id]);
 
   // Listen for track metadata updates from DebugModal
@@ -716,108 +732,152 @@ const PlaylistPage: React.FC = () => {
         )}
       </div>
 
-      {/* Track List */}
-      <div className="px-4 md:px-8">
-        {tracks.length === 0 ? (
-          <div className="text-center py-12">
-            <Music className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
-            <p className="text-muted-foreground">Nessun brano in questa playlist</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">
-              Aggiungi brani dal menu ••• su qualsiasi traccia
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Header - Hidden on mobile and in edit mode */}
-            {!isEditing && (
-              <div className="hidden md:grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 text-sm text-muted-foreground border-b border-border mb-2">
-                <span className="w-8 text-center">#</span>
-                <span>Titolo</span>
-                <Clock className="w-4 h-4" />
-              </div>
+      {/* Tab Bar - Instagram/TikTok style */}
+      <div className="border-t border-b border-border">
+        <div className="flex max-w-xl mx-auto">
+          <button
+            onClick={() => setActiveTab('tracks')}
+            className={`flex-1 py-3 flex items-center justify-center gap-2 transition-colors relative ${
+              activeTab === 'tracks' 
+                ? 'text-foreground' 
+                : 'text-muted-foreground'
+            }`}
+          >
+            <ListMusic className="w-5 h-5" />
+            <span className="text-sm font-medium">{tracks.length}</span>
+            {activeTab === 'tracks' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
             )}
-
-            {/* Tracks */}
-            <div className="space-y-1">
-              {tracks.map((track, index) => (
-                isEditing && canEdit && !playlist.deezer_id ? (
-                  // Edit mode track row
-                  <div
-                    key={`${track.id}-${index}`}
-                    draggable
-                    onDragStart={() => handleDragStart(index)}
-                    onDragOver={(e) => handleDragOver(e, index)}
-                    onDragEnd={handleDragEnd}
-                    onDragLeave={handleDragLeave}
-                    className={`
-                      flex items-center gap-3 p-3 rounded-lg bg-card/50 border border-border
-                      cursor-grab active:cursor-grabbing transition-all
-                      ${draggedIndex === index ? 'opacity-50 scale-95' : ''}
-                      ${dragOverIndex === index ? 'border-primary border-2' : ''}
-                    `}
-                  >
-                    {/* Drag handle */}
-                    <GripVertical className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                    
-                    {/* Track info */}
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {track.coverUrl && (
-                        <img 
-                          src={track.coverUrl} 
-                          alt={track.title}
-                          className="w-10 h-10 rounded object-cover flex-shrink-0"
-                        />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium truncate">{track.title}</p>
-                        <p className="text-sm text-muted-foreground truncate">{track.artist}</p>
-                      </div>
-                    </div>
-                    
-                    {/* Remove button */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveTrack(track.id)}
-                      className="w-8 h-8 text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  // Normal mode track row
-                  <TrackCard 
-                    key={`${track.id}-${index}`} 
-                    track={track}
-                    queue={tracks}
-                    index={index}
-                    showArtist={true}
-                    showSyncStatus={true}
-                    isSynced={isSynced(track.id)}
-                    isSyncing={isSyncing(track.id)}
-                    isDownloading={isDownloading(track.id)}
-                    playlistId={isOwner && !playlist.deezer_id ? playlist.id : undefined}
-                    onRemoveFromPlaylist={isOwner && !playlist.deezer_id ? handleRemoveTrack : undefined}
-                  />
-                )
-              ))}
-            </div>
-          </>
-        )}
+          </button>
+          <button
+            onClick={() => setActiveTab('comments')}
+            className={`flex-1 py-3 flex items-center justify-center gap-2 transition-colors relative ${
+              activeTab === 'comments' 
+                ? 'text-foreground' 
+                : 'text-muted-foreground'
+            }`}
+          >
+            <MessageCircle className="w-5 h-5" />
+            <span className="text-sm font-medium">{commentsCount}</span>
+            {activeTab === 'comments' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Recommended Tracks - only for owner and non-Deezer playlists */}
-      {isOwner && !playlist.deezer_id && !isEditing && tracks.length > 0 && (
-        <PlaylistRecommendations 
-          tracks={tracks}
-          onAddTrack={async (track) => {
-            const success = await addTrackToPlaylist(playlist.id, track);
-            if (success) {
-              setTracks(prev => [...prev, track]);
-            }
-            return success;
-          }}
-        />
+      {/* Tab Content */}
+      {activeTab === 'tracks' ? (
+        <>
+          {/* Track List */}
+          <div className="px-4 md:px-8 pt-4">
+            {tracks.length === 0 ? (
+              <div className="text-center py-12">
+                <Music className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+                <p className="text-muted-foreground">Nessun brano in questa playlist</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">
+                  Aggiungi brani dal menu ••• su qualsiasi traccia
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Header - Hidden on mobile and in edit mode */}
+                {!isEditing && (
+                  <div className="hidden md:grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 text-sm text-muted-foreground border-b border-border mb-2">
+                    <span className="w-8 text-center">#</span>
+                    <span>Titolo</span>
+                    <Clock className="w-4 h-4" />
+                  </div>
+                )}
+
+                {/* Tracks */}
+                <div className="space-y-1">
+                  {tracks.map((track, index) => (
+                    isEditing && canEdit && !playlist.deezer_id ? (
+                      // Edit mode track row
+                      <div
+                        key={`${track.id}-${index}`}
+                        draggable
+                        onDragStart={() => handleDragStart(index)}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDragEnd={handleDragEnd}
+                        onDragLeave={handleDragLeave}
+                        className={`
+                          flex items-center gap-3 p-3 rounded-lg bg-card/50 border border-border
+                          cursor-grab active:cursor-grabbing transition-all
+                          ${draggedIndex === index ? 'opacity-50 scale-95' : ''}
+                          ${dragOverIndex === index ? 'border-primary border-2' : ''}
+                        `}
+                      >
+                        {/* Drag handle */}
+                        <GripVertical className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                        
+                        {/* Track info */}
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          {track.coverUrl && (
+                            <img 
+                              src={track.coverUrl} 
+                              alt={track.title}
+                              className="w-10 h-10 rounded object-cover flex-shrink-0"
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium truncate">{track.title}</p>
+                            <p className="text-sm text-muted-foreground truncate">{track.artist}</p>
+                          </div>
+                        </div>
+                        
+                        {/* Remove button */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveTrack(track.id)}
+                          className="w-8 h-8 text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      // Normal mode track row
+                      <TrackCard 
+                        key={`${track.id}-${index}`} 
+                        track={track}
+                        queue={tracks}
+                        index={index}
+                        showArtist={true}
+                        showSyncStatus={true}
+                        isSynced={isSynced(track.id)}
+                        isSyncing={isSyncing(track.id)}
+                        isDownloading={isDownloading(track.id)}
+                        playlistId={isOwner && !playlist.deezer_id ? playlist.id : undefined}
+                        onRemoveFromPlaylist={isOwner && !playlist.deezer_id ? handleRemoveTrack : undefined}
+                      />
+                    )
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Recommended Tracks - only for owner and non-Deezer playlists */}
+          {isOwner && !playlist.deezer_id && !isEditing && tracks.length > 0 && (
+            <PlaylistRecommendations 
+              tracks={tracks}
+              onAddTrack={async (track) => {
+                const success = await addTrackToPlaylist(playlist.id, track);
+                if (success) {
+                  setTracks(prev => [...prev, track]);
+                }
+                return success;
+              }}
+            />
+          )}
+        </>
+      ) : (
+        /* Comments Section */
+        <div className="px-4 md:px-8 py-6">
+          <CommentSection albumId={playlist.id} />
+        </div>
       )}
     </div>
   );
