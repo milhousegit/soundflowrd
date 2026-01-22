@@ -28,6 +28,7 @@ import {
 import { getTidalStream, mapQualityToTidal } from '@/lib/tidal';
 import { searchTracks, getArtistTopTracks } from '@/lib/deezer';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
+import { updateListeningStats } from '@/hooks/useListeningStats';
 import { addSyncedTrack, addSyncingTrack, removeSyncingTrack } from '@/hooks/useSyncedTracks';
 
 // IndexedDB helper for offline playback
@@ -552,6 +553,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const { track: prevTrack, startTime } = lastSavedTrackRef.current;
         const actualSecondsListened = Math.round((Date.now() - startTime) / 1000);
         saveRecentlyPlayedTrack(prevTrack, user?.id, actualSecondsListened);
+        // Update aggregated stats for Wrapped
+        if (user?.id) {
+          updateListeningStats(prevTrack, user.id, actualSecondsListened);
+        }
         lastSavedTrackRef.current = null;
       }
       
@@ -620,6 +625,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           const actualSecondsListened = Math.round((Date.now() - startTime) / 1000);
           if (actualSecondsListened >= 10) {
             saveRecentlyPlayedTrack(prevTrack, user?.id, actualSecondsListened);
+            // Update aggregated stats for Wrapped
+            if (user?.id) {
+              updateListeningStats(prevTrack, user.id, actualSecondsListened);
+            }
           }
           lastSavedTrackRef.current = null;
         }

@@ -910,6 +910,45 @@ export type Database = {
           },
         ]
       }
+      user_artist_stats: {
+        Row: {
+          artist_id: string
+          artist_image_url: string | null
+          artist_name: string
+          created_at: string
+          id: string
+          last_played_at: string | null
+          total_plays: number
+          total_seconds_listened: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          artist_id: string
+          artist_image_url?: string | null
+          artist_name: string
+          created_at?: string
+          id?: string
+          last_played_at?: string | null
+          total_plays?: number
+          total_seconds_listened?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          artist_id?: string
+          artist_image_url?: string | null
+          artist_name?: string
+          created_at?: string
+          id?: string
+          last_played_at?: string | null
+          total_plays?: number
+          total_seconds_listened?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_follows: {
         Row: {
           created_at: string
@@ -948,6 +987,60 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_track_stats: {
+        Row: {
+          artist_id: string | null
+          created_at: string
+          id: string
+          last_played_at: string | null
+          play_count: number
+          total_seconds_listened: number
+          track_album: string | null
+          track_album_id: string | null
+          track_artist: string
+          track_cover_url: string | null
+          track_duration: number | null
+          track_id: string
+          track_title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          artist_id?: string | null
+          created_at?: string
+          id?: string
+          last_played_at?: string | null
+          play_count?: number
+          total_seconds_listened?: number
+          track_album?: string | null
+          track_album_id?: string | null
+          track_artist: string
+          track_cover_url?: string | null
+          track_duration?: number | null
+          track_id: string
+          track_title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          artist_id?: string | null
+          created_at?: string
+          id?: string
+          last_played_at?: string | null
+          play_count?: number
+          total_seconds_listened?: number
+          track_album?: string | null
+          track_album_id?: string | null
+          track_artist?: string
+          track_cover_url?: string | null
+          track_duration?: number | null
+          track_id?: string
+          track_title?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []

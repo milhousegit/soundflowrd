@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { searchArtists } from '@/lib/deezer';
+
 interface ArtistStats {
   id: string;
   name: string;
@@ -64,7 +65,6 @@ const GENRE_COLORS = [
 const detectGenre = (artistName: string): string => {
   const lowerName = artistName.toLowerCase();
   
-  // Mapping of common artists to genres
   const artistGenreMap: Record<string, string> = {
     'drake': 'Hip-Hop',
     'kendrick lamar': 'Hip-Hop',
@@ -108,7 +108,7 @@ const detectGenre = (artistName: string): string => {
     }
   }
   
-  return 'Pop'; // Default genre
+  return 'Pop';
 };
 
 export const useWrappedStats = () => {
@@ -133,20 +133,31 @@ export const useWrappedStats = () => {
     }
 
     try {
-      // Fetch all data in parallel
+      // Fetch all data in parallel from aggregated tables
       const [
-        recentlyPlayedResult,
+        artistStatsResult,
+        trackStatsResult,
         postsResult,
         commentsResult,
         postLikesResult,
         albumLikesResult,
         commentLikesResult,
       ] = await Promise.all([
+        // Top artists by listening time
         supabase
-          .from('recently_played')
+          .from('user_artist_stats')
           .select('*')
           .eq('user_id', user.id)
-          .order('played_at', { ascending: false }),
+          .order('total_seconds_listened', { ascending: false })
+          .limit(6),
+        // Top tracks by play count
+        supabase
+          .from('user_track_stats')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('play_count', { ascending: false })
+          .limit(10),
+        // Social stats
         supabase
           .from('posts')
           .select('id')
@@ -169,114 +180,62 @@ export const useWrappedStats = () => {
           .eq('user_id', user.id),
       ]);
 
-      if (recentlyPlayedResult.error) throw recentlyPlayedResult.error;
+      if (artistStatsResult.error) throw artistStatsResult.error;
+      if (trackStatsResult.error) throw trackStatsResult.error;
 
-      const recentlyPlayed = recentlyPlayedResult.data || [];
+      const artistStatsData = artistStatsResult.data || [];
+      const trackStatsData = trackStatsResult.data || [];
       
-      // Calculate total listening time in minutes
-      const totalSeconds = recentlyPlayed.reduce((acc, track) => {
-        return acc + (track.track_duration || 0);
+      // Calculate total minutes from aggregated artist stats
+      const totalSeconds = artistStatsData.reduce((acc, artist) => {
+        return acc + (artist.total_seconds_listened || 0);
       }, 0);
       const totalMinutes = Math.round(totalSeconds / 60);
-      const totalSongs = recentlyPlayed.length;
-
-      // Count plays by track
-      const trackPlayCounts = new Map<string, { 
-        id: string;
-        title: string; 
-        artist: string; 
-        artistId?: string;
-        coverUrl?: string;
-        plays: number;
-      }>();
       
-      recentlyPlayed.forEach(record => {
-        const key = record.track_id;
-        if (trackPlayCounts.has(key)) {
-          trackPlayCounts.get(key)!.plays++;
-        } else {
-          trackPlayCounts.set(key, {
-            id: record.track_id,
-            title: record.track_title,
-            artist: record.track_artist,
-            artistId: record.artist_id || undefined,
-            coverUrl: record.track_cover_url || undefined,
-            plays: 1,
-          });
-        }
-      });
+      // Calculate total songs from aggregated track stats
+      const totalSongs = trackStatsData.reduce((acc, track) => {
+        return acc + (track.play_count || 0);
+      }, 0);
 
-      // Get top 5 tracks
-      const topTracks = Array.from(trackPlayCounts.values())
-        .sort((a, b) => b.plays - a.plays)
-        .slice(0, 5);
-
-      // Count plays and listening time by artist
-      const artistStats = new Map<string, {
-        id: string;
-        name: string;
-        minutesListened: number;
-        songsPlayed: number;
-      }>();
-
-      recentlyPlayed.forEach(record => {
-        const artistKey = record.track_artist.toLowerCase();
-        const artistId = record.artist_id || record.track_artist;
-        const duration = (record.track_duration || 0) / 60;
-        
-        if (artistStats.has(artistKey)) {
-          const existing = artistStats.get(artistKey)!;
-          existing.minutesListened += duration;
-          existing.songsPlayed++;
-        } else {
-          artistStats.set(artistKey, {
-            id: artistId,
-            name: record.track_artist,
-            minutesListened: duration,
-            songsPlayed: 1,
-          });
-        }
-      });
-
-      // Get top 6 artists (1 main + 5 others)
-      const sortedArtists = Array.from(artistStats.values())
-        .sort((a, b) => b.minutesListened - a.minutesListened)
-        .slice(0, 6);
+      // Build top tracks from aggregated data
+      const topTracks: TrackStats[] = trackStatsData.slice(0, 5).map(track => ({
+        id: track.track_id,
+        title: track.track_title,
+        artist: track.track_artist,
+        artistId: track.artist_id || undefined,
+        coverUrl: track.track_cover_url || undefined,
+        plays: track.play_count,
+      }));
 
       // Fetch real artist images from Deezer API
-      const artistImagePromises = sortedArtists.map(async (artist) => {
+      const artistImagePromises = artistStatsData.map(async (artist) => {
         try {
-          const results = await searchArtists(artist.name);
+          const results = await searchArtists(artist.artist_name);
           const matchedArtist = results.find(
-            a => a.name.toLowerCase() === artist.name.toLowerCase()
+            a => a.name.toLowerCase() === artist.artist_name.toLowerCase()
           ) || results[0];
           return {
-            ...artist,
+            id: artist.artist_id,
+            name: artist.artist_name,
             imageUrl: matchedArtist?.imageUrl || '/placeholder.svg',
-            deezerArtistId: matchedArtist?.id,
+            minutesListened: Math.round(artist.total_seconds_listened / 60),
+            songsPlayed: artist.total_plays,
           };
         } catch {
           return {
-            ...artist,
+            id: artist.artist_id,
+            name: artist.artist_name,
             imageUrl: '/placeholder.svg',
+            minutesListened: Math.round(artist.total_seconds_listened / 60),
+            songsPlayed: artist.total_plays,
           };
         }
       });
 
-      const artistsWithImages = await Promise.all(artistImagePromises);
-
-      // Build artist stats with real Deezer images
-      const topArtists: ArtistStats[] = artistsWithImages.map(artist => ({
-        id: artist.id,
-        name: artist.name,
-        imageUrl: artist.imageUrl,
-        minutesListened: Math.round(artist.minutesListened),
-        songsPlayed: artist.songsPlayed,
-      }));
-
+      const topArtists: ArtistStats[] = await Promise.all(artistImagePromises);
       const topArtist = topArtists[0] || null;
 
-      // Count plays by album
+      // Build top albums from track stats (aggregate by album)
       const albumPlayCounts = new Map<string, {
         id: string;
         title: string;
@@ -285,36 +244,35 @@ export const useWrappedStats = () => {
         plays: number;
       }>();
 
-      recentlyPlayed.forEach(record => {
-        if (!record.track_album_id || !record.track_album) return;
+      trackStatsData.forEach(track => {
+        if (!track.track_album_id || !track.track_album) return;
         
-        const key = record.track_album_id;
+        const key = track.track_album_id;
         if (albumPlayCounts.has(key)) {
-          albumPlayCounts.get(key)!.plays++;
+          albumPlayCounts.get(key)!.plays += track.play_count;
         } else {
           albumPlayCounts.set(key, {
-            id: record.track_album_id,
-            title: record.track_album,
-            artist: record.track_artist,
-            coverUrl: record.track_cover_url || undefined,
-            plays: 1,
+            id: track.track_album_id,
+            title: track.track_album,
+            artist: track.track_artist,
+            coverUrl: track.track_cover_url || undefined,
+            plays: track.play_count,
           });
         }
       });
 
-      // Get top 3 albums
       const topAlbums = Array.from(albumPlayCounts.values())
         .sort((a, b) => b.plays - a.plays)
         .slice(0, 3);
 
-      // Calculate genre distribution
+      // Calculate genre distribution from artist stats
       const genreCounts = new Map<string, number>();
-      recentlyPlayed.forEach(record => {
-        const genre = detectGenre(record.track_artist);
-        genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
+      artistStatsData.forEach(artist => {
+        const genre = detectGenre(artist.artist_name);
+        genreCounts.set(genre, (genreCounts.get(genre) || 0) + artist.total_plays);
       });
 
-      const totalGenrePlays = recentlyPlayed.length || 1;
+      const totalGenrePlays = artistStatsData.reduce((acc, a) => acc + a.total_plays, 0) || 1;
       const topGenres = Array.from(genreCounts.entries())
         .sort((a, b) => b[1] - a[1])
         .slice(0, 4)
