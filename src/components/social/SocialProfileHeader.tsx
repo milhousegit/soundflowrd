@@ -14,6 +14,7 @@ import { searchAll } from '@/lib/deezer';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Track } from '@/types/music';
 import FollowListModal from './FollowListModal';
+import WrappedRing from './WrappedRing';
 
 interface SocialProfileHeaderProps {
   userId?: string;
@@ -183,17 +184,26 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
         )}
 
         <div className="flex flex-col items-center text-center space-y-4 pt-8">
-          {/* Avatar - no click interaction, photo changed via edit modal */}
+          {/* Avatar - with Wrapped ring for admin */}
           <div className="relative">
-            <div className="relative w-24 h-24 rounded-full bg-muted overflow-hidden ring-4 ring-background">
-              {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <User className="w-10 h-10 text-muted-foreground" />
-                </div>
-              )}
-            </div>
+            {/* Check if user is admin (leomilhouse) - show Wrapped ring */}
+            {(profile as any).is_admin ? (
+              <WrappedRing
+                avatarUrl={profile.avatar_url}
+                displayName={profile.display_name || profile.email?.split('@')[0]}
+                isPremium={profile.is_premium || false}
+              />
+            ) : (
+              <div className="relative w-24 h-24 rounded-full bg-muted overflow-hidden ring-4 ring-background">
+                {profile.avatar_url ? (
+                  <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <User className="w-10 h-10 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+            )}
             <input
               ref={fileInputRef}
               type="file"
