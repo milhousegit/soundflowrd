@@ -48,6 +48,7 @@ const PlaylistPage: React.FC = () => {
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
   
   const [playlist, setPlaylist] = useState<PlaylistType | null>(null);
+  const [ownerProfile, setOwnerProfile] = useState<{ id: string; display_name: string | null; avatar_url: string | null } | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -92,6 +93,19 @@ const PlaylistPage: React.FC = () => {
         setEditedName(fetchedPlaylist.name);
         setEditedCoverUrl(fetchedPlaylist.cover_url || '');
         setEditedIsPublic(fetchedPlaylist.is_public || false);
+
+        // Fetch owner profile if not the current user
+        if (fetchedPlaylist.user_id !== user?.id) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('id, display_name, avatar_url')
+            .eq('id', fetchedPlaylist.user_id)
+            .single();
+          
+          if (profileData) {
+            setOwnerProfile(profileData);
+          }
+        }
 
         // Check if this is a Deezer playlist (has deezer_id)
         if (fetchedPlaylist.deezer_id) {
@@ -370,16 +384,46 @@ const PlaylistPage: React.FC = () => {
                 {playlist.name}
               </h1>
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-1 md:gap-2 text-xs md:text-sm text-muted-foreground">
-                {/* Public/Private indicator */}
-                {playlist.is_public ? (
+                {/* Owner/Public/Private indicator */}
+                {isOwner ? (
+                  // Show public/private status for owner
+                  playlist.is_public ? (
+                    <span className="flex items-center gap-1 text-primary">
+                      <Globe className="w-3 h-3" />
+                      Pubblica
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      Privata
+                    </span>
+                  )
+                ) : ownerProfile ? (
+                  // Show owner profile link for non-owners
+                  <button
+                    onClick={() => navigate(`/profile/${ownerProfile.id}`)}
+                    className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+                  >
+                    {ownerProfile.avatar_url ? (
+                      <img 
+                        src={ownerProfile.avatar_url} 
+                        alt="" 
+                        className="w-4 h-4 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-muted flex items-center justify-center">
+                        <span className="text-[8px]">👤</span>
+                      </div>
+                    )}
+                    <span className="hover:underline">
+                      {ownerProfile.display_name || 'Utente'}
+                    </span>
+                  </button>
+                ) : (
+                  // Fallback for public playlists without owner data
                   <span className="flex items-center gap-1 text-primary">
                     <Globe className="w-3 h-3" />
                     Pubblica
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1">
-                    <Lock className="w-3 h-3" />
-                    Privata
                   </span>
                 )}
                 <span>•</span>
