@@ -5,6 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { 
   Crown, 
   Search, 
@@ -13,10 +20,14 @@ import {
   Calendar,
   Check,
   X,
-  ExternalLink,
-  Clock
+  Clock,
+  MoreVertical,
+  Ban,
+  Gift,
+  MessageSquareOff,
+  ShieldOff
 } from 'lucide-react';
-import { addYears, addMonths, format, isPast } from 'date-fns';
+import { addYears, addMonths, addDays, format, isPast } from 'date-fns';
 import { it, enUS } from 'date-fns/locale';
 
 interface UserProfile {
@@ -26,6 +37,8 @@ interface UserProfile {
   premium_expires_at: string | null;
   created_at: string;
   payment_pending_since: string | null;
+  posts_blocked_until: string | null;
+  comments_blocked_until: string | null;
 }
 
 interface AdminUsersManagementProps {
@@ -56,6 +69,15 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     premiumRevoked: language === 'it' ? 'Premium revocato' : 'Premium revoked',
     error: language === 'it' ? 'Errore' : 'Error',
     registeredAt: language === 'it' ? 'Registrato il' : 'Registered',
+    banPosts: language === 'it' ? 'Blocca post (7gg)' : 'Ban posts (7d)',
+    banComments: language === 'it' ? 'Blocca commenti (7gg)' : 'Ban comments (7d)',
+    unbanPosts: language === 'it' ? 'Sblocca post' : 'Unban posts',
+    unbanComments: language === 'it' ? 'Sblocca commenti' : 'Unban comments',
+    banned: language === 'it' ? 'Bannato' : 'Banned',
+    postsBanned: language === 'it' ? 'Post bloccati!' : 'Posts banned!',
+    commentsBanned: language === 'it' ? 'Commenti bloccati!' : 'Comments banned!',
+    postsUnbanned: language === 'it' ? 'Post sbloccati!' : 'Posts unbanned!',
+    commentsUnbanned: language === 'it' ? 'Commenti sbloccati!' : 'Comments unbanned!',
   };
 
   const loadUsers = async () => {
@@ -63,7 +85,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since')
+        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -152,6 +174,68 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     } finally {
       setUpdatingUser(null);
     }
+  };
+
+  const togglePostsBan = async (userId: string, isBanned: boolean) => {
+    setUpdatingUser(userId);
+    try {
+      const updateData = isBanned 
+        ? { posts_blocked_until: null }
+        : { posts_blocked_until: addDays(new Date(), 7).toISOString() };
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      setUsers(prev => prev.map(u => 
+        u.id === userId ? { ...u, ...updateData } : u
+      ));
+
+      toast({ title: isBanned ? t.postsUnbanned : t.postsBanned });
+    } catch (error) {
+      console.error('Failed to toggle posts ban:', error);
+      toast({ title: t.error, description: String(error), variant: 'destructive' });
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const toggleCommentsBan = async (userId: string, isBanned: boolean) => {
+    setUpdatingUser(userId);
+    try {
+      const updateData = isBanned 
+        ? { comments_blocked_until: null }
+        : { comments_blocked_until: addDays(new Date(), 7).toISOString() };
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      setUsers(prev => prev.map(u => 
+        u.id === userId ? { ...u, ...updateData } : u
+      ));
+
+      toast({ title: isBanned ? t.commentsUnbanned : t.commentsBanned });
+    } catch (error) {
+      console.error('Failed to toggle comments ban:', error);
+      toast({ title: t.error, description: String(error), variant: 'destructive' });
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const isPostsBanned = (user: UserProfile) => {
+    return user.posts_blocked_until && !isPast(new Date(user.posts_blocked_until));
+  };
+
+  const isCommentsBanned = (user: UserProfile) => {
+    return user.comments_blocked_until && !isPast(new Date(user.comments_blocked_until));
   };
 
   const isPremiumActive = (user: UserProfile) => {
@@ -258,6 +342,14 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* Ban badges */}
+                  {(isPostsBanned(user) || isCommentsBanned(user)) && (
+                    <Badge variant="outline" className="text-red-500 border-red-500/50 text-xs">
+                      <Ban className="w-3 h-3 mr-1" />
+                      {t.banned}
+                    </Badge>
+                  )}
+                  
                   {isActive ? (
                     <Badge className="bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] text-white border-0 text-xs">
                       <Crown className="w-3 h-3 mr-1" />
@@ -273,40 +365,75 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                     </Badge>
                   )}
                   
-                  <div className="flex items-center gap-1.5">
-                    {/* Trial button - only show for non-premium users */}
-                    {!isActive && (
+                  {/* 3-dot menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="h-7 text-xs border-[#8B5CF6]/50 text-[#8B5CF6] hover:bg-[#8B5CF6]/10"
-                        onClick={() => grantTrial(user.id)}
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
                         disabled={updatingUser === user.id}
                       >
                         {updatingUser === user.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          t.grantTrial
+                          <MoreVertical className="w-4 h-4" />
                         )}
                       </Button>
-                    )}
-                    
-                    <Button
-                      size="sm"
-                      variant={isActive ? "outline" : "default"}
-                      className={`h-7 text-xs ${!isActive ? 'bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0' : ''}`}
-                      onClick={() => togglePremium(user.id, isActive)}
-                      disabled={updatingUser === user.id}
-                    >
-                      {updatingUser === user.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : isActive ? (
-                        <><X className="w-3 h-3 mr-1" /> {t.revokePremium}</>
-                      ) : (
-                        <><Check className="w-3 h-3 mr-1" /> {t.grantPremium}</>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      {/* Premium actions */}
+                      {!isActive && (
+                        <DropdownMenuItem onClick={() => grantTrial(user.id)}>
+                          <Gift className="w-4 h-4 mr-2 text-[#8B5CF6]" />
+                          {t.grantTrial}
+                        </DropdownMenuItem>
                       )}
-                    </Button>
-                  </div>
+                      <DropdownMenuItem onClick={() => togglePremium(user.id, isActive)}>
+                        {isActive ? (
+                          <>
+                            <X className="w-4 h-4 mr-2 text-red-500" />
+                            {t.revokePremium}
+                          </>
+                        ) : (
+                          <>
+                            <Crown className="w-4 h-4 mr-2 text-[#8B5CF6]" />
+                            {t.grantPremium}
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                      
+                      <DropdownMenuSeparator />
+                      
+                      {/* Ban actions */}
+                      <DropdownMenuItem onClick={() => togglePostsBan(user.id, !!isPostsBanned(user))}>
+                        {isPostsBanned(user) ? (
+                          <>
+                            <ShieldOff className="w-4 h-4 mr-2 text-green-500" />
+                            {t.unbanPosts}
+                          </>
+                        ) : (
+                          <>
+                            <MessageSquareOff className="w-4 h-4 mr-2 text-red-500" />
+                            {t.banPosts}
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toggleCommentsBan(user.id, !!isCommentsBanned(user))}>
+                        {isCommentsBanned(user) ? (
+                          <>
+                            <ShieldOff className="w-4 h-4 mr-2 text-green-500" />
+                            {t.unbanComments}
+                          </>
+                        ) : (
+                          <>
+                            <Ban className="w-4 h-4 mr-2 text-red-500" />
+                            {t.banComments}
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             );
