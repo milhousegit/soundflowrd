@@ -105,8 +105,8 @@ const ReferralShare: React.FC<ReferralShareProps> = ({ language }) => {
     if (!referralLink) return;
 
     const shareText = language === 'it'
-      ? `Scarica SoundFlow e ricevi 1 mese di Premium gratis! 🎵\n${referralLink}`
-      : `Download SoundFlow and get 1 month of Premium for free! 🎵\n${referralLink}`;
+      ? `Scarica SoundFlow e ricevi 1 mese di Premium gratis! 🎵`
+      : `Download SoundFlow and get 1 month of Premium for free! 🎵`;
 
     if (navigator.share) {
       try {
