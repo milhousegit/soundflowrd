@@ -12,20 +12,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   Crown, 
   Search, 
   Loader2, 
   User as UserIcon,
   Calendar,
-  Check,
-  X,
   Clock,
   MoreVertical,
   Ban,
   Gift,
   MessageSquareOff,
-  ShieldOff
+  ShieldOff,
+  Trash2,
+  X
 } from 'lucide-react';
 import { addYears, addMonths, addDays, format, isPast } from 'date-fns';
 import { it, enUS } from 'date-fns/locale';
@@ -52,6 +62,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
+  const [deleteDialogUser, setDeleteDialogUser] = useState<UserProfile | null>(null);
 
   const t = {
     title: language === 'it' ? 'Gestione Utenti' : 'User Management',
@@ -78,6 +89,12 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     commentsBanned: language === 'it' ? 'Commenti bloccati!' : 'Comments banned!',
     postsUnbanned: language === 'it' ? 'Post sbloccati!' : 'Posts unbanned!',
     commentsUnbanned: language === 'it' ? 'Commenti sbloccati!' : 'Comments unbanned!',
+    deleteAccount: language === 'it' ? 'Elimina account' : 'Delete account',
+    deleteConfirmTitle: language === 'it' ? 'Eliminare questo account?' : 'Delete this account?',
+    deleteConfirmDesc: language === 'it' ? 'Questa azione è irreversibile. Tutti i dati dell\'utente verranno eliminati permanentemente.' : 'This action cannot be undone. All user data will be permanently deleted.',
+    cancel: language === 'it' ? 'Annulla' : 'Cancel',
+    delete: language === 'it' ? 'Elimina' : 'Delete',
+    accountDeleted: language === 'it' ? 'Account eliminato!' : 'Account deleted!',
   };
 
   const loadUsers = async () => {
@@ -224,6 +241,42 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
       toast({ title: isBanned ? t.commentsUnbanned : t.commentsBanned });
     } catch (error) {
       console.error('Failed to toggle comments ban:', error);
+      toast({ title: t.error, description: String(error), variant: 'destructive' });
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    setUpdatingUser(userId);
+    setDeleteDialogUser(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ userId }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete user');
+      }
+
+      // Remove from local state
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      toast({ title: t.accountDeleted });
+    } catch (error) {
+      console.error('Failed to delete user:', error);
       toast({ title: t.error, description: String(error), variant: 'destructive' });
     } finally {
       setUpdatingUser(null);
@@ -432,6 +485,17 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                           </>
                         )}
                       </DropdownMenuItem>
+                      
+                      <DropdownMenuSeparator />
+                      
+                      {/* Delete account */}
+                      <DropdownMenuItem 
+                        onClick={() => setDeleteDialogUser(user)}
+                        className="text-red-500 focus:text-red-500"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        {t.deleteAccount}
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -440,6 +504,30 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
           })
         )}
       </div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteDialogUser} onOpenChange={(open) => !open && setDeleteDialogUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t.deleteConfirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteDialogUser?.email && (
+                <span className="font-medium text-foreground block mb-2">{deleteDialogUser.email}</span>
+              )}
+              {t.deleteConfirmDesc}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteDialogUser && deleteUser(deleteDialogUser.id)}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              {t.delete}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
