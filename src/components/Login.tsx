@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { verifyApiKey } from '@/lib/realdebrid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Music2, Mail, Lock, Key, Loader2, AlertCircle, UserPlus, LogIn, ArrowLeft } from 'lucide-react';
+import { Music2, Mail, Lock, Key, Loader2, AlertCircle, UserPlus, LogIn, ArrowLeft, Gift } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import appLogo from '@/assets/logo.png';
@@ -34,6 +34,17 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
   const [resetSent, setResetSent] = useState(false);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+
+  // Check for referral code in URL on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ref = urlParams.get('ref');
+    if (ref) {
+      setReferralCode(ref.toUpperCase());
+      setMode('signup'); // Auto switch to signup mode
+    }
+  }, []);
 
   // Clear API key field when switching to login mode (not needed for login)
   useEffect(() => {
@@ -127,6 +138,10 @@ const Login: React.FC = () => {
           return;
         }
 
+        // Get the new user ID
+        const { data: sessionData } = await supabase.auth.getSession();
+        const newUserId = sessionData.session?.user?.id;
+
         // Only save API key if provided
         if (apiKey && apiKey.trim().length > 0) {
           const { error: apiKeyError } = await updateApiKey(apiKey);
@@ -134,6 +149,32 @@ const Login: React.FC = () => {
             setError('Account creato, ma non sono riuscito a salvare la API Key. Riprova dalle Impostazioni.');
             setIsLoading(false);
             return;
+          }
+        }
+
+        // Process referral if there's a code
+        if (referralCode && newUserId) {
+          try {
+            const response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-referral`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${sessionData.session?.access_token}`,
+                },
+                body: JSON.stringify({ referralCode, newUserId }),
+              }
+            );
+            
+            if (response.ok) {
+              toast({
+                title: '🎉 Bonus Referral!',
+                description: 'Hai ricevuto 1 mese di Premium gratis!',
+              });
+            }
+          } catch (refError) {
+            console.error('Referral processing error:', refError);
           }
         }
         
@@ -282,6 +323,16 @@ const Login: React.FC = () => {
                 Registrati
               </Button>
             </div>
+
+            {/* Referral badge */}
+            {referralCode && mode === 'signup' && (
+              <div className="flex items-center justify-center gap-2 p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 to-[#3B82F6]/20 border border-[#8B5CF6]/30 mb-4">
+                <Gift className="w-5 h-5 text-[#8B5CF6]" />
+                <span className="text-sm font-medium text-foreground">
+                  🎁 Registrati e ricevi <span className="text-[#8B5CF6]">1 mese di Premium gratis!</span>
+                </span>
+              </div>
+            )}
 
             {/* Login/Signup Form */}
             <form onSubmit={handleSubmit} className="glass rounded-2xl p-6 md:p-8 space-y-5 md:space-y-6 animate-scale-in">
