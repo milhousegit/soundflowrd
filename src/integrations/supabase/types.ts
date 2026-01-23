@@ -755,6 +755,7 @@ export type Database = {
           currently_playing_track_id: string | null
           display_name: string | null
           email: string | null
+          email_confirmed: boolean | null
           followers_count: number | null
           following_count: number | null
           id: string
@@ -785,6 +786,7 @@ export type Database = {
           currently_playing_track_id?: string | null
           display_name?: string | null
           email?: string | null
+          email_confirmed?: boolean | null
           followers_count?: number | null
           following_count?: number | null
           id: string
@@ -815,6 +817,7 @@ export type Database = {
           currently_playing_track_id?: string | null
           display_name?: string | null
           email?: string | null
+          email_confirmed?: boolean | null
           followers_count?: number | null
           following_count?: number | null
           id?: string
