@@ -758,6 +758,7 @@ export type Database = {
           id: string
           is_premium: boolean | null
           is_private: boolean | null
+          payment_pending_since: string | null
           posts_blocked_until: string | null
           preferred_language: string | null
           premium_expires_at: string | null
@@ -782,6 +783,7 @@ export type Database = {
           id: string
           is_premium?: boolean | null
           is_private?: boolean | null
+          payment_pending_since?: string | null
           posts_blocked_until?: string | null
           preferred_language?: string | null
           premium_expires_at?: string | null
@@ -806,6 +808,7 @@ export type Database = {
           id?: string
           is_premium?: boolean | null
           is_private?: boolean | null
+          payment_pending_since?: string | null
           posts_blocked_until?: string | null
           preferred_language?: string | null
           premium_expires_at?: string | null

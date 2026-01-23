@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Crown, X, AlertTriangle, Download, Car, Music, Mic2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { isPast } from 'date-fns';
@@ -57,9 +58,16 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
     }
   };
 
-  const handleRenewPremium = () => {
+  const handleRenewPremium = async () => {
     // Open PayPal link
     window.open('https://www.paypal.me/tony271202/9,90', '_blank');
+    // Save payment pending timestamp
+    if (profile?.id) {
+      await supabase
+        .from('profiles')
+        .update({ payment_pending_since: new Date().toISOString() })
+        .eq('id', profile.id);
+    }
     // Close this banner and show payment pending
     handleDismiss();
     setTimeout(() => {

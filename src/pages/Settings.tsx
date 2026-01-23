@@ -374,9 +374,16 @@ const Settings: React.FC = () => {
                     ))}
                   </div>
                   
-                  <Button className="w-full h-11 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0" onClick={() => {
+                  <Button className="w-full h-11 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0" onClick={async () => {
                     setShowPremiumModal(false);
                     window.open('https://www.paypal.me/tony271202/9,90', '_blank');
+                    // Save payment pending timestamp
+                    if (user?.id) {
+                      await supabase
+                        .from('profiles')
+                        .update({ payment_pending_since: new Date().toISOString() })
+                        .eq('id', user.id);
+                    }
                     setTimeout(() => {
                       setShowPaymentPendingBanner(true);
                     }, 1500);
