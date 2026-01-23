@@ -751,6 +751,8 @@ export type Database = {
           bio_track_title: string | null
           comments_blocked_until: string | null
           created_at: string
+          currently_playing_at: string | null
+          currently_playing_track_id: string | null
           display_name: string | null
           email: string | null
           followers_count: number | null
@@ -758,6 +760,7 @@ export type Database = {
           id: string
           is_premium: boolean | null
           is_private: boolean | null
+          last_seen_at: string | null
           payment_pending_since: string | null
           posts_blocked_until: string | null
           preferred_language: string | null
@@ -778,6 +781,8 @@ export type Database = {
           bio_track_title?: string | null
           comments_blocked_until?: string | null
           created_at?: string
+          currently_playing_at?: string | null
+          currently_playing_track_id?: string | null
           display_name?: string | null
           email?: string | null
           followers_count?: number | null
@@ -785,6 +790,7 @@ export type Database = {
           id: string
           is_premium?: boolean | null
           is_private?: boolean | null
+          last_seen_at?: string | null
           payment_pending_since?: string | null
           posts_blocked_until?: string | null
           preferred_language?: string | null
@@ -805,6 +811,8 @@ export type Database = {
           bio_track_title?: string | null
           comments_blocked_until?: string | null
           created_at?: string
+          currently_playing_at?: string | null
+          currently_playing_track_id?: string | null
           display_name?: string | null
           email?: string | null
           followers_count?: number | null
@@ -812,6 +820,7 @@ export type Database = {
           id?: string
           is_premium?: boolean | null
           is_private?: boolean | null
+          last_seen_at?: string | null
           payment_pending_since?: string | null
           posts_blocked_until?: string | null
           preferred_language?: string | null
