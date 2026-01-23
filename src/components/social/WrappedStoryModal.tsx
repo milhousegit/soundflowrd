@@ -375,16 +375,16 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                 {settings.language === 'it' ? 'Le tue top 5 canzoni' : 'Your top 5 songs'} 🎶
               </h2>
             </div>
-            <div className="space-y-2.5 flex-1">
+            <div className="space-y-2.5 flex-1 overflow-hidden">
               {wrappedStats.topTracks.length > 0 ? (
                 wrappedStats.topTracks.map((track, index) => (
                   <div 
                     key={track.id}
-                    className="flex items-center gap-3 p-2.5 rounded-xl bg-gradient-to-r from-secondary/80 to-secondary/40 backdrop-blur-sm animate-slide-in-stagger"
+                    className="flex items-center gap-2 p-2 rounded-xl bg-gradient-to-r from-secondary/80 to-secondary/40 backdrop-blur-sm animate-slide-in-stagger overflow-hidden"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <span className={cn(
-                      "text-xl font-black w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                      "text-base font-black w-7 h-7 rounded-full flex items-center justify-center shrink-0",
                       index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500 text-white",
                       index === 1 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800",
                       index === 2 && "bg-gradient-to-br from-orange-600 to-orange-700 text-white",
@@ -393,7 +393,7 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                       {index + 1}
                     </span>
                     {track.coverUrl && (
-                      <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0">
+                      <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0">
                         <img 
                           src={track.coverUrl} 
                           alt={track.title}
