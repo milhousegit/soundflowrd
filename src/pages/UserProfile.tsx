@@ -32,8 +32,27 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
   const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
   const [activeTab, setActiveTab] = useState<'feed' | 'playlists'>('feed');
   const [playlistSavesCounts, setPlaylistSavesCounts] = useState<Record<string, number>>({});
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const isOwnProfile = !id || id === user?.id;
+
+  // Check if current user is admin
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user?.id) return;
+      const { data } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+      setIsAdmin(!!data);
+    };
+    checkAdmin();
+  }, [user?.id]);
+
+  // Admins or profile owners can see all playlists
+  const canSeeAllPlaylists = isOwnProfile || isAdmin;
 
   // Fetch playlists
   useEffect(() => {
@@ -43,14 +62,14 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
 
       setIsLoadingPlaylists(true);
       try {
-        // Fetch all playlists for the tab
+        // Fetch all playlists for the tab (admins and owners see all, others see public only)
         let query = supabase
           .from('playlists')
           .select('*')
           .eq('user_id', targetId)
           .order('created_at', { ascending: false });
 
-        if (!isOwnProfile) {
+        if (!canSeeAllPlaylists) {
           query = query.eq('is_public', true);
         }
 
@@ -88,7 +107,7 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
     };
 
     fetchPlaylists();
-  }, [id, user?.id, isOwnProfile]);
+  }, [id, user?.id, canSeeAllPlaylists]);
 
   if (isLoading) {
     return (
@@ -350,8 +369,8 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
                 <ListMusic className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
                 <p className="text-muted-foreground text-sm">
                   {settings.language === 'it' 
-                    ? (isOwnProfile ? 'Nessuna playlist' : 'Nessuna playlist pubblica')
-                    : (isOwnProfile ? 'No playlists' : 'No public playlists')}
+                    ? (canSeeAllPlaylists ? 'Nessuna playlist' : 'Nessuna playlist pubblica')
+                    : (canSeeAllPlaylists ? 'No playlists' : 'No public playlists')}
                 </p>
               </div>
             ) : (
@@ -360,7 +379,7 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
                   <PlaylistCard
                     key={playlist.id}
                     playlist={playlist}
-                    showPrivateIndicator={isOwnProfile}
+                    showPrivateIndicator={canSeeAllPlaylists}
                   />
                 ))}
               </div>
