@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { verifyApiKey } from '@/lib/realdebrid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Music2, Mail, Lock, Key, Loader2, AlertCircle, UserPlus, LogIn, ArrowLeft, Gift } from 'lucide-react';
+import { Music2, Mail, Lock, Key, Loader2, AlertCircle, UserPlus, LogIn, ArrowLeft, Gift, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import appLogo from '@/assets/logo.png';
@@ -35,6 +35,7 @@ const Login: React.FC = () => {
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
   const [resetSent, setResetSent] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [verificationSent, setVerificationSent] = useState(false);
 
   // Check for referral code in URL on mount
   useEffect(() => {
@@ -53,6 +54,7 @@ const Login: React.FC = () => {
     }
     setError('');
     setResetSent(false);
+    setVerificationSent(false);
   }, [mode]);
 
   const handlePasswordReset = async (e: React.FormEvent) => {
@@ -129,6 +131,14 @@ const Login: React.FC = () => {
           setIsLoading(false);
           return;
         }
+
+        // Show verification email sent message
+        setVerificationSent(true);
+        setIsLoading(false);
+        return;
+
+        // Note: The rest of the signup flow (API key, referral) will happen after email verification
+        // when the user clicks the verification link and logs in
 
         // Ensure we have an authenticated session, then save the API key if provided
         const { error: signInAfterSignUpError } = await signIn(email, password);
@@ -299,6 +309,41 @@ const Login: React.FC = () => {
                 </Button>
               </form>
             )}
+          </div>
+        ) : verificationSent ? (
+          /* Email Verification Sent Message */
+          <div className="glass rounded-2xl p-6 md:p-8 space-y-5 md:space-y-6 animate-scale-in text-center">
+            <div className="flex justify-center">
+              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-primary" />
+              </div>
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-foreground mb-2">Controlla la tua email!</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Ti abbiamo inviato un link di verifica a <span className="font-medium text-foreground">{email}</span>
+              </p>
+              <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30 text-sm">
+                <p className="text-orange-500 font-medium">⚠️ Controlla anche la cartella SPAM!</p>
+                <p className="text-muted-foreground text-xs mt-1">
+                  A volte le email di verifica finiscono lì.
+                </p>
+              </div>
+            </div>
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setVerificationSent(false);
+                  setMode('login');
+                }}
+                className="gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Torna al login
+              </Button>
+            </div>
           </div>
         ) : (
           <>

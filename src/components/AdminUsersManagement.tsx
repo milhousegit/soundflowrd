@@ -54,6 +54,7 @@ interface UserProfile {
   last_seen_at: string | null;
   currently_playing_track_id: string | null;
   currently_playing_at: string | null;
+  email_confirmed: boolean | null;
 }
 
 interface AdminUsersManagementProps {
@@ -108,9 +109,11 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
   const loadUsers = async () => {
     setIsLoading(true);
     try {
+      // Get only users with confirmed email
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until, last_seen_at, currently_playing_track_id, currently_playing_at')
+        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until, last_seen_at, currently_playing_track_id, currently_playing_at, email_confirmed')
+        .eq('email_confirmed', true) // Only show confirmed users
         .order('created_at', { ascending: false });
 
       if (error) throw error;

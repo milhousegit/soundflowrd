@@ -30,6 +30,8 @@ interface Profile {
   payment_pending_since: string | null;
   // Referral
   referral_code: string | null;
+  // Email confirmation
+  email_confirmed: boolean | null;
 }
 
 interface AuthContextType {
@@ -191,6 +193,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               fetchProfile(session.user.id),
               checkAdminRole(session.user.id),
             ]);
+            
+            // Mark email as confirmed when user logs in (they can only log in after confirming)
+            if (profileData && !profileData.email_confirmed) {
+              await supabase
+                .from('profiles')
+                .update({ email_confirmed: true })
+                .eq('id', session.user.id);
+              // Update local profile
+              setProfile(prev => prev ? { ...prev, email_confirmed: true } : prev);
+            }
             
             // Cache the data
             if (profileData || adminStatus) {
