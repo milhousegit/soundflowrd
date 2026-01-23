@@ -85,6 +85,13 @@ const Settings: React.FC = () => {
     checkAdminRole();
   }, [user?.id]);
 
+  // Check if user has pending payment and show banner
+  useEffect(() => {
+    if (profile?.payment_pending_since && !profile?.is_premium) {
+      setShowPaymentPendingBanner(true);
+    }
+  }, [profile?.payment_pending_since, profile?.is_premium]);
+
   useEffect(() => {
     if (isEditingApiKey) {
       setApiKeyDraft(profile?.real_debrid_api_key ?? '');

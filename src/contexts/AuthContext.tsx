@@ -26,6 +26,10 @@ interface Profile {
   // Rate limiting fields
   comments_blocked_until: string | null;
   posts_blocked_until: string | null;
+  // Payment pending
+  payment_pending_since: string | null;
+  // Referral
+  referral_code: string | null;
 }
 
 interface AuthContextType {
