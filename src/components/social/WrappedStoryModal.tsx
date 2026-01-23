@@ -337,9 +337,9 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                         }}
                       />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate text-sm">{artist.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <p className="font-semibold text-sm truncate w-full">{artist.name}</p>
+                      <p className="text-xs text-muted-foreground truncate w-full">
                         {artist.songsPlayed} {settings.language === 'it' ? 'brani' : 'songs'}
                       </p>
                     </div>
@@ -401,9 +401,9 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                         />
                       </div>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate text-sm">{track.title}</p>
-                      <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <p className="font-semibold text-sm truncate w-full">{track.title}</p>
+                      <p className="text-xs text-muted-foreground truncate w-full">{track.artist}</p>
                     </div>
                     <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full shrink-0">
                       {track.plays}×
@@ -465,9 +465,9 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
                           {index + 1}
                         </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm truncate">{album.title}</p>
-                        <p className="text-xs text-muted-foreground truncate">{album.artist}</p>
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <p className="font-bold text-sm truncate w-full">{album.title}</p>
+                        <p className="text-xs text-muted-foreground truncate w-full">{album.artist}</p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-base font-bold text-primary">{album.plays}</p>
