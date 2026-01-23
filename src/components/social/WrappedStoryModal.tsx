@@ -437,45 +437,45 @@ const WrappedStoryModal: React.FC<WrappedStoryModalProps> = ({
             <div className="flex-1 flex flex-col justify-center space-y-4">
               {wrappedStats.topAlbums.length > 0 ? (
                 wrappedStats.topAlbums.map((album, index) => (
-                  <div 
-                    key={album.id}
-                    className="flex items-center gap-4 p-3 rounded-2xl bg-gradient-to-r from-secondary/80 to-secondary/40 backdrop-blur-sm animate-slide-in-stagger"
-                    style={{ animationDelay: `${index * 150}ms` }}
-                  >
-                    <div className="relative">
-                      <div className={cn(
-                        "absolute -inset-1 rounded-xl blur-sm",
-                        index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500",
-                        index === 1 && "bg-gradient-to-br from-gray-300 to-gray-500",
-                        index === 2 && "bg-gradient-to-br from-orange-600 to-amber-700"
-                      )} />
-                      <div className="relative w-16 h-16 rounded-lg overflow-hidden">
-                        <img 
-                          src={album.coverUrl || '/placeholder.svg'} 
-                          alt={album.title}
-                          className="w-full h-full object-cover"
-                        />
+                    <div 
+                      key={album.id}
+                      className="flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-r from-secondary/80 to-secondary/40 backdrop-blur-sm animate-slide-in-stagger overflow-hidden max-w-full"
+                      style={{ animationDelay: `${index * 150}ms` }}
+                    >
+                      <div className="relative shrink-0">
+                        <div className={cn(
+                          "absolute -inset-1 rounded-xl blur-sm",
+                          index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500",
+                          index === 1 && "bg-gradient-to-br from-gray-300 to-gray-500",
+                          index === 2 && "bg-gradient-to-br from-orange-600 to-amber-700"
+                        )} />
+                        <div className="relative w-14 h-14 rounded-lg overflow-hidden">
+                          <img 
+                            src={album.coverUrl || '/placeholder.svg'} 
+                            alt={album.title}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className={cn(
+                          "absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                          index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500 text-white",
+                          index === 1 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800",
+                          index === 2 && "bg-gradient-to-br from-orange-600 to-orange-700 text-white"
+                        )}>
+                          {index + 1}
+                        </div>
                       </div>
-                      <div className={cn(
-                        "absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-                        index === 0 && "bg-gradient-to-br from-yellow-400 to-orange-500 text-white",
-                        index === 1 && "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800",
-                        index === 2 && "bg-gradient-to-br from-orange-600 to-orange-700 text-white"
-                      )}>
-                        {index + 1}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm truncate">{album.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{album.artist}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-base font-bold text-primary">{album.plays}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {settings.language === 'it' ? 'ascolti' : 'plays'}
+                        </p>
                       </div>
                     </div>
-                    <div className="flex-1 min-w-0 overflow-hidden">
-                      <p className="font-bold truncate">{album.title}</p>
-                      <p className="text-sm text-muted-foreground truncate">{album.artist}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-lg font-bold text-primary">{album.plays}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {settings.language === 'it' ? 'ascolti' : 'plays'}
-                      </p>
-                    </div>
-                  </div>
                 ))
               ) : (
                 <div className="flex items-center justify-center">
