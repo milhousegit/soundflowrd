@@ -176,8 +176,25 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     );
   }
 
+  const totalUsers = users.length;
+  const premiumUsers = users.filter(isPremiumActive).length;
+
   return (
     <div className="space-y-4">
+      {/* User count stats */}
+      <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <UserIcon className="w-4 h-4 text-muted-foreground" />
+          <span className="text-muted-foreground">{language === 'it' ? 'Totale:' : 'Total:'}</span>
+          <span className="font-semibold text-foreground">{totalUsers}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Crown className="w-4 h-4 text-[#8B5CF6]" />
+          <span className="text-muted-foreground">Premium:</span>
+          <span className="font-semibold text-[#8B5CF6]">{premiumUsers}</span>
+        </div>
+      </div>
+
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
