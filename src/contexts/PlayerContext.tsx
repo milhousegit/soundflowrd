@@ -902,6 +902,19 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           track: enrichedTrack,
           startTime: Date.now(),
         };
+        
+        // Update currently playing status in database (for admin visibility)
+        if (user?.id) {
+          supabase
+            .from('profiles')
+            .update({
+              currently_playing_track_id: enrichedTrack.id,
+              currently_playing_at: new Date().toISOString(),
+              last_seen_at: new Date().toISOString(),
+            })
+            .eq('id', user.id)
+            .then(() => {});
+        }
       };
 
       // Helper function for Tidal fallback (used in hybrid mode)

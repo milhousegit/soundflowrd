@@ -35,7 +35,9 @@ import {
   MessageSquareOff,
   ShieldOff,
   Trash2,
-  X
+  X,
+  Music,
+  Circle
 } from 'lucide-react';
 import { addYears, addMonths, addDays, format, isPast } from 'date-fns';
 import { it, enUS } from 'date-fns/locale';
@@ -49,6 +51,9 @@ interface UserProfile {
   payment_pending_since: string | null;
   posts_blocked_until: string | null;
   comments_blocked_until: string | null;
+  last_seen_at: string | null;
+  currently_playing_track_id: string | null;
+  currently_playing_at: string | null;
 }
 
 interface AdminUsersManagementProps {
@@ -95,6 +100,9 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     cancel: language === 'it' ? 'Annulla' : 'Cancel',
     delete: language === 'it' ? 'Elimina' : 'Delete',
     accountDeleted: language === 'it' ? 'Account eliminato!' : 'Account deleted!',
+    lastSeen: language === 'it' ? 'Ultimo accesso' : 'Last seen',
+    online: language === 'it' ? 'Online' : 'Online',
+    playing: language === 'it' ? 'In riproduzione' : 'Playing',
   };
 
   const loadUsers = async () => {
@@ -102,7 +110,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until')
+        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until, last_seen_at, currently_playing_track_id, currently_playing_at')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -297,6 +305,37 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     return !isPast(new Date(user.premium_expires_at));
   };
 
+  // Check if user is online (last seen within 5 minutes)
+  const isOnline = (user: UserProfile) => {
+    if (!user.last_seen_at) return false;
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    return new Date(user.last_seen_at) > fiveMinutesAgo;
+  };
+
+  // Check if user is currently playing (played within last 30 seconds)
+  const isPlaying = (user: UserProfile) => {
+    if (!user.currently_playing_at || !user.currently_playing_track_id) return false;
+    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
+    return new Date(user.currently_playing_at) > thirtySecondsAgo;
+  };
+
+  // Format relative time for last seen
+  const formatLastSeen = (dateStr: string | null) => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return language === 'it' ? 'Adesso' : 'Now';
+    if (diffMins < 60) return `${diffMins} min`;
+    if (diffHours < 24) return `${diffHours}h`;
+    if (diffDays < 7) return `${diffDays}d`;
+    return formatDate(dateStr);
+  };
+
   const filteredUsers = users.filter(user => 
     !searchQuery || user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -368,6 +407,13 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
+                    {/* Playing music icon */}
+                    {isPlaying(user) && (
+                      <span title={t.playing}>
+                        <Music className="w-4 h-4 text-primary shrink-0 animate-pulse" />
+                      </span>
+                    )}
+                    {/* Payment pending icon */}
                     {user.payment_pending_since && !isPremiumActive(user) && (
                       <span title={`${language === 'it' ? 'Pagamento in attesa dal' : 'Payment pending since'} ${formatDate(user.payment_pending_since)}`}>
                         <Clock className="w-4 h-4 text-orange-500 shrink-0" />
@@ -380,8 +426,25 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                       {user.email || 'No email'}
                     </button>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                     <span>{t.registeredAt} {formatDate(user.created_at)}</span>
+                    {/* Online status / Last seen */}
+                    {isOnline(user) ? (
+                      <>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 text-green-500">
+                          <Circle className="w-2 h-2 fill-green-500" />
+                          {t.online}
+                        </span>
+                      </>
+                    ) : user.last_seen_at && (
+                      <>
+                        <span>•</span>
+                        <span className="flex items-center gap-1">
+                          {t.lastSeen} {formatLastSeen(user.last_seen_at)}
+                        </span>
+                      </>
+                    )}
                     {isActive && user.premium_expires_at && (
                       <>
                         <span>•</span>

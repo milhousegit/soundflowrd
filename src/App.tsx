@@ -1,4 +1,5 @@
 // Main App component - Provider hierarchy and routing
+import React, { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,6 +9,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlayerProvider } from "@/contexts/PlayerContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { AutoModeProvider, useAutoMode } from "@/components/auto/AutoModeContext";
+import { supabase } from "@/integrations/supabase/client";
 import Login from "@/components/Login";
 import Layout from "@/components/Layout";
 import InstallPrompt from "@/components/InstallPrompt";
@@ -98,6 +100,43 @@ const AppRoutes = () => {
 };
 
 const AppContent = () => {
+  const { user } = useAuth();
+
+  // Update last_seen_at periodically when user is active
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const updateLastSeen = async () => {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq('id', user.id);
+      } catch (error) {
+        // Silently fail - not critical
+      }
+    };
+
+    // Update immediately on mount
+    updateLastSeen();
+
+    // Update every 2 minutes while active
+    const interval = setInterval(updateLastSeen, 2 * 60 * 1000);
+
+    // Update on visibility change (when user returns to tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        updateLastSeen();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user?.id]);
+
   return (
     <>
       <Toaster />
