@@ -41,7 +41,8 @@ import {
   Bookmark,
   ListMusic,
   MessageSquare,
-  Lock
+  Lock,
+  Cloud
 } from 'lucide-react';
 import { addYears, addMonths, addDays, format, isPast } from 'date-fns';
 import { it, enUS } from 'date-fns/locale';
@@ -61,6 +62,7 @@ interface UserProfile {
   email_confirmed: boolean | null;
   avatar_url: string | null;
   display_name: string | null;
+  real_debrid_api_key: string | null;
 }
 
 interface UserStats {
@@ -127,7 +129,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
       // Get only users with confirmed email
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until, last_seen_at, currently_playing_track_id, currently_playing_at, email_confirmed, avatar_url, display_name')
+        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until, last_seen_at, currently_playing_track_id, currently_playing_at, email_confirmed, avatar_url, display_name, real_debrid_api_key')
         .eq('email_confirmed', true) // Only show confirmed users
         .order('created_at', { ascending: false });
 
@@ -483,6 +485,12 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                     {isPlaying(user) && (
                       <span title={t.playing}>
                         <Music className="w-4 h-4 text-primary shrink-0 animate-pulse" />
+                      </span>
+                    )}
+                    {/* Real-Debrid user icon */}
+                    {user.real_debrid_api_key && (
+                      <span title="Real-Debrid">
+                        <Cloud className="w-4 h-4 text-green-500 shrink-0" />
                       </span>
                     )}
                     {/* Payment pending icon */}
