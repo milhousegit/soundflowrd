@@ -2001,27 +2001,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const currentIndex = queueIndexRef.current;
       const nextIndex = currentIndex + 1;
       
-      console.log('[Prefetch] handlePrefetchPlayed - trackId:', trackId, 'currentIndex:', currentIndex, 'nextIndex:', nextIndex, 'queueLength:', currentQueue.length);
+      console.log('[Prefetch] handlePrefetchPlayed - trackId:', trackId, 'currentIndex:', currentIndex, 'nextIndex:', nextIndex);
       
-      // First, try to find the track by ID anywhere in the queue (handles race conditions)
-      const trackIndexInQueue = currentQueue.findIndex(t => t.id === trackId);
-      
-      if (trackIndexInQueue !== -1) {
-        const prefetchedTrack = currentQueue[trackIndexInQueue];
-        console.log('[Prefetch] Found prefetched track at index:', trackIndexInQueue, '-', prefetchedTrack.title);
-        setState((prev) => ({
-          ...prev,
-          currentTrack: prefetchedTrack,
-          queueIndex: trackIndexInQueue,
-          isPlaying: true,
-          progress: 0,
-        }));
-        setCurrentAudioSource(source);
-        updateMediaSessionMetadata(prefetchedTrack, true);
-        // Start tracking playback time for the new track
-        lastSavedTrackRef.current = { track: prefetchedTrack, startTime: Date.now() };
-      } else if (nextIndex < currentQueue.length) {
-        // Fallback: try expected next index
+      if (nextIndex < currentQueue.length) {
         const nextTrack = currentQueue[nextIndex];
         if (nextTrack && nextTrack.id === trackId) {
           console.log('[Prefetch] Updating state for prefetched track:', nextTrack.title);
@@ -2034,16 +2016,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }));
           setCurrentAudioSource(source);
           updateMediaSessionMetadata(nextTrack, true);
+          // Start tracking playback time for the new track
           lastSavedTrackRef.current = { track: nextTrack, startTime: Date.now() };
         } else {
           console.log('[Prefetch] Track ID mismatch. Expected:', nextTrack?.id, 'Got:', trackId);
-          // Don't skip - let normal playback continue
         }
       } else {
-        // End of queue - but track is already playing from prefetch
-        // Don't call nextRef here as it causes premature skips
-        // The track is already playing, just log it
-        console.log('[Prefetch] End of queue reached, prefetched track is playing. Autoplay will trigger when this track ends.');
+        // End of queue reached - trigger autoplay via next()
+        console.log('[Prefetch] End of queue reached, triggering autoplay...');
+        nextRef.current();
       }
     };
     
