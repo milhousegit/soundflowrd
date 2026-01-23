@@ -55,6 +55,7 @@ interface UserProfile {
   currently_playing_track_id: string | null;
   currently_playing_at: string | null;
   email_confirmed: boolean | null;
+  avatar_url: string | null;
 }
 
 interface AdminUsersManagementProps {
@@ -112,7 +113,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
       // Get only users with confirmed email
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until, last_seen_at, currently_playing_track_id, currently_playing_at, email_confirmed')
+        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until, last_seen_at, currently_playing_track_id, currently_playing_at, email_confirmed, avatar_url')
         .eq('email_confirmed', true) // Only show confirmed users
         .order('created_at', { ascending: false });
 
@@ -403,9 +404,17 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
               >
                 <button 
                   onClick={() => navigate(`/profile/${user.id}`)}
-                  className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0 hover:ring-2 hover:ring-primary/50 transition-all"
+                  className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0 hover:ring-2 hover:ring-primary/50 transition-all overflow-hidden"
                 >
-                  <UserIcon className="w-4 h-4 text-muted-foreground" />
+                  {user.avatar_url ? (
+                    <img 
+                      src={user.avatar_url} 
+                      alt="" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <UserIcon className="w-4 h-4 text-muted-foreground" />
+                  )}
                 </button>
                 
                 <div className="flex-1 min-w-0">
