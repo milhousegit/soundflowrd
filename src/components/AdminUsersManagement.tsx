@@ -13,7 +13,8 @@ import {
   Calendar,
   Check,
   X,
-  ExternalLink
+  ExternalLink,
+  Clock
 } from 'lucide-react';
 import { addYears, addMonths, format, isPast } from 'date-fns';
 import { it, enUS } from 'date-fns/locale';
@@ -24,6 +25,7 @@ interface UserProfile {
   is_premium: boolean | null;
   premium_expires_at: string | null;
   created_at: string;
+  payment_pending_since: string | null;
 }
 
 interface AdminUsersManagementProps {
@@ -61,7 +63,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, is_premium, premium_expires_at, created_at')
+        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -87,7 +89,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
     try {
       const updateData = currentlyPremium 
         ? { is_premium: false, premium_expires_at: null }
-        : { is_premium: true, premium_expires_at: addYears(new Date(), 1).toISOString() };
+        : { is_premium: true, premium_expires_at: addYears(new Date(), 1).toISOString(), payment_pending_since: null };
 
       const { error } = await supabase
         .from('profiles')
@@ -121,7 +123,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
   const grantTrial = async (userId: string) => {
     setUpdatingUser(userId);
     try {
-      const updateData = { is_premium: true, premium_expires_at: addMonths(new Date(), 1).toISOString() };
+      const updateData = { is_premium: true, premium_expires_at: addMonths(new Date(), 1).toISOString(), payment_pending_since: null };
 
       const { error } = await supabase
         .from('profiles')
@@ -228,12 +230,19 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                 </button>
                 
                 <div className="flex-1 min-w-0">
-                  <button 
-                    onClick={() => navigate(`/profile/${user.id}`)}
-                    className="text-sm font-medium text-foreground truncate hover:text-primary transition-colors text-left block"
-                  >
-                    {user.email || 'No email'}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {user.payment_pending_since && !isPremiumActive(user) && (
+                      <span title={`${language === 'it' ? 'Pagamento in attesa dal' : 'Payment pending since'} ${formatDate(user.payment_pending_since)}`}>
+                        <Clock className="w-4 h-4 text-orange-500 shrink-0" />
+                      </span>
+                    )}
+                    <button 
+                      onClick={() => navigate(`/profile/${user.id}`)}
+                      className="text-sm font-medium text-foreground truncate hover:text-primary transition-colors text-left"
+                    >
+                      {user.email || 'No email'}
+                    </button>
+                  </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{t.registeredAt} {formatDate(user.created_at)}</span>
                     {isActive && user.premium_expires_at && (
