@@ -56,6 +56,7 @@ interface UserProfile {
   currently_playing_at: string | null;
   email_confirmed: boolean | null;
   avatar_url: string | null;
+  display_name: string | null;
 }
 
 interface AdminUsersManagementProps {
@@ -113,7 +114,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
       // Get only users with confirmed email
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until, last_seen_at, currently_playing_track_id, currently_playing_at, email_confirmed, avatar_url')
+        .select('id, email, is_premium, premium_expires_at, created_at, payment_pending_since, posts_blocked_until, comments_blocked_until, last_seen_at, currently_playing_track_id, currently_playing_at, email_confirmed, avatar_url, display_name')
         .eq('email_confirmed', true) // Only show confirmed users
         .order('created_at', { ascending: false });
 
@@ -435,8 +436,11 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                       onClick={() => navigate(`/profile/${user.id}`)}
                       className="text-sm font-medium text-foreground truncate hover:text-primary transition-colors text-left"
                     >
-                      {user.email || 'No email'}
+                      {user.display_name || user.email || 'No email'}
                     </button>
+                    {user.display_name && user.email && (
+                      <span className="text-xs text-muted-foreground truncate">({user.email})</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                     <span>{t.registeredAt} {formatDate(user.created_at)}</span>

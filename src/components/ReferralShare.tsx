@@ -19,6 +19,8 @@ const ReferralShare: React.FC<ReferralShareProps> = ({ language }) => {
   const { toast } = useToast();
   const [stats, setStats] = useState<ReferralStats>({ referralCode: null, totalReferrals: 0 });
   const [isLoading, setIsLoading] = useState(true);
+  const [isEnabled, setIsEnabled] = useState(true);
+  const [offerDescription, setOfferDescription] = useState('');
 
   const t = {
     title: language === 'it' ? 'Invita un amico' : 'Invite a friend',
@@ -33,10 +35,23 @@ const ReferralShare: React.FC<ReferralShareProps> = ({ language }) => {
   };
 
   useEffect(() => {
-    const loadStats = async () => {
+    const loadData = async () => {
       if (!user?.id) return;
 
       try {
+        // Load referral settings
+        const { data: settingsData } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'referral_system')
+          .single();
+
+        if (settingsData?.value) {
+          const settings = settingsData.value as { enabled?: boolean; offer_description?: string };
+          setIsEnabled(settings.enabled ?? true);
+          setOfferDescription(settings.offer_description ?? '');
+        }
+
         // Get referral code
         const { data: profile } = await supabase
           .from('profiles')
@@ -55,13 +70,13 @@ const ReferralShare: React.FC<ReferralShareProps> = ({ language }) => {
           totalReferrals: count || 0,
         });
       } catch (error) {
-        console.error('Error loading referral stats:', error);
+        console.error('Error loading referral data:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadStats();
+    loadData();
   }, [user?.id]);
 
   const referralLink = stats.referralCode 
@@ -108,6 +123,11 @@ const ReferralShare: React.FC<ReferralShareProps> = ({ language }) => {
     }
   };
 
+  // Don't show if referral system is disabled
+  if (!isEnabled && !isLoading) {
+    return null;
+  }
+
   if (isLoading) {
     return (
       <div className="p-4 rounded-xl bg-gradient-to-r from-[#8B5CF6]/10 to-[#3B82F6]/10 border border-[#8B5CF6]/20">
@@ -127,7 +147,9 @@ const ReferralShare: React.FC<ReferralShareProps> = ({ language }) => {
         </div>
         <div>
           <h3 className="font-semibold text-foreground">{t.title}</h3>
-          <p className="text-xs text-muted-foreground">{t.description}</p>
+          <p className="text-xs text-muted-foreground">
+            {offerDescription || t.description}
+          </p>
         </div>
       </div>
 
