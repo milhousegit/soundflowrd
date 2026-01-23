@@ -360,6 +360,7 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
                   <PlaylistCard
                     key={playlist.id}
                     playlist={playlist}
+                    showPrivateIndicator={isOwnProfile}
                   />
                 ))}
               </div>

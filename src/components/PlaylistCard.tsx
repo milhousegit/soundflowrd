@@ -1,15 +1,17 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Music, ListMusic } from 'lucide-react';
+import { Music, ListMusic, Lock } from 'lucide-react';
 import { Playlist } from '@/hooks/usePlaylists';
 import TapArea from './TapArea';
 
 interface PlaylistCardProps {
   playlist: Playlist;
+  showPrivateIndicator?: boolean;
 }
 
-const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist }) => {
+const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist, showPrivateIndicator = false }) => {
   const navigate = useNavigate();
+  const isPrivate = !playlist.is_public;
 
   return (
     <TapArea
@@ -28,10 +30,21 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist }) => {
             <ListMusic className="w-12 h-12 text-primary/50" />
           </div>
         )}
+        {/* Private indicator */}
+        {showPrivateIndicator && isPrivate && (
+          <div className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm rounded-full p-1.5">
+            <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+          </div>
+        )}
       </div>
-      <h3 className="font-medium text-sm text-foreground truncate">
-        {playlist.name}
-      </h3>
+      <div className="flex items-center gap-1.5">
+        {showPrivateIndicator && isPrivate && (
+          <Lock className="w-3 h-3 text-muted-foreground shrink-0" />
+        )}
+        <h3 className="font-medium text-sm text-foreground truncate">
+          {playlist.name}
+        </h3>
+      </div>
       <p className="text-xs text-muted-foreground truncate">
         {playlist.track_count || 0} brani
       </p>

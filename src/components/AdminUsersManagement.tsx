@@ -37,7 +37,11 @@ import {
   Trash2,
   X,
   Music,
-  Circle
+  Circle,
+  Bookmark,
+  ListMusic,
+  MessageSquare,
+  Lock
 } from 'lucide-react';
 import { addYears, addMonths, addDays, format, isPast } from 'date-fns';
 import { it, enUS } from 'date-fns/locale';
@@ -59,6 +63,14 @@ interface UserProfile {
   display_name: string | null;
 }
 
+interface UserStats {
+  favorites_count: number;
+  playlists_count: number;
+  private_playlists_count: number;
+  posts_count: number;
+  comments_count: number;
+}
+
 interface AdminUsersManagementProps {
   language: 'en' | 'it';
 }
@@ -67,6 +79,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
   const navigate = useNavigate();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [userStats, setUserStats] = useState<Record<string, UserStats>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
@@ -120,6 +133,52 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
 
       if (error) throw error;
       setUsers(data || []);
+
+      // Load stats for all users in parallel
+      if (data && data.length > 0) {
+        const statsPromises = data.map(async (user) => {
+          const [favoritesRes, playlistsRes, postsRes, commentsRes] = await Promise.all([
+            supabase
+              .from('favorites')
+              .select('*', { count: 'exact', head: true })
+              .eq('user_id', user.id)
+              .eq('item_type', 'track'),
+            supabase
+              .from('playlists')
+              .select('id, is_public')
+              .eq('user_id', user.id),
+            supabase
+              .from('posts')
+              .select('*', { count: 'exact', head: true })
+              .eq('user_id', user.id),
+            supabase
+              .from('comments')
+              .select('*', { count: 'exact', head: true })
+              .eq('user_id', user.id),
+          ]);
+
+          const playlists = playlistsRes.data || [];
+          const privatePlaylists = playlists.filter(p => !p.is_public).length;
+
+          return {
+            id: user.id,
+            stats: {
+              favorites_count: favoritesRes.count || 0,
+              playlists_count: playlists.length,
+              private_playlists_count: privatePlaylists,
+              posts_count: postsRes.count || 0,
+              comments_count: commentsRes.count || 0,
+            } as UserStats
+          };
+        });
+
+        const allStats = await Promise.all(statsPromises);
+        const statsMap: Record<string, UserStats> = {};
+        allStats.forEach(({ id, stats }) => {
+          statsMap[id] = stats;
+        });
+        setUserStats(statsMap);
+      }
     } catch (error) {
       console.error('Failed to load users:', error);
       toast({
@@ -458,6 +517,31 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           {t.lastSeen} {formatLastSeen(user.last_seen_at)}
+                        </span>
+                      </>
+                    )}
+                    {/* User stats */}
+                    {userStats[user.id] && (
+                      <>
+                        <span>•</span>
+                        <span className="flex items-center gap-1" title={language === 'it' ? 'Brani salvati' : 'Saved tracks'}>
+                          <Bookmark className="w-3 h-3" />
+                          {userStats[user.id].favorites_count}
+                        </span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1" title={language === 'it' ? 'Playlist create' : 'Created playlists'}>
+                          <ListMusic className="w-3 h-3" />
+                          {userStats[user.id].playlists_count}
+                          {userStats[user.id].private_playlists_count > 0 && (
+                            <span className="flex items-center gap-0.5 text-muted-foreground/70">
+                              (<Lock className="w-2.5 h-2.5" />{userStats[user.id].private_playlists_count})
+                            </span>
+                          )}
+                        </span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1" title={language === 'it' ? 'Post e commenti' : 'Posts and comments'}>
+                          <MessageSquare className="w-3 h-3" />
+                          {userStats[user.id].posts_count + userStats[user.id].comments_count}
                         </span>
                       </>
                     )}
