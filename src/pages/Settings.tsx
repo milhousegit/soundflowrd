@@ -18,6 +18,7 @@ import AdminBannerTester from '@/components/AdminBannerTester';
 import AdminArtistMerge from '@/components/AdminArtistMerge';
 import AdminChartConfig from '@/components/AdminChartConfig';
 import PaymentPendingBanner from '@/components/PaymentPendingBanner';
+import ReferralShare from '@/components/ReferralShare';
 import { isPast } from 'date-fns';
 import BackButton from '@/components/BackButton';
 
@@ -486,6 +487,11 @@ const Settings: React.FC = () => {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+            </div>
+
+            {/* Referral Section */}
+            <div className="pt-4 border-t border-border">
+              <ReferralShare language={settings.language as 'en' | 'it'} />
             </div>
           </div>
         </section>

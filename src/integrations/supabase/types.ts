@@ -763,6 +763,8 @@ export type Database = {
           preferred_language: string | null
           premium_expires_at: string | null
           real_debrid_api_key: string | null
+          referral_code: string | null
+          referred_by: string | null
           telegram_chat_id: string | null
           updated_at: string
         }
@@ -788,6 +790,8 @@ export type Database = {
           preferred_language?: string | null
           premium_expires_at?: string | null
           real_debrid_api_key?: string | null
+          referral_code?: string | null
+          referred_by?: string | null
           telegram_chat_id?: string | null
           updated_at?: string
         }
@@ -813,10 +817,20 @@ export type Database = {
           preferred_language?: string | null
           premium_expires_at?: string | null
           real_debrid_api_key?: string | null
+          referral_code?: string | null
+          referred_by?: string | null
           telegram_chat_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_referred_by_fkey"
+            columns: ["referred_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       recently_played: {
         Row: {
@@ -862,6 +876,48 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      referrals: {
+        Row: {
+          created_at: string
+          id: string
+          referred_id: string
+          referred_premium_granted: boolean
+          referrer_id: string
+          referrer_premium_granted: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          referred_id: string
+          referred_premium_granted?: boolean
+          referrer_id: string
+          referrer_premium_granted?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          referred_id?: string
+          referred_premium_granted?: boolean
+          referrer_id?: string
+          referrer_premium_granted?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_referred_id_fkey"
+            columns: ["referred_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       track_file_mappings: {
         Row: {
