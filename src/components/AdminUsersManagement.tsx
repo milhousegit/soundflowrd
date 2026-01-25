@@ -140,11 +140,11 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
       if (data && data.length > 0) {
         const statsPromises = data.map(async (user) => {
           const [favoritesRes, playlistsRes, postsRes, commentsRes] = await Promise.all([
+            // Count all favorites (tracks, albums, artists, playlists) for unified usage stats
             supabase
               .from('favorites')
               .select('*', { count: 'exact', head: true })
-              .eq('user_id', user.id)
-              .eq('item_type', 'track'),
+              .eq('user_id', user.id),
             supabase
               .from('playlists')
               .select('id, is_public')
