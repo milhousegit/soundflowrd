@@ -8,25 +8,93 @@ import { Music2, Mail, Lock, Key, Loader2, AlertCircle, UserPlus, LogIn, ArrowLe
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import appLogo from '@/assets/logo.png';
+import { useGeoLanguage } from '@/hooks/useGeoLanguage';
 
-const loginSchema = z.object({
-  email: z.string().email('Email non valida'),
-  password: z.string().min(6, 'La password deve avere almeno 6 caratteri'),
-});
-
-const signupSchema = z.object({
-  email: z.string().email('Email non valida'),
-  password: z.string().min(6, 'La password deve avere almeno 6 caratteri'),
-  apiKey: z.string().optional(),
-});
-
-const resetSchema = z.object({
-  email: z.string().email('Email non valida'),
-});
+// Translation strings
+const translations = {
+  en: {
+    tagline: 'Your personal music player',
+    login: 'Login',
+    signup: 'Sign Up',
+    backToLogin: 'Back to login',
+    forgotPassword: 'Forgot password?',
+    resetPassword: 'Reset Password',
+    resetPasswordDesc: 'Enter your email to receive a recovery link',
+    sendResetLink: 'Send recovery link',
+    emailSent: 'Email sent!',
+    checkInbox: 'Check your inbox and follow the instructions.',
+    checkEmail: 'Check your email!',
+    verificationSent: 'We sent you a verification link to',
+    checkSpam: '⚠️ Check your SPAM folder too!',
+    spamNote: 'Sometimes verification emails end up there.',
+    email: 'Email',
+    password: 'Password',
+    apiKeyOptional: 'Real-Debrid API Key (optional)',
+    apiKeyNote: 'You can add your API Key from',
+    apiKeyNoteLater: 'later in settings',
+    referralBonus: '🎁 Sign up and get',
+    freePremium: '1 month of Premium free!',
+    // Error messages
+    invalidEmail: 'Invalid email',
+    passwordMinLength: 'Password must be at least 6 characters',
+    invalidApiKey: 'Invalid Real-Debrid API Key. Please check and try again.',
+    emailAlreadyRegistered: 'Email already registered. Try logging in.',
+    invalidCredentials: 'Invalid email or password.',
+    verificationError: 'Error during verification. Please try again.',
+    resetError: 'Error sending email. Please try again.',
+    // Success messages
+    accountCreated: 'Account created!',
+    welcomeBack: 'Welcome back!',
+    loggedIn: 'Logged in successfully',
+    welcome: 'Welcome',
+    referralBonusToast: '🎉 Referral Bonus!',
+    referralBonusDesc: 'You received 1 month of Premium for free!',
+  },
+  it: {
+    tagline: 'Il tuo player musicale personale',
+    login: 'Accedi',
+    signup: 'Registrati',
+    backToLogin: 'Torna al login',
+    forgotPassword: 'Password dimenticata?',
+    resetPassword: 'Recupera Password',
+    resetPasswordDesc: 'Inserisci la tua email per ricevere il link di recupero',
+    sendResetLink: 'Invia link di recupero',
+    emailSent: 'Email inviata!',
+    checkInbox: 'Controlla la tua casella di posta e segui le istruzioni.',
+    checkEmail: 'Controlla la tua email!',
+    verificationSent: 'Ti abbiamo inviato un link di verifica a',
+    checkSpam: '⚠️ Controlla anche la cartella SPAM!',
+    spamNote: 'A volte le email di verifica finiscono lì.',
+    email: 'Email',
+    password: 'Password',
+    apiKeyOptional: 'Real-Debrid API Key (opzionale)',
+    apiKeyNote: 'Puoi aggiungere la tua API Key da',
+    apiKeyNoteLater: 'in seguito dalle impostazioni',
+    referralBonus: '🎁 Registrati e ricevi',
+    freePremium: '1 mese di Premium gratis!',
+    // Error messages
+    invalidEmail: 'Email non valida',
+    passwordMinLength: 'La password deve avere almeno 6 caratteri',
+    invalidApiKey: 'API Key Real-Debrid non valida. Controlla e riprova.',
+    emailAlreadyRegistered: 'Email già registrata. Prova ad accedere.',
+    invalidCredentials: 'Email o password non corretti.',
+    verificationError: 'Errore durante la verifica. Riprova.',
+    resetError: 'Errore durante l\'invio. Riprova.',
+    // Success messages
+    accountCreated: 'Account creato!',
+    welcomeBack: 'Bentornato!',
+    loggedIn: 'Accesso effettuato',
+    welcome: 'Benvenuto',
+    referralBonusToast: '🎉 Bonus Referral!',
+    referralBonusDesc: 'Hai ricevuto 1 mese di Premium gratis!',
+  },
+};
 
 const Login: React.FC = () => {
   const { signIn, signUp, updateApiKey, profile } = useAuth();
   const { toast } = useToast();
+  const { language, isLoading: geoLoading } = useGeoLanguage();
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -36,6 +104,24 @@ const Login: React.FC = () => {
   const [resetSent, setResetSent] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [verificationSent, setVerificationSent] = useState(false);
+
+  const t = translations[language];
+
+  // Dynamic validation schemas based on language
+  const loginSchema = z.object({
+    email: z.string().email(t.invalidEmail),
+    password: z.string().min(6, t.passwordMinLength),
+  });
+
+  const signupSchema = z.object({
+    email: z.string().email(t.invalidEmail),
+    password: z.string().min(6, t.passwordMinLength),
+    apiKey: z.string().optional(),
+  });
+
+  const resetSchema = z.object({
+    email: z.string().email(t.invalidEmail),
+  });
 
   // Check for referral code in URL on mount
   useEffect(() => {
@@ -82,11 +168,11 @@ const Login: React.FC = () => {
 
       setResetSent(true);
       toast({
-        title: 'Email inviata!',
-        description: 'Controlla la tua casella di posta per reimpostare la password.',
+        title: t.emailSent,
+        description: t.checkInbox,
       });
     } catch (err) {
-      setError('Errore durante l\'invio. Riprova.');
+      setError(t.resetError);
     } finally {
       setIsLoading(false);
     }
@@ -113,7 +199,7 @@ const Login: React.FC = () => {
           const verification = await verifyApiKey(apiKey);
           
           if (!verification.valid) {
-            setError('API Key Real-Debrid non valida. Controlla e riprova.');
+            setError(t.invalidApiKey);
             setIsLoading(false);
             return;
           }
@@ -124,7 +210,7 @@ const Login: React.FC = () => {
         
         if (signUpError) {
           if (signUpError.message.includes('already registered')) {
-            setError('Email già registrata. Prova ad accedere.');
+            setError(t.emailAlreadyRegistered);
           } else {
             setError(signUpError.message);
           }
@@ -156,7 +242,9 @@ const Login: React.FC = () => {
         if (apiKey && apiKey.trim().length > 0) {
           const { error: apiKeyError } = await updateApiKey(apiKey);
           if (apiKeyError) {
-            setError('Account creato, ma non sono riuscito a salvare la API Key. Riprova dalle Impostazioni.');
+            setError(language === 'it' 
+              ? 'Account creato, ma non sono riuscito a salvare la API Key. Riprova dalle Impostazioni.'
+              : 'Account created, but failed to save API Key. Try again in Settings.');
             setIsLoading(false);
             return;
           }
@@ -179,8 +267,8 @@ const Login: React.FC = () => {
             
             if (response.ok) {
               toast({
-                title: '🎉 Bonus Referral!',
-                description: 'Hai ricevuto 1 mese di Premium gratis!',
+                title: t.referralBonusToast,
+                description: t.referralBonusDesc,
               });
             }
           } catch (refError) {
@@ -189,8 +277,8 @@ const Login: React.FC = () => {
         }
         
         toast({
-          title: 'Account creato!',
-          description: `Benvenuto ${verifiedUsername || email}`,
+          title: t.accountCreated,
+          description: `${t.welcome} ${verifiedUsername || email}`,
         });
       } else {
         // Login mode - only email and password required
@@ -205,7 +293,7 @@ const Login: React.FC = () => {
         
         if (signInError) {
           if (signInError.message.includes('Invalid login')) {
-            setError('Email o password non corretti.');
+            setError(t.invalidCredentials);
           } else {
             setError(signInError.message);
           }
@@ -214,16 +302,25 @@ const Login: React.FC = () => {
         }
         
         toast({
-          title: 'Bentornato!',
-          description: `Accesso effettuato`,
+          title: t.welcomeBack,
+          description: t.loggedIn,
         });
       }
     } catch (err) {
-      setError('Errore durante la verifica. Riprova.');
+      setError(t.verificationError);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Show loading state while detecting geo location
+  if (geoLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 md:p-6 relative overflow-hidden">
@@ -242,7 +339,7 @@ const Login: React.FC = () => {
             className="w-20 h-20 md:w-24 md:h-24 mx-auto mb-4 md:mb-6 rounded-2xl shadow-glow"
           />
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">SoundFlow</h1>
-          <p className="text-sm md:text-base text-muted-foreground">Il tuo player musicale personale</p>
+          <p className="text-sm md:text-base text-muted-foreground">{t.tagline}</p>
         </div>
 
         {/* Password Reset Mode */}
@@ -254,13 +351,13 @@ const Login: React.FC = () => {
               className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              Torna al login
+              {t.backToLogin}
             </button>
 
             <div className="text-center">
-              <h2 className="text-xl font-semibold text-foreground mb-2">Recupera Password</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-2">{t.resetPassword}</h2>
               <p className="text-sm text-muted-foreground">
-                Inserisci la tua email per ricevere il link di recupero
+                {t.resetPasswordDesc}
               </p>
             </div>
 
@@ -274,9 +371,9 @@ const Login: React.FC = () => {
             {resetSent ? (
               <div className="text-center p-4 rounded-lg bg-primary/10 text-primary">
                 <Mail className="w-12 h-12 mx-auto mb-3 opacity-80" />
-                <p className="font-medium">Email inviata!</p>
+                <p className="font-medium">{t.emailSent}</p>
                 <p className="text-sm opacity-80 mt-1">
-                  Controlla la tua casella di posta e segui le istruzioni.
+                  {t.checkInbox}
                 </p>
               </div>
             ) : (
@@ -285,7 +382,7 @@ const Login: React.FC = () => {
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
                     type="email"
-                    placeholder="Email"
+                    placeholder={t.email}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-12"
@@ -303,7 +400,7 @@ const Login: React.FC = () => {
                   ) : (
                     <>
                       <Mail className="w-5 h-5" />
-                      Invia link di recupero
+                      {t.sendResetLink}
                     </>
                   )}
                 </Button>
@@ -319,14 +416,14 @@ const Login: React.FC = () => {
               </div>
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">Controlla la tua email!</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-2">{t.checkEmail}</h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Ti abbiamo inviato un link di verifica a <span className="font-medium text-foreground">{email}</span>
+                {t.verificationSent} <span className="font-medium text-foreground">{email}</span>
               </p>
               <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30 text-sm">
-                <p className="text-orange-500 font-medium">⚠️ Controlla anche la cartella SPAM!</p>
+                <p className="text-orange-500 font-medium">{t.checkSpam}</p>
                 <p className="text-muted-foreground text-xs mt-1">
-                  A volte le email di verifica finiscono lì.
+                  {t.spamNote}
                 </p>
               </div>
             </div>
@@ -341,7 +438,7 @@ const Login: React.FC = () => {
                 className="gap-2"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Torna al login
+                {t.backToLogin}
               </Button>
             </div>
           </div>
@@ -356,7 +453,7 @@ const Login: React.FC = () => {
                 className="gap-2"
               >
                 <LogIn className="w-4 h-4" />
-                Accedi
+                {t.login}
               </Button>
               <Button
                 type="button"
@@ -365,7 +462,7 @@ const Login: React.FC = () => {
                 className="gap-2"
               >
                 <UserPlus className="w-4 h-4" />
-                Registrati
+                {t.signup}
               </Button>
             </div>
 
@@ -374,7 +471,7 @@ const Login: React.FC = () => {
               <div className="flex items-center justify-center gap-2 p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 to-[#3B82F6]/20 border border-[#8B5CF6]/30 mb-4">
                 <Gift className="w-5 h-5 text-[#8B5CF6]" />
                 <span className="text-sm font-medium text-foreground">
-                  🎁 Registrati e ricevi <span className="text-[#8B5CF6]">1 mese di Premium gratis!</span>
+                  {t.referralBonus} <span className="text-[#8B5CF6]">{t.freePremium}</span>
                 </span>
               </div>
             )}
@@ -393,7 +490,7 @@ const Login: React.FC = () => {
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
                     type="email"
-                    placeholder="Email"
+                    placeholder={t.email}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-12"
@@ -405,7 +502,7 @@ const Login: React.FC = () => {
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
                     type="password"
-                    placeholder="Password"
+                    placeholder={t.password}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-12"
@@ -420,7 +517,7 @@ const Login: React.FC = () => {
                     <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input
                       type="password"
-                      placeholder="Real-Debrid API Key (opzionale)"
+                      placeholder={t.apiKeyOptional}
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       className="pl-12"
@@ -437,7 +534,7 @@ const Login: React.FC = () => {
                     onClick={() => setMode('reset')}
                     className="text-sm text-primary hover:underline"
                   >
-                    Password dimenticata?
+                    {t.forgotPassword}
                   </button>
                 </div>
               )}
@@ -452,14 +549,14 @@ const Login: React.FC = () => {
                 ) : (
                   <>
                     <Music2 className="w-5 h-5" />
-                    {mode === 'login' ? 'Accedi' : 'Registrati'}
+                    {mode === 'login' ? t.login : t.signup}
                   </>
                 )}
               </Button>
 
               {mode === 'signup' && (
                 <p className="text-center text-xs md:text-sm text-muted-foreground">
-                  Puoi aggiungere la tua API Key da{' '}
+                  {t.apiKeyNote}{' '}
                   <a
                     href="https://real-debrid.com/apitoken"
                     target="_blank"
@@ -468,7 +565,7 @@ const Login: React.FC = () => {
                   >
                     Real-Debrid
                   </a>
-                  {' '}in seguito dalle impostazioni
+                  {' '}{t.apiKeyNoteLater}
                 </p>
               )}
             </form>
