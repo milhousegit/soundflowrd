@@ -83,11 +83,22 @@
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x pan-y;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
   }
 
   body {
     @apply bg-background text-foreground font-outfit antialiased;
     overflow-x: hidden;
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
   }
 
   /* Safe area for iOS notch and home indicator */
@@ -334,8 +345,22 @@
 /* Auto Mode landscape styles - ensure full screen coverage */
 @media screen and (orientation: landscape) {
   .auto-mode-active {
-    /* Full landscape support for Auto Mode */
     width: 100vw;
     height: 100vh;
   }
+}
+
+/* WKWebView / native wrapper full-screen overrides (iPhone) */
+.native-wrapper,
+.native-wrapper #root {
+  width: 100% !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.native-wrapper body {
+  height: 100dvh !important;
 }
