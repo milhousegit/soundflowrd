@@ -194,14 +194,48 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               checkAdminRole(session.user.id),
             ]);
             
-            // Mark email as confirmed when user logs in (they can only log in after confirming)
+            // Mark email as confirmed and process pending referral/apikey on first login
             if (profileData && !profileData.email_confirmed) {
               await supabase
                 .from('profiles')
                 .update({ email_confirmed: true })
                 .eq('id', session.user.id);
-              // Update local profile
               setProfile(prev => prev ? { ...prev, email_confirmed: true } : prev);
+
+              // Process pending referral from signup
+              const pendingReferral = localStorage.getItem('soundflow_pending_referral');
+              if (pendingReferral) {
+                localStorage.removeItem('soundflow_pending_referral');
+                try {
+                  await fetch(
+                    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-referral`,
+                    {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`,
+                      },
+                      body: JSON.stringify({ referralCode: pendingReferral, newUserId: session.user.id }),
+                    }
+                  );
+                  console.log('[Auth] Referral processed successfully');
+                } catch (refErr) {
+                  console.error('[Auth] Referral processing error:', refErr);
+                }
+              }
+
+              // Process pending API key from signup
+              const pendingApiKey = localStorage.getItem('soundflow_pending_apikey');
+              if (pendingApiKey) {
+                localStorage.removeItem('soundflow_pending_apikey');
+                await supabase
+                  .from('profiles')
+                  .update({ real_debrid_api_key: pendingApiKey })
+                  .eq('id', session.user.id);
+              }
+
+              // Re-fetch profile after updates
+              await fetchProfile(session.user.id);
             }
             
             // Cache the data

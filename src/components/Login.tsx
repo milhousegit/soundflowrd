@@ -218,13 +218,18 @@ const Login: React.FC = () => {
           return;
         }
 
+        // Persist referral code and API key for after email verification
+        if (referralCode) {
+          localStorage.setItem('soundflow_pending_referral', referralCode);
+        }
+        if (apiKey && apiKey.trim().length > 0) {
+          localStorage.setItem('soundflow_pending_apikey', apiKey);
+        }
+
         // Show verification email sent message
         setVerificationSent(true);
         setIsLoading(false);
         return;
-
-        // Note: The rest of the signup flow (API key, referral) will happen after email verification
-        // when the user clicks the verification link and logs in
 
         // Ensure we have an authenticated session, then save the API key if provided
         const { error: signInAfterSignUpError } = await signIn(email, password);
