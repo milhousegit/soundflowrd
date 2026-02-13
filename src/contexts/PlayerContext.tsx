@@ -1,4 +1,4 @@
-// PlayerContext - Audio playback state management (v2.1 - CarPlay optimization)
+// PlayerContext - Audio playback state management (v3.0 - Clean queue logic)
 import React, {
   createContext,
   useCallback,
@@ -14,7 +14,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Track, type PlayerState } from '@/types/music';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
-import { useIOSAudioSession } from '@/hooks/useIOSAudioSession';
 
 import {
   type AudioFile,
@@ -354,8 +353,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials, user } = useAuth();
   const { audioSourceMode, settings } = useSettings();
-  // iOS audio session management (uses only refs internally)
-  const iosAudio = useIOSAudioSession();
 
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
@@ -513,9 +510,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [state.progress, state.duration, state.currentTrack]);
 
-  // Store iosAudio in a ref to avoid dependency issues
-  const iosAudioRef = useRef(iosAudio);
-  iosAudioRef.current = iosAudio;
+  // (iOS audio session ref removed - not needed for desktop/Android)
 
   useEffect(() => {
     audioRef.current = new Audio();
@@ -526,25 +521,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const audio = audioRef.current;
 
-    // Enhanced time update handler with pre-fetching for background playback
+    // Simple time update handler
     const handleTimeUpdate = () => {
-      const currentTime = audio.currentTime;
-      const duration = audio.duration;
-      
-      setState((prev) => ({ ...prev, progress: currentTime }));
-      
-      // AGGRESSIVE PREFETCH: Start prefetching 3 seconds AFTER playback begins
-      // This gives maximum time for the next track to be ready
-      if (currentTime >= 3 && currentTime < 6) {
-        if (!isPrefetchingRef.current && !prefetchedNextUrlRef.current) {
-          window.dispatchEvent(new CustomEvent('prefetch-next-track'));
-        }
-      }
+      setState((prev) => ({ ...prev, progress: audio.currentTime }));
     };
     
     const handleLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
     
-    // Track ended handler - uses pre-fetched URL for seamless background playback
+    // Track ended handler - simply advance to next track
     const handleEnded = () => {
       console.log('[PlayerContext] Track ended');
       
@@ -553,65 +537,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const { track: prevTrack, startTime } = lastSavedTrackRef.current;
         const actualSecondsListened = Math.round((Date.now() - startTime) / 1000);
         saveRecentlyPlayedTrack(prevTrack, user?.id, actualSecondsListened);
-        // Update aggregated stats for Wrapped
         if (user?.id) {
           updateListeningStats(prevTrack, user.id, actualSecondsListened);
         }
         lastSavedTrackRef.current = null;
       }
       
-      // Keep media session showing "playing" during track transition
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.playbackState = 'playing';
-      }
-      
-      // On iOS (non-external devices): play placeholder immediately to maintain session
-      const iosAudioInstance = iosAudioRef.current;
-      const isExternalDevice = iosAudioInstance?.isExternalDevice() ?? false;
-      if (iosAudioInstance && !isExternalDevice) {
-        iosAudioInstance.playPlaceholder().catch(() => {});
-      }
-      
-      // Check if we have a pre-fetched URL for immediate playback
-      const prefetched = prefetchedNextUrlRef.current;
-      if (prefetched && prefetched.url) {
-        console.log('[PlayerContext] Using pre-fetched URL for seamless transition');
-        
-        // Store details before clearing
-        const prefetchDetails = { ...prefetched };
-        
-        // Clear the prefetch refs immediately to prevent duplicate plays
-        prefetchedNextUrlRef.current = null;
-        prefetchedTrackIdRef.current = null;
-        
-        // Immediately set the new source and play - no async operations!
-        audio.src = prefetchDetails.url;
-        
-        // Try to play, with fallback to next() if it fails
-        audio.play().then(() => {
-          console.log('[PlayerContext] Prefetched track started successfully');
-          // Trigger state update via event
-          window.dispatchEvent(new CustomEvent('prefetch-played', { detail: prefetchDetails }));
-        }).catch((error) => {
-          console.log('[PlayerContext] Prefetched play failed, falling back to next():', error);
-          // Fallback to normal next() flow
-          setTimeout(() => {
-            nextRef.current();
-          }, 50);
-        });
-        return;
-      }
-      
-      // Fallback: No prefetch available - clear audio source to prevent replay, then call next()
-      // This is critical for end-of-queue: prevents the audio element from trying to replay
-      console.log('[PlayerContext] No prefetch available, clearing audio and calling next()');
-      audio.pause();
-      audio.src = '';
-      audio.load(); // Reset the audio element state
-      
-      setTimeout(() => {
-        nextRef.current();
-      }, 50);
+      // Simply advance to next track
+      nextRef.current();
     };
 
     // Handle pause events - save actual listening time
@@ -722,10 +655,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Simplified unlock - only quickUnlock, no aggressive keepAlive
+  // Simplified unlock - no-op without iOS audio session
   const tryUnlockAudioFromUserGesture = useCallback(() => {
-    iosAudio.quickUnlock();
-  }, [iosAudio]);
+    // No-op: iOS workarounds removed
+  }, []);
 
   const saveFileMapping = useCallback(async (params: {
     track: Track;
@@ -816,17 +749,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [addDebugLog, credentials, state.currentTrack]);
 
   const playTrack = useCallback(
-    async (track: Track, queue?: Track[]) => {
+    async (track: Track, queue?: Track[], startIndex?: number) => {
       tryUnlockAudioFromUserGesture();
 
       // Save actual listening time for the previous track before switching
       if (lastSavedTrackRef.current && audioRef.current) {
         const { track: prevTrack, startTime } = lastSavedTrackRef.current;
         const actualSecondsListened = Math.round((Date.now() - startTime) / 1000);
-        // Only save if track actually played (not just loaded)
         if (actualSecondsListened >= 10) {
           saveRecentlyPlayedTrack(prevTrack, user?.id, actualSecondsListened);
-          // Update aggregated stats for Wrapped
           if (user?.id) {
             updateListeningStats(prevTrack, user.id, actualSecondsListened);
           }
@@ -839,31 +770,29 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         audioRef.current.src = '';
       }
 
-      // Start with original track - fetch metadata in background while playing
       currentSearchTrackIdRef.current = track.id;
 
       // Initialize queue with original track
       const initialQueue = queue ? [...queue] : [track];
+      const calculatedIndex = startIndex !== undefined ? startIndex : initialQueue.findIndex((t) => t.id === track.id);
 
       setState((prev) => ({
         ...prev,
         currentTrack: track,
         isPlaying: true,
         queue: initialQueue,
-        queueIndex: initialQueue.findIndex((t) => t.id === track.id),
+        queueIndex: calculatedIndex >= 0 ? calculatedIndex : 0,
         duration: track.duration,
         progress: 0,
       }));
 
-      // iOS widget sync: Set metadata immediately and play placeholder
-      // This keeps the widget showing correct info during stream loading
+      // Update media session metadata immediately
       updateMediaSessionMetadata(track, true);
-      
-      // Play silent placeholder on iOS (not on CarPlay/Bluetooth) to maintain session
-      await iosAudio.playPlaceholder();
 
-      // REMOVED: Automatic metadata fetch - user can manually fix metadata via Debug Modal if needed
-      // Use original track for playback
+      // Clear prefetch state
+      prefetchedNextUrlRef.current = null;
+      prefetchedTrackIdRef.current = null;
+
       const enrichedTrack = track;
 
       clearDebugLogs();
@@ -1662,8 +1591,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     (index: number) => {
       if (index < 0 || index >= state.queue.length) return;
       const track = state.queue[index];
-      setState((prev) => ({ ...prev, queueIndex: index }));
-      playTrack(track, state.queue);
+      playTrack(track, state.queue, index);
     },
     [playTrack, state.queue]
   );
@@ -1771,8 +1699,92 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     currentTrackRef.current = state.currentTrack;
   }, [state.queue, state.queueIndex, state.currentTrack]);
 
+  // Internal play: advances within existing queue without resetting it
+  const playTrackInternal = useCallback(async (track: Track, index: number) => {
+    // Save listening stats for previous track
+    if (lastSavedTrackRef.current && audioRef.current) {
+      const { track: prevTrack, startTime } = lastSavedTrackRef.current;
+      const actualSecondsListened = Math.round((Date.now() - startTime) / 1000);
+      if (actualSecondsListened >= 10) {
+        saveRecentlyPlayedTrack(prevTrack, user?.id, actualSecondsListened);
+        if (user?.id) {
+          updateListeningStats(prevTrack, user.id, actualSecondsListened);
+        }
+      }
+      lastSavedTrackRef.current = null;
+    }
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+
+    currentSearchTrackIdRef.current = track.id;
+
+    // Update state: currentTrack + queueIndex, but do NOT touch queue
+    setState((prev) => ({
+      ...prev,
+      currentTrack: track,
+      isPlaying: true,
+      queueIndex: index,
+      duration: track.duration,
+      progress: 0,
+    }));
+
+    updateMediaSessionMetadata(track, true);
+
+    // Clear prefetch
+    prefetchedNextUrlRef.current = null;
+    prefetchedTrackIdRef.current = null;
+
+    // Now resolve the audio source (same logic as playTrack but without queue setup)
+    const enrichedTrack = track;
+
+    clearDebugLogs();
+    setAlternativeStreams([]);
+    setAvailableTorrents([]);
+    setCurrentStreamId(undefined);
+    setDownloadProgress(null);
+    setDownloadStatus(null);
+    setLoadingPhase('idle');
+    setCurrentAudioSource(null);
+
+    // Check offline first
+    const offlineUrl = await getOfflineTrackUrl(enrichedTrack.id);
+    if (offlineUrl && audioRef.current) {
+      audioRef.current.src = offlineUrl;
+      if (await safePlay(audioRef.current)) {
+        setState((prev) => ({ ...prev, isPlaying: true }));
+        setLoadingPhase('idle');
+        setCurrentAudioSource('offline');
+        lastSavedTrackRef.current = { track: enrichedTrack, startTime: Date.now() };
+        return;
+      }
+    }
+
+    // Check prefetched URL
+    const prefetched = prefetchedNextUrlRef.current;
+    if (prefetched && prefetched.trackId === enrichedTrack.id && prefetched.url && audioRef.current) {
+      console.log('[Queue] Using prefetched URL for:', enrichedTrack.title);
+      audioRef.current.src = prefetched.url;
+      prefetchedNextUrlRef.current = null;
+      prefetchedTrackIdRef.current = null;
+      if (await safePlay(audioRef.current)) {
+        setState((prev) => ({ ...prev, isPlaying: true }));
+        setLoadingPhase('idle');
+        setCurrentAudioSource(prefetched.source);
+        lastSavedTrackRef.current = { track: enrichedTrack, startTime: Date.now() };
+        return;
+      }
+    }
+
+    // Delegate to full playTrack for source resolution (but keep the queue!)
+    // We need to call the source resolution logic - reuse playTrack with current queue
+    const currentQueue = queueRef.current;
+    playTrack(enrichedTrack, currentQueue, index);
+  }, [clearDebugLogs, playTrack, safePlay, user]);
+
   const next = useCallback(async () => {
-    // Always use the latest state from refs to avoid stale closures
     const currentQueue = queueRef.current;
     const currentIndex = queueIndexRef.current;
     const currentTrack = currentTrackRef.current;
@@ -1783,24 +1795,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (nextIndex < currentQueue.length) {
       const nextTrack = currentQueue[nextIndex];
       console.log('[Queue] Playing next track:', nextTrack.title, 'at index', nextIndex);
-      
-      // Update index FIRST, then play track with the SAME queue
-      // This ensures the queue and index are in sync
-      setState((prev) => ({ 
-        ...prev, 
-        queueIndex: nextIndex,
-        currentTrack: nextTrack,
-        progress: 0 
-      }));
-      
-      // Play the track - pass the queue explicitly
-      playTrack(nextTrack, currentQueue);
+      playTrackInternal(nextTrack, nextIndex);
     } else if (currentTrack) {
-      // End of queue - fetch similar tracks and continue playing
+      // End of queue - fetch similar tracks
       console.log('[Autoplay] Queue ended, fetching similar tracks...');
       addDebugLog('🔄 Autoplay', 'Carico brani simili...', 'info');
       
-      // Fetch similar tracks - use await to ensure we get them before playing
       try {
         const similarTracks = await fetchSimilarTracks(currentTrack);
         if (similarTracks.length > 0) {
@@ -1810,26 +1810,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           
           console.log('[Autoplay] Adding', similarTracks.length, 'tracks, playing at index', newIndex);
           
-          // Update queue and index atomically, then play
-          setState((prev) => ({ 
-            ...prev, 
-            queue: newQueue,
-            queueIndex: newIndex,
-            currentTrack: similarTracks[0],
-            progress: 0
-          }));
-          
-          playTrack(similarTracks[0], newQueue);
+          // For autoplay, use playTrack to set the new expanded queue
+          playTrack(similarTracks[0], newQueue, newIndex);
           addDebugLog('✅ Autoplay avviato', `${similarTracks.length} brani aggiunti`, 'success');
         } else {
           addDebugLog('ℹ️ Autoplay', 'Nessun brano simile trovato', 'info');
         }
       } catch (error) {
-        console.error('[Autoplay] Error fetching similar tracks:', error);
+        console.error('[Autoplay] Error:', error);
         addDebugLog('❌ Autoplay fallito', error instanceof Error ? error.message : 'Errore', 'error');
       }
     }
-  }, [addDebugLog, fetchSimilarTracks, playTrack]);
+  }, [addDebugLog, fetchSimilarTracks, playTrack, playTrackInternal]);
 
   const previous = useCallback(() => {
     if (state.progress > 3) {
@@ -1846,18 +1838,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (prevIndex >= 0) {
       const prevTrack = currentQueue[prevIndex];
       console.log('[Queue] Playing previous track:', prevTrack.title, 'at index', prevIndex);
-      
-      // Update index FIRST, then play
-      setState((prev) => ({ 
-        ...prev, 
-        queueIndex: prevIndex,
-        currentTrack: prevTrack,
-        progress: 0 
-      }));
-      
-      playTrack(prevTrack, currentQueue);
+      playTrackInternal(prevTrack, prevIndex);
     }
-  }, [playTrack, seek, state.progress]);
+  }, [playTrackInternal, seek, state.progress]);
 
   // Keep refs updated for Media Session handlers
   useEffect(() => {
@@ -1865,39 +1848,26 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     previousRef.current = previous;
   }, [next, previous]);
 
-  // Pre-fetch next track URL for seamless iOS background playback
+  // Pre-fetch next track URL (simplified - no event system, just pre-resolve URL)
   useEffect(() => {
-    const handlePrefetchNextTrack = async () => {
-      // Skip if already prefetching
+    if (!state.currentTrack || !state.isPlaying) return;
+    
+    const currentQueue = queueRef.current;
+    const currentIndex = queueIndexRef.current;
+    const nextIndex = currentIndex + 1;
+    
+    if (nextIndex >= currentQueue.length) return;
+    
+    const nextTrack = currentQueue[nextIndex];
+    if (!nextTrack) return;
+    if (prefetchedTrackIdRef.current === nextTrack.id) return;
+    
+    const prefetchTimeout = setTimeout(async () => {
       if (isPrefetchingRef.current) return;
-      
-      // Use refs to get latest queue state
-      const currentQueue = queueRef.current;
-      const currentIndex = queueIndexRef.current;
-      const nextIndex = currentIndex + 1;
-      
-      console.log('[Prefetch] Checking next track - currentIndex:', currentIndex, 'nextIndex:', nextIndex, 'queueLength:', currentQueue.length);
-      
-      if (nextIndex >= currentQueue.length) {
-        console.log('[Prefetch] No next track in queue');
-        return;
-      }
-      
-      const nextTrack = currentQueue[nextIndex];
-      if (!nextTrack) return;
-      
-      // Skip if already prefetched this track
-      if (prefetchedTrackIdRef.current === nextTrack.id) {
-        console.log('[Prefetch] Already prefetched:', nextTrack.title);
-        return;
-      }
-      
       isPrefetchingRef.current = true;
-      console.log('[Prefetch] Starting prefetch for:', nextTrack.title);
-      addDebugLog('🔄 Pre-caricamento', `Preparando "${nextTrack.title}"...`, 'info');
       
       try {
-        // STEP 1: Check if we have a saved mapping with direct link (fastest)
+        // Check saved RD mapping
         if (nextTrack.albumId) {
           const { data: trackMapping } = await supabase
             .from('track_file_mappings')
@@ -1906,149 +1876,32 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             .maybeSingle();
           
           if (trackMapping?.direct_link) {
-            prefetchedNextUrlRef.current = {
-              trackId: nextTrack.id,
-              url: trackMapping.direct_link,
-              source: 'real-debrid'
-            };
+            prefetchedNextUrlRef.current = { trackId: nextTrack.id, url: trackMapping.direct_link, source: 'real-debrid' };
             prefetchedTrackIdRef.current = nextTrack.id;
-            console.log('[Prefetch] Found cached RD link for:', nextTrack.title);
-            addDebugLog('✅ Pre-caricato (RD cache)', `"${nextTrack.title}" pronto`, 'success');
+            console.log('[Prefetch] Cached RD link for:', nextTrack.title);
             isPrefetchingRef.current = false;
             return;
           }
         }
         
-        // STEP 2: Try Tidal (fast and reliable)
+        // Try Tidal
         const tidalQuality = mapQualityToTidal(settings.audioQuality);
         const tidalResult = await getTidalStream(nextTrack.title, nextTrack.artist, tidalQuality);
         
         if ('streamUrl' in tidalResult && tidalResult.streamUrl) {
-          prefetchedNextUrlRef.current = {
-            trackId: nextTrack.id,
-            url: tidalResult.streamUrl,
-            source: 'tidal'
-          };
+          prefetchedNextUrlRef.current = { trackId: nextTrack.id, url: tidalResult.streamUrl, source: 'tidal' };
           prefetchedTrackIdRef.current = nextTrack.id;
-          console.log('[Prefetch] Successfully prefetched Tidal URL for:', nextTrack.title);
-          addDebugLog('✅ Pre-caricato (Tidal)', `"${nextTrack.title}" pronto`, 'success');
-          isPrefetchingRef.current = false;
-          return;
-        }
-        
-        // STEP 3: If Tidal failed and we have RD credentials, try RD search
-        if (credentials?.realDebridApiKey) {
-          console.log('[Prefetch] Tidal failed, trying RD for:', nextTrack.title);
-          addDebugLog('🔄 Tidal fallito, provo RD...', nextTrack.title, 'info');
-          
-          const query = nextTrack.album?.trim() 
-            ? `${nextTrack.album} ${nextTrack.artist}` 
-            : `${nextTrack.title} ${nextTrack.artist}`;
-          
-          const result = await searchStreams(credentials.realDebridApiKey, query);
-          
-          // Try to find matching file in torrents
-          for (const torrent of result.torrents) {
-            if (!torrent.files?.length) continue;
-            const matchingFile = torrent.files.find((file) =>
-              flexibleMatch(file.filename || '', nextTrack.title) || 
-              flexibleMatch(file.path || '', nextTrack.title)
-            );
-            if (!matchingFile) continue;
-            
-            // Select the file and get stream URL
-            const selectResult = await selectFilesAndPlay(
-              credentials.realDebridApiKey, 
-              torrent.torrentId, 
-              [matchingFile.id]
-            );
-            
-            if (!selectResult.error && selectResult.streams.length > 0) {
-              const streamUrl = selectResult.streams[0].streamUrl;
-              
-              prefetchedNextUrlRef.current = {
-                trackId: nextTrack.id,
-                url: streamUrl,
-                source: 'real-debrid'
-              };
-              prefetchedTrackIdRef.current = nextTrack.id;
-              console.log('[Prefetch] Successfully prefetched RD URL for:', nextTrack.title);
-              addDebugLog('✅ Pre-caricato (RD)', `"${nextTrack.title}" pronto`, 'success');
-              
-              // Also save mapping for future use
-              if (nextTrack.albumId) {
-                // Fire and forget - don't block prefetch
-                saveFileMapping({
-                  track: nextTrack,
-                  torrentId: torrent.torrentId,
-                  torrentTitle: torrent.title,
-                  fileId: matchingFile.id,
-                  fileName: matchingFile.filename,
-                  filePath: matchingFile.path,
-                  directLink: streamUrl,
-                }).catch(() => {});
-              }
-              break;
-            }
-          }
-        }
-        
-        if (!prefetchedNextUrlRef.current) {
-          console.log('[Prefetch] All sources failed for:', nextTrack.title);
-          addDebugLog('⚠️ Pre-caricamento fallito', `"${nextTrack.title}" - userà ricerca normale`, 'warning');
+          console.log('[Prefetch] Tidal URL ready for:', nextTrack.title);
         }
       } catch (error) {
-        console.log('[Prefetch] Error during prefetch:', error);
-        addDebugLog('⚠️ Errore pre-caricamento', error instanceof Error ? error.message : 'Errore', 'warning');
+        console.log('[Prefetch] Error:', error);
       } finally {
         isPrefetchingRef.current = false;
       }
-    };
+    }, 3000);
     
-    // Handle when prefetched track starts playing
-    const handlePrefetchPlayed = (event: CustomEvent) => {
-      const { trackId, source } = event.detail;
-      
-      // Use refs to get latest state - avoids stale closure issues
-      const currentQueue = queueRef.current;
-      const currentIndex = queueIndexRef.current;
-      const nextIndex = currentIndex + 1;
-      
-      console.log('[Prefetch] handlePrefetchPlayed - trackId:', trackId, 'currentIndex:', currentIndex, 'nextIndex:', nextIndex);
-      
-      if (nextIndex < currentQueue.length) {
-        const nextTrack = currentQueue[nextIndex];
-        if (nextTrack && nextTrack.id === trackId) {
-          console.log('[Prefetch] Updating state for prefetched track:', nextTrack.title);
-          setState((prev) => ({
-            ...prev,
-            currentTrack: nextTrack,
-            queueIndex: nextIndex,
-            isPlaying: true,
-            progress: 0,
-          }));
-          setCurrentAudioSource(source);
-          updateMediaSessionMetadata(nextTrack, true);
-          // Start tracking playback time for the new track
-          lastSavedTrackRef.current = { track: nextTrack, startTime: Date.now() };
-        } else {
-          console.log('[Prefetch] Track ID mismatch. Expected:', nextTrack?.id, 'Got:', trackId);
-        }
-      } else {
-        // End of queue reached - trigger autoplay via next()
-        console.log('[Prefetch] End of queue reached, triggering autoplay...');
-        nextRef.current();
-      }
-    };
-    
-    window.addEventListener('prefetch-next-track', handlePrefetchNextTrack);
-    window.addEventListener('prefetch-played', handlePrefetchPlayed as EventListener);
-    
-    return () => {
-      window.removeEventListener('prefetch-next-track', handlePrefetchNextTrack);
-      window.removeEventListener('prefetch-played', handlePrefetchPlayed as EventListener);
-    };
-  }, [settings.audioQuality, addDebugLog, user?.id, credentials?.realDebridApiKey, saveFileMapping]);
+    return () => clearTimeout(prefetchTimeout);
+  }, [state.currentTrack?.id, state.isPlaying, settings.audioQuality]);
 
   // Note: Media Session next/previous handlers are set up in the audio initialization useEffect
 
