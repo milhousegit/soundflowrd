@@ -180,6 +180,8 @@ async function findBestMatch(title: string, artist: string): Promise<{ tidalId: 
     `${title} ${artist}`,
     title,
   ];
+
+  let bestOverall: { id: string; score: number; track: any } | null = null;
   
   for (const query of queries) {
     try {
@@ -197,7 +199,12 @@ async function findBestMatch(title: string, artist: string): Promise<{ tidalId: 
       // Sort by score
       scored.sort((a, b) => b.score - a.score);
       
-      // Return best match if score is good enough
+      // Track the best match across all queries
+      if (scored[0].score > (bestOverall?.score ?? 0)) {
+        bestOverall = scored[0];
+      }
+
+      // Return immediately if score is very good
       if (scored[0].score >= 80) {
         console.log(`[SquidWTF] Best match: "${scored[0].track.title}" by ${scored[0].track.artist?.name} (score: ${scored[0].score})`);
         return { tidalId: scored[0].id, score: scored[0].score };
@@ -205,6 +212,12 @@ async function findBestMatch(title: string, artist: string): Promise<{ tidalId: 
     } catch (e) {
       console.error(`[SquidWTF] Search error for "${query}":`, e);
     }
+  }
+
+  // Accept lower-confidence matches (threshold 40) rather than returning nothing
+  if (bestOverall && bestOverall.score >= 40) {
+    console.log(`[SquidWTF] Low-confidence match: "${bestOverall.track.title}" by ${bestOverall.track.artist?.name} (score: ${bestOverall.score})`);
+    return { tidalId: bestOverall.id, score: bestOverall.score };
   }
   
   return null;
