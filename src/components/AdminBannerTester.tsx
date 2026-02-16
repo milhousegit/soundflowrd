@@ -239,7 +239,7 @@ const TestUnlockPremiumModal: React.FC<{ onClose: () => void; onPayment: () => v
   ];
 
   const handlePayment = () => {
-    window.open('https://www.paypal.me/tony271202/9,90', '_blank');
+    window.open('https://ko-fi.com/tony271202', '_blank');
     onPayment();
   };
 
@@ -280,7 +280,7 @@ const TestUnlockPremiumModal: React.FC<{ onClose: () => void; onPayment: () => v
           className="w-full h-11 mt-4 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0"
         >
           <Crown className="w-4 h-4 mr-2" />
-          {isItalian ? 'Dona 9,90€/anno' : '€9.90/year'}
+          {isItalian ? 'Supportaci su Ko-fi' : 'Support us on Ko-fi'}
         </Button>
       </div>
     </div>

@@ -59,8 +59,8 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
   };
 
   const handleRenewPremium = async () => {
-    // Open PayPal link
-    window.open('https://www.paypal.me/tony271202/9,90', '_blank');
+    // Open Ko-fi link
+    window.open('https://ko-fi.com/tony271202', '_blank');
     // Save payment pending timestamp
     if (profile?.id) {
       await supabase
