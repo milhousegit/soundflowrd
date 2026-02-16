@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface KofiModalProps {
@@ -9,8 +10,8 @@ interface KofiModalProps {
 const KofiModal: React.FC<KofiModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 animate-fade-in" style={{ position: 'fixed' }}>
+  return createPortal(
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 animate-fade-in">
       {/* Blurred backdrop */}
       <div 
         className="absolute inset-0 bg-background/60 backdrop-blur-md"
@@ -38,7 +39,8 @@ const KofiModal: React.FC<KofiModalProps> = ({ isOpen, onClose }) => {
           />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
