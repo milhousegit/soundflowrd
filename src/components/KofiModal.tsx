@@ -51,8 +51,8 @@ const KofiModal: React.FC<KofiModalProps> = ({ isOpen, onClose }) => {
           <div className="mb-3 p-3 rounded-xl bg-card/90 backdrop-blur-sm border border-border">
             <p className="text-xs text-muted-foreground mb-1.5">
               {isItalian 
-                ? '⚠️ Inserisci questa email nel campo "Name" per attivare Premium automaticamente:'
-                : '⚠️ Enter this email in the "Name" field to activate Premium automatically:'}
+                ? '⚠️ Inserisci questa email nel campo "Email" per attivare Premium automaticamente:'
+                : '⚠️ Enter this email in the "Email" field to activate Premium automatically:'}
             </p>
             <button
               onClick={handleCopy}
