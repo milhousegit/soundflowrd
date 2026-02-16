@@ -93,7 +93,7 @@ const KofiModal: React.FC<KofiModalProps> = ({ isOpen, onClose }) => {
             src="https://ko-fi.com/milhousedhl/?hidefeed=true&widget=true&embed=true&preview=true"
             className="w-full border-none"
             style={{ background: 'transparent', padding: '4px' }}
-            height="712"
+            height="600"
             title="milhousedhl"
           />
         </div>
