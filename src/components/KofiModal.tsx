@@ -29,13 +29,14 @@ const KofiModal: React.FC<KofiModalProps> = ({ isOpen, onClose }) => {
         </button>
 
         {/* Ko-fi iframe */}
-        <div className="rounded-2xl overflow-hidden shadow-2xl">
+        <div className="rounded-2xl overflow-hidden">
           <iframe
+            id="kofiframe"
             src="https://ko-fi.com/milhousedhl/?hidefeed=true&widget=true&embed=true&preview=true"
             className="w-full border-none"
-            style={{ background: 'transparent' }}
+            style={{ background: 'transparent', padding: '4px' }}
             height="712"
-            title="Ko-fi"
+            title="milhousedhl"
           />
         </div>
       </div>
