@@ -10,7 +10,7 @@ const KofiModal: React.FC<KofiModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 animate-fade-in">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 animate-fade-in" style={{ position: 'fixed' }}>
       {/* Blurred backdrop */}
       <div 
         className="absolute inset-0 bg-background/60 backdrop-blur-md"
