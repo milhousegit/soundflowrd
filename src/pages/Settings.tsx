@@ -385,7 +385,7 @@ const Settings: React.FC = () => {
                   
                   <Button className="w-full h-11 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0" onClick={async () => {
                     setShowPremiumModal(false);
-                    window.open('https://www.paypal.me/tony271202/9,90', '_blank');
+                    window.open('https://ko-fi.com/tony271202', '_blank');
                     // Save payment pending timestamp
                     if (user?.id) {
                       await supabase
@@ -398,7 +398,7 @@ const Settings: React.FC = () => {
                     }, 1500);
                   }}>
                     <Crown className="w-4 h-4 mr-2" />
-                    {settings.language === 'it' ? 'Dona 9,90€/anno' : '€9.90/year'}
+                    {settings.language === 'it' ? 'Supportaci su Ko-fi' : 'Support us on Ko-fi'}
                   </Button>
                 </DialogContent>
               </Dialog>
