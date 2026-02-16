@@ -19,6 +19,7 @@ import AdminArtistMerge from '@/components/AdminArtistMerge';
 import AdminReferralSettings from '@/components/AdminReferralSettings';
 import AdminChartConfig from '@/components/AdminChartConfig';
 import PaymentPendingBanner from '@/components/PaymentPendingBanner';
+import KofiModal from '@/components/KofiModal';
 import ReferralShare from '@/components/ReferralShare';
 import { isPast } from 'date-fns';
 import BackButton from '@/components/BackButton';
@@ -68,6 +69,7 @@ const Settings: React.FC = () => {
   const [showCloudSection, setShowCloudSection] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showPaymentPendingBanner, setShowPaymentPendingBanner] = useState(false);
+  const [showKofiModal, setShowKofiModal] = useState(false);
 
   // Check if user has active premium (respect simulation mode)
   const isPremiumActive = !simulateFreeUser && profile?.is_premium && (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at)));
@@ -383,19 +385,9 @@ const Settings: React.FC = () => {
                     ))}
                   </div>
                   
-                  <Button className="w-full h-11 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0" onClick={async () => {
+                  <Button className="w-full h-11 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0" onClick={() => {
                     setShowPremiumModal(false);
-                    window.open('https://ko-fi.com/tony271202', '_blank');
-                    // Save payment pending timestamp
-                    if (user?.id) {
-                      await supabase
-                        .from('profiles')
-                        .update({ payment_pending_since: new Date().toISOString() })
-                        .eq('id', user.id);
-                    }
-                    setTimeout(() => {
-                      setShowPaymentPendingBanner(true);
-                    }, 1500);
+                    setShowKofiModal(true);
                   }}>
                     <Crown className="w-4 h-4 mr-2" />
                     {settings.language === 'it' ? 'Supportaci su Ko-fi' : 'Support us on Ko-fi'}
@@ -916,6 +908,23 @@ const Settings: React.FC = () => {
       {showPaymentPendingBanner && (
         <PaymentPendingBanner onClose={() => setShowPaymentPendingBanner(false)} />
       )}
+
+      {/* Ko-fi Modal */}
+      <KofiModal 
+        isOpen={showKofiModal} 
+        onClose={async () => {
+          setShowKofiModal(false);
+          if (user?.id) {
+            await supabase
+              .from('profiles')
+              .update({ payment_pending_since: new Date().toISOString() })
+              .eq('id', user.id);
+          }
+          setTimeout(() => {
+            setShowPaymentPendingBanner(true);
+          }, 1500);
+        }} 
+      />
     </div>
   );
 };

@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Crown, X, AlertTriangle, Download, Car, Music, Mic2, Zap } from 'lucide-react';
+import KofiModal from '@/components/KofiModal';
 import { Button } from '@/components/ui/button';
 import { isPast } from 'date-fns';
 import PaymentPendingBanner from './PaymentPendingBanner';
@@ -19,6 +20,7 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
   const { settings } = useSettings();
   const [isVisible, setIsVisible] = useState(false);
   const [showPaymentPending, setShowPaymentPending] = useState(false);
+  const [showKofiModal, setShowKofiModal] = useState(false);
   const isItalian = settings.language === 'it';
 
   // Check if premium has expired (had premium but now expired)
@@ -58,9 +60,13 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
     }
   };
 
-  const handleRenewPremium = async () => {
-    // Open Ko-fi link
-    window.open('https://ko-fi.com/tony271202', '_blank');
+  const handleRenewPremium = () => {
+    handleDismiss();
+    setShowKofiModal(true);
+  };
+
+  const handleKofiClose = async () => {
+    setShowKofiModal(false);
     // Save payment pending timestamp
     if (profile?.id) {
       await supabase
@@ -68,14 +74,12 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
         .update({ payment_pending_since: new Date().toISOString() })
         .eq('id', profile.id);
     }
-    // Close this banner and show payment pending
-    handleDismiss();
     setTimeout(() => {
       setShowPaymentPending(true);
     }, 1500);
   };
 
-  if (!isVisible && !showPaymentPending) return null;
+  if (!isVisible && !showPaymentPending && !showKofiModal) return null;
 
   const lostFeatures = [
     {
@@ -183,6 +187,9 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
         </div>
       )}
       
+      {/* Ko-fi Modal */}
+      <KofiModal isOpen={showKofiModal} onClose={handleKofiClose} />
+
       {/* Payment Pending Banner */}
       {showPaymentPending && (
         <PaymentPendingBanner onClose={() => setShowPaymentPending(false)} />

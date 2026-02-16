@@ -4,6 +4,7 @@ import { ChevronDown, Eye, Crown, AlertTriangle, Sparkles, Download, Car, Music,
 import { useSettings } from '@/contexts/SettingsContext';
 import { useRateLimiter } from '@/hooks/useRateLimiter';
 import PremiumExpiredBanner from './PremiumExpiredBanner';
+import KofiModal from './KofiModal';
 
 interface AdminBannerTesterProps {
   language: 'it' | 'en';
@@ -239,7 +240,7 @@ const TestUnlockPremiumModal: React.FC<{ onClose: () => void; onPayment: () => v
   ];
 
   const handlePayment = () => {
-    window.open('https://ko-fi.com/tony271202', '_blank');
+    onClose();
     onPayment();
   };
 
