@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { usePlayer } from '@/contexts/PlayerContext';
@@ -446,10 +446,20 @@ const MobileRemote: React.FC = () => {
   );
 };
 
-// ─── MAIN TV PAGE ───
+// ─── MAIN TV PAGE (unprotected, outside Layout) ───
 const TV: React.FC = () => {
   const isMobile = useIsMobile();
-  return isMobile ? <MobileRemote /> : <TVDisplay />;
+  // On mobile, redirect to /remote (inside Layout) to keep player alive
+  if (isMobile) {
+    const search = window.location.search;
+    return <Navigate to={`/remote${search}`} replace />;
+  }
+  return <TVDisplay />;
+};
+
+// ─── MOBILE REMOTE PAGE (protected, inside Layout) ───
+export const MobileRemotePage: React.FC = () => {
+  return <MobileRemote />;
 };
 
 export default TV;
