@@ -66,6 +66,7 @@ const TVDisplay: React.FC = () => {
   const [streamLoading, setStreamLoading] = useState(false);
   const fetchingTrackIdRef = useRef<string | null>(null);
   const remoteCurrentTimeRef = useRef<number>(0);
+  const playbackStartedAtRef = useRef<number>(0);
 
   const tvUrl = `${window.location.origin}/tv?room=${roomCode}`;
 
@@ -98,15 +99,12 @@ const TVDisplay: React.FC = () => {
         audio.src = result.streamUrl;
         audio.load();
 
-        // Sync to phone's current time
-        if (remoteCurrentTimeRef.current > 0) {
-          audio.currentTime = remoteCurrentTimeRef.current;
-        }
-
         // Auto-play if audio is unlocked
         if (audioUnlockedRef.current) {
           audio.muted = tvMutedRef.current;
-          audio.play().catch(() => {});
+          audio.play().then(() => {
+            playbackStartedAtRef.current = Date.now();
+          }).catch(() => {});
         }
       } else {
         const errorMsg = 'error' in result ? result.error : 'No stream found';
@@ -138,10 +136,13 @@ const TVDisplay: React.FC = () => {
         const audio = tvAudioRef.current;
         if (!audio || !audio.src) return;
 
-        // Sync currentTime from phone's progress
+        // Sync currentTime from phone's progress (skip first 5s after playback starts)
         if (typeof data.progress === 'number') {
-          const diff = Math.abs(audio.currentTime - data.progress);
-          if (diff > 3) audio.currentTime = data.progress;
+          const elapsed = Date.now() - playbackStartedAtRef.current;
+          if (elapsed > 5000) {
+            const diff = Math.abs(audio.currentTime - data.progress);
+            if (diff > 3) audio.currentTime = data.progress;
+          }
         }
 
         // Sync play/pause if audio is unlocked
