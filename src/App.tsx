@@ -95,8 +95,8 @@ const AppRoutes = () => {
         <Route path="album/:id" element={<Album />} />
         <Route path="playlist/:id" element={<Playlist />} />
         <Route path="deezer-playlist/:id" element={<DeezerPlaylist />} />
+        <Route path="tv" element={<TV />} />
       </Route>
-      <Route path="/tv" element={<TV />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

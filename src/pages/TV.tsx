@@ -2,13 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useTVConnection } from '@/contexts/TVConnectionContext';
 import { Track } from '@/types/music';
 import { QRCodeSVG } from 'qrcode.react';
-import { Tv, Smartphone, Wifi, WifiOff, Music2, Loader2, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, ScanLine, X } from 'lucide-react';
+import { Tv, Smartphone, Wifi, WifiOff, Music2, Loader2, Pause, ScanLine, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -45,7 +44,7 @@ function parseSyncedLyrics(syncedLyrics: string): SyncedLine[] {
 const TVDisplay: React.FC = () => {
   const { settings } = useSettings();
   const isItalian = settings.language === 'it';
-  const [roomCode, setRoomCode] = useState(() => generateRoomCode());
+  const [roomCode] = useState(() => generateRoomCode());
   const [connected, setConnected] = useState(false);
   const [remoteTrack, setRemoteTrack] = useState<Track | null>(null);
   const [remoteIsPlaying, setRemoteIsPlaying] = useState(false);
@@ -74,7 +73,6 @@ const TVDisplay: React.FC = () => {
         if (data.track) setRemoteTrack(data.track);
         if (typeof data.isPlaying === 'boolean') setRemoteIsPlaying(data.isPlaying);
         if (typeof data.progress === 'number') setRemoteProgress(data.progress);
-        // Handle audio stream URL
         if (data.streamUrl && data.streamUrl !== lastStreamUrlRef.current) {
           lastStreamUrlRef.current = data.streamUrl;
           if (tvAudioRef.current) {
@@ -82,7 +80,6 @@ const TVDisplay: React.FC = () => {
             if (data.isPlaying) tvAudioRef.current.play().catch(() => {});
           }
         }
-        // Sync play/pause
         if (tvAudioRef.current) {
           if (data.isPlaying && tvAudioRef.current.paused) {
             tvAudioRef.current.play().catch(() => {});
@@ -172,11 +169,9 @@ const TVDisplay: React.FC = () => {
           <Tv className="w-10 h-10 text-primary" />
           <h1 className="text-3xl font-bold text-white">SoundFlow TV</h1>
         </div>
-
         <div className="bg-white p-6 rounded-2xl shadow-2xl">
           <QRCodeSVG value={tvUrl} size={240} level="M" />
         </div>
-
         <div className="text-center space-y-3 max-w-md">
           <p className="text-white/80 text-lg">
             {isItalian
@@ -192,7 +187,6 @@ const TVDisplay: React.FC = () => {
             <p className="text-white text-2xl font-mono tracking-[0.3em]">{roomCode}</p>
           </div>
         </div>
-
         <div className="flex items-center gap-2 text-white/30 animate-pulse">
           <WifiOff className="w-4 h-4" />
           <span className="text-sm">{isItalian ? 'In attesa di connessione...' : 'Waiting for connection...'}</span>
@@ -204,25 +198,16 @@ const TVDisplay: React.FC = () => {
   // Connected - show lyrics and track info
   return (
     <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
-      {/* Background blurred cover */}
       {remoteTrack?.coverUrl && (
         <div className="absolute inset-0 z-0">
-          <img
-            src={remoteTrack.coverUrl}
-            alt=""
-            className="w-full h-full object-cover blur-3xl scale-110 opacity-20"
-          />
+          <img src={remoteTrack.coverUrl} alt="" className="w-full h-full object-cover blur-3xl scale-110 opacity-20" />
           <div className="absolute inset-0 bg-black/60" />
         </div>
       )}
-
-      {/* Connected indicator */}
       <div className="absolute top-6 right-6 z-10 flex items-center gap-2 text-green-400/70">
         <Wifi className="w-4 h-4" />
         <span className="text-xs">{isItalian ? 'Connesso' : 'Connected'}</span>
       </div>
-
-      {/* Center: Lyrics */}
       <div className="flex-1 flex items-center justify-center z-10 px-8 py-24">
         {lyricsLoading ? (
           <Loader2 className="w-10 h-10 text-white/40 animate-spin" />
@@ -264,17 +249,11 @@ const TVDisplay: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Bottom: Track info */}
       {remoteTrack && (
         <div className="absolute bottom-0 left-0 right-0 z-10 p-6 bg-gradient-to-t from-black/90 to-transparent">
           <div className="flex items-center gap-4">
             {remoteTrack.coverUrl ? (
-              <img
-                src={remoteTrack.coverUrl}
-                alt={remoteTrack.album}
-                className="w-16 h-16 md:w-20 md:h-20 rounded-lg object-cover shadow-lg"
-              />
+              <img src={remoteTrack.coverUrl} alt={remoteTrack.album} className="w-16 h-16 md:w-20 md:h-20 rounded-lg object-cover shadow-lg" />
             ) : (
               <div className="w-16 h-16 md:w-20 md:h-20 rounded-lg bg-white/10 flex items-center justify-center">
                 <Music2 className="w-8 h-8 text-white/30" />
@@ -306,34 +285,39 @@ const TVDisplay: React.FC = () => {
 const MobileRemote: React.FC = () => {
   const { settings } = useSettings();
   const isItalian = settings.language === 'it';
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { isConnected, connectToRoom } = useTVConnection();
   const navigate = useNavigate();
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const scannerRef = useRef<any>(null);
-  const startScannerOnMount = useRef(false);
+  const autoStarted = useRef(false);
 
-  // Check URL for room param, otherwise auto-start scanner
+  // Check URL for room param
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get('room');
     if (room) {
       connectToRoom(room);
-    } else if (!isConnected) {
-      startScannerOnMount.current = true;
     }
-  }, []);
+  }, [connectToRoom]);
 
-  // When connected, navigate back to home so user can browse normally
+  // When connected, navigate back to home
   useEffect(() => {
     if (isConnected) {
+      // Stop scanner if running
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {});
+        scannerRef.current = null;
+      }
       navigate('/', { replace: true });
     }
   }, [isConnected, navigate]);
 
   const handleConnect = useCallback((code: string) => {
-    if (scannerRef.current) scannerRef.current.stop().catch(() => {});
+    if (scannerRef.current) {
+      scannerRef.current.stop().catch(() => {});
+      scannerRef.current = null;
+    }
     setScanning(false);
     connectToRoom(code);
   }, [connectToRoom]);
@@ -360,6 +344,7 @@ const MobileRemote: React.FC = () => {
             // not a URL
           }
           scanner.stop().catch(() => {});
+          scannerRef.current = null;
           handleConnect(code);
         },
         () => {}
@@ -370,18 +355,23 @@ const MobileRemote: React.FC = () => {
     }
   }, [handleConnect]);
 
-  // Auto-start scanner after auth is ready
+  // Auto-start scanner if no room param
   useEffect(() => {
-    if (startScannerOnMount.current && isAuthenticated && !authLoading && !isConnected) {
-      startScannerOnMount.current = false;
+    if (autoStarted.current || isConnected) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get('room')) {
+      autoStarted.current = true;
       startScanner();
     }
-  }, [isAuthenticated, authLoading, isConnected, startScanner]);
+  }, [isConnected, startScanner]);
 
-  // Cleanup scanner
+  // Cleanup scanner on unmount
   useEffect(() => {
     return () => {
-      if (scannerRef.current) scannerRef.current.stop().catch(() => {});
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {});
+        scannerRef.current = null;
+      }
     };
   }, []);
 
@@ -390,30 +380,8 @@ const MobileRemote: React.FC = () => {
     if (code.length >= 4) handleConnect(code);
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 gap-4">
-        <Tv className="w-12 h-12 text-muted-foreground" />
-        <p className="text-muted-foreground text-center">
-          {isItalian ? 'Accedi per usare il telecomando TV' : 'Log in to use TV remote'}
-        </p>
-        <Button onClick={() => window.location.href = '/login'}>
-          {isItalian ? 'Accedi' : 'Log in'}
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background flex flex-col p-6 gap-5" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
+    <div className="flex flex-col p-6 gap-5" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Tv className="w-7 h-7 text-primary" />
@@ -424,7 +392,6 @@ const MobileRemote: React.FC = () => {
         </Button>
       </div>
 
-      {/* Instructions */}
       <div className="bg-secondary/50 rounded-xl p-4 space-y-2">
         <p className="text-sm font-medium text-foreground">
           {isItalian ? 'Come collegare:' : 'How to connect:'}
@@ -437,12 +404,11 @@ const MobileRemote: React.FC = () => {
         </ol>
       </div>
 
-      {/* Scanner */}
       {scanning && (
         <div className="w-full space-y-3">
           <div id="qr-reader" className="w-full rounded-xl overflow-hidden" />
           <Button variant="outline" className="w-full" onClick={() => {
-            if (scannerRef.current) scannerRef.current.stop().catch(() => {});
+            if (scannerRef.current) { scannerRef.current.stop().catch(() => {}); scannerRef.current = null; }
             setScanning(false);
           }}>
             {isItalian ? 'Chiudi fotocamera' : 'Close camera'}
@@ -483,9 +449,6 @@ const MobileRemote: React.FC = () => {
 // ─── MAIN TV PAGE ───
 const TV: React.FC = () => {
   const isMobile = useIsMobile();
-
-  // On desktop/TV: show QR code and lyrics display
-  // On mobile: show scanner and remote control
   return isMobile ? <MobileRemote /> : <TVDisplay />;
 };
 
