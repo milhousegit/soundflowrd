@@ -773,6 +773,7 @@ export type Database = {
           bio_track_cover_url: string | null
           bio_track_id: string | null
           bio_track_title: string | null
+          bridge_url: string | null
           comments_blocked_until: string | null
           created_at: string
           currently_playing_at: string | null
@@ -804,6 +805,7 @@ export type Database = {
           bio_track_cover_url?: string | null
           bio_track_id?: string | null
           bio_track_title?: string | null
+          bridge_url?: string | null
           comments_blocked_until?: string | null
           created_at?: string
           currently_playing_at?: string | null
@@ -835,6 +837,7 @@ export type Database = {
           bio_track_cover_url?: string | null
           bio_track_id?: string | null
           bio_track_title?: string | null
+          bridge_url?: string | null
           comments_blocked_until?: string | null
           created_at?: string
           currently_playing_at?: string | null

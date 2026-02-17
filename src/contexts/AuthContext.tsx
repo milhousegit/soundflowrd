@@ -9,6 +9,7 @@ interface Profile {
   real_debrid_api_key: string | null;
   preferred_language: string | null;
   audio_source_mode: string | null;
+  bridge_url: string | null;
   is_premium: boolean | null;
   premium_expires_at: string | null;
   telegram_chat_id: string | null;
@@ -49,6 +50,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   updateApiKey: (apiKey: string) => Promise<{ error: Error | null }>;
   updateAudioSourceMode: (mode: string) => Promise<{ error: Error | null }>;
+  updateBridgeUrl: (url: string) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
   // Legacy support for existing code
   login: (credentials: UserCredentials) => void;
@@ -402,6 +404,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { error: error as Error | null };
   };
 
+  const updateBridgeUrl = async (url: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id ?? user?.id;
+
+    if (!userId) return { error: new Error('Not authenticated') };
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ bridge_url: url })
+      .eq('id', userId);
+
+    if (!error) {
+      setProfile(prev => prev ? { ...prev, bridge_url: url } : prev);
+    }
+
+    return { error: error as Error | null };
+  };
+
   // Build credentials from profile for compatibility
   const credentials: UserCredentials | null = profile?.real_debrid_api_key
     ? {
@@ -465,6 +485,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       signOut,
       updateApiKey,
       updateAudioSourceMode,
+      updateBridgeUrl,
       refreshProfile,
       login,
       logout,
