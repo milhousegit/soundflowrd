@@ -419,7 +419,7 @@ const MobileRemote: React.FC = () => {
           <Tv className="w-7 h-7 text-primary" />
           <h1 className="text-xl font-bold">{isItalian ? 'Collega alla TV' : 'Connect to TV'}</h1>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Close">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/', { replace: true })} aria-label="Close">
           <X className="w-5 h-5" />
         </Button>
       </div>

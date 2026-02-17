@@ -24,6 +24,9 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const savedVolumeRef = useRef<number>(0.7);
 
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+
   const connectToRoom = useCallback((code: string) => {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
@@ -38,7 +41,7 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
         setIsConnected(true);
         setRoomCode(code);
         // Mute phone audio
-        savedVolumeRef.current = volume;
+        savedVolumeRef.current = volumeRef.current;
         setVolume(0);
         // Notify TV
         channel.send({ type: 'broadcast', event: 'phone-connected', payload: {} });
@@ -46,7 +49,7 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
     });
 
     channelRef.current = channel;
-  }, [volume, setVolume]);
+  }, [setVolume]);
 
   const disconnect = useCallback(() => {
     if (channelRef.current) {
