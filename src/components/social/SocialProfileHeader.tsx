@@ -186,8 +186,14 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
         <div className="flex flex-col items-center text-center space-y-4 pt-8">
           {/* Avatar - with Wrapped ring for admin */}
           <div className="relative">
-            {/* Check if user is admin (leomilhouse) - show Wrapped ring */}
-            {(profile as any).is_admin ? (
+            {/* Show Wrapped ring for everyone from Dec 25 to Dec 31 (disappears Jan 1 midnight) */}
+            {(() => {
+              const now = new Date();
+              const month = now.getMonth(); // 0-indexed: 11 = December
+              const day = now.getDate();
+              const isWrappedSeason = month === 11 && day >= 25;
+              return isWrappedSeason;
+            })() ? (
               <WrappedRing
                 avatarUrl={profile.avatar_url}
                 displayName={profile.display_name || profile.email?.split('@')[0]}
