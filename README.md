@@ -51,6 +51,3 @@ You can help a lot by:
 - Sharing feedback  
 
 Enjoy your music, and let’s improve SoundFlow together ❤️
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
