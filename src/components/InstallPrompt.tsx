@@ -28,15 +28,12 @@ const InstallPrompt: React.FC = () => {
       if (Date.now() - dismissedTime < 7 * 24 * 60 * 60 * 1000) return;
     }
 
-    // Detect iOS
+    // Detect iOS - don't show install prompt on iOS
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(isIOSDevice);
 
-    // Show iOS prompt after delay
-    if (isIOSDevice) {
-      const timer = setTimeout(() => setShowPrompt(true), 3000);
-      return () => clearTimeout(timer);
-    }
+    // Skip prompt entirely on iOS
+    if (isIOSDevice) return;
 
     // Android/Desktop PWA prompt
     const handleBeforeInstall = (e: Event) => {
