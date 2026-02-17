@@ -57,6 +57,8 @@ const Settings: React.FC = () => {
     setSelectedScrapingSource,
     hybridFallbackChain,
     setHybridFallbackChain,
+    bridgeUrl,
+    setBridgeUrl,
   } = useSettings();
   const { toast } = useToast();
   
@@ -550,10 +552,10 @@ const Settings: React.FC = () => {
                     {settings.language === 'it' ? 'Indirizzo sito ponte' : 'Bridge site address'}
                   </span>
                   <Input
-                    value={settings.bridgeUrl}
+                    value={bridgeUrl}
                     onChange={(e) => {
                       const val = e.target.value;
-                      updateSettings({ bridgeUrl: val });
+                      setBridgeUrl(val);
                       // Validate on blur or when it looks like a full URL
                       if (val && val.startsWith('http') && val.includes('.')) {
                         const isCompatible = val.startsWith('https://tidal.squid.wtf') || val.startsWith('https://monochrome.tf');

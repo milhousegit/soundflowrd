@@ -12,12 +12,14 @@ interface SettingsContextType {
   setSelectedScrapingSource: (sourceId: string) => void;
   hybridFallbackChain: FallbackSourceId[];
   setHybridFallbackChain: (chain: FallbackSourceId[]) => void;
+  bridgeUrl: string;
+  setBridgeUrl: (url: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { profile, updateAudioSourceMode, isAuthenticated } = useAuth();
+  const { profile, updateAudioSourceMode, updateBridgeUrl, isAuthenticated } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
 
   // Derive audio source mode from profile (DB) or default
@@ -84,6 +86,17 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     updateSettings({ hybridFallbackChain: chain });
   };
 
+  // Bridge URL from DB profile
+  const bridgeUrl = profile?.bridge_url || defaultSettings.bridgeUrl;
+
+  const setBridgeUrl = (url: string) => {
+    if (isAuthenticated) {
+      updateBridgeUrl(url);
+    }
+    // Also update local settings for immediate reactivity
+    updateSettings({ bridgeUrl: url });
+  };
+
   const t = (key: TranslationKey): string => {
     return translations[settings.language][key] || key;
   };
@@ -95,6 +108,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       setSelectedScrapingSource,
       hybridFallbackChain: settings.hybridFallbackChain,
       setHybridFallbackChain,
+      bridgeUrl,
+      setBridgeUrl,
     }}>
       {children}
     </SettingsContext.Provider>

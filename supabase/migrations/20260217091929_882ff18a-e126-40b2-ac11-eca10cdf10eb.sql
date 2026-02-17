@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN bridge_url text DEFAULT 'https://tidal.squid.wtf';
