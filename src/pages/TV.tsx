@@ -381,7 +381,7 @@ const MobileRemote: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col p-6 gap-5" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
+    <div className="fixed inset-0 z-50 bg-background flex flex-col p-6 gap-5 overflow-y-auto" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Tv className="w-7 h-7 text-primary" />
