@@ -130,20 +130,22 @@ const TVDisplay: React.FC = () => {
         const data = payload.payload;
         if (data.track) setRemoteTrack(data.track);
         if (typeof data.isPlaying === 'boolean') setRemoteIsPlaying(data.isPlaying);
-        if (typeof data.progress === 'number') setRemoteProgress(data.progress);
-        if (typeof data.currentTime === 'number') remoteCurrentTimeRef.current = data.currentTime;
+        if (typeof data.progress === 'number') {
+          setRemoteProgress(data.progress);
+          remoteCurrentTimeRef.current = data.progress;
+        }
 
         const audio = tvAudioRef.current;
-        if (!audio) return;
+        if (!audio || !audio.src) return;
 
-        // Sync currentTime from phone
-        if (typeof data.currentTime === 'number' && audio.src) {
-          const diff = Math.abs(audio.currentTime - data.currentTime);
-          if (diff > 3) audio.currentTime = data.currentTime;
+        // Sync currentTime from phone's progress
+        if (typeof data.progress === 'number') {
+          const diff = Math.abs(audio.currentTime - data.progress);
+          if (diff > 3) audio.currentTime = data.progress;
         }
 
         // Sync play/pause if audio is unlocked
-        if (audioUnlockedRef.current && audio.src) {
+        if (audioUnlockedRef.current) {
           if (data.isPlaying && audio.paused) {
             audio.play().catch(() => {});
           } else if (!data.isPlaying && !audio.paused) {
