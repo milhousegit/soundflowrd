@@ -37,23 +37,33 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
       config: { broadcast: { self: false } },
     });
 
+    let acked = false;
+    let retryInterval: ReturnType<typeof setInterval> | null = null;
+
     channel
       .on('broadcast', { event: 'tv-ack' }, () => {
-        console.log('[TV] Received TV ack');
+        console.log('[TV-Phone] Received TV ack');
+        acked = true;
+        if (retryInterval) { clearInterval(retryInterval); retryInterval = null; }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('[TV] Channel SUBSCRIBED for room:', code);
+          console.log('[TV-Phone] Channel SUBSCRIBED for room:', code);
           setIsConnected(true);
           setRoomCode(code);
           // Mute phone audio
           savedVolumeRef.current = volumeRef.current;
           setVolume(0);
-          // Small delay to ensure channel is fully ready before sending
-          setTimeout(() => {
+          // Send phone-connected repeatedly until TV acks
+          const sendConnect = () => {
+            if (acked) return;
             channel.send({ type: 'broadcast', event: 'phone-connected', payload: {} });
-            console.log('[TV] Sent phone-connected');
-          }, 200);
+            console.log('[TV-Phone] Sent phone-connected');
+          };
+          setTimeout(sendConnect, 300);
+          retryInterval = setInterval(sendConnect, 2000);
+          // Stop retrying after 30s
+          setTimeout(() => { if (retryInterval) { clearInterval(retryInterval); retryInterval = null; } }, 30000);
         }
       });
 
