@@ -70,7 +70,15 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
     setRoomCode(null);
   }, [setVolume]);
 
-  // Send player state to TV continuously
+  // Keep refs for current state to use in interval
+  const currentTrackRef = useRef(currentTrack);
+  const isPlayingRef = useRef(isPlaying);
+  const progressRef = useRef(progress);
+  currentTrackRef.current = currentTrack;
+  isPlayingRef.current = isPlaying;
+  progressRef.current = progress;
+
+  // Send player state to TV on every change
   useEffect(() => {
     if (!isConnected || !channelRef.current) return;
 
@@ -88,6 +96,30 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
       },
     });
   }, [isConnected, currentTrack, isPlaying, progress]);
+
+  // Also send state periodically to ensure TV stays in sync
+  useEffect(() => {
+    if (!isConnected || !channelRef.current) return;
+
+    const interval = setInterval(() => {
+      if (!channelRef.current) return;
+      const audioEl = document.querySelector('audio');
+      const streamUrl = audioEl?.src || null;
+
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'player-state',
+        payload: {
+          track: currentTrackRef.current,
+          isPlaying: isPlayingRef.current,
+          progress: progressRef.current,
+          streamUrl,
+        },
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isConnected]);
 
   return (
     <TVConnectionContext.Provider value={{ isConnected, roomCode, connectToRoom, disconnect }}>
