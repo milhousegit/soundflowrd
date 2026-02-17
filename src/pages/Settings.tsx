@@ -601,7 +601,7 @@ const Settings: React.FC = () => {
                 )}
               </div>
 
-              {/* RD Settings - API Key inline */}
+              {/* RD Settings - API Key + Cloud Files inline */}
               {audioSourceMode === 'rd_priority' && showRdSettings && (
                 <div className="ml-7 space-y-3 animate-fade-in">
                   <span className="text-xs text-muted-foreground">Real-Debrid API Key</span>
@@ -636,6 +636,66 @@ const Settings: React.FC = () => {
                       <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(false)} disabled={isSavingApiKey}>
                         <X className="w-3.5 h-3.5" />
                       </Button>
+                    </div>
+                  )}
+                  {hasRdApiKey && (
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => {
+                        setShowCloudSection(!showCloudSection);
+                        if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
+                      }}>
+                        <Cloud className="w-3.5 h-3.5 mr-1.5" />
+                        {t('cloudFiles')}
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>{settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}</AlertDialogTitle>
+                            <AlertDialogDescription>{settings.language === 'it' ? 'La tua API Key verrà eliminata.' : 'Your API Key will be deleted.'}</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>{settings.language === 'it' ? 'Annulla' : 'Cancel'}</AlertDialogCancel>
+                            <AlertDialogAction onClick={async () => { await updateApiKey(''); toast({ title: settings.language === 'it' ? 'Rimosso' : 'Removed' }); }}>
+                              {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  )}
+                  {showCloudSection && hasRdApiKey && (
+                    <div className="rounded-lg bg-secondary/50 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{settings.language === 'it' ? 'Ultimi 30 giorni' : 'Last 30 days'}</span>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadCloudFiles} disabled={isLoadingCloud}>
+                          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingCloud ? 'animate-spin' : ''}`} />
+                        </Button>
+                      </div>
+                      {isLoadingCloud ? (
+                        <div className="flex items-center justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                      ) : cloudFiles.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">{t('noCloudFiles')}</p>
+                      ) : (
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                          {cloudFiles.map(file => (
+                            <div key={file.id} className="flex items-center gap-2 p-2 rounded bg-background/50 hover:bg-background transition-colors">
+                              <Play className="w-3 h-3 text-primary shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-foreground truncate">{file.filename}</p>
+                                <p className="text-[10px] text-muted-foreground">{formatFileSize(file.filesize)}</p>
+                              </div>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(file.link, '_blank')}>
+                                <ExternalLink className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -751,129 +811,53 @@ const Settings: React.FC = () => {
                       </div>
                     )}
                   </div>
-                </div>
-              )}
-            </div>
 
-            {/* Real-Debrid API Key & Cloud Files */}
-            <div className="pt-3 border-t border-border space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Key className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="text-sm text-foreground">Real-Debrid API</span>
-                </div>
-                {hasRdApiKey && <span className="text-xs text-primary flex items-center gap-1"><Check className="w-3 h-3" /> {t('connected')}</span>}
-              </div>
-
-              {/* Show API key editor when no mode-specific settings are open */}
-              {audioSourceMode !== 'rd_priority' && audioSourceMode !== 'hybrid_priority' && (
-                <>
-                  {!isEditingApiKey ? (
-                    <div className="flex gap-2">
-                      <Input value={profile?.real_debrid_api_key ? maskApiKey(profile.real_debrid_api_key) : ''} disabled className="h-9 text-sm font-mono flex-1" placeholder="—" />
-                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(true)}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => window.open('https://real-debrid.com/apitoken', '_blank')}>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Input value={apiKeyDraft} onChange={e => setApiKeyDraft(e.target.value)} type="password" className="h-9 text-sm font-mono flex-1" placeholder="API Key" />
-                      <Button size="icon" className="h-9 w-9 shrink-0" disabled={isSavingApiKey} onClick={async () => {
-                        setIsSavingApiKey(true);
-                        try {
-                          const trimmed = apiKeyDraft.trim();
-                          if (!trimmed) { toast({ title: 'API Key mancante', variant: 'destructive' }); return; }
-                          const verification = await verifyApiKey(trimmed);
-                          if (!verification.valid) { toast({ title: 'API Key non valida', variant: 'destructive' }); return; }
-                          const { error } = await updateApiKey(trimmed);
-                          if (error) { toast({ title: 'Errore', description: error.message, variant: 'destructive' }); return; }
-                          setIsEditingApiKey(false);
-                          toast({ title: settings.language === 'it' ? 'Salvata!' : 'Saved!' });
-                        } finally { setIsSavingApiKey(false); }
+                  {/* Cloud Files in Hybrid */}
+                  {hasRdApiKey && (
+                    <div className="space-y-2">
+                      <Button variant="outline" size="sm" className="w-full h-9" onClick={() => {
+                        setShowCloudSection(!showCloudSection);
+                        if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
                       }}>
-                        {isSavingApiKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        <Cloud className="w-3.5 h-3.5 mr-1.5" />
+                        {t('cloudFiles')}
                       </Button>
-                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(false)} disabled={isSavingApiKey}>
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {hasRdApiKey && (
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => {
-                    setShowCloudSection(!showCloudSection);
-                    if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
-                  }}>
-                    <Cloud className="w-3.5 h-3.5 mr-1.5" />
-                    {t('cloudFiles')}
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {settings.language === 'it' ? 'La tua API Key verrà eliminata.' : 'Your API Key will be deleted.'}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{settings.language === 'it' ? 'Annulla' : 'Cancel'}</AlertDialogCancel>
-                        <AlertDialogAction onClick={async () => {
-                          await updateApiKey('');
-                          toast({ title: settings.language === 'it' ? 'Rimosso' : 'Removed' });
-                        }}>
-                          {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              )}
-
-              {/* Cloud Files Expandable */}
-              {showCloudSection && hasRdApiKey && (
-                <div className="rounded-lg bg-secondary/50 p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">{settings.language === 'it' ? 'Ultimi 30 giorni' : 'Last 30 days'}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadCloudFiles} disabled={isLoadingCloud}>
-                      <RefreshCw className={`w-3.5 h-3.5 ${isLoadingCloud ? 'animate-spin' : ''}`} />
-                    </Button>
-                  </div>
-                  {isLoadingCloud ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : cloudFiles.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-4">{t('noCloudFiles')}</p>
-                  ) : (
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
-                      {cloudFiles.map(file => (
-                        <div key={file.id} className="flex items-center gap-2 p-2 rounded bg-background/50 hover:bg-background transition-colors">
-                          <Play className="w-3 h-3 text-primary shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-foreground truncate">{file.filename}</p>
-                            <p className="text-[10px] text-muted-foreground">{formatFileSize(file.filesize)}</p>
+                      {showCloudSection && (
+                        <div className="rounded-lg bg-secondary/50 p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">{settings.language === 'it' ? 'Ultimi 30 giorni' : 'Last 30 days'}</span>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadCloudFiles} disabled={isLoadingCloud}>
+                              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingCloud ? 'animate-spin' : ''}`} />
+                            </Button>
                           </div>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(file.link, '_blank')}>
-                            <ExternalLink className="w-3 h-3" />
-                          </Button>
+                          {isLoadingCloud ? (
+                            <div className="flex items-center justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                          ) : cloudFiles.length === 0 ? (
+                            <p className="text-xs text-muted-foreground text-center py-4">{t('noCloudFiles')}</p>
+                          ) : (
+                            <div className="space-y-1 max-h-48 overflow-y-auto">
+                              {cloudFiles.map(file => (
+                                <div key={file.id} className="flex items-center gap-2 p-2 rounded bg-background/50 hover:bg-background transition-colors">
+                                  <Play className="w-3 h-3 text-primary shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium text-foreground truncate">{file.filename}</p>
+                                    <p className="text-[10px] text-muted-foreground">{formatFileSize(file.filesize)}</p>
+                                  </div>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(file.link, '_blank')}>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )}
                 </div>
               )}
             </div>
+
 
             {/* Audio Quality */}
             <div className="flex items-center justify-between pt-3 border-t border-border">
