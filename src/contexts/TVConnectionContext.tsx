@@ -30,23 +30,32 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
   const connectToRoom = useCallback((code: string) => {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
     }
+
+    console.log('[TV] Connecting to room:', code);
 
     const channel = supabase.channel(`tv-room-${code}`, {
       config: { broadcast: { self: false } },
     });
 
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        setIsConnected(true);
-        setRoomCode(code);
-        // Mute phone audio
-        savedVolumeRef.current = volumeRef.current;
-        setVolume(0);
-        // Notify TV
-        channel.send({ type: 'broadcast', event: 'phone-connected', payload: {} });
-      }
-    });
+    channel
+      .on('broadcast', { event: 'tv-ack' }, () => {
+        console.log('[TV] Received TV ack');
+      })
+      .subscribe((status, err) => {
+        console.log('[TV] Channel status:', status, err);
+        if (status === 'SUBSCRIBED') {
+          setIsConnected(true);
+          setRoomCode(code);
+          // Mute phone audio
+          savedVolumeRef.current = volumeRef.current;
+          setVolume(0);
+          // Notify TV
+          channel.send({ type: 'broadcast', event: 'phone-connected', payload: {} });
+          console.log('[TV] Connected and sent phone-connected');
+        }
+      });
 
     channelRef.current = channel;
   }, [setVolume]);
