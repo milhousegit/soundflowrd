@@ -482,7 +482,7 @@ const MobileRemote: React.FC = () => {
           </p>
           <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
             <li>{isItalian ? 'Apri il browser sulla TV o PC' : 'Open browser on your TV or PC'}</li>
-            <li>{isItalian ? 'Vai su ' : 'Go to '}<span className="font-mono text-primary font-medium">soundflowrd.lovable.app/tv</span></li>
+            <li>{isItalian ? 'Vai su ' : 'Go to '}<span className="font-mono text-primary font-medium">soundflow.online/tv</span></li>
             <li>{isItalian ? 'Scansiona il QR code mostrato sullo schermo' : 'Scan the QR code shown on screen'}</li>
             <li>{isItalian ? 'Oppure inserisci il codice stanza qui sotto' : 'Or enter the room code below'}</li>
           </ol>
