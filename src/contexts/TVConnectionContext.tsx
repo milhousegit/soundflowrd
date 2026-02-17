@@ -94,7 +94,7 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const audioEl = document.querySelector('audio') as HTMLAudioElement | null;
     const streamUrl = audioEl?.src && audioEl.src !== '' ? audioEl.src : null;
-    console.log('[TV] Sending state, streamUrl:', streamUrl ? streamUrl.substring(0, 80) + '...' : 'null');
+    const currentTime = audioEl?.currentTime ?? 0;
 
     channelRef.current.send({
       type: 'broadcast',
@@ -104,6 +104,7 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
         isPlaying,
         progress,
         streamUrl,
+        currentTime,
       },
     });
   }, [isConnected, currentTrack, isPlaying, progress]);
@@ -114,8 +115,9 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const interval = setInterval(() => {
       if (!channelRef.current) return;
-      const audioEl = document.querySelector('audio');
-      const streamUrl = audioEl?.src || null;
+      const audioEl = document.querySelector('audio') as HTMLAudioElement | null;
+      const streamUrl = audioEl?.src && audioEl.src !== '' ? audioEl.src : null;
+      const currentTime = audioEl?.currentTime ?? 0;
 
       channelRef.current.send({
         type: 'broadcast',
@@ -125,6 +127,7 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
           isPlaying: isPlayingRef.current,
           progress: progressRef.current,
           streamUrl,
+          currentTime,
         },
       });
     }, 2000);
