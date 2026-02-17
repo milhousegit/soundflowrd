@@ -88,13 +88,9 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
   isPlayingRef.current = isPlaying;
   progressRef.current = progress;
 
-  // Send player state to TV on every change
+  // Send player state to TV on every change (no streamUrl - TV fetches its own)
   useEffect(() => {
     if (!isConnected || !channelRef.current) return;
-
-    const audioEl = document.querySelector('audio') as HTMLAudioElement | null;
-    const streamUrl = audioEl?.src && audioEl.src !== '' ? audioEl.src : null;
-    const currentTime = audioEl?.currentTime ?? 0;
 
     channelRef.current.send({
       type: 'broadcast',
@@ -103,8 +99,6 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
         track: currentTrack,
         isPlaying,
         progress,
-        streamUrl,
-        currentTime,
       },
     });
   }, [isConnected, currentTrack, isPlaying, progress]);
@@ -115,9 +109,6 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const interval = setInterval(() => {
       if (!channelRef.current) return;
-      const audioEl = document.querySelector('audio') as HTMLAudioElement | null;
-      const streamUrl = audioEl?.src && audioEl.src !== '' ? audioEl.src : null;
-      const currentTime = audioEl?.currentTime ?? 0;
 
       channelRef.current.send({
         type: 'broadcast',
@@ -126,14 +117,14 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
           track: currentTrackRef.current,
           isPlaying: isPlayingRef.current,
           progress: progressRef.current,
-          streamUrl,
-          currentTime,
         },
       });
     }, 2000);
 
     return () => clearInterval(interval);
   }, [isConnected]);
+
+
 
   return (
     <TVConnectionContext.Provider value={{ isConnected, roomCode, connectToRoom, disconnect }}>
