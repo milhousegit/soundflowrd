@@ -225,30 +225,33 @@ const TVDisplay: React.FC = () => {
         <Wifi className="w-4 h-4" />
         <span className="text-xs">{isItalian ? 'Connesso' : 'Connected'}</span>
       </div>
-      {/* Audio unlock overlay */}
+      {/* Audio unlock button - bottom right */}
       {connected && !audioUnlocked && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div className="absolute bottom-28 right-6 z-50">
           <Button
             size="lg"
-            className="text-xl px-10 py-6 gap-3"
+            className="gap-2 shadow-2xl animate-pulse"
             onClick={() => {
-              if (tvAudioRef.current) {
-                // Unlock audio context with a user gesture
-                if (lastStreamUrlRef.current) {
-                  tvAudioRef.current.src = lastStreamUrlRef.current;
-                  tvAudioRef.current.load();
-                }
-                tvAudioRef.current.play().then(() => {
-                  setAudioUnlocked(true);
-                  pendingPlayRef.current = false;
-                }).catch(() => {});
-              } else {
-                setAudioUnlocked(true);
+              // Create a fresh audio element on user gesture to guarantee unlock
+              const audio = new Audio();
+              audio.volume = 1;
+              if (lastStreamUrlRef.current) {
+                audio.src = lastStreamUrlRef.current;
               }
+              audio.play().then(() => {
+                tvAudioRef.current = audio;
+                setAudioUnlocked(true);
+                pendingPlayRef.current = false;
+              }).catch((e) => {
+                console.log('[TV-Audio] Still blocked:', e.name);
+                // Even if play fails (no src yet), mark as unlocked since gesture happened
+                tvAudioRef.current = audio;
+                setAudioUnlocked(true);
+              });
             }}
           >
-            <Music2 className="w-6 h-6" />
-            {isItalian ? 'Abilita audio' : 'Enable audio'}
+            <Music2 className="w-5 h-5" />
+            {isItalian ? '🔊 Abilita audio' : '🔊 Enable audio'}
           </Button>
         </div>
       )}
