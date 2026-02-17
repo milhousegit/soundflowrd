@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useTVConnection } from '@/contexts/TVConnectionContext';
 import { Track } from '@/types/music';
 import { QRCodeSVG } from 'qrcode.react';
 import { Tv, Smartphone, Wifi, WifiOff, Music2, Loader2, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, ScanLine, X } from 'lucide-react';
@@ -305,16 +307,12 @@ const MobileRemote: React.FC = () => {
   const { settings } = useSettings();
   const isItalian = settings.language === 'it';
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { currentTrack, isPlaying, toggle, next, previous, progress, duration, volume, setVolume } = usePlayer();
-  const [roomCode, setRoomCode] = useState<string | null>(null);
-  const [connected, setConnected] = useState(false);
+  const { isConnected, connectToRoom } = useTVConnection();
+  const navigate = useNavigate();
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState('');
-  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const scannerRef = useRef<any>(null);
-  const videoRef = useRef<HTMLDivElement>(null);
-  const savedVolumeRef = useRef<number>(0.7);
+  const startScannerOnMount = useRef(false);
 
   // Check URL for room param, otherwise auto-start scanner
   useEffect(() => {
@@ -322,80 +320,30 @@ const MobileRemote: React.FC = () => {
     const room = params.get('room');
     if (room) {
       connectToRoom(room);
-    } else {
-      // Auto-start camera scanner
+    } else if (!isConnected) {
       startScannerOnMount.current = true;
     }
   }, []);
 
-  const startScannerOnMount = useRef(false);
-
-  const connectToRoom = useCallback((code: string) => {
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-    }
-
-    const channel = supabase.channel(`tv-room-${code}`, {
-      config: { broadcast: { self: false } },
-    });
-
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        setConnected(true);
-        setRoomCode(code);
-        setScanning(false);
-        // Mute phone audio - save current volume first
-        savedVolumeRef.current = volume;
-        setVolume(0);
-        // Notify TV
-        channel.send({ type: 'broadcast', event: 'phone-connected', payload: {} });
-      }
-    });
-
-    channelRef.current = channel;
-  }, [volume, setVolume]);
-
-  const disconnectFromTV = useCallback(() => {
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
-    // Restore phone volume
-    setVolume(savedVolumeRef.current || 0.7);
-    setConnected(false);
-    setRoomCode(null);
-    setShowDisconnectConfirm(false);
-  }, [setVolume]);
-
-  // Send player state + stream URL to TV
+  // When connected, navigate back to home so user can browse normally
   useEffect(() => {
-    if (!connected || !channelRef.current) return;
+    if (isConnected) {
+      navigate('/', { replace: true });
+    }
+  }, [isConnected, navigate]);
 
-    // Get the current audio stream URL from the DOM audio element
-    const audioEl = document.querySelector('audio');
-    const streamUrl = audioEl?.src || null;
-
-    channelRef.current.send({
-      type: 'broadcast',
-      event: 'player-state',
-      payload: {
-        track: currentTrack,
-        isPlaying,
-        progress,
-        streamUrl,
-      },
-    });
-  }, [connected, currentTrack, isPlaying, progress]);
+  const handleConnect = useCallback((code: string) => {
+    if (scannerRef.current) scannerRef.current.stop().catch(() => {});
+    setScanning(false);
+    connectToRoom(code);
+  }, [connectToRoom]);
 
   // QR Scanner
   const startScanner = useCallback(async () => {
     setScanning(true);
     try {
       const { Html5Qrcode } = await import('html5-qrcode');
-      
-      // Wait for DOM element
       await new Promise(r => setTimeout(r, 300));
-      
       const scanner = new Html5Qrcode('qr-reader');
       scannerRef.current = scanner;
 
@@ -403,46 +351,43 @@ const MobileRemote: React.FC = () => {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
-          // Extract room code from URL or use directly
           let code = decodedText;
           try {
             const url = new URL(decodedText);
             const room = url.searchParams.get('room');
             if (room) code = room;
           } catch {
-            // not a URL, use as-is
+            // not a URL
           }
           scanner.stop().catch(() => {});
-          connectToRoom(code);
+          handleConnect(code);
         },
-        () => {} // ignore scan failures
+        () => {}
       );
     } catch (err) {
       console.error('Scanner error:', err);
       setScanning(false);
     }
-  }, [connectToRoom]);
+  }, [handleConnect]);
 
   // Auto-start scanner after auth is ready
   useEffect(() => {
-    if (startScannerOnMount.current && isAuthenticated && !authLoading && !connected) {
+    if (startScannerOnMount.current && isAuthenticated && !authLoading && !isConnected) {
       startScannerOnMount.current = false;
       startScanner();
     }
-  }, [isAuthenticated, authLoading, connected, startScanner]);
+  }, [isAuthenticated, authLoading, isConnected, startScanner]);
 
   // Cleanup scanner
   useEffect(() => {
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
-      }
+      if (scannerRef.current) scannerRef.current.stop().catch(() => {});
     };
   }, []);
 
   const handleManualConnect = () => {
     const code = manualCode.trim().toUpperCase();
-    if (code.length >= 4) connectToRoom(code);
+    if (code.length >= 4) handleConnect(code);
   };
 
   if (authLoading) {
@@ -467,183 +412,64 @@ const MobileRemote: React.FC = () => {
     );
   }
 
-  if (!connected) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col p-6 gap-5" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
-        <div className="flex items-center gap-2">
-          <Tv className="w-7 h-7 text-primary" />
-          <h1 className="text-xl font-bold">{isItalian ? 'Collega alla TV' : 'Connect to TV'}</h1>
-        </div>
-
-        {/* Instructions */}
-        <div className="bg-secondary/50 rounded-xl p-4 space-y-2">
-          <p className="text-sm font-medium text-foreground">
-            {isItalian ? 'Come collegare:' : 'How to connect:'}
-          </p>
-          <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
-            <li>{isItalian ? 'Apri il browser sulla TV o PC' : 'Open browser on your TV or PC'}</li>
-            <li>{isItalian ? 'Vai su ' : 'Go to '}<span className="font-mono text-primary font-medium">soundflow.online/tv</span></li>
-            <li>{isItalian ? 'Scansiona il QR code mostrato sullo schermo' : 'Scan the QR code shown on screen'}</li>
-            <li>{isItalian ? 'Oppure inserisci il codice stanza qui sotto' : 'Or enter the room code below'}</li>
-          </ol>
-        </div>
-
-        {/* Scanner */}
-        {scanning && (
-          <div className="w-full space-y-3">
-            <div id="qr-reader" className="w-full rounded-xl overflow-hidden" />
-            <Button variant="outline" className="w-full" onClick={() => {
-              if (scannerRef.current) scannerRef.current.stop().catch(() => {});
-              setScanning(false);
-            }}>
-              {isItalian ? 'Chiudi fotocamera' : 'Close camera'}
-            </Button>
-          </div>
-        )}
-
-        {!scanning && (
-          <Button className="w-full gap-2 h-12" onClick={startScanner}>
-            <ScanLine className="w-5 h-5" />
-            {isItalian ? 'Apri fotocamera' : 'Open camera'}
-          </Button>
-        )}
-
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-border" />
-          <span className="text-xs text-muted-foreground">{isItalian ? 'oppure inserisci il codice' : 'or enter code'}</span>
-          <div className="flex-1 h-px bg-border" />
-        </div>
-
-        <div className="space-y-3">
-          <input
-            type="text"
-            placeholder={isItalian ? 'Codice stanza' : 'Room code'}
-            value={manualCode}
-            onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-            maxLength={6}
-            className="w-full h-14 px-4 rounded-xl bg-secondary text-foreground font-mono text-2xl tracking-[0.3em] text-center border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-          <Button className="w-full h-12 text-base" onClick={handleManualConnect} disabled={manualCode.length < 4}>
-            {isItalian ? 'Connetti' : 'Connect'}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Connected - show remote controls
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, '0')}`;
-  };
-
   return (
-    <div className="min-h-screen bg-background flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-      {/* Banner "In riproduzione su TV" */}
-      <div
-        className="bg-primary text-primary-foreground px-4 py-3 flex items-center justify-between cursor-pointer active:opacity-80 transition-opacity"
-        onClick={() => setShowDisconnectConfirm(true)}
-      >
-        <div className="flex items-center gap-2">
-          <Tv className="w-4 h-4" />
-          <span className="text-sm font-medium">
-            {isItalian ? 'In riproduzione su TV' : 'Playing on TV'}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Wifi className="w-3.5 h-3.5" />
-          <span className="text-xs font-mono opacity-80">{roomCode}</span>
-        </div>
+    <div className="min-h-screen bg-background flex flex-col p-6 gap-5" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
+      <div className="flex items-center gap-2">
+        <Tv className="w-7 h-7 text-primary" />
+        <h1 className="text-xl font-bold">{isItalian ? 'Collega alla TV' : 'Connect to TV'}</h1>
       </div>
 
-      {/* Disconnect confirmation */}
-      {showDisconnectConfirm && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-lg">
-            <div className="flex items-center gap-3">
-              <Tv className="w-6 h-6 text-primary" />
-              <h3 className="text-lg font-semibold">
-                {isItalian ? 'Disconnetti dalla TV?' : 'Disconnect from TV?'}
-              </h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {isItalian 
-                ? 'L\'audio tornerà a essere riprodotto dal telefono.' 
-                : 'Audio will play from your phone again.'}
-            </p>
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setShowDisconnectConfirm(false)}>
-                {isItalian ? 'Annulla' : 'Cancel'}
-              </Button>
-              <Button variant="destructive" className="flex-1" onClick={disconnectFromTV}>
-                {isItalian ? 'Disconnetti' : 'Disconnect'}
-              </Button>
-            </div>
-          </div>
+      {/* Instructions */}
+      <div className="bg-secondary/50 rounded-xl p-4 space-y-2">
+        <p className="text-sm font-medium text-foreground">
+          {isItalian ? 'Come collegare:' : 'How to connect:'}
+        </p>
+        <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
+          <li>{isItalian ? 'Apri il browser sulla TV o PC' : 'Open browser on your TV or PC'}</li>
+          <li>{isItalian ? 'Vai su ' : 'Go to '}<span className="font-mono text-primary font-medium">soundflow.online/tv</span></li>
+          <li>{isItalian ? 'Scansiona il QR code mostrato sullo schermo' : 'Scan the QR code shown on screen'}</li>
+          <li>{isItalian ? 'Oppure inserisci il codice stanza qui sotto' : 'Or enter the room code below'}</li>
+        </ol>
+      </div>
+
+      {/* Scanner */}
+      {scanning && (
+        <div className="w-full space-y-3">
+          <div id="qr-reader" className="w-full rounded-xl overflow-hidden" />
+          <Button variant="outline" className="w-full" onClick={() => {
+            if (scannerRef.current) scannerRef.current.stop().catch(() => {});
+            setScanning(false);
+          }}>
+            {isItalian ? 'Chiudi fotocamera' : 'Close camera'}
+          </Button>
         </div>
       )}
 
-      {/* Track info */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6">
-        {currentTrack ? (
-          <>
-            <div className="w-64 h-64 rounded-2xl overflow-hidden shadow-2xl">
-              {currentTrack.coverUrl ? (
-                <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-secondary flex items-center justify-center">
-                  <Music2 className="w-16 h-16 text-muted-foreground" />
-                </div>
-              )}
-            </div>
+      {!scanning && (
+        <Button className="w-full gap-2 h-12" onClick={startScanner}>
+          <ScanLine className="w-5 h-5" />
+          {isItalian ? 'Apri fotocamera' : 'Open camera'}
+        </Button>
+      )}
 
-            <div className="text-center w-full max-w-sm">
-              <h2 className="text-xl font-bold truncate">{currentTrack.title}</h2>
-              <p className="text-muted-foreground truncate">{currentTrack.artist}</p>
-            </div>
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-border" />
+        <span className="text-xs text-muted-foreground">{isItalian ? 'oppure inserisci il codice' : 'or enter code'}</span>
+        <div className="flex-1 h-px bg-border" />
+      </div>
 
-            {/* Progress */}
-            <div className="w-full max-w-sm space-y-1">
-              <div className="h-1 bg-secondary rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all"
-                  style={{ width: `${duration > 0 ? (progress / duration) * 100 : 0}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>{formatTime(progress)}</span>
-                <span>{formatTime(duration)}</span>
-              </div>
-            </div>
-
-            {/* Controls */}
-            <div className="flex items-center gap-6">
-              <Button variant="ghost" size="icon" className="h-14 w-14" onClick={previous}>
-                <SkipBack className="w-7 h-7" />
-              </Button>
-              <Button
-                className="h-16 w-16 rounded-full"
-                onClick={toggle}
-              >
-                {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
-              </Button>
-              <Button variant="ghost" size="icon" className="h-14 w-14" onClick={next}>
-                <SkipForward className="w-7 h-7" />
-              </Button>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <Music2 className="w-16 h-16 text-muted-foreground" />
-            <p className="text-muted-foreground">
-              {isItalian ? 'Nessuna traccia in riproduzione' : 'No track playing'}
-            </p>
-            <p className="text-sm text-muted-foreground/60">
-              {isItalian ? 'Avvia la musica per controllarla da qui' : 'Start playing music to control it from here'}
-            </p>
-          </div>
-        )}
+      <div className="space-y-3">
+        <input
+          type="text"
+          placeholder={isItalian ? 'Codice stanza' : 'Room code'}
+          value={manualCode}
+          onChange={(e) => setManualCode(e.target.value.toUpperCase())}
+          maxLength={6}
+          className="w-full h-14 px-4 rounded-xl bg-secondary text-foreground font-mono text-2xl tracking-[0.3em] text-center border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+        <Button className="w-full h-12 text-base" onClick={handleManualConnect} disabled={manualCode.length < 4}>
+          {isItalian ? 'Connetti' : 'Connect'}
+        </Button>
       </div>
     </div>
   );
