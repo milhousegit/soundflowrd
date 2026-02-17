@@ -11,6 +11,8 @@ import { Tv, Smartphone, Wifi, WifiOff, Music2, Loader2, Pause, ScanLine, X, Vol
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { getTidalStream, mapQualityToTidal } from '@/lib/tidal';
+import { getMonochromeStream } from '@/lib/monochrome';
 
 // Generate a short room code
 const generateRoomCode = () => {
@@ -42,7 +44,7 @@ function parseSyncedLyrics(syncedLyrics: string): SyncedLine[] {
 
 // ─── TV DISPLAY (Desktop/TV) ───
 const TVDisplay: React.FC = () => {
-  const { settings } = useSettings();
+  const { settings, selectedScrapingSource } = useSettings();
   const isItalian = settings.language === 'it';
   const [roomCode] = useState(() => generateRoomCode());
   const [connected, setConnected] = useState(false);
@@ -60,10 +62,62 @@ const TVDisplay: React.FC = () => {
   const lastTrackIdRef = useRef<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const tvAudioRef = useRef<HTMLAudioElement | null>(null);
-  const lastStreamUrlRef = useRef<string | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [streamLoading, setStreamLoading] = useState(false);
+  const fetchingTrackIdRef = useRef<string | null>(null);
+  const remoteCurrentTimeRef = useRef<number>(0);
 
   const tvUrl = `${window.location.origin}/tv?room=${roomCode}`;
+
+  // Fetch stream URL independently when track changes
+  const fetchStreamForTrack = useCallback(async (track: Track) => {
+    if (fetchingTrackIdRef.current === track.id) return;
+    fetchingTrackIdRef.current = track.id;
+    setStreamLoading(true);
+
+    const audio = tvAudioRef.current;
+    if (!audio) { setStreamLoading(false); return; }
+
+    // Stop current playback
+    audio.pause();
+    audio.src = '';
+
+    const tidalQuality = mapQualityToTidal(settings.audioQuality);
+    const streamFn = selectedScrapingSource === 'monochrome' ? getMonochromeStream : getTidalStream;
+
+    console.log(`[TV-Audio] Fetching stream for "${track.title}" by ${track.artist} via ${selectedScrapingSource}`);
+
+    try {
+      const result = await streamFn(track.title, track.artist, tidalQuality);
+
+      // Check if we're still on the same track
+      if (fetchingTrackIdRef.current !== track.id) return;
+
+      if ('streamUrl' in result && result.streamUrl) {
+        console.log('[TV-Audio] Got stream URL, loading...');
+        audio.src = result.streamUrl;
+        audio.load();
+
+        // Sync to phone's current time
+        if (remoteCurrentTimeRef.current > 0) {
+          audio.currentTime = remoteCurrentTimeRef.current;
+        }
+
+        // Auto-play if audio is unlocked
+        if (audioUnlockedRef.current) {
+          audio.muted = tvMutedRef.current;
+          audio.play().catch(() => {});
+        }
+      } else {
+        const errorMsg = 'error' in result ? result.error : 'No stream found';
+        console.warn('[TV-Audio] Stream fetch failed:', errorMsg);
+      }
+    } catch (err) {
+      console.error('[TV-Audio] Fetch error:', err);
+    } finally {
+      setStreamLoading(false);
+    }
+  }, [settings.audioQuality, selectedScrapingSource]);
 
   // Subscribe to broadcast channel
   useEffect(() => {
@@ -77,33 +131,31 @@ const TVDisplay: React.FC = () => {
         if (data.track) setRemoteTrack(data.track);
         if (typeof data.isPlaying === 'boolean') setRemoteIsPlaying(data.isPlaying);
         if (typeof data.progress === 'number') setRemoteProgress(data.progress);
+        if (typeof data.currentTime === 'number') remoteCurrentTimeRef.current = data.currentTime;
+
         const audio = tvAudioRef.current;
         if (!audio) return;
-        // Load new stream URL
-        if (data.streamUrl && data.streamUrl !== lastStreamUrlRef.current) {
-          lastStreamUrlRef.current = data.streamUrl;
-          audio.src = data.streamUrl;
-          audio.load();
-        }
-        // Sync currentTime
-        if (typeof data.currentTime === 'number') {
+
+        // Sync currentTime from phone
+        if (typeof data.currentTime === 'number' && audio.src) {
           const diff = Math.abs(audio.currentTime - data.currentTime);
           if (diff > 3) audio.currentTime = data.currentTime;
         }
-        // Only control play/pause if user has unlocked audio
-        if (audioUnlockedRef.current) {
+
+        // Sync play/pause if audio is unlocked
+        if (audioUnlockedRef.current && audio.src) {
           if (data.isPlaying && audio.paused) {
             audio.play().catch(() => {});
           } else if (!data.isPlaying && !audio.paused) {
             audio.pause();
           }
         }
+
         setConnected(true);
       })
       .on('broadcast', { event: 'phone-connected' }, () => {
         console.log('[TV] Received phone-connected, sending tv-ack');
         setConnected(true);
-        // Send ack so phone knows TV is ready
         channel.send({ type: 'broadcast', event: 'tv-ack', payload: {} });
       })
       .subscribe((status) => {
@@ -127,11 +179,15 @@ const TVDisplay: React.FC = () => {
     };
   }, []);
 
-  // Fetch lyrics when track changes
+  // Fetch lyrics AND stream when track changes
   useEffect(() => {
     if (!remoteTrack || remoteTrack.id === lastTrackIdRef.current) return;
     lastTrackIdRef.current = remoteTrack.id;
 
+    // Fetch stream independently
+    fetchStreamForTrack(remoteTrack);
+
+    // Fetch lyrics
     const fetchLyrics = async () => {
       setLyricsLoading(true);
       setLyrics(null);
@@ -157,7 +213,7 @@ const TVDisplay: React.FC = () => {
       }
     };
     fetchLyrics();
-  }, [remoteTrack]);
+  }, [remoteTrack, fetchStreamForTrack]);
 
   // Update current line based on progress
   useEffect(() => {
@@ -263,7 +319,13 @@ const TVDisplay: React.FC = () => {
               }
             }}
           >
-            {tvMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            {streamLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : tvMuted ? (
+              <VolumeX className="w-5 h-5" />
+            ) : (
+              <Volume2 className="w-5 h-5" />
+            )}
           </Button>
         </div>
       )}
