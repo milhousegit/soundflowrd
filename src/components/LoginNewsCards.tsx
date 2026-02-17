@@ -291,10 +291,13 @@ const LoginNewsCards: React.FC<LoginNewsCardsProps> = ({ language }) => {
   return (
     <>
       {/* Horizontal scrolling news */}
-      <div className="w-full mt-6 -mx-4 px-4">
+      <div className="w-full mt-6 -mx-4 px-4 relative">
         <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">
           {language === 'it' ? 'Novità' : 'News'}
         </p>
+        {/* Fade edges */}
+        <div className="pointer-events-none absolute left-0 top-8 bottom-0 w-6 bg-gradient-to-r from-background to-transparent z-10" />
+        <div className="pointer-events-none absolute right-0 top-8 bottom-0 w-6 bg-gradient-to-l from-background to-transparent z-10" />
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
           {newsCards.map((card) => (
             <button
