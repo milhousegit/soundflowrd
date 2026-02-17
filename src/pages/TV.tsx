@@ -7,7 +7,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useTVConnection } from '@/contexts/TVConnectionContext';
 import { Track } from '@/types/music';
 import { QRCodeSVG } from 'qrcode.react';
-import { Tv, Smartphone, Wifi, WifiOff, Music2, Loader2, Pause, ScanLine, X, Volume2, VolumeX } from 'lucide-react';
+import { Tv, Smartphone, Wifi, WifiOff, Music2, Loader2, Pause, ScanLine, X, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -55,8 +55,6 @@ const TVDisplay: React.FC = () => {
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(-1);
   const [lyricsLoading, setLyricsLoading] = useState(false);
-  const [tvMuted, setTvMuted] = useState(true);
-  const tvMutedRef = useRef(true);
   const audioUnlockedRef = useRef(false);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const lastTrackIdRef = useRef<string | null>(null);
@@ -65,8 +63,7 @@ const TVDisplay: React.FC = () => {
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [streamLoading, setStreamLoading] = useState(false);
   const fetchingTrackIdRef = useRef<string | null>(null);
-  const remoteCurrentTimeRef = useRef<number>(0);
-  const playbackStartedAtRef = useRef<number>(0);
+  const pendingTrackRef = useRef<Track | null>(null);
 
   const tvUrl = `${window.location.origin}/tv?room=${roomCode}`;
 
@@ -101,10 +98,11 @@ const TVDisplay: React.FC = () => {
 
         // Auto-play if audio is unlocked
         if (audioUnlockedRef.current) {
-          audio.muted = tvMutedRef.current;
-          audio.play().then(() => {
-            playbackStartedAtRef.current = Date.now();
-          }).catch(() => {});
+          audio.muted = false;
+          audio.play().catch(() => {});
+        } else {
+          // Save track for when user unlocks audio
+          pendingTrackRef.current = track;
         }
       } else {
         const errorMsg = 'error' in result ? result.error : 'No stream found';
@@ -130,19 +128,14 @@ const TVDisplay: React.FC = () => {
         if (typeof data.isPlaying === 'boolean') setRemoteIsPlaying(data.isPlaying);
         if (typeof data.progress === 'number') {
           setRemoteProgress(data.progress);
-          remoteCurrentTimeRef.current = data.progress;
         }
 
         const audio = tvAudioRef.current;
         if (!audio || !audio.src) return;
 
-        // Sync currentTime from phone's progress (skip first 5s after playback starts)
-        if (typeof data.progress === 'number') {
-          const elapsed = Date.now() - playbackStartedAtRef.current;
-          if (elapsed > 5000) {
-            const diff = Math.abs(audio.currentTime - data.progress);
-            if (diff > 3) audio.currentTime = data.progress;
-          }
+        // Only sync currentTime when user seeks on phone
+        if (data.seeked && typeof data.progress === 'number') {
+          audio.currentTime = data.progress;
         }
 
         // Sync play/pause if audio is unlocked
@@ -282,54 +275,29 @@ const TVDisplay: React.FC = () => {
         <Wifi className="w-4 h-4" />
         <span className="text-xs">{isItalian ? 'Connesso' : 'Connected'}</span>
       </div>
-      {/* Hidden audio element in DOM - required for browser autoplay policy */}
-      <audio ref={tvAudioRef} muted crossOrigin="anonymous" />
-      {/* Mute/Unmute toggle - bottom right */}
-      {connected && (
-        <div className="absolute bottom-28 right-6 z-50">
-          <Button
-            size="icon"
-            variant="secondary"
-            className="w-12 h-12 rounded-full shadow-2xl"
-            onClick={() => {
-              const audio = tvAudioRef.current;
-              if (!audio) return;
-              if (!audioUnlockedRef.current) {
-                // First click: unlock audio with user gesture
-                audio.muted = false;
-                audio.play().then(() => {
-                  audioUnlockedRef.current = true;
-                  tvMutedRef.current = false;
-                  setAudioUnlocked(true);
-                  setTvMuted(false);
-                }).catch(() => {
-                  // Even if play fails (no src yet), mark as unlocked
-                  audioUnlockedRef.current = true;
-                  audio.muted = false;
-                  tvMutedRef.current = false;
-                  setAudioUnlocked(true);
-                  setTvMuted(false);
-                });
-              } else {
-                // Subsequent clicks: toggle mute
-                const newMuted = !tvMutedRef.current;
-                audio.muted = newMuted;
-                tvMutedRef.current = newMuted;
-                setTvMuted(newMuted);
-                if (!newMuted && audio.paused) {
-                  audio.play().catch(() => {});
-                }
-              }
-            }}
-          >
-            {streamLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : tvMuted ? (
-              <VolumeX className="w-5 h-5" />
-            ) : (
-              <Volume2 className="w-5 h-5" />
-            )}
-          </Button>
+      {/* Audio element */}
+      <audio ref={tvAudioRef} crossOrigin="anonymous" />
+      {/* Tap-to-start overlay */}
+      {!audioUnlocked && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center cursor-pointer bg-black/40"
+          onClick={() => {
+            const audio = tvAudioRef.current;
+            if (!audio) return;
+            audioUnlockedRef.current = true;
+            setAudioUnlocked(true);
+            audio.muted = false;
+            if (audio.src) {
+              audio.play().catch(() => {});
+            } else if (pendingTrackRef.current) {
+              fetchStreamForTrack(pendingTrackRef.current);
+            }
+          }}
+        >
+          <div className="flex flex-col items-center gap-3 animate-pulse">
+            <Volume2 className="w-12 h-12 text-white/70" />
+            <p className="text-white/70 text-lg">{isItalian ? 'Tocca per attivare l\'audio' : 'Tap to enable audio'}</p>
+          </div>
         </div>
       )}
       <div className="flex-1 flex items-center justify-center z-10 px-16 py-32">

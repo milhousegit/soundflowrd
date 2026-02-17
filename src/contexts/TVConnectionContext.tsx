@@ -84,13 +84,23 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
   const currentTrackRef = useRef(currentTrack);
   const isPlayingRef = useRef(isPlaying);
   const progressRef = useRef(progress);
+  const lastBroadcastProgressRef = useRef(progress);
   currentTrackRef.current = currentTrack;
   isPlayingRef.current = isPlaying;
   progressRef.current = progress;
 
+  // Detect seek: if progress jumps by more than 2s between updates, it's a user seek
+  const detectSeeked = useCallback((newProgress: number, oldProgress: number): boolean => {
+    const diff = Math.abs(newProgress - oldProgress);
+    return diff > 2;
+  }, []);
+
   // Send player state to TV on every change (no streamUrl - TV fetches its own)
   useEffect(() => {
     if (!isConnected || !channelRef.current) return;
+
+    const seeked = detectSeeked(progress, lastBroadcastProgressRef.current);
+    lastBroadcastProgressRef.current = progress;
 
     channelRef.current.send({
       type: 'broadcast',
@@ -99,9 +109,10 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
         track: currentTrack,
         isPlaying,
         progress,
+        seeked,
       },
     });
-  }, [isConnected, currentTrack, isPlaying, progress]);
+  }, [isConnected, currentTrack, isPlaying, progress, detectSeeked]);
 
   // Also send state periodically to ensure TV stays in sync
   useEffect(() => {
@@ -117,6 +128,7 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
           track: currentTrackRef.current,
           isPlaying: isPlayingRef.current,
           progress: progressRef.current,
+          seeked: false,
         },
       });
     }, 2000);
