@@ -290,20 +290,17 @@ const LoginNewsCards: React.FC<LoginNewsCardsProps> = ({ language }) => {
 
   return (
     <>
-      {/* Horizontal scrolling news */}
-      <div className="w-full mt-6 -mx-4 px-4 relative">
+      {/* Paginated news cards */}
+      <div className="w-full mt-6">
         <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">
           {language === 'it' ? 'Novità' : 'News'}
         </p>
-        {/* Fade edges */}
-        <div className="pointer-events-none absolute left-0 top-8 bottom-0 w-16 bg-gradient-to-r from-background via-background/60 to-transparent z-10" />
-        <div className="pointer-events-none absolute right-0 top-8 bottom-0 w-16 bg-gradient-to-l from-background via-background/60 to-transparent z-10" />
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
           {newsCards.map((card) => (
             <button
               key={card.id}
               onClick={() => setOpenCard(card.id)}
-              className={`flex-shrink-0 w-[160px] snap-start rounded-xl p-4 bg-gradient-to-br ${card.gradient} border border-border/50 text-left transition-transform active:scale-95 hover:border-primary/40`}
+              className={`flex-shrink-0 w-[calc(50%-6px)] snap-center rounded-xl p-4 bg-gradient-to-br ${card.gradient} border border-border/50 text-left transition-transform active:scale-95 hover:border-primary/40`}
             >
               <div className="w-10 h-10 rounded-lg bg-background/50 flex items-center justify-center mb-3 text-foreground">
                 {card.icon}
@@ -316,6 +313,12 @@ const LoginNewsCards: React.FC<LoginNewsCardsProps> = ({ language }) => {
                 <ChevronRight className="w-3 h-3" />
               </p>
             </button>
+          ))}
+        </div>
+        {/* Page dots */}
+        <div className="flex justify-center gap-1.5 mt-2">
+          {newsCards.map((card, i) => (
+            <div key={card.id} className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />
           ))}
         </div>
       </div>
