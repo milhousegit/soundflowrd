@@ -32,6 +32,7 @@ import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
 import DeezerPlaylist from "@/pages/DeezerPlaylist";
 import NotFound from "./pages/NotFound";
+import TV from "./pages/TV";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -94,6 +95,7 @@ const AppRoutes = () => {
         <Route path="playlist/:id" element={<Playlist />} />
         <Route path="deezer-playlist/:id" element={<DeezerPlaylist />} />
       </Route>
+      <Route path="/tv" element={<TV />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
