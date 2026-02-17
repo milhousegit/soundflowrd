@@ -76,6 +76,8 @@ const Settings: React.FC = () => {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showPaymentPendingBanner, setShowPaymentPendingBanner] = useState(false);
   const [showBridgeUrlInput, setShowBridgeUrlInput] = useState(false);
+  const [showRdSettings, setShowRdSettings] = useState(false);
+  const [showHybridSettings, setShowHybridSettings] = useState(false);
   const [showKofiModal, setShowKofiModal] = useState(false);
 
   // Check if user has active premium (respect simulation mode)
@@ -570,7 +572,8 @@ const Settings: React.FC = () => {
               )}
 
               {/* Real-Debrid */}
-              <button onClick={() => hasRdApiKey ? setAudioSourceMode('rd_priority') : null} disabled={!hasRdApiKey} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${!hasRdApiKey ? 'opacity-50 cursor-not-allowed bg-secondary/30' : audioSourceMode === 'rd_priority' ? 'bg-primary/15 ring-1 ring-primary/40' : 'bg-secondary/50 hover:bg-secondary'}`}>
+              <div className="flex items-center gap-1">
+                <button onClick={() => hasRdApiKey ? setAudioSourceMode('rd_priority') : null} disabled={!hasRdApiKey} className={`flex-1 flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${!hasRdApiKey ? 'opacity-50 cursor-not-allowed bg-secondary/30' : audioSourceMode === 'rd_priority' ? 'bg-primary/15 ring-1 ring-primary/40' : 'bg-secondary/50 hover:bg-secondary'}`}>
                 <Cloud className={`w-4 h-4 ${audioSourceMode === 'rd_priority' && hasRdApiKey ? 'text-primary' : 'text-muted-foreground'}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -586,13 +589,64 @@ const Settings: React.FC = () => {
                   <p className="text-xs text-muted-foreground truncate">{t('rdPriorityDesc')}</p>
                 </div>
                 {audioSourceMode === 'rd_priority' && hasRdApiKey && <Check className="w-4 h-4 text-primary shrink-0" />}
-              </button>
+                </button>
+                {audioSourceMode === 'rd_priority' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowRdSettings(prev => !prev); }}
+                    className="p-3 rounded-lg hover:bg-secondary/80 transition-colors shrink-0"
+                    title={settings.language === 'it' ? 'Configura API' : 'Configure API'}
+                  >
+                    <Settings2 className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+
+              {/* RD Settings - API Key inline */}
+              {audioSourceMode === 'rd_priority' && showRdSettings && (
+                <div className="ml-7 space-y-3 animate-fade-in">
+                  <span className="text-xs text-muted-foreground">Real-Debrid API Key</span>
+                  {!isEditingApiKey ? (
+                    <div className="flex gap-2">
+                      <Input value={profile?.real_debrid_api_key ? maskApiKey(profile.real_debrid_api_key) : ''} disabled className="h-9 text-sm font-mono flex-1" placeholder="—" />
+                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(true)}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => window.open('https://real-debrid.com/apitoken', '_blank')}>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input value={apiKeyDraft} onChange={e => setApiKeyDraft(e.target.value)} type="password" className="h-9 text-sm font-mono flex-1" placeholder="API Key" />
+                      <Button size="icon" className="h-9 w-9 shrink-0" disabled={isSavingApiKey} onClick={async () => {
+                        setIsSavingApiKey(true);
+                        try {
+                          const trimmed = apiKeyDraft.trim();
+                          if (!trimmed) { toast({ title: 'API Key mancante', variant: 'destructive' }); return; }
+                          const verification = await verifyApiKey(trimmed);
+                          if (!verification.valid) { toast({ title: 'API Key non valida', variant: 'destructive' }); return; }
+                          const { error } = await updateApiKey(trimmed);
+                          if (error) { toast({ title: 'Errore', description: error.message, variant: 'destructive' }); return; }
+                          setIsEditingApiKey(false);
+                          toast({ title: settings.language === 'it' ? 'Salvata!' : 'Saved!' });
+                        } finally { setIsSavingApiKey(false); }
+                      }}>
+                        {isSavingApiKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      </Button>
+                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(false)} disabled={isSavingApiKey}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Hybrid (Premium) */}
+              <div className="flex items-center gap-1">
               <button onClick={() => {
                 if (!hasRdApiKey) return;
                 isAdmin || isPremiumActive ? setAudioSourceMode('hybrid_priority') : setShowPremiumModal(true);
-              }} disabled={!hasRdApiKey} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${!hasRdApiKey ? 'opacity-50 cursor-not-allowed bg-secondary/30' : audioSourceMode === 'hybrid_priority' ? 'bg-gradient-to-r from-[#8B5CF6]/15 to-[#3B82F6]/15 ring-1 ring-[#8B5CF6]/40' : 'bg-secondary/50 hover:bg-secondary'}`}>
+              }} disabled={!hasRdApiKey} className={`flex-1 flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${!hasRdApiKey ? 'opacity-50 cursor-not-allowed bg-secondary/30' : audioSourceMode === 'hybrid_priority' ? 'bg-gradient-to-r from-[#8B5CF6]/15 to-[#3B82F6]/15 ring-1 ring-[#8B5CF6]/40' : 'bg-secondary/50 hover:bg-secondary'}`}>
                 <Crown className={`w-4 h-4 ${audioSourceMode === 'hybrid_priority' && hasRdApiKey ? 'text-[#8B5CF6]' : 'text-muted-foreground'}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -613,202 +667,212 @@ const Settings: React.FC = () => {
                 </div>
                 {audioSourceMode === 'hybrid_priority' && hasRdApiKey && <Check className="w-4 h-4 text-[#8B5CF6] shrink-0" />}
               </button>
-
-              {/* Hybrid Fallback Chain - shown when Hybrid is active */}
               {audioSourceMode === 'hybrid_priority' && (isAdmin || isPremiumActive) && (
-                <div className="ml-7 space-y-2 animate-fade-in">
-                  <span className="text-xs text-muted-foreground">{t('fallbackChain')}</span>
-                  <div className="space-y-1.5">
-                    {hybridFallbackChain.map((sourceId, index) => {
-                      const source = ALL_FALLBACK_SOURCES.find(s => s.id === sourceId);
-                      if (!source) return null;
-                      return (
-                        <div key={sourceId} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50">
-                          <span className="text-xs text-muted-foreground w-5 text-center font-mono">{index + 1}</span>
-                          <span className="text-sm text-foreground flex-1">{source.name}</span>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => {
-                                if (index === 0) return;
-                                const newChain = [...hybridFallbackChain];
-                                [newChain[index - 1], newChain[index]] = [newChain[index], newChain[index - 1]];
-                                setHybridFallbackChain(newChain);
-                              }}
-                              disabled={index === 0}
-                              className="p-1 rounded hover:bg-secondary disabled:opacity-30"
-                            >
-                              <ArrowUp className="w-3.5 h-3.5 text-muted-foreground" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (index === hybridFallbackChain.length - 1) return;
-                                const newChain = [...hybridFallbackChain];
-                                [newChain[index], newChain[index + 1]] = [newChain[index + 1], newChain[index]];
-                                setHybridFallbackChain(newChain);
-                              }}
-                              disabled={index === hybridFallbackChain.length - 1}
-                              className="p-1 rounded hover:bg-secondary disabled:opacity-30"
-                            >
-                              <ArrowDown className="w-3.5 h-3.5 text-muted-foreground" />
-                            </button>
-                            {hybridFallbackChain.length > 1 && (
-                              <button
-                                onClick={() => setHybridFallbackChain(hybridFallbackChain.filter(s => s !== sourceId))}
-                                className="p-1 rounded hover:bg-destructive/20"
-                              >
-                                <X className="w-3.5 h-3.5 text-destructive" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowHybridSettings(prev => !prev); }}
+                  className="p-3 rounded-lg hover:bg-secondary/80 transition-colors shrink-0"
+                  title={settings.language === 'it' ? 'Configura' : 'Configure'}
+                >
+                  <Settings2 className="w-4 h-4 text-muted-foreground" />
+                </button>
+              )}
+              </div>
+
+              {/* Hybrid Settings - API Key + Fallback Chain */}
+              {audioSourceMode === 'hybrid_priority' && (isAdmin || isPremiumActive) && showHybridSettings && (
+                <div className="ml-7 space-y-4 animate-fade-in">
+                  {/* API Key */}
+                  <div className="space-y-2">
+                    <span className="text-xs text-muted-foreground">Real-Debrid API Key</span>
+                    {!isEditingApiKey ? (
+                      <div className="flex gap-2">
+                        <Input value={profile?.real_debrid_api_key ? maskApiKey(profile.real_debrid_api_key) : ''} disabled className="h-9 text-sm font-mono flex-1" placeholder="—" />
+                        <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(true)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => window.open('https://real-debrid.com/apitoken', '_blank')}>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input value={apiKeyDraft} onChange={e => setApiKeyDraft(e.target.value)} type="password" className="h-9 text-sm font-mono flex-1" placeholder="API Key" />
+                        <Button size="icon" className="h-9 w-9 shrink-0" disabled={isSavingApiKey} onClick={async () => {
+                          setIsSavingApiKey(true);
+                          try {
+                            const trimmed = apiKeyDraft.trim();
+                            if (!trimmed) { toast({ title: 'API Key mancante', variant: 'destructive' }); return; }
+                            const verification = await verifyApiKey(trimmed);
+                            if (!verification.valid) { toast({ title: 'API Key non valida', variant: 'destructive' }); return; }
+                            const { error } = await updateApiKey(trimmed);
+                            if (error) { toast({ title: 'Errore', description: error.message, variant: 'destructive' }); return; }
+                            setIsEditingApiKey(false);
+                            toast({ title: settings.language === 'it' ? 'Salvata!' : 'Saved!' });
+                          } finally { setIsSavingApiKey(false); }
+                        }}>
+                          {isSavingApiKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        </Button>
+                        <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(false)} disabled={isSavingApiKey}>
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  {/* Add source button */}
-                  {hybridFallbackChain.length < ALL_FALLBACK_SOURCES.length && (
-                    <div className="flex gap-2 flex-wrap">
-                      {ALL_FALLBACK_SOURCES.filter(s => !hybridFallbackChain.includes(s.id)).map(source => (
-                        <button
-                          key={source.id}
-                          onClick={() => setHybridFallbackChain([...hybridFallbackChain, source.id])}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary/50 hover:bg-secondary text-xs text-muted-foreground transition-colors"
-                        >
-                          <Plus className="w-3 h-3" />
-                          {source.name}
-                        </button>
+
+                  {/* Fallback Chain */}
+                  <div className="space-y-2">
+                    <span className="text-xs text-muted-foreground">{t('fallbackChain')}</span>
+                    <div className="space-y-1.5">
+                      {hybridFallbackChain.map((sourceId, index) => {
+                        const source = ALL_FALLBACK_SOURCES.find(s => s.id === sourceId);
+                        if (!source) return null;
+                        return (
+                          <div key={sourceId} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50">
+                            <span className="text-xs text-muted-foreground w-5 text-center font-mono">{index + 1}</span>
+                            <span className="text-sm text-foreground flex-1">{source.name}</span>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => { if (index === 0) return; const newChain = [...hybridFallbackChain]; [newChain[index - 1], newChain[index]] = [newChain[index], newChain[index - 1]]; setHybridFallbackChain(newChain); }} disabled={index === 0} className="p-1 rounded hover:bg-secondary disabled:opacity-30"><ArrowUp className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                              <button onClick={() => { if (index === hybridFallbackChain.length - 1) return; const newChain = [...hybridFallbackChain]; [newChain[index], newChain[index + 1]] = [newChain[index + 1], newChain[index]]; setHybridFallbackChain(newChain); }} disabled={index === hybridFallbackChain.length - 1} className="p-1 rounded hover:bg-secondary disabled:opacity-30"><ArrowDown className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                              {hybridFallbackChain.length > 1 && (
+                                <button onClick={() => setHybridFallbackChain(hybridFallbackChain.filter(s => s !== sourceId))} className="p-1 rounded hover:bg-destructive/20"><X className="w-3.5 h-3.5 text-destructive" /></button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {hybridFallbackChain.length < ALL_FALLBACK_SOURCES.length && (
+                      <div className="flex gap-2 flex-wrap">
+                        {ALL_FALLBACK_SOURCES.filter(s => !hybridFallbackChain.includes(s.id)).map(source => (
+                          <button key={source.id} onClick={() => setHybridFallbackChain([...hybridFallbackChain, source.id])} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary/50 hover:bg-secondary text-xs text-muted-foreground transition-colors">
+                            <Plus className="w-3 h-3" />{source.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Real-Debrid API Key & Cloud Files */}
+            <div className="pt-3 border-t border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Key className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-sm text-foreground">Real-Debrid API</span>
+                </div>
+                {hasRdApiKey && <span className="text-xs text-primary flex items-center gap-1"><Check className="w-3 h-3" /> {t('connected')}</span>}
+              </div>
+
+              {/* Show API key editor when no mode-specific settings are open */}
+              {audioSourceMode !== 'rd_priority' && audioSourceMode !== 'hybrid_priority' && (
+                <>
+                  {!isEditingApiKey ? (
+                    <div className="flex gap-2">
+                      <Input value={profile?.real_debrid_api_key ? maskApiKey(profile.real_debrid_api_key) : ''} disabled className="h-9 text-sm font-mono flex-1" placeholder="—" />
+                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(true)}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => window.open('https://real-debrid.com/apitoken', '_blank')}>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input value={apiKeyDraft} onChange={e => setApiKeyDraft(e.target.value)} type="password" className="h-9 text-sm font-mono flex-1" placeholder="API Key" />
+                      <Button size="icon" className="h-9 w-9 shrink-0" disabled={isSavingApiKey} onClick={async () => {
+                        setIsSavingApiKey(true);
+                        try {
+                          const trimmed = apiKeyDraft.trim();
+                          if (!trimmed) { toast({ title: 'API Key mancante', variant: 'destructive' }); return; }
+                          const verification = await verifyApiKey(trimmed);
+                          if (!verification.valid) { toast({ title: 'API Key non valida', variant: 'destructive' }); return; }
+                          const { error } = await updateApiKey(trimmed);
+                          if (error) { toast({ title: 'Errore', description: error.message, variant: 'destructive' }); return; }
+                          setIsEditingApiKey(false);
+                          toast({ title: settings.language === 'it' ? 'Salvata!' : 'Saved!' });
+                        } finally { setIsSavingApiKey(false); }
+                      }}>
+                        {isSavingApiKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      </Button>
+                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(false)} disabled={isSavingApiKey}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {hasRdApiKey && (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => {
+                    setShowCloudSection(!showCloudSection);
+                    if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
+                  }}>
+                    <Cloud className="w-3.5 h-3.5 mr-1.5" />
+                    {t('cloudFiles')}
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {settings.language === 'it' ? 'La tua API Key verrà eliminata.' : 'Your API Key will be deleted.'}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>{settings.language === 'it' ? 'Annulla' : 'Cancel'}</AlertDialogCancel>
+                        <AlertDialogAction onClick={async () => {
+                          await updateApiKey('');
+                          toast({ title: settings.language === 'it' ? 'Rimosso' : 'Removed' });
+                        }}>
+                          {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
+
+              {/* Cloud Files Expandable */}
+              {showCloudSection && hasRdApiKey && (
+                <div className="rounded-lg bg-secondary/50 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">{settings.language === 'it' ? 'Ultimi 30 giorni' : 'Last 30 days'}</span>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadCloudFiles} disabled={isLoadingCloud}>
+                      <RefreshCw className={`w-3.5 h-3.5 ${isLoadingCloud ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
+                  {isLoadingCloud ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : cloudFiles.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">{t('noCloudFiles')}</p>
+                  ) : (
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {cloudFiles.map(file => (
+                        <div key={file.id} className="flex items-center gap-2 p-2 rounded bg-background/50 hover:bg-background transition-colors">
+                          <Play className="w-3 h-3 text-primary shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-foreground truncate">{file.filename}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatFileSize(file.filesize)}</p>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(file.link, '_blank')}>
+                            <ExternalLink className="w-3 h-3" />
+                          </Button>
+                        </div>
                       ))}
                     </div>
                   )}
                 </div>
               )}
-            </div>
-
-            {/* Real-Debrid API Key */}
-            <div className="pt-3 border-t border-border space-y-3">
-              <div className="pt-3 border-t border-border space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Key className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-sm text-foreground">Real-Debrid API</span>
-                  </div>
-                  {hasRdApiKey && <span className="text-xs text-primary flex items-center gap-1"><Check className="w-3 h-3" /> {t('connected')}</span>}
-                </div>
-
-                {!isEditingApiKey ? (
-                  <div className="flex gap-2">
-                    <Input value={profile?.real_debrid_api_key ? maskApiKey(profile.real_debrid_api_key) : ''} disabled className="h-9 text-sm font-mono flex-1" placeholder="—" />
-                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(true)}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => window.open('https://real-debrid.com/apitoken', '_blank')}>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <Input value={apiKeyDraft} onChange={e => setApiKeyDraft(e.target.value)} type="password" className="h-9 text-sm font-mono flex-1" placeholder="API Key" />
-                    <Button size="icon" className="h-9 w-9 shrink-0" disabled={isSavingApiKey} onClick={async () => {
-                      setIsSavingApiKey(true);
-                      try {
-                        const trimmed = apiKeyDraft.trim();
-                        if (!trimmed) {
-                          toast({ title: 'API Key mancante', variant: 'destructive' });
-                          return;
-                        }
-                        const verification = await verifyApiKey(trimmed);
-                        if (!verification.valid) {
-                          toast({ title: 'API Key non valida', variant: 'destructive' });
-                          return;
-                        }
-                        const { error } = await updateApiKey(trimmed);
-                        if (error) {
-                          toast({ title: 'Errore', description: error.message, variant: 'destructive' });
-                          return;
-                        }
-                        setIsEditingApiKey(false);
-                        toast({ title: settings.language === 'it' ? 'Salvata!' : 'Saved!' });
-                      } finally {
-                        setIsSavingApiKey(false);
-                      }
-                    }}>
-                      {isSavingApiKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    </Button>
-                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIsEditingApiKey(false)} disabled={isSavingApiKey}>
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                )}
-
-                {hasRdApiKey && (
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => {
-                      setShowCloudSection(!showCloudSection);
-                      if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
-                    }}>
-                      <Cloud className="w-3.5 h-3.5 mr-1.5" />
-                      {t('cloudFiles')}
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>{settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            {settings.language === 'it' ? 'La tua API Key verrà eliminata.' : 'Your API Key will be deleted.'}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>{settings.language === 'it' ? 'Annulla' : 'Cancel'}</AlertDialogCancel>
-                          <AlertDialogAction onClick={async () => {
-                            await updateApiKey('');
-                            toast({ title: settings.language === 'it' ? 'Rimosso' : 'Removed' });
-                          }}>
-                            {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                )}
-
-                {/* Cloud Files Expandable */}
-                {showCloudSection && hasRdApiKey && (
-                  <div className="rounded-lg bg-secondary/50 p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">{settings.language === 'it' ? 'Ultimi 30 giorni' : 'Last 30 days'}</span>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadCloudFiles} disabled={isLoadingCloud}>
-                        <RefreshCw className={`w-3.5 h-3.5 ${isLoadingCloud ? 'animate-spin' : ''}`} />
-                      </Button>
-                    </div>
-                    {isLoadingCloud ? (
-                      <div className="flex items-center justify-center py-4">
-                        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : cloudFiles.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-4">{t('noCloudFiles')}</p>
-                    ) : (
-                      <div className="space-y-1 max-h-48 overflow-y-auto">
-                        {cloudFiles.map(file => (
-                          <div key={file.id} className="flex items-center gap-2 p-2 rounded bg-background/50 hover:bg-background transition-colors">
-                            <Play className="w-3 h-3 text-primary shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-foreground truncate">{file.filename}</p>
-                              <p className="text-[10px] text-muted-foreground">{formatFileSize(file.filesize)}</p>
-                            </div>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(file.link, '_blank')}>
-                              <ExternalLink className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Audio Quality */}
