@@ -96,9 +96,14 @@ const TVDisplay: React.FC = () => {
         setConnected(true);
       })
       .on('broadcast', { event: 'phone-connected' }, () => {
+        console.log('[TV] Received phone-connected, sending tv-ack');
         setConnected(true);
+        // Send ack so phone knows TV is ready
+        channel.send({ type: 'broadcast', event: 'tv-ack', payload: {} });
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[TV] Channel status:', status);
+      });
 
     channelRef.current = channel;
 
