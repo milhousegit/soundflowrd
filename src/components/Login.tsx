@@ -5,6 +5,7 @@ import { verifyApiKey } from '@/lib/realdebrid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Music2, Mail, Lock, Key, Loader2, AlertCircle, UserPlus, LogIn, ArrowLeft, Gift, CheckCircle } from 'lucide-react';
+import LoginNewsCards from '@/components/LoginNewsCards';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import appLogo from '@/assets/logo.png';
@@ -576,6 +577,9 @@ const Login: React.FC = () => {
             </form>
           </>
         )}
+
+        {/* News section below login */}
+        <LoginNewsCards language={language} />
       </div>
     </div>
   );
