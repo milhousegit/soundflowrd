@@ -1,73 +1,56 @@
-# Welcome to your Lovable project
+# 🎵 Welcome to SoundFlow
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+SoundFlow is a personal music player project built with passion, curiosity, and a lot of vibecoding.
 
-## How can I edit this code?
+> ⚠️ Disclaimer: I am not a professional developer.  
+> Everything you see in this app has been created through experimentation, learning by doing, and pure vibecoding energy.
 
-There are several ways of editing your application.
+The main goal of SoundFlow is to provide a clean and functional music player experience, similar to classic music apps, with support for external sources (including Real Debrid), without ads or forced subscriptions.
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## ✨ What is SoundFlow?
 
-Changes made via Lovable will be committed automatically to this repo.
+SoundFlow is designed to be:
 
-**Use your preferred IDE**
+- A simple and powerful music player  
+- Free from advertising  
+- Free from mandatory subscriptions  
+- Compatible with external streaming/file sources  
+- Focused on enjoying music with no distractions  
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+Just press play and enjoy your music 🎧
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+---
 
-Follow these steps:
+## ⭐ Premium Features
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+SoundFlow includes a few optional premium features.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+These are **not meant to lock the app**, but only to help:
 
-# Step 3: Install the necessary dependencies.
-npm i
+- Cover server and maintenance costs  
+- Support ongoing development  
+- Fund the iOS and Android APK versions (currently still in beta)  
+
+The project is independent, and this is the only way to keep it sustainable.
+
+---
+
+## 🤝 Help the project grow
+
+SoundFlow is still evolving, and since it’s a vibecoding-made project, bugs may happen.
+
+You can help a lot by:
+
+- Reporting bugs  
+- Suggesting new features  
+- Opening issues or pull requests  
+- Sharing feedback  
+
+Enjoy your music, and let’s improve SoundFlow together ❤️
 
 # Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
