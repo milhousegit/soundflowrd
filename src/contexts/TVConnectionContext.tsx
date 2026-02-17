@@ -18,13 +18,10 @@ export const useTVConnection = () => {
 };
 
 export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { currentTrack, isPlaying, progress, volume, setVolume } = usePlayer();
+  const { currentTrack, isPlaying, progress } = usePlayer();
   const [isConnected, setIsConnected] = useState(false);
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const savedVolumeRef = useRef<number>(0.7);
-  const volumeRef = useRef(volume);
-  volumeRef.current = volume;
 
   const connectToRoom = useCallback((code: string) => {
     // Clean up any existing channel
@@ -51,9 +48,7 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
           console.log('[TV-Phone] Channel SUBSCRIBED for room:', code);
           setIsConnected(true);
           setRoomCode(code);
-          // Mute phone audio
-          savedVolumeRef.current = volumeRef.current;
-          setVolume(0);
+          // Phone keeps playing normally - TV has its own audio stream
           // Send phone-connected repeatedly until TV acks
           const sendConnect = () => {
             if (acked) return;
@@ -68,17 +63,16 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
       });
 
     channelRef.current = channel;
-  }, [setVolume]);
+  }, []);
 
   const disconnect = useCallback(() => {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
-    setVolume(savedVolumeRef.current || 0.7);
     setIsConnected(false);
     setRoomCode(null);
-  }, [setVolume]);
+  }, []);
 
   // Keep refs for current state to use in interval
   const currentTrackRef = useRef(currentTrack);
