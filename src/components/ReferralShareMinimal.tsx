@@ -69,7 +69,7 @@ const ReferralShareMinimal: React.FC<ReferralShareMinimalProps> = ({ language, o
       className="flex items-center justify-between w-full group"
     >
       <div className="flex items-center gap-2">
-        <Gift className="w-3.5 h-3.5 text-primary" />
+        <Gift className="w-3.5 h-3.5 text-muted-foreground" />
         <span className="text-sm text-foreground">
           {language === 'it' ? 'Invita un amico' : 'Invite a friend'}
         </span>

@@ -404,9 +404,9 @@ const Settings: React.FC = () => {
             <div className="pt-2">
               {profile?.telegram_chat_id ? (
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 flex items-center gap-2 p-2.5 rounded-lg bg-[#0088cc]/10 border border-[#0088cc]/30">
-                    <Send className="w-3.5 h-3.5 text-[#0088cc]" />
-                    <span className="text-sm text-[#0088cc] font-medium">
+                <div className="flex-1 flex items-center gap-2">
+                    <Send className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-sm text-foreground">
                       {settings.language === 'it' ? 'Telegram connesso' : 'Telegram connected'}
                     </span>
                     <Check className="w-3.5 h-3.5 text-green-500 ml-auto" />
