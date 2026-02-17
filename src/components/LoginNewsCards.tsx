@@ -135,7 +135,7 @@ const GitHubContent: React.FC<{lang: 'en' | 'it';}> = ({ lang }) =>
         </p>
         <p>Puoi esplorare il codice sorgente, segnalare bug, proporre nuove funzionalità o contribuire direttamente al progetto.</p>
         <a
-      href="https://github.com/Traxof/SoundFlow"
+      href="https://github.com/milhousegit/soundflowrd"
       target="_blank"
       rel="noopener noreferrer">
 
@@ -153,7 +153,7 @@ const GitHubContent: React.FC<{lang: 'en' | 'it';}> = ({ lang }) =>
         </p>
         <p>Explore the source code, report bugs, suggest features, or contribute directly to the project.</p>
         <a
-      href="https://github.com/Traxof/SoundFlow"
+      href="https://github.com/milhousegit/soundflowrd"
       target="_blank"
       rel="noopener noreferrer">
 
