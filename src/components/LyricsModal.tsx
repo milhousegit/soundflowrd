@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Loader2, Music2, LocateFixed, LocateOff, Minus, Plus } from 'lucide-react';
+import { X, Loader2, Music2, LocateFixed, LocateOff, Minus, Plus, Tv } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
@@ -55,6 +56,7 @@ function parseSyncedLyrics(syncedLyrics: string): SyncedLine[] {
 const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => {
   const { settings } = useSettings();
   const { progress, seek } = usePlayer();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
@@ -267,9 +269,14 @@ const LyricsModal: React.FC<LyricsModalProps> = ({ isOpen, onClose, track }) => 
             <p className="text-sm text-muted-foreground truncate">{track?.artist}</p>
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="w-5 h-5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={() => { onClose(); navigate('/tv'); }}>
+            <Tv className="w-5 h-5" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
       </div>
 
       {/* Sync controls for synced lyrics */}
