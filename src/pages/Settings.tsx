@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { verifyApiKey } from '@/lib/realdebrid';
-import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, ChevronRight, ChevronDown, ChevronUp, Info, Globe, Crown, Download, Car, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2, MessageSquare, Mic2, BadgeCheck, Gift, Copy, Share2, Plus, Minus, ArrowUp, ArrowDown } from 'lucide-react';
-import { SCRAPING_SOURCES, ALL_FALLBACK_SOURCES, type FallbackSourceId } from '@/types/settings';
+import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, ChevronRight, ChevronDown, ChevronUp, Info, Globe, Crown, Download, Car, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2, MessageSquare, Mic2, BadgeCheck, Gift, Copy, Share2, Plus, Minus, ArrowUp, ArrowDown, Settings2 } from 'lucide-react';
+import { ALL_FALLBACK_SOURCES, type FallbackSourceId } from '@/types/settings';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -75,6 +75,7 @@ const Settings: React.FC = () => {
   const [showCloudSection, setShowCloudSection] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showPaymentPendingBanner, setShowPaymentPendingBanner] = useState(false);
+  const [showBridgeUrlInput, setShowBridgeUrlInput] = useState(false);
   const [showKofiModal, setShowKofiModal] = useState(false);
 
   // Check if user has active premium (respect simulation mode)
@@ -514,36 +515,44 @@ const Settings: React.FC = () => {
               <span className="text-xs text-muted-foreground uppercase tracking-wide">{t('audioSource')}</span>
               
               {/* Scraping Ponte */}
-              <button onClick={() => setAudioSourceMode('deezer_priority')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${audioSourceMode === 'deezer_priority' ? 'bg-purple-500/15 ring-1 ring-purple-500/40' : 'bg-secondary/50 hover:bg-secondary'}`}>
-                <Music className={`w-4 h-4 ${audioSourceMode === 'deezer_priority' ? 'text-purple-500' : 'text-muted-foreground'}`} />
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium ${audioSourceMode === 'deezer_priority' ? 'text-purple-500' : 'text-foreground'}`}>
-                    {t('deezerPriority')}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">{t('deezerPriorityDesc')}</p>
-                </div>
-                {audioSourceMode === 'deezer_priority' && <Check className="w-4 h-4 text-purple-500 shrink-0" />}
-              </button>
-
-              {/* Scraping Source Selector - shown when Scraping Ponte is active */}
-              {audioSourceMode === 'deezer_priority' && (
-                <div className="ml-7 space-y-2 animate-fade-in">
-                  <span className="text-xs text-muted-foreground">{t('scrapingSource')}</span>
-                  <div className="flex gap-2">
-                    {SCRAPING_SOURCES.map(source => (
-                      <button
-                        key={source.id}
-                        onClick={() => setSelectedScrapingSource(source.id)}
-                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          selectedScrapingSource === source.id
-                            ? source.id === 'monochrome' ? 'bg-sky-500/20 text-sky-400 ring-1 ring-sky-500/40' : 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/40'
-                            : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
-                        }`}
-                      >
-                        {source.name}
-                      </button>
-                    ))}
+              <div className="flex items-center gap-1">
+                <button onClick={() => setAudioSourceMode('deezer_priority')} className={`flex-1 flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${audioSourceMode === 'deezer_priority' ? 'bg-purple-500/15 ring-1 ring-purple-500/40' : 'bg-secondary/50 hover:bg-secondary'}`}>
+                  <Music className={`w-4 h-4 ${audioSourceMode === 'deezer_priority' ? 'text-purple-500' : 'text-muted-foreground'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${audioSourceMode === 'deezer_priority' ? 'text-purple-500' : 'text-foreground'}`}>
+                      {t('deezerPriority')}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{t('deezerPriorityDesc')}</p>
                   </div>
+                  {audioSourceMode === 'deezer_priority' && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Check className="w-4 h-4 text-purple-500" />
+                    </div>
+                  )}
+                </button>
+                {audioSourceMode === 'deezer_priority' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowBridgeUrlInput(prev => !prev); }}
+                    className="p-3 rounded-lg hover:bg-secondary/80 transition-colors shrink-0"
+                    title={settings.language === 'it' ? 'Configura indirizzo' : 'Configure address'}
+                  >
+                    <Settings2 className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+
+              {/* Bridge URL Input - shown when gear icon is clicked */}
+              {audioSourceMode === 'deezer_priority' && showBridgeUrlInput && (
+                <div className="ml-7 space-y-2 animate-fade-in">
+                  <span className="text-xs text-muted-foreground">
+                    {settings.language === 'it' ? 'Indirizzo sito ponte' : 'Bridge site address'}
+                  </span>
+                  <Input
+                    value={settings.bridgeUrl}
+                    onChange={(e) => updateSettings({ bridgeUrl: e.target.value })}
+                    placeholder={settings.language === 'it' ? 'Inserisci indirizzo...' : 'Enter address...'}
+                    className="h-9 text-sm"
+                  />
                 </div>
               )}
 

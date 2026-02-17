@@ -39,6 +39,7 @@ export interface AppSettings {
   realDebridApiKey?: string;
   audioSourceMode: AudioSourceMode;
   selectedScrapingSource: string; // ID of active scraping source
+  bridgeUrl: string; // URL of the bridge site
   hybridFallbackChain: FallbackSourceId[]; // ordered fallback chain for hybrid mode
 }
 
@@ -62,6 +63,7 @@ export const defaultSettings: AppSettings = {
   realDebridApiKey: undefined,
   audioSourceMode: 'deezer_priority',
   selectedScrapingSource: 'squidwtf',
+  bridgeUrl: '',
   hybridFallbackChain: ['real-debrid', 'squidwtf'],
 };
 
