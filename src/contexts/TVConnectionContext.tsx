@@ -82,8 +82,9 @@ export const TVConnectionProvider: React.FC<{ children: ReactNode }> = ({ childr
   useEffect(() => {
     if (!isConnected || !channelRef.current) return;
 
-    const audioEl = document.querySelector('audio');
-    const streamUrl = audioEl?.src || null;
+    const audioEl = document.querySelector('audio') as HTMLAudioElement | null;
+    const streamUrl = audioEl?.src && audioEl.src !== '' ? audioEl.src : null;
+    console.log('[TV] Sending state, streamUrl:', streamUrl ? streamUrl.substring(0, 80) + '...' : 'null');
 
     channelRef.current.send({
       type: 'broadcast',

@@ -73,12 +73,18 @@ const TVDisplay: React.FC = () => {
         if (data.track) setRemoteTrack(data.track);
         if (typeof data.isPlaying === 'boolean') setRemoteIsPlaying(data.isPlaying);
         if (typeof data.progress === 'number') setRemoteProgress(data.progress);
-        if (data.streamUrl && data.streamUrl !== lastStreamUrlRef.current) {
-          lastStreamUrlRef.current = data.streamUrl;
-          if (tvAudioRef.current) {
-            tvAudioRef.current.src = data.streamUrl;
-            if (data.isPlaying) tvAudioRef.current.play().catch(() => {});
+        if (data.streamUrl) {
+          // Always update src if changed
+          if (data.streamUrl !== lastStreamUrlRef.current) {
+            lastStreamUrlRef.current = data.streamUrl;
+            if (tvAudioRef.current) {
+              tvAudioRef.current.src = data.streamUrl;
+              tvAudioRef.current.load();
+              if (data.isPlaying) tvAudioRef.current.play().catch((e) => console.log('[TV-Audio] Play failed:', e));
+            }
           }
+        } else {
+          console.log('[TV-Audio] No streamUrl received');
         }
         if (tvAudioRef.current) {
           if (data.isPlaying && tvAudioRef.current.paused) {
@@ -208,23 +214,23 @@ const TVDisplay: React.FC = () => {
         <Wifi className="w-4 h-4" />
         <span className="text-xs">{isItalian ? 'Connesso' : 'Connected'}</span>
       </div>
-      <div className="flex-1 flex items-center justify-center z-10 px-8 py-24">
+      <div className="flex-1 flex items-center justify-center z-10 px-16 py-32">
         {lyricsLoading ? (
           <Loader2 className="w-10 h-10 text-white/40 animate-spin" />
         ) : syncedLines.length > 0 ? (
-          <ScrollArea className="h-[60vh] w-full max-w-4xl">
-            <div className="space-y-6 py-12">
+          <ScrollArea className="h-[70vh] w-full max-w-5xl">
+            <div className="space-y-5 py-16 px-8">
               {syncedLines.map((line, index) => (
                 <p
                   key={index}
                   ref={(el) => (lineRefs.current[index] = el)}
                   className={cn(
-                    "text-center transition-all duration-500",
+                    "text-center transition-all duration-500 px-4",
                     index === currentLineIndex
-                      ? "text-white text-4xl md:text-5xl font-bold scale-105"
+                      ? "text-white text-2xl md:text-3xl lg:text-4xl font-bold scale-105"
                       : index < currentLineIndex
-                      ? "text-white/25 text-2xl md:text-3xl"
-                      : "text-white/40 text-2xl md:text-3xl"
+                      ? "text-white/25 text-lg md:text-xl lg:text-2xl"
+                      : "text-white/40 text-lg md:text-xl lg:text-2xl"
                   )}
                 >
                   {line.text}
