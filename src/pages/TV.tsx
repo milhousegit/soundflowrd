@@ -285,14 +285,19 @@ const MobileRemote: React.FC = () => {
   const scannerRef = useRef<any>(null);
   const videoRef = useRef<HTMLDivElement>(null);
 
-  // Check URL for room param
+  // Check URL for room param, otherwise auto-start scanner
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get('room');
     if (room) {
       connectToRoom(room);
+    } else {
+      // Auto-start camera scanner
+      startScannerOnMount.current = true;
     }
   }, []);
+
+  const startScannerOnMount = useRef(false);
 
   const connectToRoom = useCallback((code: string) => {
     if (channelRef.current) {
@@ -367,6 +372,14 @@ const MobileRemote: React.FC = () => {
     }
   }, [connectToRoom]);
 
+  // Auto-start scanner after auth is ready
+  useEffect(() => {
+    if (startScannerOnMount.current && isAuthenticated && !authLoading && !connected) {
+      startScannerOnMount.current = false;
+      startScanner();
+    }
+  }, [isAuthenticated, authLoading, connected, startScanner]);
+
   // Cleanup scanner
   useEffect(() => {
     return () => {
@@ -405,50 +418,64 @@ const MobileRemote: React.FC = () => {
 
   if (!connected) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 gap-6">
+      <div className="min-h-screen bg-background flex flex-col p-6 gap-5" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
         <div className="flex items-center gap-2">
-          <Tv className="w-8 h-8 text-primary" />
-          <h1 className="text-2xl font-bold">{isItalian ? 'Collega alla TV' : 'Connect to TV'}</h1>
+          <Tv className="w-7 h-7 text-primary" />
+          <h1 className="text-xl font-bold">{isItalian ? 'Collega alla TV' : 'Connect to TV'}</h1>
         </div>
 
-        {scanning ? (
-          <div className="w-full max-w-sm space-y-4">
+        {/* Instructions */}
+        <div className="bg-secondary/50 rounded-xl p-4 space-y-2">
+          <p className="text-sm font-medium text-foreground">
+            {isItalian ? 'Come collegare:' : 'How to connect:'}
+          </p>
+          <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
+            <li>{isItalian ? 'Apri il browser sulla TV o PC' : 'Open browser on your TV or PC'}</li>
+            <li>{isItalian ? 'Vai su ' : 'Go to '}<span className="font-mono text-primary font-medium">soundflowrd.lovable.app/tv</span></li>
+            <li>{isItalian ? 'Scansiona il QR code mostrato sullo schermo' : 'Scan the QR code shown on screen'}</li>
+            <li>{isItalian ? 'Oppure inserisci il codice stanza qui sotto' : 'Or enter the room code below'}</li>
+          </ol>
+        </div>
+
+        {/* Scanner */}
+        {scanning && (
+          <div className="w-full space-y-3">
             <div id="qr-reader" className="w-full rounded-xl overflow-hidden" />
             <Button variant="outline" className="w-full" onClick={() => {
               if (scannerRef.current) scannerRef.current.stop().catch(() => {});
               setScanning(false);
             }}>
-              {isItalian ? 'Annulla' : 'Cancel'}
+              {isItalian ? 'Chiudi fotocamera' : 'Close camera'}
             </Button>
-          </div>
-        ) : (
-          <div className="w-full max-w-sm space-y-4">
-            <Button className="w-full gap-2 h-14 text-lg" onClick={startScanner}>
-              <ScanLine className="w-5 h-5" />
-              {isItalian ? 'Scansiona QR Code' : 'Scan QR Code'}
-            </Button>
-
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">{isItalian ? 'oppure' : 'or'}</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder={isItalian ? 'Codice stanza' : 'Room code'}
-                value={manualCode}
-                onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-                maxLength={6}
-                className="flex-1 h-12 px-4 rounded-lg bg-secondary text-foreground font-mono text-lg tracking-[0.2em] text-center border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <Button className="h-12 px-6" onClick={handleManualConnect} disabled={manualCode.length < 4}>
-                {isItalian ? 'Connetti' : 'Connect'}
-              </Button>
-            </div>
           </div>
         )}
+
+        {!scanning && (
+          <Button className="w-full gap-2 h-12" onClick={startScanner}>
+            <ScanLine className="w-5 h-5" />
+            {isItalian ? 'Apri fotocamera' : 'Open camera'}
+          </Button>
+        )}
+
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs text-muted-foreground">{isItalian ? 'oppure inserisci il codice' : 'or enter code'}</span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+
+        <div className="space-y-3">
+          <input
+            type="text"
+            placeholder={isItalian ? 'Codice stanza' : 'Room code'}
+            value={manualCode}
+            onChange={(e) => setManualCode(e.target.value.toUpperCase())}
+            maxLength={6}
+            className="w-full h-14 px-4 rounded-xl bg-secondary text-foreground font-mono text-2xl tracking-[0.3em] text-center border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          <Button className="w-full h-12 text-base" onClick={handleManualConnect} disabled={manualCode.length < 4}>
+            {isItalian ? 'Connetti' : 'Connect'}
+          </Button>
+        </div>
       </div>
     );
   }
