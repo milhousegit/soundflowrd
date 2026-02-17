@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlayerProvider } from "@/contexts/PlayerContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { AutoModeProvider, useAutoMode } from "@/components/auto/AutoModeContext";
+import { TVConnectionProvider } from "@/contexts/TVConnectionContext";
 import { supabase } from "@/integrations/supabase/client";
 import Login from "@/components/Login";
 import Layout from "@/components/Layout";
@@ -161,9 +162,11 @@ const App = () => (
       <SettingsProvider>
         <PlayerProvider>
           <AutoModeProvider>
-            <TooltipProvider>
-              <AppContent />
-            </TooltipProvider>
+            <TVConnectionProvider>
+              <TooltipProvider>
+                <AppContent />
+              </TooltipProvider>
+            </TVConnectionProvider>
           </AutoModeProvider>
         </PlayerProvider>
       </SettingsProvider>
