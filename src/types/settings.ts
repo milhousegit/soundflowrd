@@ -1,5 +1,24 @@
 export type AudioSourceMode = 'deezer_priority' | 'rd_priority' | 'hybrid_priority';
 
+export interface ScrapingSource {
+  id: string;
+  name: string;
+  edgeFunctionName: string;
+}
+
+export const SCRAPING_SOURCES: ScrapingSource[] = [
+  { id: 'squidwtf', name: 'SquidWTF', edgeFunctionName: 'squidwtf' },
+  { id: 'monochrome', name: 'Monochrome', edgeFunctionName: 'monochrome' },
+];
+
+export type FallbackSourceId = 'real-debrid' | 'squidwtf' | 'monochrome';
+
+export const ALL_FALLBACK_SOURCES: { id: FallbackSourceId; name: string }[] = [
+  { id: 'real-debrid', name: 'Real-Debrid' },
+  { id: 'squidwtf', name: 'SquidWTF' },
+  { id: 'monochrome', name: 'Monochrome' },
+];
+
 export interface AppSettings {
   language: 'en' | 'it';
   homeDisplayOptions: {
@@ -16,9 +35,11 @@ export interface AppSettings {
     showFollowingPlaylists: boolean;
   };
   audioQuality: 'high' | 'medium' | 'low';
-  crossfade: number; // seconds, 0 = off
+  crossfade: number;
   realDebridApiKey?: string;
-  audioSourceMode: AudioSourceMode; // 'deezer_priority' = Deezer (Lucida), 'rd_priority' = Real-Debrid
+  audioSourceMode: AudioSourceMode;
+  selectedScrapingSource: string; // ID of active scraping source
+  hybridFallbackChain: FallbackSourceId[]; // ordered fallback chain for hybrid mode
 }
 
 export const defaultSettings: AppSettings = {
@@ -39,7 +60,9 @@ export const defaultSettings: AppSettings = {
   audioQuality: 'high',
   crossfade: 0,
   realDebridApiKey: undefined,
-  audioSourceMode: 'deezer_priority', // Default to Scraping Ponte (no RD API key required)
+  audioSourceMode: 'deezer_priority',
+  selectedScrapingSource: 'squidwtf',
+  hybridFallbackChain: ['real-debrid', 'squidwtf'],
 };
 
 export const translations = {
@@ -101,11 +124,17 @@ export const translations = {
     playFromCloud: 'Play from cloud',
     audioSource: 'Audio Source',
     deezerPriority: 'Scraping Ponte',
-    deezerPriorityDesc: 'FLAC/320kbps from SquidWTF',
+    deezerPriorityDesc: 'FLAC/320kbps from bridge site',
     rdPriority: 'Real-Debrid',
     rdPriorityDesc: 'High quality (FLAC/320kbps) when available',
     hybridPriority: 'Hybrid',
-    hybridPriorityDesc: 'RD first, fallback to SquidWTF while downloading',
+    hybridPriorityDesc: 'Custom fallback chain with multiple sources',
+    scrapingSource: 'Bridge Site',
+    fallbackChain: 'Fallback Order',
+    addSource: 'Add source',
+    removeSource: 'Remove',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
   },
   it: {
     home: 'Home',
@@ -165,11 +194,17 @@ export const translations = {
     playFromCloud: 'Riproduci da cloud',
     audioSource: 'Sorgente Audio',
     deezerPriority: 'Scraping Ponte',
-    deezerPriorityDesc: 'FLAC/320kbps da SquidWTF',
+    deezerPriorityDesc: 'FLAC/320kbps dal sito ponte',
     rdPriority: 'Real-Debrid',
     rdPriorityDesc: 'Alta qualità (FLAC/320kbps) quando disponibile',
     hybridPriority: 'Ibrida',
-    hybridPriorityDesc: 'RD prima, fallback SquidWTF durante il download',
+    hybridPriorityDesc: 'Catena fallback personalizzata con più sorgenti',
+    scrapingSource: 'Sito Ponte',
+    fallbackChain: 'Ordine Fallback',
+    addSource: 'Aggiungi sorgente',
+    removeSource: 'Rimuovi',
+    moveUp: 'Sposta su',
+    moveDown: 'Sposta giù',
   },
 };
 

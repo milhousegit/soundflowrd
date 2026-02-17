@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AppSettings, defaultSettings, translations, TranslationKey, AudioSourceMode } from '@/types/settings';
+import { AppSettings, defaultSettings, translations, TranslationKey, AudioSourceMode, FallbackSourceId } from '@/types/settings';
 import { useAuth } from './AuthContext';
 
 interface SettingsContextType {
@@ -8,6 +8,10 @@ interface SettingsContextType {
   t: (key: TranslationKey) => string;
   audioSourceMode: AudioSourceMode;
   setAudioSourceMode: (mode: AudioSourceMode) => Promise<void>;
+  selectedScrapingSource: string;
+  setSelectedScrapingSource: (sourceId: string) => void;
+  hybridFallbackChain: FallbackSourceId[];
+  setHybridFallbackChain: (chain: FallbackSourceId[]) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -35,7 +39,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
           showFollowingPlaylists: true,
           ...(parsed.feedDisplayOptions || {})
         };
-        setSettings({ ...defaultSettings, ...parsed, feedDisplayOptions });
+        // Ensure new fields have defaults
+        const selectedScrapingSource = parsed.selectedScrapingSource || defaultSettings.selectedScrapingSource;
+        const hybridFallbackChain = parsed.hybridFallbackChain || defaultSettings.hybridFallbackChain;
+        setSettings({ ...defaultSettings, ...parsed, feedDisplayOptions, selectedScrapingSource, hybridFallbackChain });
       } catch {
         // Use defaults
       }
@@ -68,12 +75,26 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
+  const setSelectedScrapingSource = (sourceId: string) => {
+    updateSettings({ selectedScrapingSource: sourceId });
+  };
+
+  const setHybridFallbackChain = (chain: FallbackSourceId[]) => {
+    updateSettings({ hybridFallbackChain: chain });
+  };
+
   const t = (key: TranslationKey): string => {
     return translations[settings.language][key] || key;
   };
 
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings, t, audioSourceMode, setAudioSourceMode }}>
+    <SettingsContext.Provider value={{ 
+      settings, updateSettings, t, audioSourceMode, setAudioSourceMode,
+      selectedScrapingSource: settings.selectedScrapingSource,
+      setSelectedScrapingSource,
+      hybridFallbackChain: settings.hybridFallbackChain,
+      setHybridFallbackChain,
+    }}>
       {children}
     </SettingsContext.Provider>
   );

@@ -392,13 +392,18 @@ const Player: React.FC = () => {
               <div className="mt-2">
                 <span className={cn(
                   "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
-                  currentAudioSource === 'tidal' 
-                    ? "bg-sky-500/20 text-sky-400" 
-                    : currentAudioSource === 'offline'
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-orange-500/20 text-orange-400"
+                  currentAudioSource === 'squidwtf' 
+                    ? "bg-purple-500/20 text-purple-400"
+                    : currentAudioSource === 'monochrome'
+                      ? "bg-sky-500/20 text-sky-400" 
+                      : currentAudioSource === 'offline'
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-orange-500/20 text-orange-400"
                 )}>
-                  {currentAudioSource === 'tidal' ? '🎵 Tidal HQ' : currentAudioSource === 'offline' ? '📱 Offline' : '📦 Real-Debrid'}
+                  {currentAudioSource === 'squidwtf' ? '🎵 SquidWTF' 
+                    : currentAudioSource === 'monochrome' ? '🎵 Monochrome'
+                    : currentAudioSource === 'offline' ? '📱 Offline' 
+                    : '📦 Real-Debrid'}
                 </span>
               </div>
             )}
