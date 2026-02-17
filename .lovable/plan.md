@@ -1,67 +1,38 @@
 
 
-# Fix Audio TV: Riproduzione Funzionante
+# Fix: Audio torna indietro nei primi secondi
 
 ## Problema
-Il browser blocca completamente `audio.play()` perche l'elemento audio e creato con `new Audio()` in un `useEffect`, fuori dal DOM e senza mai ricevere un gesto utente. I log confermano: `[TV-Audio] Still blocked: AbortError`.
+Quando la TV inizia a riprodurre un nuovo brano, il telefono e gia avanti di qualche secondo (perche stava riproducendo mentre la TV fetchava lo stream). La logica di sincronizzazione (soglia di 3 secondi) continua a correggere la posizione della TV ad ogni heartbeat (ogni 2 secondi), causando piccoli salti indietro durante i primi secondi di riproduzione.
 
 ## Soluzione
+Ignorare la sincronizzazione del tempo per i primi secondi dopo che la TV inizia a riprodurre un nuovo brano.
 
-### Cambiamento principale in `src/pages/TV.tsx`
+### Modifiche in `src/pages/TV.tsx`
 
-1. **Sostituire `new Audio()` con un tag `<audio>` nel JSX**
-   - Aggiungere `<audio ref={tvAudioRef} muted crossOrigin="anonymous" />` nel return del componente TVDisplay
-   - Rimuovere il `useEffect` che crea `new Audio()` programmaticamente
+1. **Aggiungere un ref `playbackStartedAtRef`** che registra il timestamp (`Date.now()`) di quando la TV inizia effettivamente la riproduzione di un nuovo brano (dentro `fetchStreamForTrack`, dopo `audio.play()`)
 
-2. **Riscrivere il pulsante Mute/Unmute**
-   - Al click dell'utente (gesto valido per il browser):
-     - Se l'audio e in pausa, chiamare `tvAudioRef.current.play()` dentro il gestore click
-     - Impostare `muted = false`
-   - Questo sblocca permanentemente l'elemento audio per il browser
+2. **Nella logica di sync del broadcast handler** (linee 141-145), aggiungere una guardia:
+   - Se sono passati meno di 5 secondi da `playbackStartedAtRef`, NON sincronizzare il `currentTime`
+   - Questo da alla TV il tempo di stabilizzarsi senza essere interrotta dai heartbeat del telefono
+   - Dopo 5 secondi, la sincronizzazione riprende normalmente con la soglia di 3 secondi
 
-3. **Aggiornare la logica di ricezione `player-state`**
-   - Quando arriva un nuovo `streamUrl`, impostare `audio.src` e chiamare `audio.load()`
-   - NON chiamare `audio.play()` automaticamente se l'audio non e ancora stato sbloccato dall'utente
-   - Usare un flag `audioUnlocked` (ref) che diventa `true` solo dopo il primo click utente
-   - Se `audioUnlocked` e `true`, allora si puo chiamare `play()` automaticamente sui cambi di stato successivi
-
-4. **Sync del tempo**
-   - Mantenere la logica esistente: se la differenza tra `currentTime` del telefono e della TV supera 3 secondi, aggiornare la posizione
-
-### Flusso corretto dopo la fix
-
-```text
-Telefono                          TV (Browser)
-   |                                  |
-   |--- phone-connected ------------>|
-   |<------------ tv-ack ------------|
-   |                                  |
-   |--- player-state --------------->| Riceve streamUrl, lo carica
-   |    (streamUrl, currentTime,     | ma NON chiama play()
-   |     isPlaying, track)           |
-   |                                  |
-   |                          [Utente clicca Unmute]
-   |                                  | -> audio.play() (gesto utente)
-   |                                  | -> audioUnlocked = true
-   |                                  | -> audio.muted = false
-   |                                  |
-   |--- player-state --------------->| Ora play/pause/seek
-   |    (ogni 2 secondi)             | funzionano automaticamente
-```
-
-### File modificati
-- **`src/pages/TV.tsx`** - Unico file da modificare
+3. **Rimuovere la sync iniziale** alle linee 101-104 (`if (remoteCurrentTimeRef.current > 0) audio.currentTime = ...`). Non serve piu perche la TV riproduce autonomamente dall'inizio e la sync partira dopo 5 secondi.
 
 ### Dettagli tecnici
 
-Il tag `<audio>` nel DOM con `ref={tvAudioRef}`:
-- E visibile al browser come elemento media legittimo
-- Puo essere sbloccato con un singolo click utente
-- Una volta sbloccato, le chiamate `.play()` successive funzionano senza gesti aggiuntivi
-- L'attributo `crossOrigin="anonymous"` e necessario per URL di streaming esterni
+```text
+Prima (problematico):
+  TV fetch stream -> audio.currentTime = phone.progress (5s)
+  -> heartbeat arriva -> diff < 3s ma posizione cambia -> piccolo salto
+  -> altro heartbeat -> altro salto
 
-Il pulsante unmute mostrera:
-- `VolumeX` quando muto (stato iniziale)
-- `Volume2` quando attivo
-- Al primo click: sblocca + unmute + play
-- Click successivi: solo toggle mute/unmute
+Dopo (fix):
+  TV fetch stream -> audio.play() da 0
+  -> playbackStartedAt = Date.now()
+  -> heartbeat arriva (entro 5s) -> IGNORATO
+  -> heartbeat arriva (dopo 5s) -> sync normale con soglia 3s
+```
+
+### File modificato
+- `src/pages/TV.tsx` - Aggiungere `playbackStartedAtRef`, guardia temporale nel sync handler, rimuovere sync iniziale
