@@ -401,7 +401,7 @@ const Settings: React.FC = () => {
             )}
 
             {/* Connect/Disconnect Telegram */}
-            <div className="pt-2">
+            <div>
               {profile?.telegram_chat_id ? (
                 <div className="flex items-center gap-2">
                 <div className="flex-1 flex items-center gap-2">
