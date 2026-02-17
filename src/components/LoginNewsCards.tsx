@@ -13,41 +13,41 @@ interface NewsCard {
 }
 
 const newsCards: NewsCard[] = [
-  {
-    id: 'what-is-soundflow',
-    icon: <Music2 className="w-6 h-6" />,
-    gradient: 'from-primary/30 to-accent/30',
-    titleEn: 'What is SoundFlow?',
-    titleIt: 'Cos\'è SoundFlow?',
-    subtitleEn: 'Discover how it works',
-    subtitleIt: 'Scopri come funziona',
-  },
-  {
-    id: 'github',
-    icon: <Github className="w-6 h-6" />,
-    gradient: 'from-[#333]/40 to-[#555]/30',
-    titleEn: 'GitHub Repository',
-    titleIt: 'Repository GitHub',
-    subtitleEn: 'Open source project',
-    subtitleIt: 'Progetto open source',
-  },
-  {
-    id: 'ios-sideload',
-    icon: <Apple className="w-6 h-6" />,
-    gradient: 'from-[#007AFF]/30 to-[#5856D6]/30',
-    titleEn: 'iOS App',
-    titleIt: 'App iOS',
-    subtitleEn: 'Download & Sideload',
-    subtitleIt: 'Scarica e installa',
-  },
-];
+{
+  id: 'what-is-soundflow',
+  icon: <Music2 className="w-6 h-6" />,
+  gradient: 'from-primary/30 to-accent/30',
+  titleEn: 'What is SoundFlow?',
+  titleIt: 'Cos\'è SoundFlow?',
+  subtitleEn: 'Discover how it works',
+  subtitleIt: 'Scopri come funziona'
+},
+{
+  id: 'github',
+  icon: <Github className="w-6 h-6" />,
+  gradient: 'from-[#333]/40 to-[#555]/30',
+  titleEn: 'GitHub Repository',
+  titleIt: 'Repository GitHub',
+  subtitleEn: 'Open source project',
+  subtitleIt: 'Progetto open source'
+},
+{
+  id: 'ios-sideload',
+  icon: <Apple className="w-6 h-6" />,
+  gradient: 'from-[#007AFF]/30 to-[#5856D6]/30',
+  titleEn: 'iOS App',
+  titleIt: 'App iOS',
+  subtitleEn: 'Download & Sideload',
+  subtitleIt: 'Scarica e installa'
+}];
+
 
 // --- Modal content components ---
 
-const WhatIsSoundFlowContent: React.FC<{ lang: 'en' | 'it' }> = ({ lang }) => (
-  <div className="space-y-4 text-sm text-muted-foreground">
-    {lang === 'it' ? (
-      <>
+const WhatIsSoundFlowContent: React.FC<{lang: 'en' | 'it';}> = ({ lang }) =>
+<div className="space-y-4 text-sm text-muted-foreground">
+    {lang === 'it' ?
+  <>
         <p className="text-foreground font-medium text-base">
           SoundFlow è il tuo player musicale personale, gratuito e senza pubblicità.
         </p>
@@ -80,12 +80,12 @@ const WhatIsSoundFlowContent: React.FC<{ lang: 'en' | 'it' }> = ({ lang }) => (
             </div>
           </div>
         </div>
-        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-          <p className="text-xs">💡 <strong>Come iniziare:</strong> Registrati con la tua email, conferma il link di verifica e inizia ad ascoltare!</p>
-        </div>
-      </>
-    ) : (
-      <>
+        
+
+
+      </> :
+
+  <>
         <p className="text-foreground font-medium text-base">
           SoundFlow is your personal music player, free and ad-free.
         </p>
@@ -122,41 +122,41 @@ const WhatIsSoundFlowContent: React.FC<{ lang: 'en' | 'it' }> = ({ lang }) => (
           <p className="text-xs">💡 <strong>How to start:</strong> Sign up with your email, confirm the verification link, and start listening!</p>
         </div>
       </>
-    )}
-  </div>
-);
+  }
+  </div>;
 
-const GitHubContent: React.FC<{ lang: 'en' | 'it' }> = ({ lang }) => (
-  <div className="space-y-4 text-sm text-muted-foreground">
-    {lang === 'it' ? (
-      <>
+
+const GitHubContent: React.FC<{lang: 'en' | 'it';}> = ({ lang }) =>
+<div className="space-y-4 text-sm text-muted-foreground">
+    {lang === 'it' ?
+  <>
         <p className="text-foreground font-medium text-base">
           SoundFlow è un progetto open source disponibile su GitHub.
         </p>
         <p>Puoi esplorare il codice sorgente, segnalare bug, proporre nuove funzionalità o contribuire direttamente al progetto.</p>
         <a
-          href="https://github.com/Traxof/SoundFlow"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+      href="https://github.com/Traxof/SoundFlow"
+      target="_blank"
+      rel="noopener noreferrer">
+
           <Button className="w-full gap-2 mt-2">
             <Github className="w-5 h-5" />
             Apri su GitHub
             <ExternalLink className="w-4 h-4" />
           </Button>
         </a>
-      </>
-    ) : (
-      <>
+      </> :
+
+  <>
         <p className="text-foreground font-medium text-base">
           SoundFlow is an open source project available on GitHub.
         </p>
         <p>Explore the source code, report bugs, suggest features, or contribute directly to the project.</p>
         <a
-          href="https://github.com/Traxof/SoundFlow"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+      href="https://github.com/Traxof/SoundFlow"
+      target="_blank"
+      rel="noopener noreferrer">
+
           <Button className="w-full gap-2 mt-2">
             <Github className="w-5 h-5" />
             Open on GitHub
@@ -164,14 +164,14 @@ const GitHubContent: React.FC<{ lang: 'en' | 'it' }> = ({ lang }) => (
           </Button>
         </a>
       </>
-    )}
-  </div>
-);
+  }
+  </div>;
 
-const IOSSideloadContent: React.FC<{ lang: 'en' | 'it' }> = ({ lang }) => (
-  <div className="space-y-4 text-sm text-muted-foreground">
-    {lang === 'it' ? (
-      <>
+
+const IOSSideloadContent: React.FC<{lang: 'en' | 'it';}> = ({ lang }) =>
+<div className="space-y-4 text-sm text-muted-foreground">
+    {lang === 'it' ?
+  <>
         <p className="text-foreground font-medium text-base">
           Installa SoundFlow sul tuo iPhone/iPad tramite sideload.
         </p>
@@ -213,9 +213,9 @@ const IOSSideloadContent: React.FC<{ lang: 'en' | 'it' }> = ({ lang }) => (
         <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30">
           <p className="text-xs text-orange-400">⚠️ Le app sideloaded scadono dopo 7 giorni con un Apple ID gratuito. Usa AltStore per rinnovarle automaticamente.</p>
         </div>
-      </>
-    ) : (
-      <>
+      </> :
+
+  <>
         <p className="text-foreground font-medium text-base">
           Install SoundFlow on your iPhone/iPad via sideloading.
         </p>
@@ -258,9 +258,9 @@ const IOSSideloadContent: React.FC<{ lang: 'en' | 'it' }> = ({ lang }) => (
           <p className="text-xs text-orange-400">⚠️ Sideloaded apps expire after 7 days with a free Apple ID. Use AltStore to auto-refresh them.</p>
         </div>
       </>
-    )}
-  </div>
-);
+  }
+  </div>;
+
 
 interface LoginNewsCardsProps {
   language: 'en' | 'it';
@@ -283,7 +283,7 @@ const LoginNewsCards: React.FC<LoginNewsCardsProps> = ({ language }) => {
   };
 
   const getModalTitle = () => {
-    const card = newsCards.find(c => c.id === openCard);
+    const card = newsCards.find((c) => c.id === openCard);
     if (!card) return '';
     return language === 'it' ? card.titleIt : card.titleEn;
   };
@@ -296,12 +296,12 @@ const LoginNewsCards: React.FC<LoginNewsCardsProps> = ({ language }) => {
           {language === 'it' ? 'Novità' : 'News'}
         </p>
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
-          {newsCards.map((card) => (
-            <button
-              key={card.id}
-              onClick={() => setOpenCard(card.id)}
-              className={`flex-shrink-0 w-[calc(50%-6px)] snap-center rounded-xl p-4 bg-gradient-to-br ${card.gradient} border border-border/50 text-left transition-transform active:scale-95 hover:border-primary/40`}
-            >
+          {newsCards.map((card) =>
+          <button
+            key={card.id}
+            onClick={() => setOpenCard(card.id)}
+            className={`flex-shrink-0 w-[calc(50%-6px)] snap-center rounded-xl p-4 bg-gradient-to-br ${card.gradient} border border-border/50 text-left transition-transform active:scale-95 hover:border-primary/40`}>
+
               <div className="w-10 h-10 rounded-lg bg-background/50 flex items-center justify-center mb-3 text-foreground">
                 {card.icon}
               </div>
@@ -313,39 +313,39 @@ const LoginNewsCards: React.FC<LoginNewsCardsProps> = ({ language }) => {
                 <ChevronRight className="w-3 h-3" />
               </p>
             </button>
-          ))}
+          )}
         </div>
         {/* Page dots */}
         <div className="flex justify-center gap-1.5 mt-2">
-          {newsCards.map((card, i) => (
-            <div key={card.id} className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />
-          ))}
+          {newsCards.map((card, i) =>
+          <div key={card.id} className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />
+          )}
         </div>
       </div>
 
       {/* Modal overlay */}
-      {openCard && (
-        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div 
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
-            onClick={() => setOpenCard(null)} 
-          />
+      {openCard &&
+      <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          onClick={() => setOpenCard(null)} />
+
           <div className="relative z-10 w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl p-6 max-h-[80vh] overflow-y-auto animate-scale-in">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-foreground">{getModalTitle()}</h3>
-              <button 
-                onClick={() => setOpenCard(null)} 
-                className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80"
-              >
+              <button
+              onClick={() => setOpenCard(null)}
+              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80">
+
                 <X className="w-4 h-4" />
               </button>
             </div>
             {renderModalContent()}
           </div>
         </div>
-      )}
-    </>
-  );
+      }
+    </>);
+
 };
 
 export default LoginNewsCards;
