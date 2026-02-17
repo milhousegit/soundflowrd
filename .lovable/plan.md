@@ -1,97 +1,54 @@
 
-# Integrazione Multi-Sorgente Audio
 
-## Panoramica
+# Piano: Riscrittura completa TV Sync
 
-Trasformare il sistema audio da sorgenti fisse (SquidWTF / RD) a un sistema modulare dove l'utente puo configurare quali sorgenti usare, in che ordine, e vedere nel player da quale sito sta arrivando l'audio.
+## Problemi identificati
 
-## Cosa cambia
+### Problema 1: La musica si interrompe premendo la X
+La route `/tv` si trova **fuori** dal `Layout` nell'albero delle route. Quando navighi da `/tv` a `/`, l'intero Layout (incluso il Player) viene distrutto e ricreato da zero, interrompendo la riproduzione audio.
 
-### 1. Nuovo tipo "Scraping Source" con URL configurabile
-
-Quando si seleziona "Scraping Ponte" nelle impostazioni, appare un campo di testo per inserire l'indirizzo del sito ponte. Predefinito: SquidWTF. Opzione rapida per aggiungere Monochrome.
-
-### 2. Monochrome.tf come nuova sorgente
-
-Monochrome usa le stesse API HiFi di SquidWTF ma con server propri (`ohio.monochrome.tf`, `virginia.monochrome.tf`, `oregon.monochrome.tf`). Viene creata una nuova edge function `monochrome` che usa questi server.
-
-### 3. Player: mostra il nome della sorgente reale
-
-Invece di "Tidal HQ" nel badge del player, mostra il nome del sito effettivo: "SquidWTF", "Monochrome", "Real-Debrid", "Offline".
-
-### 4. Modalita Ibrida con fallback multipli ordinabili
-
-La modalita ibrida diventa una lista ordinabile di sorgenti. L'utente puo:
-- Aggiungere/rimuovere sorgenti (RD, SquidWTF, Monochrome)
-- Trascinare per riordinare la priorita
-- Avere anche solo una sorgente
+### Problema 2: La connessione non funziona
+Il canale Supabase Realtime nella funzione `connectToRoom` potrebbe non sottoscriversi correttamente. Inoltre, la callback `subscribe` potrebbe non ricevere lo stato corretto a causa di un problema di timing.
 
 ---
 
-## Dettagli Tecnici
+## Soluzione
 
-### Modifiche ai tipi (`src/types/settings.ts`)
+### 1. Spostare `/tv` dentro il Layout (App.tsx)
+Rendere `/tv` una route figlia di Layout, cosi il Player resta montato durante la navigazione. Questo risolve completamente il problema della musica che si interrompe.
 
-- Nuovo tipo `ScrapingSource` con `id`, `name`, `url`
-- Sorgenti predefinite: SquidWTF e Monochrome
-- Nuovo campo `hybridFallbackChain: string[]` (array di ID sorgente ordinati)
-- Nuovo campo `selectedScrapingSource: string` (ID della sorgente attiva in modalita scraping)
+```text
+Route "/" (Layout)
+  ├── index -> Home
+  ├── search -> Search
+  ├── tv -> TV          <-- spostato qui dentro
+  └── ...altri
+```
 
-### Nuova Edge Function (`supabase/functions/monochrome/index.ts`)
+### 2. Riscrivere TVConnectionContext.tsx
+- Assicurarsi che il canale Supabase venga creato e sottoscritto correttamente
+- Usare `async/await` per la sottoscrizione del canale con gestione errori
+- Aggiungere un piccolo delay prima di inviare `phone-connected` per garantire che il canale sia pronto
+- Mantenere il ref per il volume per evitare stale closures
 
-Identica alla funzione `squidwtf` ma usa i server Monochrome:
-- `https://ohio.monochrome.tf`
-- `https://virginia.monochrome.tf`
-- `https://oregon.monochrome.tf`
+### 3. Riscrivere la pagina TV (MobileRemote)
+- La X usa `navigate('/', { replace: true })` che ora funziona senza problemi perche resta dentro il Layout
+- Pulizia scanner al dismount
+- Gestire correttamente il parametro `room` dall'URL
 
-Stesse API: `/search/?s=...` e `/track/?id=...&quality=...`
+---
 
-### Nuovo lib (`src/lib/monochrome.ts`)
+## Dettagli tecnici
 
-Simile a `src/lib/tidal.ts` ma chiama la funzione edge `monochrome` invece di `squidwtf`.
+### File modificati:
+1. **`src/App.tsx`** - Spostare `<Route path="tv" element={<TV />} />` dentro il gruppo Layout
+2. **`src/contexts/TVConnectionContext.tsx`** - Riscrivere `connectToRoom` con sottoscrizione robusta
+3. **`src/pages/TV.tsx`** - Riscrivere MobileRemote: rimuovere `min-h-screen` (ora e dentro il Layout), mantenere safe-area-inset, X funzionante
 
-### Modifiche Settings (`src/pages/Settings.tsx`)
+### Comportamento atteso:
+- Apri `/tv` da mobile: vedi la schermata di collegamento dentro il layout dell'app (con player e nav attivi)
+- Scansioni o inserisci codice: ti connetti e torni alla home con il banner TV visibile
+- Premi X: torni alla home senza interruzione musicale
+- Navighi liberamente nell'app con il banner TV sempre visibile
+- Premi il banner: dialog di disconnessione
 
-Quando "Scraping Ponte" e selezionato:
-- Dropdown o bottoni per scegliere tra SquidWTF e Monochrome
-- Campo testo opzionale per URL personalizzato
-
-Nella sezione "Ibrida":
-- Lista ordinabile delle sorgenti fallback
-- Bottoni +/- per aggiungere/rimuovere
-- Drag & drop o frecce su/giu per riordinare
-
-### Modifiche PlayerContext (`src/contexts/PlayerContext.tsx`)
-
-- Il tipo `AudioSource` diventa: `'squidwtf' | 'monochrome' | 'real-debrid' | 'offline' | null`
-- In modalita `deezer_priority`: usa la sorgente selezionata (SquidWTF o Monochrome)
-- In modalita `hybrid_priority`: segue la catena di fallback configurata
-- Salva quale sorgente ha effettivamente fornito l'audio
-
-### Modifiche Player (`src/components/Player.tsx`)
-
-Il badge sorgente mostra:
-- "SquidWTF" (viola) quando audio da SquidWTF
-- "Monochrome" (azzurro) quando audio da Monochrome
-- "Real-Debrid" (arancione) quando audio da RD
-- "Offline" (verde) quando offline
-
-### Modifiche SettingsContext (`src/contexts/SettingsContext.tsx`)
-
-Gestione dei nuovi campi di configurazione (sorgente selezionata, catena fallback).
-
-### Database
-
-Nuovo campo `scraping_source` e `hybrid_fallback_chain` nella tabella `profiles` per persistere le preferenze (migrazione SQL).
-
-### File coinvolti
-
-1. `src/types/settings.ts` - nuovi tipi
-2. `supabase/functions/monochrome/index.ts` - nuova edge function
-3. `src/lib/monochrome.ts` - nuovo client lib
-4. `src/pages/Settings.tsx` - UI configurazione sorgenti
-5. `src/contexts/PlayerContext.tsx` - logica fallback chain
-6. `src/components/Player.tsx` - badge sorgente
-7. `src/contexts/SettingsContext.tsx` - gestione nuovi settings
-8. `src/types/settings.ts` - traduzioni nuove
-9. Migrazione DB per nuovi campi profilo
