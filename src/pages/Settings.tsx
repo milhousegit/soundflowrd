@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { verifyApiKey } from '@/lib/realdebrid';
-import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, ChevronRight, ChevronDown, Info, Globe, Crown, Download, Car, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2, MessageSquare, Mic2, BadgeCheck, Gift, Copy, Share2 } from 'lucide-react';
+import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, ChevronRight, ChevronDown, ChevronUp, Info, Globe, Crown, Download, Car, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2, MessageSquare, Mic2, BadgeCheck, Gift, Copy, Share2, Plus, Minus, ArrowUp, ArrowDown } from 'lucide-react';
+import { SCRAPING_SOURCES, ALL_FALLBACK_SOURCES, type FallbackSourceId } from '@/types/settings';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -51,7 +52,11 @@ const Settings: React.FC = () => {
     updateSettings,
     t,
     audioSourceMode,
-    setAudioSourceMode
+    setAudioSourceMode,
+    selectedScrapingSource,
+    setSelectedScrapingSource,
+    hybridFallbackChain,
+    setHybridFallbackChain,
   } = useSettings();
   const { toast } = useToast();
   
@@ -520,6 +525,28 @@ const Settings: React.FC = () => {
                 {audioSourceMode === 'deezer_priority' && <Check className="w-4 h-4 text-purple-500 shrink-0" />}
               </button>
 
+              {/* Scraping Source Selector - shown when Scraping Ponte is active */}
+              {audioSourceMode === 'deezer_priority' && (
+                <div className="ml-7 space-y-2 animate-fade-in">
+                  <span className="text-xs text-muted-foreground">{t('scrapingSource')}</span>
+                  <div className="flex gap-2">
+                    {SCRAPING_SOURCES.map(source => (
+                      <button
+                        key={source.id}
+                        onClick={() => setSelectedScrapingSource(source.id)}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          selectedScrapingSource === source.id
+                            ? source.id === 'monochrome' ? 'bg-sky-500/20 text-sky-400 ring-1 ring-sky-500/40' : 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/40'
+                            : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
+                        }`}
+                      >
+                        {source.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Real-Debrid */}
               <button onClick={() => hasRdApiKey ? setAudioSourceMode('rd_priority') : null} disabled={!hasRdApiKey} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${!hasRdApiKey ? 'opacity-50 cursor-not-allowed bg-secondary/30' : audioSourceMode === 'rd_priority' ? 'bg-primary/15 ring-1 ring-primary/40' : 'bg-secondary/50 hover:bg-secondary'}`}>
                 <Cloud className={`w-4 h-4 ${audioSourceMode === 'rd_priority' && hasRdApiKey ? 'text-primary' : 'text-muted-foreground'}`} />
@@ -564,6 +591,74 @@ const Settings: React.FC = () => {
                 </div>
                 {audioSourceMode === 'hybrid_priority' && hasRdApiKey && <Check className="w-4 h-4 text-[#8B5CF6] shrink-0" />}
               </button>
+
+              {/* Hybrid Fallback Chain - shown when Hybrid is active */}
+              {audioSourceMode === 'hybrid_priority' && (isAdmin || isPremiumActive) && (
+                <div className="ml-7 space-y-2 animate-fade-in">
+                  <span className="text-xs text-muted-foreground">{t('fallbackChain')}</span>
+                  <div className="space-y-1.5">
+                    {hybridFallbackChain.map((sourceId, index) => {
+                      const source = ALL_FALLBACK_SOURCES.find(s => s.id === sourceId);
+                      if (!source) return null;
+                      return (
+                        <div key={sourceId} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50">
+                          <span className="text-xs text-muted-foreground w-5 text-center font-mono">{index + 1}</span>
+                          <span className="text-sm text-foreground flex-1">{source.name}</span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                if (index === 0) return;
+                                const newChain = [...hybridFallbackChain];
+                                [newChain[index - 1], newChain[index]] = [newChain[index], newChain[index - 1]];
+                                setHybridFallbackChain(newChain);
+                              }}
+                              disabled={index === 0}
+                              className="p-1 rounded hover:bg-secondary disabled:opacity-30"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5 text-muted-foreground" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (index === hybridFallbackChain.length - 1) return;
+                                const newChain = [...hybridFallbackChain];
+                                [newChain[index], newChain[index + 1]] = [newChain[index + 1], newChain[index]];
+                                setHybridFallbackChain(newChain);
+                              }}
+                              disabled={index === hybridFallbackChain.length - 1}
+                              className="p-1 rounded hover:bg-secondary disabled:opacity-30"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5 text-muted-foreground" />
+                            </button>
+                            {hybridFallbackChain.length > 1 && (
+                              <button
+                                onClick={() => setHybridFallbackChain(hybridFallbackChain.filter(s => s !== sourceId))}
+                                className="p-1 rounded hover:bg-destructive/20"
+                              >
+                                <X className="w-3.5 h-3.5 text-destructive" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Add source button */}
+                  {hybridFallbackChain.length < ALL_FALLBACK_SOURCES.length && (
+                    <div className="flex gap-2 flex-wrap">
+                      {ALL_FALLBACK_SOURCES.filter(s => !hybridFallbackChain.includes(s.id)).map(source => (
+                        <button
+                          key={source.id}
+                          onClick={() => setHybridFallbackChain([...hybridFallbackChain, source.id])}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary/50 hover:bg-secondary text-xs text-muted-foreground transition-colors"
+                        >
+                          <Plus className="w-3 h-3" />
+                          {source.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Real-Debrid API Key */}

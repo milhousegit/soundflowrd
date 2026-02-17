@@ -24,7 +24,9 @@ import {
   selectFilesAndPlay,
 } from '@/lib/realdebrid';
 
-import { getTidalStream, mapQualityToTidal } from '@/lib/tidal';
+import { getTidalStream, mapQualityToTidal, type TidalStreamResult, type TidalStreamError } from '@/lib/tidal';
+import { getMonochromeStream } from '@/lib/monochrome';
+import { SCRAPING_SOURCES, type FallbackSourceId } from '@/types/settings';
 import { searchTracks, getArtistTopTracks } from '@/lib/deezer';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
 import { updateListeningStats } from '@/hooks/useListeningStats';
@@ -72,7 +74,7 @@ export interface DebugLogEntry {
 }
 
 export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading' | 'unavailable';
-export type AudioSource = 'tidal' | 'real-debrid' | 'offline' | null;
+export type AudioSource = 'squidwtf' | 'monochrome' | 'real-debrid' | 'offline' | null;
 
 interface PlayerContextType extends PlayerState {
   play: (track?: Track) => void;
@@ -352,7 +354,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Audio element reference
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials, user } = useAuth();
-  const { audioSourceMode, settings } = useSettings();
+  const { audioSourceMode, settings, selectedScrapingSource, hybridFallbackChain } = useSettings();
 
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
@@ -846,16 +848,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       };
 
-      // Helper function for Tidal fallback (used in hybrid mode)
-      const playWithTidalFallback = async (): Promise<boolean> => {
+      // Helper function for scraping source fallback
+      const playWithScrapingSource = async (sourceId: string): Promise<boolean> => {
         const tidalQuality = mapQualityToTidal(settings.audioQuality);
-        addDebugLog('🎵 Fallback Tidal', `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} (${tidalQuality})`, 'info');
+        const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'SquidWTF';
+        addDebugLog(`🎵 ${sourceName}`, `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} (${tidalQuality})`, 'info');
         try {
-          const tidalResult = await getTidalStream(enrichedTrack.title, enrichedTrack.artist, tidalQuality);
+          const streamFn = sourceId === 'monochrome' ? getMonochromeStream : getTidalStream;
+          const result = await streamFn(enrichedTrack.title, enrichedTrack.artist, tidalQuality);
           if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
 
-          if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
-            audioRef.current.src = tidalResult.streamUrl;
+          if ('streamUrl' in result && result.streamUrl && audioRef.current) {
+            audioRef.current.src = result.streamUrl;
             
             try {
               if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
@@ -869,13 +873,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               
               setState((prev) => ({ ...prev, isPlaying: true }));
               setLoadingPhase('idle');
-              setCurrentAudioSource('tidal');
+              setCurrentAudioSource(sourceId === 'monochrome' ? 'monochrome' : 'squidwtf');
               startTrackingPlayback();
               
-              const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
-                ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
-                : tidalResult.quality || 'LOSSLESS';
-              addDebugLog('✅ Fallback Tidal avviato', `Stream ${qualityInfo}`, 'success');
+              const qualityInfo = result.bitDepth && result.sampleRate 
+                ? `${result.bitDepth}bit/${result.sampleRate/1000}kHz` 
+                : result.quality || 'LOSSLESS';
+              addDebugLog(`✅ ${sourceName} avviato`, `Stream ${qualityInfo}`, 'success');
               return true;
             } catch (playError) {
               if (playError instanceof Error && (playError.name === 'AbortError' || playError.name === 'NotAllowedError')) {
@@ -886,7 +890,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
           return false;
         } catch (error) {
-          addDebugLog('❌ Fallback Tidal fallito', error instanceof Error ? error.message : 'Errore', 'error');
+          addDebugLog(`❌ ${sourceName} fallito`, error instanceof Error ? error.message : 'Errore', 'error');
           return false;
         }
       };
@@ -938,77 +942,17 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
       };
 
-      // =============== DEEZER/TIDAL PRIORITY MODE ===============
+      // =============== SCRAPING PONTE MODE ===============
       if (isDeezerPriorityMode) {
-        const tidalQuality = mapQualityToTidal(settings.audioQuality);
-        addDebugLog('🎵 Modalità HQ', `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} su Tidal (${tidalQuality})`, 'info');
         setLoadingPhase('searching');
+        const success = await playWithScrapingSource(selectedScrapingSource);
+        if (success) return;
 
-        try {
-          // Use Tidal via SquidWTF - search by title and artist
-          const tidalResult = await getTidalStream(enrichedTrack.title, enrichedTrack.artist, tidalQuality);
-          if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
-
-          if ('streamUrl' in tidalResult && tidalResult.streamUrl && audioRef.current) {
-            setLoadingPhase('loading');
-            audioRef.current.src = tidalResult.streamUrl;
-            
-            try {
-              // Check again if we're still playing this track
-              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
-              
-              const playPromise = audioRef.current.play();
-              if (playPromise !== undefined) {
-                await playPromise;
-              }
-              
-              // Final check after play succeeds
-              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
-              
-              setState((prev) => ({ ...prev, isPlaying: true }));
-              setLoadingPhase('idle');
-              setCurrentAudioSource('tidal');
-              
-              // Save to recently played for Deezer/Tidal mode
-              startTrackingPlayback();
-              
-              const qualityInfo = tidalResult.bitDepth && tidalResult.sampleRate 
-                ? `${tidalResult.bitDepth}bit/${tidalResult.sampleRate/1000}kHz` 
-                : tidalResult.quality || 'LOSSLESS';
-              addDebugLog('✅ Riproduzione Tidal', `Stream ${qualityInfo} avviato`, 'success');
-              return;
-            } catch (playError) {
-              // Ignore "interrupted" errors - this is normal when user switches tracks quickly
-              if (playError instanceof Error && playError.name === 'AbortError') {
-                console.log('[PlayerContext] Play was aborted (user switched tracks)');
-                return;
-              }
-              // For NotAllowedError, the user hasn't interacted yet
-              if (playError instanceof Error && playError.name === 'NotAllowedError') {
-                console.log('[PlayerContext] Autoplay blocked, waiting for user interaction');
-                setState((prev) => ({ ...prev, isPlaying: false }));
-                setLoadingPhase('idle');
-                setCurrentAudioSource('tidal');
-                startTrackingPlayback();
-                return;
-              }
-              throw playError;
-            }
-          }
-
-          const errorMsg = 'error' in tidalResult ? tidalResult.error : 'Stream non disponibile';
-          addDebugLog('❌ Tidal non disponibile', errorMsg, 'error');
-          setLoadingPhase('unavailable');
-          toast.error('Traccia non trovata su Tidal', { description: 'Passo alla prossima...' });
-          autoSkipToNext();
-          return;
-        } catch (error) {
-          addDebugLog('❌ Errore Tidal', error instanceof Error ? error.message : 'Errore', 'error');
-          setLoadingPhase('unavailable');
-          toast.error('Errore Tidal', { description: 'Passo alla prossima...' });
-          autoSkipToNext();
-          return;
-        }
+        setLoadingPhase('unavailable');
+        const sourceName = selectedScrapingSource === 'monochrome' ? 'Monochrome' : 'SquidWTF';
+        toast.error(`Traccia non trovata su ${sourceName}`, { description: 'Passo alla prossima...' });
+        autoSkipToNext();
+        return;
       }
 
       // =============== HYBRID MODE: RD first, Tidal fallback ===============
@@ -1131,21 +1075,22 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
         }
 
-        // RD not available or downloading - use Tidal fallback
-        addDebugLog('🔄 Fallback a Tidal', 'RD non disponibile, uso SquidWTF', 'info');
-        setLoadingPhase('searching');
-        
-        const tidalSuccess = await playWithTidalFallback();
-        
-        if (tidalSuccess) {
-          // Start background RD download while playing via Tidal
-          if (hasRdKey) {
-            startBackgroundRdDownload(enrichedTrack);
+        // RD not available or downloading - try remaining fallback chain sources
+        const scrapingSources = hybridFallbackChain.filter(s => s !== 'real-debrid');
+        for (const sourceId of scrapingSources) {
+          addDebugLog(`🔄 Fallback a ${sourceId === 'monochrome' ? 'Monochrome' : 'SquidWTF'}`, '', 'info');
+          setLoadingPhase('searching');
+          const success = await playWithScrapingSource(sourceId);
+          if (success) {
+            // Start background RD download while playing via scraping
+            if (hasRdKey) {
+              startBackgroundRdDownload(enrichedTrack);
+            }
+            return;
           }
-          return;
         }
         
-        // Both failed
+        // All failed
         setLoadingPhase('unavailable');
         toast.error('Nessuna sorgente disponibile', {
           description: 'Passo alla prossima...',
@@ -1884,14 +1829,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
         }
         
-        // Try Tidal
+        // Try selected scraping source
         const tidalQuality = mapQualityToTidal(settings.audioQuality);
-        const tidalResult = await getTidalStream(nextTrack.title, nextTrack.artist, tidalQuality);
+        const streamFn = selectedScrapingSource === 'monochrome' ? getMonochromeStream : getTidalStream;
+        const sourceLabel: AudioSource = selectedScrapingSource === 'monochrome' ? 'monochrome' : 'squidwtf';
+        const result = await streamFn(nextTrack.title, nextTrack.artist, tidalQuality);
         
-        if ('streamUrl' in tidalResult && tidalResult.streamUrl) {
-          prefetchedNextUrlRef.current = { trackId: nextTrack.id, url: tidalResult.streamUrl, source: 'tidal' };
+        if ('streamUrl' in result && result.streamUrl) {
+          prefetchedNextUrlRef.current = { trackId: nextTrack.id, url: result.streamUrl, source: sourceLabel };
           prefetchedTrackIdRef.current = nextTrack.id;
-          console.log('[Prefetch] Tidal URL ready for:', nextTrack.title);
+          console.log(`[Prefetch] ${sourceLabel} URL ready for:`, nextTrack.title);
         }
       } catch (error) {
         console.log('[Prefetch] Error:', error);
