@@ -42,7 +42,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         // Ensure new fields have defaults
         const selectedScrapingSource = parsed.selectedScrapingSource || defaultSettings.selectedScrapingSource;
         const hybridFallbackChain = parsed.hybridFallbackChain || defaultSettings.hybridFallbackChain;
-        setSettings({ ...defaultSettings, ...parsed, feedDisplayOptions, selectedScrapingSource, hybridFallbackChain });
+        const bridgeUrl = parsed.bridgeUrl !== undefined ? parsed.bridgeUrl : defaultSettings.bridgeUrl;
+        setSettings({ ...defaultSettings, ...parsed, feedDisplayOptions, selectedScrapingSource, hybridFallbackChain, bridgeUrl });
       } catch {
         // Use defaults
       }
