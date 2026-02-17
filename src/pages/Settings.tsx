@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { verifyApiKey } from '@/lib/realdebrid';
-import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, ChevronRight, ChevronDown, Info, Globe, Crown, Download, Car, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2, MessageSquare, Mic2, BadgeCheck } from 'lucide-react';
+import { User, Key, Volume2, LogOut, ExternalLink, Check, Home, Pencil, X, Loader2, Save, Cloud, Play, RefreshCw, Trash2, Music, Smartphone, ChevronRight, ChevronDown, Info, Globe, Crown, Download, Car, Sparkles, Shield, Users, Send, Eye, EyeOff, Link2, MessageSquare, Mic2, BadgeCheck, Gift, Copy, Share2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +21,7 @@ import AdminChartConfig from '@/components/AdminChartConfig';
 import PaymentPendingBanner from '@/components/PaymentPendingBanner';
 import KofiModal from '@/components/KofiModal';
 import ReferralShare from '@/components/ReferralShare';
+import ReferralShareMinimal from '@/components/ReferralShareMinimal';
 import { isPast } from 'date-fns';
 import BackButton from '@/components/BackButton';
 
@@ -230,7 +231,7 @@ const Settings: React.FC = () => {
                   <RefreshCw className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-foreground">SoundFlow v1.6</p>
+                  <p className="text-base font-semibold text-foreground">SoundFlow v1.7</p>
                   <p className="text-xs text-muted-foreground">
                     {settings.language === 'it' ? 'Verifica aggiornamenti' : 'Check for updates'}
                   </p>
@@ -309,6 +310,9 @@ const Settings: React.FC = () => {
                 <option value="it">Italiano</option>
               </select>
             </div>
+
+            {/* Invite a friend - minimal */}
+            <ReferralShareMinimal language={settings.language as 'en' | 'it'} onCopied={() => toast({ title: settings.language === 'it' ? 'Link copiato!' : 'Link copied!' })} />
 
             {/* Premium Status */}
             {isPremiumActive && profile?.premium_expires_at ? (
@@ -489,10 +493,6 @@ const Settings: React.FC = () => {
               </AlertDialog>
             </div>
 
-            {/* Referral Section */}
-            <div className="pt-4 border-t border-border">
-              <ReferralShare language={settings.language as 'en' | 'it'} />
-            </div>
           </div>
         </section>
 
