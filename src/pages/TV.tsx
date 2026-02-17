@@ -54,6 +54,7 @@ const TVDisplay: React.FC = () => {
   const [currentLineIndex, setCurrentLineIndex] = useState(-1);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const audioUnlockedRef = useRef(false);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const lastTrackIdRef = useRef<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -81,20 +82,16 @@ const TVDisplay: React.FC = () => {
             if (tvAudioRef.current) {
               tvAudioRef.current.src = data.streamUrl;
               tvAudioRef.current.load();
-              if (data.isPlaying) {
-                tvAudioRef.current.play().then(() => {
-                  setAudioUnlocked(true);
-                }).catch((e) => {
-                  console.log('[TV-Audio] Play blocked (need user click):', e.name);
-                  pendingPlayRef.current = true;
-                });
-              }
             }
           }
+          // Only attempt play if audio has been unlocked by user gesture
+          if (data.isPlaying && tvAudioRef.current && audioUnlockedRef.current) {
+            tvAudioRef.current.play().catch(() => {});
+          }
         }
-        if (tvAudioRef.current) {
+        if (tvAudioRef.current && audioUnlockedRef.current) {
           if (data.isPlaying && tvAudioRef.current.paused) {
-            tvAudioRef.current.play().then(() => setAudioUnlocked(true)).catch(() => { pendingPlayRef.current = true; });
+            tvAudioRef.current.play().catch(() => {});
           } else if (!data.isPlaying && !tvAudioRef.current.paused) {
             tvAudioRef.current.pause();
           }
@@ -232,22 +229,27 @@ const TVDisplay: React.FC = () => {
             size="lg"
             className="gap-2 shadow-2xl animate-[pulse_3s_ease-in-out_infinite]"
             onClick={() => {
-              // Create a fresh audio element on user gesture to guarantee unlock
-              const audio = new Audio();
-              audio.volume = 1;
+              const audio = tvAudioRef.current;
+              if (!audio) return;
+              // Set src if available
               if (lastStreamUrlRef.current) {
                 audio.src = lastStreamUrlRef.current;
+                audio.load();
               }
-              audio.play().then(() => {
-                tvAudioRef.current = audio;
-                setAudioUnlocked(true);
-                pendingPlayRef.current = false;
-              }).catch((e) => {
-                console.log('[TV-Audio] Still blocked:', e.name);
-                // Even if play fails (no src yet), mark as unlocked since gesture happened
-                tvAudioRef.current = audio;
-                setAudioUnlocked(true);
-              });
+              // User gesture: play (even silent) to unlock audio context
+              const playPromise = audio.play();
+              if (playPromise) {
+                playPromise.then(() => {
+                  console.log('[TV-Audio] Unlocked via user click');
+                  audioUnlockedRef.current = true;
+                  setAudioUnlocked(true);
+                }).catch(() => {
+                  // Even if no src, mark unlocked - the gesture is what matters
+                  console.log('[TV-Audio] Marked unlocked (no src yet)');
+                  audioUnlockedRef.current = true;
+                  setAudioUnlocked(true);
+                });
+              }
             }}
           >
             <Music2 className="w-5 h-5" />
