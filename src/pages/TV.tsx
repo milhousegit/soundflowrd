@@ -230,7 +230,7 @@ const TVDisplay: React.FC = () => {
         <div className="absolute bottom-28 right-6 z-50">
           <Button
             size="lg"
-            className="gap-2 shadow-2xl animate-pulse"
+            className="gap-2 shadow-2xl animate-[pulse_3s_ease-in-out_infinite]"
             onClick={() => {
               // Create a fresh audio element on user gesture to guarantee unlock
               const audio = new Audio();
