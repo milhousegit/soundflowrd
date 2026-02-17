@@ -549,8 +549,21 @@ const Settings: React.FC = () => {
                   </span>
                   <Input
                     value={settings.bridgeUrl}
-                    onChange={(e) => updateSettings({ bridgeUrl: e.target.value })}
-                    placeholder={settings.language === 'it' ? 'Inserisci indirizzo...' : 'Enter address...'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      updateSettings({ bridgeUrl: val });
+                      // Validate on blur or when it looks like a full URL
+                      if (val && val.startsWith('http') && val.includes('.')) {
+                        const isCompatible = val.startsWith('https://tidal.squid.wtf') || val.startsWith('https://monochrome.tf');
+                        if (!isCompatible) {
+                          toast({
+                            title: settings.language === 'it' ? 'Ponte non compatibile' : 'Incompatible bridge',
+                            variant: 'destructive',
+                          });
+                        }
+                      }
+                    }}
+                    placeholder="https://tidal.squid.wtf o https://monochrome.tf/"
                     className="h-9 text-sm"
                   />
                 </div>
