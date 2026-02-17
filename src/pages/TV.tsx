@@ -7,7 +7,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useTVConnection } from '@/contexts/TVConnectionContext';
 import { Track } from '@/types/music';
 import { QRCodeSVG } from 'qrcode.react';
-import { Tv, Smartphone, Wifi, WifiOff, Music2, Loader2, Pause, ScanLine, X } from 'lucide-react';
+import { Tv, Smartphone, Wifi, WifiOff, Music2, Loader2, Pause, ScanLine, X, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -53,14 +53,13 @@ const TVDisplay: React.FC = () => {
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(-1);
   const [lyricsLoading, setLyricsLoading] = useState(false);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const audioUnlockedRef = useRef(false);
+  const [tvMuted, setTvMuted] = useState(true);
+  const tvMutedRef = useRef(true);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const lastTrackIdRef = useRef<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const tvAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastStreamUrlRef = useRef<string | null>(null);
-  const pendingPlayRef = useRef(false);
 
   const tvUrl = `${window.location.origin}/tv?room=${roomCode}`;
 
@@ -84,12 +83,16 @@ const TVDisplay: React.FC = () => {
               tvAudioRef.current.load();
             }
           }
-          // Only attempt play if audio has been unlocked by user gesture
-          if (data.isPlaying && tvAudioRef.current && audioUnlockedRef.current) {
-            tvAudioRef.current.play().catch(() => {});
+        }
+        // Sync currentTime from phone
+        if (tvAudioRef.current && typeof data.currentTime === 'number') {
+          const diff = Math.abs(tvAudioRef.current.currentTime - data.currentTime);
+          if (diff > 3) {
+            tvAudioRef.current.currentTime = data.currentTime;
           }
         }
-        if (tvAudioRef.current && audioUnlockedRef.current) {
+        // Sync play/pause
+        if (tvAudioRef.current) {
           if (data.isPlaying && tvAudioRef.current.paused) {
             tvAudioRef.current.play().catch(() => {});
           } else if (!data.isPlaying && !tvAudioRef.current.paused) {
@@ -115,10 +118,11 @@ const TVDisplay: React.FC = () => {
     };
   }, [roomCode]);
 
-  // Initialize TV audio element
+  // Initialize TV audio element - starts muted so autoplay works
   useEffect(() => {
     const audio = new Audio();
     audio.volume = 1;
+    audio.muted = true;
     tvAudioRef.current = audio;
     return () => {
       audio.pause();
@@ -222,38 +226,29 @@ const TVDisplay: React.FC = () => {
         <Wifi className="w-4 h-4" />
         <span className="text-xs">{isItalian ? 'Connesso' : 'Connected'}</span>
       </div>
-      {/* Audio unlock button - bottom right */}
-      {connected && !audioUnlocked && (
+      {/* Mute/Unmute toggle - bottom right */}
+      {connected && (
         <div className="absolute bottom-28 right-6 z-50">
           <Button
-            size="lg"
-            className="gap-2 shadow-2xl animate-[pulse_3s_ease-in-out_infinite]"
+            size="icon"
+            variant="secondary"
+            className="w-12 h-12 rounded-full shadow-2xl"
             onClick={() => {
-              const audio = tvAudioRef.current;
-              if (!audio) return;
-              // Set src if available
-              if (lastStreamUrlRef.current) {
-                audio.src = lastStreamUrlRef.current;
-                audio.load();
-              }
-              // User gesture: play (even silent) to unlock audio context
-              const playPromise = audio.play();
-              if (playPromise) {
-                playPromise.then(() => {
-                  console.log('[TV-Audio] Unlocked via user click');
-                  audioUnlockedRef.current = true;
-                  setAudioUnlocked(true);
-                }).catch(() => {
-                  // Even if no src, mark unlocked - the gesture is what matters
-                  console.log('[TV-Audio] Marked unlocked (no src yet)');
-                  audioUnlockedRef.current = true;
-                  setAudioUnlocked(true);
-                });
+              if (tvAudioRef.current) {
+                const newMuted = !tvMutedRef.current;
+                tvAudioRef.current.muted = newMuted;
+                tvMutedRef.current = newMuted;
+                setTvMuted(newMuted);
+                // If unmuting, ensure it's playing
+                if (!newMuted && lastStreamUrlRef.current) {
+                  if (tvAudioRef.current.paused) {
+                    tvAudioRef.current.play().catch(() => {});
+                  }
+                }
               }
             }}
           >
-            <Music2 className="w-5 h-5" />
-            {isItalian ? '🔊 Abilita audio' : '🔊 Enable audio'}
+            {tvMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </Button>
         </div>
       )}
