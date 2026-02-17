@@ -63,7 +63,7 @@ export const defaultSettings: AppSettings = {
   realDebridApiKey: undefined,
   audioSourceMode: 'deezer_priority',
   selectedScrapingSource: 'squidwtf',
-  bridgeUrl: '',
+  bridgeUrl: 'https://tidal.squid.wtf',
   hybridFallbackChain: ['real-debrid', 'squidwtf'],
 };
 
