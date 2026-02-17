@@ -6,7 +6,7 @@ import { usePlayer } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Track } from '@/types/music';
 import { QRCodeSVG } from 'qrcode.react';
-import { Tv, Smartphone, Wifi, WifiOff, Music2, Loader2, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, ScanLine } from 'lucide-react';
+import { Tv, Smartphone, Wifi, WifiOff, Music2, Loader2, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, ScanLine, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -55,6 +55,8 @@ const TVDisplay: React.FC = () => {
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const lastTrackIdRef = useRef<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const tvAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lastStreamUrlRef = useRef<string | null>(null);
 
   const tvUrl = `${window.location.origin}/tv?room=${roomCode}`;
 
@@ -70,6 +72,22 @@ const TVDisplay: React.FC = () => {
         if (data.track) setRemoteTrack(data.track);
         if (typeof data.isPlaying === 'boolean') setRemoteIsPlaying(data.isPlaying);
         if (typeof data.progress === 'number') setRemoteProgress(data.progress);
+        // Handle audio stream URL
+        if (data.streamUrl && data.streamUrl !== lastStreamUrlRef.current) {
+          lastStreamUrlRef.current = data.streamUrl;
+          if (tvAudioRef.current) {
+            tvAudioRef.current.src = data.streamUrl;
+            if (data.isPlaying) tvAudioRef.current.play().catch(() => {});
+          }
+        }
+        // Sync play/pause
+        if (tvAudioRef.current) {
+          if (data.isPlaying && tvAudioRef.current.paused) {
+            tvAudioRef.current.play().catch(() => {});
+          } else if (!data.isPlaying && !tvAudioRef.current.paused) {
+            tvAudioRef.current.pause();
+          }
+        }
         setConnected(true);
       })
       .on('broadcast', { event: 'phone-connected' }, () => {
@@ -83,6 +101,17 @@ const TVDisplay: React.FC = () => {
       supabase.removeChannel(channel);
     };
   }, [roomCode]);
+
+  // Initialize TV audio element
+  useEffect(() => {
+    const audio = new Audio();
+    audio.volume = 1;
+    tvAudioRef.current = audio;
+    return () => {
+      audio.pause();
+      audio.src = '';
+    };
+  }, []);
 
   // Fetch lyrics when track changes
   useEffect(() => {
@@ -276,14 +305,16 @@ const MobileRemote: React.FC = () => {
   const { settings } = useSettings();
   const isItalian = settings.language === 'it';
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { currentTrack, isPlaying, toggle, next, previous, progress, duration } = usePlayer();
+  const { currentTrack, isPlaying, toggle, next, previous, progress, duration, volume, setVolume } = usePlayer();
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState('');
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const scannerRef = useRef<any>(null);
   const videoRef = useRef<HTMLDivElement>(null);
+  const savedVolumeRef = useRef<number>(0.7);
 
   // Check URL for room param, otherwise auto-start scanner
   useEffect(() => {
@@ -313,17 +344,36 @@ const MobileRemote: React.FC = () => {
         setConnected(true);
         setRoomCode(code);
         setScanning(false);
+        // Mute phone audio - save current volume first
+        savedVolumeRef.current = volume;
+        setVolume(0);
         // Notify TV
         channel.send({ type: 'broadcast', event: 'phone-connected', payload: {} });
       }
     });
 
     channelRef.current = channel;
-  }, []);
+  }, [volume, setVolume]);
 
-  // Send player state to TV
+  const disconnectFromTV = useCallback(() => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    // Restore phone volume
+    setVolume(savedVolumeRef.current || 0.7);
+    setConnected(false);
+    setRoomCode(null);
+    setShowDisconnectConfirm(false);
+  }, [setVolume]);
+
+  // Send player state + stream URL to TV
   useEffect(() => {
     if (!connected || !channelRef.current) return;
+
+    // Get the current audio stream URL from the DOM audio element
+    const audioEl = document.querySelector('audio');
+    const streamUrl = audioEl?.src || null;
 
     channelRef.current.send({
       type: 'broadcast',
@@ -332,6 +382,7 @@ const MobileRemote: React.FC = () => {
         track: currentTrack,
         isPlaying,
         progress,
+        streamUrl,
       },
     });
   }, [connected, currentTrack, isPlaying, progress]);
@@ -489,17 +540,49 @@ const MobileRemote: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border">
+      {/* Banner "In riproduzione su TV" */}
+      <div
+        className="bg-primary text-primary-foreground px-4 py-3 flex items-center justify-between cursor-pointer active:opacity-80 transition-opacity"
+        onClick={() => setShowDisconnectConfirm(true)}
+      >
         <div className="flex items-center gap-2">
-          <Tv className="w-5 h-5 text-primary" />
-          <span className="text-sm font-medium">{isItalian ? 'Collegato alla TV' : 'Connected to TV'}</span>
+          <Tv className="w-4 h-4" />
+          <span className="text-sm font-medium">
+            {isItalian ? 'In riproduzione su TV' : 'Playing on TV'}
+          </span>
         </div>
-        <div className="flex items-center gap-2 text-green-500">
-          <Wifi className="w-4 h-4" />
-          <span className="text-xs font-mono">{roomCode}</span>
+        <div className="flex items-center gap-2">
+          <Wifi className="w-3.5 h-3.5" />
+          <span className="text-xs font-mono opacity-80">{roomCode}</span>
         </div>
       </div>
+
+      {/* Disconnect confirmation */}
+      {showDisconnectConfirm && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-lg">
+            <div className="flex items-center gap-3">
+              <Tv className="w-6 h-6 text-primary" />
+              <h3 className="text-lg font-semibold">
+                {isItalian ? 'Disconnetti dalla TV?' : 'Disconnect from TV?'}
+              </h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {isItalian 
+                ? 'L\'audio tornerà a essere riprodotto dal telefono.' 
+                : 'Audio will play from your phone again.'}
+            </p>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setShowDisconnectConfirm(false)}>
+                {isItalian ? 'Annulla' : 'Cancel'}
+              </Button>
+              <Button variant="destructive" className="flex-1" onClick={disconnectFromTV}>
+                {isItalian ? 'Disconnetti' : 'Disconnect'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Track info */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6">
