@@ -414,9 +414,14 @@ const MobileRemote: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col p-6 gap-5" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
-      <div className="flex items-center gap-2">
-        <Tv className="w-7 h-7 text-primary" />
-        <h1 className="text-xl font-bold">{isItalian ? 'Collega alla TV' : 'Connect to TV'}</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Tv className="w-7 h-7 text-primary" />
+          <h1 className="text-xl font-bold">{isItalian ? 'Collega alla TV' : 'Connect to TV'}</h1>
+        </div>
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Close">
+          <X className="w-5 h-5" />
+        </Button>
       </div>
 
       {/* Instructions */}
