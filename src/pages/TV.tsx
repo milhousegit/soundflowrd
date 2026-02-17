@@ -53,11 +53,13 @@ const TVDisplay: React.FC = () => {
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(-1);
   const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const lastTrackIdRef = useRef<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const tvAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastStreamUrlRef = useRef<string | null>(null);
+  const pendingPlayRef = useRef(false);
 
   const tvUrl = `${window.location.origin}/tv?room=${roomCode}`;
 
@@ -74,21 +76,25 @@ const TVDisplay: React.FC = () => {
         if (typeof data.isPlaying === 'boolean') setRemoteIsPlaying(data.isPlaying);
         if (typeof data.progress === 'number') setRemoteProgress(data.progress);
         if (data.streamUrl) {
-          // Always update src if changed
           if (data.streamUrl !== lastStreamUrlRef.current) {
             lastStreamUrlRef.current = data.streamUrl;
             if (tvAudioRef.current) {
               tvAudioRef.current.src = data.streamUrl;
               tvAudioRef.current.load();
-              if (data.isPlaying) tvAudioRef.current.play().catch((e) => console.log('[TV-Audio] Play failed:', e));
+              if (data.isPlaying) {
+                tvAudioRef.current.play().then(() => {
+                  setAudioUnlocked(true);
+                }).catch((e) => {
+                  console.log('[TV-Audio] Play blocked (need user click):', e.name);
+                  pendingPlayRef.current = true;
+                });
+              }
             }
           }
-        } else {
-          console.log('[TV-Audio] No streamUrl received');
         }
         if (tvAudioRef.current) {
           if (data.isPlaying && tvAudioRef.current.paused) {
-            tvAudioRef.current.play().catch(() => {});
+            tvAudioRef.current.play().then(() => setAudioUnlocked(true)).catch(() => { pendingPlayRef.current = true; });
           } else if (!data.isPlaying && !tvAudioRef.current.paused) {
             tvAudioRef.current.pause();
           }
@@ -219,6 +225,33 @@ const TVDisplay: React.FC = () => {
         <Wifi className="w-4 h-4" />
         <span className="text-xs">{isItalian ? 'Connesso' : 'Connected'}</span>
       </div>
+      {/* Audio unlock overlay */}
+      {connected && !audioUnlocked && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <Button
+            size="lg"
+            className="text-xl px-10 py-6 gap-3"
+            onClick={() => {
+              if (tvAudioRef.current) {
+                // Unlock audio context with a user gesture
+                if (lastStreamUrlRef.current) {
+                  tvAudioRef.current.src = lastStreamUrlRef.current;
+                  tvAudioRef.current.load();
+                }
+                tvAudioRef.current.play().then(() => {
+                  setAudioUnlocked(true);
+                  pendingPlayRef.current = false;
+                }).catch(() => {});
+              } else {
+                setAudioUnlocked(true);
+              }
+            }}
+          >
+            <Music2 className="w-6 h-6" />
+            {isItalian ? 'Abilita audio' : 'Enable audio'}
+          </Button>
+        </div>
+      )}
       <div className="flex-1 flex items-center justify-center z-10 px-16 py-32">
         {lyricsLoading ? (
           <Loader2 className="w-10 h-10 text-white/40 animate-spin" />
