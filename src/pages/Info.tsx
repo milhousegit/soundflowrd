@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, RefreshCw, Shield, FileText, Scale, Info as InfoIcon } from 'lucide-react';
+import { ChevronLeft, RefreshCw, Shield, FileText, Scale, Info as InfoIcon, Github, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 const Info: React.FC = () => {
@@ -34,7 +34,7 @@ const Info: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">SoundFlow</p>
-                <p className="text-sm text-muted-foreground">v1.6</p>
+                <p className="text-sm text-muted-foreground">v1.7</p>
               </div>
               <Button variant="outline" className="gap-2" onClick={async () => {
               try {
@@ -57,8 +57,22 @@ const Info: React.FC = () => {
                 {isItalian ? 'Aggiorna' : 'Update'}
               </Button>
             </div>
+
+            {/* GitHub link */}
+            <div className="mt-4 pt-4 border-t border-border">
+              <a
+                href="https://github.com/milhousegit/soundflowrd"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-primary hover:underline"
+              >
+                <Github className="w-4 h-4" />
+                {isItalian ? 'Visualizza su GitHub' : 'View on GitHub'}
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
             
-            {/* What's New in v1.2 */}
+            {/* What's New */}
             <div className="mt-4 pt-4 border-t border-border">
               <h3 className="text-sm font-medium text-foreground mb-2">
                 {isItalian ? "Novità della versione" : "What's new"}
@@ -66,15 +80,15 @@ const Info: React.FC = () => {
               <ul className="text-sm text-muted-foreground space-y-1.5">
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "Importazione Spotify senza API key: usa le API GraphQL interne" : "Spotify import without API key: uses internal GraphQL APIs"}
+                  {isItalian ? "Wrapped 2026: disponibile per tutti dal 25 dicembre" : "Wrapped 2026: available for everyone from December 25"}
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                  {isItalian ? "Importazione Spotify senza API key" : "Spotify import without API key"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Feed migliorato: mostra le tue playlist pubblicate" : "Improved feed: shows your published playlists"}
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Azioni playlist nel feed: salva, commenta e condividi" : "Playlist actions in feed: save, comment and share"}
+                  {isItalian ? "Feed migliorato con playlist e azioni social" : "Improved feed with playlists and social actions"}
                 </li>
               </ul>
             </div>
@@ -173,11 +187,31 @@ const Info: React.FC = () => {
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                TanStack React Query - MIT License
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                Recharts - MIT License
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                Framer Motion / Embla Carousel - MIT License
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
                 Deezer API - {isItalian ? 'Metadati musicali' : 'Music metadata'}
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
                 SquidWTF/Tidal - {isItalian ? 'Streaming audio' : 'Audio streaming'}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                Lucida - {isItalian ? 'Streaming audio (fallback)' : 'Audio streaming (fallback)'}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                Monochrome - {isItalian ? 'Streaming audio (fallback)' : 'Audio streaming (fallback)'}
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
@@ -190,6 +224,10 @@ const Info: React.FC = () => {
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
                 Genius API - {isItalian ? 'Testi (fallback)' : 'Lyrics (fallback)'}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                Spotify GraphQL API - {isItalian ? 'Importazione playlist' : 'Playlist import'}
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
