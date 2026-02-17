@@ -55,11 +55,13 @@ const TVDisplay: React.FC = () => {
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [tvMuted, setTvMuted] = useState(true);
   const tvMutedRef = useRef(true);
+  const audioUnlockedRef = useRef(false);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const lastTrackIdRef = useRef<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const tvAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastStreamUrlRef = useRef<string | null>(null);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   const tvUrl = `${window.location.origin}/tv?room=${roomCode}`;
 
@@ -75,28 +77,25 @@ const TVDisplay: React.FC = () => {
         if (data.track) setRemoteTrack(data.track);
         if (typeof data.isPlaying === 'boolean') setRemoteIsPlaying(data.isPlaying);
         if (typeof data.progress === 'number') setRemoteProgress(data.progress);
-        if (data.streamUrl) {
-          if (data.streamUrl !== lastStreamUrlRef.current) {
-            lastStreamUrlRef.current = data.streamUrl;
-            if (tvAudioRef.current) {
-              tvAudioRef.current.src = data.streamUrl;
-              tvAudioRef.current.load();
-            }
-          }
+        const audio = tvAudioRef.current;
+        if (!audio) return;
+        // Load new stream URL
+        if (data.streamUrl && data.streamUrl !== lastStreamUrlRef.current) {
+          lastStreamUrlRef.current = data.streamUrl;
+          audio.src = data.streamUrl;
+          audio.load();
         }
-        // Sync currentTime from phone
-        if (tvAudioRef.current && typeof data.currentTime === 'number') {
-          const diff = Math.abs(tvAudioRef.current.currentTime - data.currentTime);
-          if (diff > 3) {
-            tvAudioRef.current.currentTime = data.currentTime;
-          }
+        // Sync currentTime
+        if (typeof data.currentTime === 'number') {
+          const diff = Math.abs(audio.currentTime - data.currentTime);
+          if (diff > 3) audio.currentTime = data.currentTime;
         }
-        // Sync play/pause
-        if (tvAudioRef.current) {
-          if (data.isPlaying && tvAudioRef.current.paused) {
-            tvAudioRef.current.play().catch(() => {});
-          } else if (!data.isPlaying && !tvAudioRef.current.paused) {
-            tvAudioRef.current.pause();
+        // Only control play/pause if user has unlocked audio
+        if (audioUnlockedRef.current) {
+          if (data.isPlaying && audio.paused) {
+            audio.play().catch(() => {});
+          } else if (!data.isPlaying && !audio.paused) {
+            audio.pause();
           }
         }
         setConnected(true);
@@ -118,15 +117,13 @@ const TVDisplay: React.FC = () => {
     };
   }, [roomCode]);
 
-  // Initialize TV audio element - starts muted so autoplay works
+  // Cleanup audio on unmount
   useEffect(() => {
-    const audio = new Audio();
-    audio.volume = 1;
-    audio.muted = true;
-    tvAudioRef.current = audio;
     return () => {
-      audio.pause();
-      audio.src = '';
+      if (tvAudioRef.current) {
+        tvAudioRef.current.pause();
+        tvAudioRef.current.src = '';
+      }
     };
   }, []);
 
@@ -226,6 +223,8 @@ const TVDisplay: React.FC = () => {
         <Wifi className="w-4 h-4" />
         <span className="text-xs">{isItalian ? 'Connesso' : 'Connected'}</span>
       </div>
+      {/* Hidden audio element in DOM - required for browser autoplay policy */}
+      <audio ref={tvAudioRef} muted crossOrigin="anonymous" />
       {/* Mute/Unmute toggle - bottom right */}
       {connected && (
         <div className="absolute bottom-28 right-6 z-50">
@@ -234,16 +233,32 @@ const TVDisplay: React.FC = () => {
             variant="secondary"
             className="w-12 h-12 rounded-full shadow-2xl"
             onClick={() => {
-              if (tvAudioRef.current) {
+              const audio = tvAudioRef.current;
+              if (!audio) return;
+              if (!audioUnlockedRef.current) {
+                // First click: unlock audio with user gesture
+                audio.muted = false;
+                audio.play().then(() => {
+                  audioUnlockedRef.current = true;
+                  tvMutedRef.current = false;
+                  setAudioUnlocked(true);
+                  setTvMuted(false);
+                }).catch(() => {
+                  // Even if play fails (no src yet), mark as unlocked
+                  audioUnlockedRef.current = true;
+                  audio.muted = false;
+                  tvMutedRef.current = false;
+                  setAudioUnlocked(true);
+                  setTvMuted(false);
+                });
+              } else {
+                // Subsequent clicks: toggle mute
                 const newMuted = !tvMutedRef.current;
-                tvAudioRef.current.muted = newMuted;
+                audio.muted = newMuted;
                 tvMutedRef.current = newMuted;
                 setTvMuted(newMuted);
-                // If unmuting, ensure it's playing
-                if (!newMuted && lastStreamUrlRef.current) {
-                  if (tvAudioRef.current.paused) {
-                    tvAudioRef.current.play().catch(() => {});
-                  }
+                if (!newMuted && audio.paused) {
+                  audio.play().catch(() => {});
                 }
               }
             }}
