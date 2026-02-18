@@ -227,39 +227,6 @@ const Settings: React.FC = () => {
       </div>
 
       <div className="space-y-4">
-        {/* Version & Update Section - Prominent */}
-        <section className="rounded-xl overflow-hidden bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/20">
-          <div className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-                  <RefreshCw className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-base font-semibold text-foreground">SoundFlow v1.8</p>
-                  <p className="text-xs text-muted-foreground">
-                    {settings.language === 'it' ? 'Verifica aggiornamenti' : 'Check for updates'}
-                  </p>
-                </div>
-              </div>
-              <Button variant="default" size="lg" className="gap-2 px-5" onClick={async () => {
-                try {
-                  const cacheNames = await caches.keys();
-                  await Promise.all(cacheNames.map(name => caches.delete(name)));
-                  const registrations = await navigator.serviceWorker.getRegistrations();
-                  await Promise.all(registrations.map(reg => reg.unregister()));
-                  window.location.reload();
-                } catch (error) {
-                  console.error('Failed to clear cache:', error);
-                  window.location.reload();
-                }
-              }}>
-                <RefreshCw className="w-4 h-4" />
-                {settings.language === 'it' ? 'Aggiorna' : 'Update'}
-              </Button>
-            </div>
-          </div>
-        </section>
 
         {/* Account Section */}
         <section className="rounded-xl bg-card overflow-hidden">
