@@ -397,7 +397,6 @@ const Settings: React.FC = () => {
                 </div>
                 <div className="space-y-1.5 pl-1">
                   {[
-                    { icon: <Music className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Audio FLAC / alta qualità' : 'FLAC / high quality audio' },
                     { icon: <Sparkles className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Modalità ibrida multi-sorgente' : 'Hybrid multi-source mode' },
                     { icon: <Download className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Download illimitati' : 'Unlimited downloads' },
                     { icon: <Mic2 className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Testi e karaoke sincronizzati' : 'Synced lyrics & karaoke' },
