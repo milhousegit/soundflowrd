@@ -319,8 +319,8 @@ const Settings: React.FC = () => {
             {/* Invite a friend - minimal */}
             <ReferralShareMinimal language={settings.language as 'en' | 'it'} onCopied={() => toast({ title: settings.language === 'it' ? 'Link copiato!' : 'Link copied!' })} />
 
-            {/* Premium Status */}
-            {isPremiumActive && profile?.premium_expires_at ? (
+            {/* Premium Status + Funding Goal */}
+            {isPremiumActive && profile?.premium_expires_at && (
               <div className="p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 via-[#6366F1]/15 to-[#3B82F6]/10 border border-[#8B5CF6]/30">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] flex items-center justify-center shrink-0">
@@ -339,12 +339,12 @@ const Settings: React.FC = () => {
                   <Check className="w-5 h-5 text-green-500" />
                 </div>
               </div>
-            ) : (
-              <FundingGoalBar 
-                language={settings.language as 'en' | 'it'} 
-                onContribute={() => setShowKofiModal(true)} 
-              />
             )}
+            <FundingGoalBar 
+              language={settings.language as 'en' | 'it'} 
+              onContribute={() => setShowKofiModal(true)}
+              isPremium={!!isPremiumActive}
+            />
 
             {/* Connect/Disconnect Telegram */}
             <div>

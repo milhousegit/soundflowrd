@@ -8,6 +8,7 @@ import KofiModal from '@/components/KofiModal';
 interface FundingGoalBarProps {
   language: 'en' | 'it';
   onContribute: () => void;
+  isPremium?: boolean;
 }
 
 interface FundingGoalData {
@@ -17,7 +18,7 @@ interface FundingGoalData {
   label_en: string;
 }
 
-const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute }) => {
+const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute, isPremium = false }) => {
   const [goalData, setGoalData] = useState<FundingGoalData | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const isItalian = language === 'it';
