@@ -360,8 +360,8 @@ const Settings: React.FC = () => {
               </button>
             )}
 
-            {/* Premium Status + Funding Goal */}
-            {isPremiumActive && profile?.premium_expires_at && (
+            {/* Premium Section */}
+            {isPremiumActive && profile?.premium_expires_at ? (
               <div className="p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 via-[#6366F1]/15 to-[#3B82F6]/10 border border-[#8B5CF6]/30">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] flex items-center justify-center shrink-0">
@@ -379,6 +379,42 @@ const Settings: React.FC = () => {
                   </div>
                   <Check className="w-5 h-5 text-green-500" />
                 </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-gradient-to-r from-[#8B5CF6]/10 to-[#3B82F6]/10 border border-[#8B5CF6]/20 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] flex items-center justify-center shrink-0">
+                    <Crown className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground text-sm">
+                      {settings.language === 'it' ? 'Sblocca Premium' : 'Unlock Premium'}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      {settings.language === 'it' ? 'Supporta SoundFlow e ottieni funzioni esclusive' : 'Support SoundFlow and get exclusive features'}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-1.5 pl-1">
+                  {[
+                    { icon: <Music className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Audio FLAC / alta qualità' : 'FLAC / high quality audio' },
+                    { icon: <Sparkles className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Modalità ibrida multi-sorgente' : 'Hybrid multi-source mode' },
+                    { icon: <Download className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Download illimitati' : 'Unlimited downloads' },
+                    { icon: <Car className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Modalità Auto' : 'Auto Mode' },
+                  ].map((feature, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="text-[#8B5CF6]">{feature.icon}</span>
+                      {feature.text}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  onClick={() => setShowKofiModal(true)}
+                  className="w-full h-9 text-sm font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0 text-white"
+                >
+                  <Crown className="w-3.5 h-3.5 mr-1.5" />
+                  {settings.language === 'it' ? 'Contribuisci su Ko-fi' : 'Contribute on Ko-fi'}
+                </Button>
               </div>
             )}
             <FundingGoalBar 
