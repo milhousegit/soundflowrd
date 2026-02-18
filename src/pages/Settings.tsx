@@ -19,7 +19,7 @@ import AdminBannerTester from '@/components/AdminBannerTester';
 import AdminArtistMerge from '@/components/AdminArtistMerge';
 import AdminReferralSettings from '@/components/AdminReferralSettings';
 import AdminChartConfig from '@/components/AdminChartConfig';
-import PaymentPendingBanner from '@/components/PaymentPendingBanner';
+
 import KofiModal from '@/components/KofiModal';
 import ReferralShare from '@/components/ReferralShare';
 import ReferralShareMinimal from '@/components/ReferralShareMinimal';
@@ -76,7 +76,7 @@ const Settings: React.FC = () => {
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
   const [showCloudSection, setShowCloudSection] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const [showPaymentPendingBanner, setShowPaymentPendingBanner] = useState(false);
+  
   const [showBridgeUrlInput, setShowBridgeUrlInput] = useState(false);
   const [showRdSettings, setShowRdSettings] = useState(false);
   const [showHybridSettings, setShowHybridSettings] = useState(false);
@@ -99,12 +99,6 @@ const Settings: React.FC = () => {
     checkAdminRole();
   }, [user?.id]);
 
-  // Check if user has pending payment and show banner
-  useEffect(() => {
-    if (profile?.payment_pending_since && !profile?.is_premium) {
-      setShowPaymentPendingBanner(true);
-    }
-  }, [profile?.payment_pending_since, profile?.is_premium]);
 
   useEffect(() => {
     if (isEditingApiKey) {
@@ -1071,26 +1065,10 @@ const Settings: React.FC = () => {
         )}
       </div>
       
-      {/* Payment Pending Banner */}
-      {showPaymentPendingBanner && (
-        <PaymentPendingBanner onClose={() => setShowPaymentPendingBanner(false)} />
-      )}
-
       {/* Ko-fi Modal */}
       <KofiModal 
         isOpen={showKofiModal} 
-        onClose={async () => {
-          setShowKofiModal(false);
-          if (user?.id) {
-            await supabase
-              .from('profiles')
-              .update({ payment_pending_since: new Date().toISOString() })
-              .eq('id', user.id);
-          }
-          setTimeout(() => {
-            setShowPaymentPendingBanner(true);
-          }, 1500);
-        }} 
+        onClose={() => setShowKofiModal(false)} 
       />
     </div>
   );
