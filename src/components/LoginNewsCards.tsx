@@ -300,18 +300,19 @@ const LoginNewsCards: React.FC<LoginNewsCardsProps> = ({ language }) => {
           <button
             key={card.id}
             onClick={() => setOpenCard(card.id)}
-            className={`flex-shrink-0 w-[calc(50%-6px)] snap-center rounded-xl p-4 bg-gradient-to-br ${card.gradient} border border-border/50 text-left transition-transform active:scale-95 hover:border-primary/40`}>
-
-              <div className="w-10 h-10 rounded-lg bg-background/50 flex items-center justify-center mb-3 text-foreground">
+            className={`flex-shrink-0 w-[calc(50%-6px)] snap-center rounded-xl px-3 py-2.5 bg-gradient-to-br ${card.gradient} border border-border/50 text-left transition-transform active:scale-95 hover:border-primary/40 flex items-center gap-2.5`}>
+              <div className="w-8 h-8 rounded-lg bg-background/50 flex items-center justify-center flex-shrink-0 text-foreground [&>svg]:w-4 [&>svg]:h-4">
                 {card.icon}
               </div>
-              <p className="text-sm font-semibold text-foreground leading-tight">
-                {language === 'it' ? card.titleIt : card.titleEn}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                {language === 'it' ? card.subtitleIt : card.subtitleEn}
-                <ChevronRight className="w-3 h-3" />
-              </p>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-foreground leading-tight truncate">
+                  {language === 'it' ? card.titleIt : card.titleEn}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-0.5 truncate">
+                  {language === 'it' ? card.subtitleIt : card.subtitleEn}
+                  <ChevronRight className="w-2.5 h-2.5 flex-shrink-0" />
+                </p>
+              </div>
             </button>
           )}
         </div>
