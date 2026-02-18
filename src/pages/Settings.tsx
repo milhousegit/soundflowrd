@@ -404,10 +404,10 @@ const Settings: React.FC = () => {
                     { icon: <Smartphone className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Collegamento con la TV' : 'TV connection' },
                     { icon: <Car className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Modalità Auto' : 'Auto Mode' },
                   ].map((feature, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <button key={i} onClick={() => setShowKofiModal(true)} className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left">
                       <span className="text-[#8B5CF6]">{feature.icon}</span>
                       {feature.text}
-                    </div>
+                    </button>
                   ))}
                 </div>
                 {/* Funding goal inline */}
