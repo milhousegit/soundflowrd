@@ -415,13 +415,16 @@ const Settings: React.FC = () => {
                   <Crown className="w-3.5 h-3.5 mr-1.5" />
                   {settings.language === 'it' ? 'Contribuisci su Ko-fi' : 'Contribute on Ko-fi'}
                 </Button>
+                {/* Funding goal inside the banner */}
+                <div className="pt-1 border-t border-[#8B5CF6]/15">
+                  <FundingGoalBar 
+                    language={settings.language as 'en' | 'it'} 
+                    onContribute={() => setShowKofiModal(true)}
+                    isPremium={false}
+                  />
+                </div>
               </div>
             )}
-            <FundingGoalBar 
-              language={settings.language as 'en' | 'it'} 
-              onContribute={() => setShowKofiModal(true)}
-              isPremium={!!isPremiumActive}
-            />
 
             {/* Logout */}
             <div className="pt-2">
