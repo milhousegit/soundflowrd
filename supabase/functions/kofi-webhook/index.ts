@@ -165,6 +165,29 @@ Deno.serve(async (req) => {
       type: "premium_activated",
     });
 
+    // Update funding goal progress
+    const donationAmount = parseFloat(data.amount) || 0;
+    if (donationAmount > 0) {
+      const { data: goalData } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "funding_goal")
+        .maybeSingle();
+
+      if (goalData?.value) {
+        const goalValue = goalData.value as Record<string, unknown>;
+        const currentAmount = (typeof goalValue.current === 'number' ? goalValue.current : 0) + donationAmount;
+        await supabase
+          .from("app_settings")
+          .update({
+            value: { ...goalValue, current: currentAmount, updated_at: new Date().toISOString() },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("key", "funding_goal");
+        console.log(`Funding goal updated: +€${donationAmount}, total now €${currentAmount}`);
+      }
+    }
+
     console.log(`Premium activated for ${profile.email} (${durationLabel}) until ${newExpiresAt.toISOString()}`);
 
     return new Response(
