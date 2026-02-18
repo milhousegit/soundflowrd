@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Crown, Sparkles, Target } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Progress } from '@/components/ui/progress';
@@ -67,7 +68,7 @@ const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute,
       </button>
 
       {/* Detail modal */}
-      {showDetails && (
+      {showDetails && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-fade-in">
           <div 
             className="absolute inset-0 bg-background/80 backdrop-blur-sm"
@@ -133,7 +134,8 @@ const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute,
               {isItalian ? 'Contribuisci su Ko-fi' : 'Contribute on Ko-fi'}
             </Button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
