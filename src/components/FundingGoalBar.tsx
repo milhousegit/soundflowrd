@@ -4,7 +4,6 @@ import { Crown, Sparkles, Target } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import KofiModal from '@/components/KofiModal';
 
 interface FundingGoalBarProps {
   language: 'en' | 'it';
@@ -12,12 +11,38 @@ interface FundingGoalBarProps {
   isPremium?: boolean;
 }
 
+interface Milestone {
+  amount: number;
+  label_it: string;
+  label_en: string;
+  icon: string;
+}
+
 interface FundingGoalData {
   goal: number;
   current: number;
   label_it: string;
   label_en: string;
+  milestones?: Milestone[];
 }
+
+const PlayStoreIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.199l2.302 2.302-2.302 2.302L15.396 12l2.302-2.492zM5.864 2.658L16.8 9.991l-2.302 2.302L5.864 2.658z"/>
+  </svg>
+);
+
+const AppStoreIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+  </svg>
+);
+
+const MilestoneIcon = ({ icon, className }: { icon: string; className?: string }) => {
+  if (icon === 'play-store') return <PlayStoreIcon className={className} />;
+  if (icon === 'app-store') return <AppStoreIcon className={className} />;
+  return <Target className={className} />;
+};
 
 const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute, isPremium = false }) => {
   const [goalData, setGoalData] = useState<FundingGoalData | null>(null);
@@ -41,6 +66,7 @@ const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute,
   if (!goalData) return null;
 
   const percentage = Math.min(Math.round((goalData.current / goalData.goal) * 100), 100);
+  const milestones = goalData.milestones || [];
 
   return (
     <>
@@ -64,7 +90,25 @@ const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute,
             {percentage}%
           </span>
         </div>
-        <Progress value={percentage} className="h-2 bg-muted/50 [&>div]:bg-gradient-to-r [&>div]:from-violet-500 [&>div]:to-blue-600" />
+        {/* Progress bar with milestone markers */}
+        <div className="relative">
+          <Progress value={percentage} className="h-2 bg-muted/50 [&>div]:bg-gradient-to-r [&>div]:from-violet-500 [&>div]:to-blue-600" />
+          {milestones.map((m) => {
+            const pos = (m.amount / goalData.goal) * 100;
+            const reached = goalData.current >= m.amount;
+            return (
+              <div
+                key={m.icon}
+                className="absolute top-1/2 -translate-y-1/2"
+                style={{ left: `${pos}%`, transform: `translateX(-50%) translateY(-50%)` }}
+              >
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center ${reached ? 'bg-green-500' : 'bg-muted border border-border'}`}>
+                  <MilestoneIcon icon={m.icon} className={`w-3 h-3 ${reached ? 'text-white' : 'text-muted-foreground'}`} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </button>
 
       {/* Detail modal */}
@@ -97,16 +141,54 @@ const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute,
                 : 'Help us reach the goal to publish SoundFlow on the stores!'}
             </p>
 
-            <div className="mb-4">
+            {/* Progress with milestones */}
+            <div className="mb-5">
               <div className="flex justify-between text-sm mb-1.5">
                 <span className="font-semibold text-foreground">€{goalData.current}</span>
                 <span className="text-muted-foreground">€{goalData.goal}</span>
               </div>
-              <Progress value={percentage} className="h-3 bg-muted/50 [&>div]:bg-gradient-to-r [&>div]:from-violet-500 [&>div]:to-blue-600" />
-              <p className="text-center text-xs text-muted-foreground mt-1.5">{percentage}% {isItalian ? 'raggiunto' : 'reached'}</p>
+              <div className="relative">
+                <Progress value={percentage} className="h-3 bg-muted/50 [&>div]:bg-gradient-to-r [&>div]:from-violet-500 [&>div]:to-blue-600" />
+                {milestones.map((m) => {
+                  const pos = (m.amount / goalData.goal) * 100;
+                  const reached = goalData.current >= m.amount;
+                  return (
+                    <div
+                      key={m.icon}
+                      className="absolute top-1/2"
+                      style={{ left: `${pos}%`, transform: `translateX(-50%) translateY(-50%)` }}
+                    >
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shadow-sm ${reached ? 'bg-green-500' : 'bg-card border-2 border-border'}`}>
+                        <MilestoneIcon icon={m.icon} className={`w-3.5 h-3.5 ${reached ? 'text-white' : 'text-muted-foreground'}`} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Milestone labels */}
+              <div className="relative mt-3">
+                {milestones.map((m) => {
+                  const pos = (m.amount / goalData.goal) * 100;
+                  const reached = goalData.current >= m.amount;
+                  return (
+                    <div
+                      key={m.icon + '-label'}
+                      className="absolute text-center"
+                      style={{ left: `${pos}%`, transform: 'translateX(-50%)' }}
+                    >
+                      <p className={`text-[10px] font-medium whitespace-nowrap ${reached ? 'text-green-500' : 'text-muted-foreground'}`}>
+                        €{m.amount}
+                      </p>
+                      <p className={`text-[9px] whitespace-nowrap ${reached ? 'text-green-500/70' : 'text-muted-foreground/70'}`}>
+                        {isItalian ? m.label_it : m.label_en}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="space-y-2 mb-5 text-xs text-muted-foreground">
+            <div className="space-y-2 mb-5 text-xs text-muted-foreground mt-8">
               <div className="flex items-start gap-2 p-2.5 rounded-lg bg-muted/30">
                 <Crown className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" />
                 <div>
