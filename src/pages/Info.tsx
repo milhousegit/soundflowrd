@@ -84,11 +84,11 @@ const Info: React.FC = () => {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "Importazione Spotify senza API key" : "Spotify import without API key"}
+                  {isItalian ? "File IPA per iOS disponibile per il download dalla schermata di login" : "iOS IPA file available for download from login screen"}
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-primary" />
-                  {isItalian ? "Feed migliorato con playlist e azioni social" : "Improved feed with playlists and social actions"}
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                  {isItalian ? "Collegamento con la TV" : "TV connection"}
                 </li>
               </ul>
             </div>
@@ -99,6 +99,10 @@ const Info: React.FC = () => {
                 {isItalian ? "Roadmap" : "Roadmap"}
               </h3>
               <ul className="text-sm text-muted-foreground space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 mt-1.5 shrink-0" />
+                  {isItalian ? "Pubblicazione sugli store" : "App store publication"}
+                </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 mt-1.5 shrink-0" />
                   {isItalian ? "Risoluzione problema della riproduzione a singhiozzo su CarPlay" : "Fixing stuttering playback issue on CarPlay"}
