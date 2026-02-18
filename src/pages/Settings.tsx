@@ -21,6 +21,7 @@ import AdminReferralSettings from '@/components/AdminReferralSettings';
 import AdminChartConfig from '@/components/AdminChartConfig';
 
 import KofiModal from '@/components/KofiModal';
+import FundingGoalBar from '@/components/FundingGoalBar';
 import ReferralShare from '@/components/ReferralShare';
 import ReferralShareMinimal from '@/components/ReferralShareMinimal';
 import { isPast } from 'date-fns';
@@ -75,7 +76,7 @@ const Settings: React.FC = () => {
   const [cloudFiles, setCloudFiles] = useState<CloudFile[]>([]);
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
   const [showCloudSection, setShowCloudSection] = useState(false);
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false); // kept for potential future use
   
   const [showBridgeUrlInput, setShowBridgeUrlInput] = useState(false);
   const [showRdSettings, setShowRdSettings] = useState(false);
@@ -338,70 +339,11 @@ const Settings: React.FC = () => {
                   <Check className="w-5 h-5 text-green-500" />
                 </div>
               </div>
-            ) : !isActualAdmin && (
-              <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
-                <DialogTrigger asChild>
-                  <button className="w-full p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6] via-[#6366F1] to-[#3B82F6] hover:opacity-90 transition-opacity shadow-lg">
-                    <div className="flex items-center justify-center gap-2">
-                      <Crown className="w-4 h-4 text-white" />
-                      <span className="text-sm font-semibold text-white">{settings.language === 'it' ? 'Sblocca Premium' : 'Unlock Premium'}</span>
-                      <Sparkles className="w-3.5 h-3.5 text-white/80" />
-                    </div>
-                  </button>
-                </DialogTrigger>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <Crown className="w-5 h-5 text-[#8B5CF6]" />
-                      <span className="bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">Premium</span>
-                    </DialogTitle>
-                  </DialogHeader>
-                  
-                  <div className="space-y-3 py-2">
-                    {[{
-                      icon: Download,
-                      label: settings.language === 'it' ? 'Download Offline' : 'Offline Downloads',
-                      desc: settings.language === 'it' ? 'Scarica brani in locale' : 'Download tracks locally'
-                    }, {
-                      icon: Car,
-                      label: settings.language === 'it' ? 'Modalità Auto' : 'Auto Mode',
-                      desc: settings.language === 'it' ? 'UI ottimizzata per guida' : 'Driving-optimized UI'
-                    }, {
-                      icon: Crown,
-                      label: settings.language === 'it' ? 'Riproduzione Ibrida' : 'Hybrid Playback',
-                      desc: settings.language === 'it' ? 'Mai interrompere la musica' : 'Never interrupt music'
-                    }, {
-                      icon: Mic2,
-                      label: settings.language === 'it' ? 'Testi Sincronizzati' : 'Synced Lyrics',
-                      desc: settings.language === 'it' ? 'Karaoke automatico' : 'Automatic karaoke'
-                    }, {
-                      icon: BadgeCheck,
-                      label: settings.language === 'it' ? 'Profilo Verificato' : 'Verified Profile',
-                      desc: settings.language === 'it' ? 'Coroncina esclusiva' : 'Exclusive crown badge'
-                    }, {
-                      icon: Sparkles,
-                      label: settings.language === 'it' ? 'Accesso Anticipato' : 'Early Access',
-                      desc: settings.language === 'it' ? 'Novità in anteprima' : 'New features first'
-                    }].map(({ icon: Icon, label, desc }) => (
-                      <div key={label} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50">
-                        <Icon className="w-4 h-4 text-[#8B5CF6] shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground">{label}</p>
-                          <p className="text-xs text-muted-foreground truncate">{desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <Button className="w-full h-11 font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0" onClick={() => {
-                    setShowPremiumModal(false);
-                    setShowKofiModal(true);
-                  }}>
-                    <Crown className="w-4 h-4 mr-2" />
-                    {settings.language === 'it' ? 'Supportaci su Ko-fi' : 'Support us on Ko-fi'}
-                  </Button>
-                </DialogContent>
-              </Dialog>
+            ) : (
+              <FundingGoalBar 
+                language={settings.language as 'en' | 'it'} 
+                onContribute={() => setShowKofiModal(true)} 
+              />
             )}
 
             {/* Connect/Disconnect Telegram */}
