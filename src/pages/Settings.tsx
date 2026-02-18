@@ -286,49 +286,22 @@ const Settings: React.FC = () => {
             {/* Invite a friend - minimal */}
             <ReferralShareMinimal language={settings.language as 'en' | 'it'} onCopied={() => toast({ title: settings.language === 'it' ? 'Link copiato!' : 'Link copied!' })} />
 
-            {/* Premium Status + Funding Goal */}
-            {isPremiumActive && profile?.premium_expires_at && (
-              <div className="p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 via-[#6366F1]/15 to-[#3B82F6]/10 border border-[#8B5CF6]/30">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] flex items-center justify-center shrink-0">
-                    <Crown className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">Premium</p>
-                    <p className="text-xs text-muted-foreground">
-                      {settings.language === 'it' ? 'Scade il' : 'Expires'} {new Date(profile.premium_expires_at).toLocaleDateString(settings.language === 'it' ? 'it-IT' : 'en-US', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric'
-                      })}
-                    </p>
-                  </div>
-                  <Check className="w-5 h-5 text-green-500" />
-                </div>
-              </div>
-            )}
-            <FundingGoalBar 
-              language={settings.language as 'en' | 'it'} 
-              onContribute={() => setShowKofiModal(true)}
-              isPremium={!!isPremiumActive}
-            />
-
             {/* Connect/Disconnect Telegram */}
-            <div>
-              {profile?.telegram_chat_id ? (
+            {profile?.telegram_chat_id ? (
+              <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-2">
-                    <Send className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-sm text-foreground">
-                      {settings.language === 'it' ? 'Telegram connesso' : 'Telegram connected'}
-                    </span>
-                    <Check className="w-3.5 h-3.5 text-green-500 ml-auto" />
-                  </div>
+                  <Send className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-sm text-foreground">
+                    {settings.language === 'it' ? 'Telegram connesso' : 'Telegram connected'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-green-500" />
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 border-destructive/30 hover:bg-destructive/10">
-                        <X className="w-3.5 h-3.5 text-destructive" />
-                      </Button>
+                      <button className="text-muted-foreground hover:text-destructive transition-colors">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
@@ -366,15 +339,53 @@ const Settings: React.FC = () => {
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
-              ) : (
-                <Button variant="outline" className="w-full h-9 text-sm gap-2 border-[#0088cc]/30 hover:bg-[#0088cc]/10" onClick={() => {
-                  window.open('https://t.me/soundflowrdbot', '_blank');
-                }}>
-                  <Send className="w-3.5 h-3.5 text-[#0088cc]" />
-                  <span className="text-[#0088cc]">{settings.language === 'it' ? 'Connetti Telegram' : 'Connect Telegram'}</span>
-                </Button>
-              )}
-            </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => window.open('https://t.me/soundflowrdbot', '_blank')}
+                className="flex items-center justify-between w-full group"
+              >
+                <div className="flex items-center gap-2">
+                  <Send className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-sm text-foreground">
+                    {settings.language === 'it' ? 'Connetti Telegram' : 'Connect Telegram'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <span className="text-xs">
+                    {settings.language === 'it' ? 'Notifiche e supporto' : 'Notifications & support'}
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </div>
+              </button>
+            )}
+
+            {/* Premium Status + Funding Goal */}
+            {isPremiumActive && profile?.premium_expires_at && (
+              <div className="p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 via-[#6366F1]/15 to-[#3B82F6]/10 border border-[#8B5CF6]/30">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] flex items-center justify-center shrink-0">
+                    <Crown className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] bg-clip-text text-transparent">Premium</p>
+                    <p className="text-xs text-muted-foreground">
+                      {settings.language === 'it' ? 'Scade il' : 'Expires'} {new Date(profile.premium_expires_at).toLocaleDateString(settings.language === 'it' ? 'it-IT' : 'en-US', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric'
+                      })}
+                    </p>
+                  </div>
+                  <Check className="w-5 h-5 text-green-500" />
+                </div>
+              </div>
+            )}
+            <FundingGoalBar 
+              language={settings.language as 'en' | 'it'} 
+              onContribute={() => setShowKofiModal(true)}
+              isPremium={!!isPremiumActive}
+            />
 
             {/* Logout */}
             <div className="pt-2">
