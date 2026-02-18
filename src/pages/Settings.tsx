@@ -410,6 +410,13 @@ const Settings: React.FC = () => {
                     </div>
                   ))}
                 </div>
+                {/* Funding goal inline */}
+                <FundingGoalBar 
+                  language={settings.language as 'en' | 'it'} 
+                  onContribute={() => setShowKofiModal(true)}
+                  isPremium={false}
+                  inline
+                />
                 <Button
                   onClick={() => setShowKofiModal(true)}
                   className="w-full h-9 text-sm font-semibold bg-gradient-to-r from-[#8B5CF6] to-[#3B82F6] hover:opacity-90 border-0 text-white"
@@ -417,14 +424,6 @@ const Settings: React.FC = () => {
                   <Crown className="w-3.5 h-3.5 mr-1.5" />
                   {settings.language === 'it' ? 'Contribuisci su Ko-fi' : 'Contribute on Ko-fi'}
                 </Button>
-                {/* Funding goal inside the banner */}
-                <div className="pt-1 border-t border-[#8B5CF6]/15">
-                  <FundingGoalBar 
-                    language={settings.language as 'en' | 'it'} 
-                    onContribute={() => setShowKofiModal(true)}
-                    isPremium={false}
-                  />
-                </div>
               </div>
             )}
 

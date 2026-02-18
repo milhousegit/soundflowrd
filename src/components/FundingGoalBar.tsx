@@ -9,6 +9,7 @@ interface FundingGoalBarProps {
   language: 'en' | 'it';
   onContribute: () => void;
   isPremium?: boolean;
+  inline?: boolean;
 }
 
 interface Milestone {
@@ -44,7 +45,7 @@ const MilestoneIcon = ({ icon, className }: { icon: string; className?: string }
   return <Target className={className} />;
 };
 
-const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute, isPremium = false }) => {
+const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute, isPremium = false, inline = false }) => {
   const [goalData, setGoalData] = useState<FundingGoalData | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const isItalian = language === 'it';
@@ -67,6 +68,39 @@ const FundingGoalBar: React.FC<FundingGoalBarProps> = ({ language, onContribute,
 
   const percentage = Math.min(Math.round((goalData.current / goalData.goal) * 100), 100);
   const milestones = goalData.milestones || [];
+
+  if (inline) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-foreground">
+            {isItalian ? goalData.label_it : goalData.label_en}
+          </p>
+          <span className="text-[10px] text-muted-foreground">
+            €{goalData.current} / €{goalData.goal} ({percentage}%)
+          </span>
+        </div>
+        <div className="relative">
+          <Progress value={percentage} className="h-2 bg-muted/50 [&>div]:bg-gradient-to-r [&>div]:from-violet-500 [&>div]:to-blue-600" />
+          {milestones.map((m) => {
+            const pos = (m.amount / goalData.goal) * 100;
+            const reached = goalData.current >= m.amount;
+            return (
+              <div
+                key={m.icon}
+                className="absolute top-1/2 -translate-y-1/2"
+                style={{ left: `${pos}%`, transform: `translateX(-50%) translateY(-50%)` }}
+              >
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center ${reached ? 'bg-green-500' : 'bg-muted border border-border'}`}>
+                  <MilestoneIcon icon={m.icon} className={`w-3 h-3 ${reached ? 'text-white' : 'text-muted-foreground'}`} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
