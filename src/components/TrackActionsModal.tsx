@@ -56,6 +56,16 @@ const TrackActionsModal: React.FC<TrackActionsModalProps> = ({
   const [addedToPlaylist, setAddedToPlaylist] = useState<string | null>(null);
   const [isLoadingRadio, setIsLoadingRadio] = useState(false);
 
+  // Reset internal state when modal closes
+  React.useEffect(() => {
+    if (!isOpen) {
+      setShowPlaylistPicker(false);
+      setShowCreatePlaylist(false);
+      setAddedToPlaylist(null);
+      setAddingToPlaylist(null);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleAddToPlaylist = async (playlistId: string) => {
