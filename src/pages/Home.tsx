@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Track, Album, Artist } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
@@ -13,6 +13,7 @@ import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import PlaylistCard from '@/components/PlaylistCard';
 import CreatePlaylistModal from '@/components/CreatePlaylistModal';
+import TrackActionsModal from '@/components/TrackActionsModal';
 import TapArea from '@/components/TapArea';
 import AlbumCardSkeleton from '@/components/skeletons/AlbumCardSkeleton';
 import ArtistCardSkeleton from '@/components/skeletons/ArtistCardSkeleton';
@@ -42,6 +43,94 @@ interface ChartDisplayData {
   coverUrl: string | null;
   trackCount: number;
 }
+
+// Recently played track item with long-press support
+const RecentTrackItem: React.FC<{
+  track: Track;
+  displayRecent: Track[];
+  currentTrack: Track | null;
+  isPlaying: boolean;
+  toggle: () => void;
+  playTrack: (track: Track, queue?: Track[]) => void;
+  setPlaybackSource: (source: any) => void;
+  addToQueue: (tracks: Track[]) => void;
+  settings: any;
+  isMobile: boolean;
+}> = ({ track, displayRecent, currentTrack, isPlaying, toggle, playTrack, setPlaybackSource, addToQueue, settings, isMobile }) => {
+  const [showActionsModal, setShowActionsModal] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
+
+  const isCurrentTrack = currentTrack?.id === track.id;
+
+  const handleTouchStart = useCallback(() => {
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      setShowActionsModal(true);
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 500);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handleTap = useCallback(() => {
+    if (longPressTriggeredRef.current) return;
+    if (isCurrentTrack) {
+      toggle();
+    } else {
+      setPlaybackSource({ type: 'playlist', name: settings.language === 'it' ? 'Ascoltati di recente' : 'Recently Played', path: '/' });
+      playTrack(track, displayRecent);
+    }
+  }, [isCurrentTrack, toggle, playTrack, track, displayRecent, setPlaybackSource, settings.language]);
+
+  return (
+    <>
+      <div
+        onTouchStart={isMobile ? handleTouchStart : undefined}
+        onTouchEnd={isMobile ? handleTouchEnd : undefined}
+        onTouchCancel={isMobile ? handleTouchEnd : undefined}
+        onClick={handleTap}
+        className="group flex items-center gap-2 md:gap-4 p-2 md:p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-all cursor-pointer touch-manipulation"
+      >
+        <div className="w-10 h-10 md:w-16 md:h-16 rounded overflow-hidden flex-shrink-0 bg-muted relative">
+          {track.coverUrl ? (
+            <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Music className="w-4 h-4 text-muted-foreground" />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+            {isCurrentTrack && isPlaying ? (
+              <Pause className="w-4 h-4 md:w-6 md:h-6 text-primary" />
+            ) : (
+              <Play className="w-4 h-4 md:w-6 md:h-6 text-foreground ml-0.5" />
+            )}
+          </div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-xs md:text-base text-foreground truncate">{track.title}</p>
+          <p className="text-[10px] md:text-sm text-muted-foreground truncate">{track.artist}</p>
+        </div>
+      </div>
+      <TrackActionsModal
+        track={track}
+        isOpen={showActionsModal}
+        onClose={() => setShowActionsModal(false)}
+        onAddToQueue={() => {
+          addToQueue([track]);
+          toast.success('Aggiunto alla coda');
+        }}
+      />
+    </>
+  );
+};
 
 const Home: React.FC = () => {
   const [newReleases, setNewReleases] = useState<Album[]>([]);
@@ -332,105 +421,21 @@ const Home: React.FC = () => {
             <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('recentlyPlayed')}</h2>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-            {displayRecent.map((track) => {
-              const isCurrentTrack = currentTrack?.id === track.id;
-              
-              const handleAddToQueue = () => {
-                addToQueue([track]);
-                toast.success('Aggiunto alla coda');
-              };
-
-              const handleAddToPlaylist = async (playlistId: string) => {
-                setIsAddingToPlaylist(playlistId);
-                await addTrackToPlaylist(playlistId, track);
-                setIsAddingToPlaylist(null);
-              };
-
-              const trackContent = (
-                <TapArea
-                  onTap={() => {
-                    if (isCurrentTrack) {
-                      toggle();
-                    } else {
-                      setPlaybackSource({ type: 'playlist', name: settings.language === 'it' ? 'Ascoltati di recente' : 'Recently Played', path: '/' });
-                      playTrack(track, displayRecent);
-                    }
-                  }}
-                  className="group flex items-center gap-2 md:gap-4 p-2 md:p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-all cursor-pointer touch-manipulation"
-                >
-                  <div className="w-10 h-10 md:w-16 md:h-16 rounded overflow-hidden flex-shrink-0 bg-muted relative">
-                    {track.coverUrl ? (
-                      <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Music className="w-4 h-4 text-muted-foreground" />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-background/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      {isCurrentTrack && isPlaying ? (
-                        <Pause className="w-4 h-4 md:w-6 md:h-6 text-primary" />
-                      ) : (
-                        <Play className="w-4 h-4 md:w-6 md:h-6 text-foreground ml-0.5" />
-                      )}
-                    </div>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-xs md:text-base text-foreground truncate">{track.title}</p>
-                    <p className="text-[10px] md:text-sm text-muted-foreground truncate">{track.artist}</p>
-                  </div>
-                </TapArea>
-              );
-
-              // Wrap with ContextMenu for long-press on mobile
-              if (isMobile) {
-                return (
-                  <ContextMenu key={track.id}>
-                    <ContextMenuTrigger asChild>
-                      {trackContent}
-                    </ContextMenuTrigger>
-                    <ContextMenuContent className="w-48 bg-popover z-[100]">
-                      <ContextMenuItem onClick={handleAddToQueue} className="cursor-pointer">
-                        <ListPlus className="w-4 h-4 mr-2" />
-                        Aggiungi alla coda
-                      </ContextMenuItem>
-                      <ContextMenuSub>
-                        <ContextMenuSubTrigger className="cursor-pointer">
-                          <ListMusic className="w-4 h-4 mr-2" />
-                          Aggiungi a playlist
-                        </ContextMenuSubTrigger>
-                        <ContextMenuSubContent className="bg-popover w-48">
-                          <ContextMenuItem 
-                            onClick={() => setShowCreatePlaylist(true)} 
-                            className="cursor-pointer"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Crea nuova playlist
-                          </ContextMenuItem>
-                          {playlists.length > 0 && <ContextMenuSeparator />}
-                          {playlists.map((playlist) => (
-                            <ContextMenuItem 
-                              key={playlist.id}
-                              onClick={() => handleAddToPlaylist(playlist.id)} 
-                              className="cursor-pointer"
-                              disabled={isAddingToPlaylist === playlist.id}
-                            >
-                              {isAddingToPlaylist === playlist.id ? (
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              ) : (
-                                <ListPlus className="w-4 h-4 mr-2" />
-                              )}
-                              <span className="truncate">{playlist.name}</span>
-                            </ContextMenuItem>
-                          ))}
-                        </ContextMenuSubContent>
-                      </ContextMenuSub>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                );
-              }
-
-              return <div key={track.id}>{trackContent}</div>;
-            })}
+            {displayRecent.map((track) => (
+              <RecentTrackItem
+                key={track.id}
+                track={track}
+                displayRecent={displayRecent}
+                currentTrack={currentTrack}
+                isPlaying={isPlaying}
+                toggle={toggle}
+                playTrack={playTrack}
+                setPlaybackSource={setPlaybackSource}
+                addToQueue={addToQueue}
+                settings={settings}
+                isMobile={isMobile}
+              />
+            ))}
           </div>
         </section>
       )}
