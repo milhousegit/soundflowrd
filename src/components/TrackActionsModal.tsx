@@ -12,6 +12,8 @@ import {
   X,
   Plus,
   Check,
+  ListMusic,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Track } from '@/types/music';
@@ -32,6 +34,8 @@ interface TrackActionsModalProps {
   isDownloading?: boolean;
   canDownload?: boolean;
   currentStreamUrl?: string;
+  onAddToQueue?: () => void;
+  onRemoveFromPlaylist?: () => void;
 }
 
 const TrackActionsModal: React.FC<TrackActionsModalProps> = ({
@@ -43,6 +47,8 @@ const TrackActionsModal: React.FC<TrackActionsModalProps> = ({
   isDownloading,
   canDownload,
   currentStreamUrl,
+  onAddToQueue,
+  onRemoveFromPlaylist,
 }) => {
   const { playlists, addTrackToPlaylist, addTracksToPlaylist, createPlaylist, isLoading: playlistsLoading } = usePlaylists();
   const { playTrack, setPlaybackSource } = usePlayer();
@@ -172,7 +178,24 @@ const TrackActionsModal: React.FC<TrackActionsModalProps> = ({
     handleAddToPlaylist(playlistId);
   };
 
+  const handleAddToQueue = () => {
+    onAddToQueue?.();
+    onClose();
+  };
+
+  const handleRemoveFromPlaylist = () => {
+    onRemoveFromPlaylist?.();
+    onClose();
+  };
+
   const actions = [
+    ...(onAddToQueue
+      ? [{
+          icon: <ListMusic className="w-5 h-5" />,
+          label: isIt ? 'Aggiungi alla coda' : 'Add to queue',
+          onClick: handleAddToQueue,
+        }]
+      : []),
     {
       icon: <ListPlus className="w-5 h-5" />,
       label: isIt ? 'Aggiungi alla playlist' : 'Add to playlist',
@@ -209,6 +232,14 @@ const TrackActionsModal: React.FC<TrackActionsModalProps> = ({
       subtitle: isIt ? 'Real-Debrid, metadati, sorgenti audio' : 'Real-Debrid, metadata, audio sources',
       onClick: handleSettings,
     },
+    ...(onRemoveFromPlaylist
+      ? [{
+          icon: <Trash2 className="w-5 h-5 text-destructive" />,
+          label: isIt ? 'Rimuovi dalla playlist' : 'Remove from playlist',
+          onClick: handleRemoveFromPlaylist,
+          destructive: true,
+        }]
+      : []),
   ];
 
   const modalContent = (
