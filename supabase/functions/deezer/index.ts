@@ -551,6 +551,26 @@ serve(async (req) => {
         });
       }
 
+      case 'get-track-radio': {
+        const data = await fetchWithRetry(`${DEEZER_API}/track/${id}/radio?limit=${limit}`);
+        
+        const radioTracks = (data.data || []).map((track: any) => ({
+          id: String(track.id),
+          title: track.title,
+          artist: track.artist?.name || 'Unknown Artist',
+          artistId: String(track.artist?.id || ''),
+          album: track.album?.title || 'Unknown Album',
+          albumId: String(track.album?.id || ''),
+          duration: track.duration || 0,
+          coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+          previewUrl: track.preview || undefined,
+        }));
+
+        return new Response(JSON.stringify(radioTracks), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       case 'get-track': {
         const data = await fetchWithRetry(`${DEEZER_API}/track/${id}`);
         
