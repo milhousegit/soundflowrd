@@ -378,10 +378,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
   const [currentAudioSource, setCurrentAudioSource] = useState<AudioSource>(null);
   const [playbackSource, setPlaybackSourceInternal] = useState<PlaybackSource>({ type: null, name: null, path: null });
-  const manualSourceRef = useRef(false);
+  const queueIdRef = useRef(0);
+  const manualSourceQueueIdRef = useRef(-1);
+  const pendingManualSourceRef = useRef(false);
   
   const setPlaybackSource = useCallback((source: PlaybackSource) => {
-    manualSourceRef.current = true;
+    pendingManualSourceRef.current = true;
     setPlaybackSourceInternal(source);
   }, []);
 
@@ -789,6 +791,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
 
       currentSearchTrackIdRef.current = track.id;
+      queueIdRef.current += 1;
+      
+      // If setPlaybackSource was called right before playTrack (same call stack), 
+      // associate the manual source with this new queue
+      if (pendingManualSourceRef.current) {
+        manualSourceQueueIdRef.current = queueIdRef.current;
+        pendingManualSourceRef.current = false;
+      }
 
       // Initialize queue with original track
       const initialQueue = queue ? [...queue] : [track];
@@ -1572,9 +1582,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const updateSourceForTrack = async () => {
       if (!state.currentTrack?.id || !user?.id) return;
       
-      // Skip auto-lookup if source was manually set (e.g. from Library, Home, Playlist page)
-      if (manualSourceRef.current) {
-        manualSourceRef.current = false;
+      // Skip auto-lookup if source was manually set for this queue
+      if (manualSourceQueueIdRef.current === queueIdRef.current) {
         return;
       }
       
