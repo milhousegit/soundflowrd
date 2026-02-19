@@ -552,9 +552,99 @@ serve(async (req) => {
       }
 
       case 'get-track-radio': {
-        const data = await fetchWithRetry(`${DEEZER_API}/track/${id}/radio?limit=${limit}`);
-        
-        const radioTracks = (data.data || []).map((track: any) => ({
+        const trackLimit = limit || 50;
+        let radioTracks: any[] = [];
+
+        // Strategy 1: Try track radio
+        try {
+          const data = await fetchWithRetry(`${DEEZER_API}/track/${id}/radio?limit=${trackLimit}`);
+          if (data.data && data.data.length > 0) {
+            radioTracks = data.data;
+          }
+        } catch (e) {
+          console.log('Track radio failed, trying alternatives:', e);
+        }
+
+        // Strategy 2: If track radio failed, get the track info and try artist radio
+        if (radioTracks.length === 0) {
+          try {
+            const trackData = await fetchWithRetry(`${DEEZER_API}/track/${id}`);
+            const artistId = trackData?.artist?.id;
+            if (artistId) {
+              const artistRadio = await fetchWithRetry(`${DEEZER_API}/artist/${artistId}/radio?limit=${trackLimit}`);
+              if (artistRadio.data && artistRadio.data.length > 0) {
+                radioTracks = artistRadio.data;
+              }
+            }
+          } catch (e) {
+            console.log('Artist radio failed:', e);
+          }
+        }
+
+        // Strategy 3: If artist radio also failed, use related artists + top tracks
+        if (radioTracks.length === 0) {
+          try {
+            const trackData = await fetchWithRetry(`${DEEZER_API}/track/${id}`);
+            const artistId = trackData?.artist?.id;
+            if (artistId) {
+              // Get related artists
+              const related = await fetchWithRetry(`${DEEZER_API}/artist/${artistId}/related?limit=10`);
+              const relatedArtists = related.data || [];
+              
+              // Get top tracks from each related artist
+              const topTracksPromises = relatedArtists.slice(0, 5).map((a: any) =>
+                fetchWithRetry(`${DEEZER_API}/artist/${a.id}/top?limit=10`).catch(() => ({ data: [] }))
+              );
+              const topTracksResults = await Promise.all(topTracksPromises);
+              
+              for (const result of topTracksResults) {
+                if (result.data) {
+                  radioTracks.push(...result.data);
+                }
+              }
+              
+              // Also add top tracks from the original artist
+              const ownTop = await fetchWithRetry(`${DEEZER_API}/artist/${artistId}/top?limit=10`).catch(() => ({ data: [] }));
+              if (ownTop.data) {
+                radioTracks.push(...ownTop.data);
+              }
+              
+              // Shuffle the results for variety
+              for (let i = radioTracks.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [radioTracks[i], radioTracks[j]] = [radioTracks[j], radioTracks[i]];
+              }
+            }
+          } catch (e) {
+            console.log('Related artists fallback failed:', e);
+          }
+        }
+
+        // Strategy 4: Last resort - search for similar tracks by query
+        if (radioTracks.length === 0) {
+          try {
+            const trackData = await fetchWithRetry(`${DEEZER_API}/track/${id}`);
+            const searchQuery = `${trackData?.artist?.name || ''}`;
+            if (searchQuery.trim()) {
+              const searchData = await fetchWithRetry(`${DEEZER_API}/search/track?q=${encodeURIComponent(searchQuery)}&limit=${trackLimit}`);
+              radioTracks = searchData.data || [];
+            }
+          } catch (e) {
+            console.log('Search fallback failed:', e);
+          }
+        }
+
+        // Deduplicate by track ID and exclude the original track
+        const seen = new Set<string>();
+        seen.add(String(id)); // Exclude original track
+        const uniqueTracks = radioTracks.filter((t: any) => {
+          const tid = String(t.id);
+          if (seen.has(tid)) return false;
+          seen.add(tid);
+          return true;
+        }).slice(0, trackLimit);
+
+        const result = uniqueTracks.map((track: any) => ({
           id: String(track.id),
           title: track.title,
           artist: track.artist?.name || 'Unknown Artist',
@@ -566,7 +656,7 @@ serve(async (req) => {
           previewUrl: track.preview || undefined,
         }));
 
-        return new Response(JSON.stringify(radioTracks), {
+        return new Response(JSON.stringify(result), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
