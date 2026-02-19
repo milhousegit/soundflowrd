@@ -304,7 +304,7 @@ const Player: React.FC = () => {
                   }}
                   className="text-sm text-muted-foreground hover:text-primary transition-colors truncate"
                 >
-                  {playbackSource.type === 'playlist' ? '📋' : playbackSource.type === 'album' ? '💿' : playbackSource.type === 'artist' ? '🎤' : playbackSource.type === 'radio' ? '📻' : '🎵'}{' '}
+                  {playbackSource.name}
                   {playbackSource.name}
                 </button>
               ) : (
