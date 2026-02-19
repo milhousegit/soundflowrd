@@ -10,12 +10,14 @@ import QueueModal from './QueueModal';
 import FavoriteButton from './FavoriteButton';
 import LyricsModal from './LyricsModal';
 import AlwaysOnDisplay from './AlwaysOnDisplay';
+import TrackActionsModal from './TrackActionsModal';
 import { useToast } from '@/hooks/use-toast';
 import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 import { isPast } from 'date-fns';
 
 import {
   Settings2,
+  MoreVertical,
   ChevronDown,
   ChevronUp,
   Cloud,
@@ -97,6 +99,7 @@ const Player: React.FC = () => {
   const currentStreamUrl = alternativeStreams.find(s => s.id === currentStreamId)?.streamUrl;
 
   const [showDebugModal, setShowDebugModal] = useState(false);
+  const [showTrackActions, setShowTrackActions] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
   const [showLyricsModal, setShowLyricsModal] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
@@ -307,10 +310,10 @@ const Player: React.FC = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={handleOpenDebugModal}
-                className="text-muted-foreground hover:text-destructive w-10"
+                onClick={() => setShowTrackActions(true)}
+                className="text-muted-foreground hover:text-foreground w-10"
               >
-                <Settings2 className="w-5 h-5" />
+                <MoreVertical className="w-5 h-5" />
               </Button>
             </div>
           </div>
@@ -452,20 +455,7 @@ const Player: React.FC = () => {
               </Button>
             </div>
 
-            <div className="flex items-center gap-1">
-              {canDownload && currentStreamUrl && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 text-muted-foreground hover:text-primary"
-                  onClick={handleDownload}
-                  disabled={isDownloading}
-                >
-                  {isDownloading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-                </Button>
-              )}
-              <FavoriteButton itemType="track" item={currentTrack} size="md" variant="ghost" className="h-11 w-11" />
-            </div>
+            <FavoriteButton itemType="track" item={currentTrack} size="md" variant="ghost" className="h-11 w-11" />
           </div>
         </div>
       )}
@@ -647,6 +637,17 @@ const Player: React.FC = () => {
         currentMappedFileId={currentMappedFileId}
         lastSearchQuery={lastSearchQuery}
         onMetadataSaved={updateTrackMetadata}
+      />
+
+      <TrackActionsModal
+        isOpen={showTrackActions}
+        onClose={() => setShowTrackActions(false)}
+        track={currentTrack}
+        onOpenDebugModal={handleOpenDebugModal}
+        onDownload={handleDownload}
+        isDownloading={isDownloading}
+        canDownload={canDownload}
+        currentStreamUrl={currentStreamUrl}
       />
 
       <QueueModal
