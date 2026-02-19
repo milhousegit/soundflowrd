@@ -12,7 +12,7 @@ import PlaylistRecommendations from '@/components/PlaylistRecommendations';
 import CommentSection from '@/components/social/CommentSection';
 import { usePlaylistCoverUpload } from '@/hooks/usePlaylistCoverUpload';
 import { useSettings } from '@/contexts/SettingsContext';
-import { usePlayer } from '@/contexts/PlayerContext';
+import { usePlayer, type PlaybackSource } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlaylists, PlaylistTrack, Playlist as PlaylistType } from '@/hooks/usePlaylists';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
@@ -42,7 +42,7 @@ import {
 const PlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { playTrack } = usePlayer();
+  const { playTrack, setPlaybackSource } = usePlayer();
   const { t } = useSettings();
   const { profile, isAdmin, user } = useAuth();
   const { getPlaylistTracks, deletePlaylist, updatePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks, addTrackToPlaylist } = usePlaylists();
@@ -346,6 +346,7 @@ const PlaylistPage: React.FC = () => {
 
   const handlePlayAll = () => {
     if (tracks.length > 0) {
+      setPlaybackSource({ type: 'playlist', name: playlist?.name || null, path: `/playlist/${id}` });
       playTrack(tracks[0], tracks);
     }
   };
@@ -353,6 +354,7 @@ const PlaylistPage: React.FC = () => {
   const handleShuffle = () => {
     if (tracks.length > 0) {
       const shuffled = [...tracks].sort(() => Math.random() - 0.5);
+      setPlaybackSource({ type: 'playlist', name: playlist?.name || null, path: `/playlist/${id}` });
       playTrack(shuffled[0], shuffled);
     }
   };

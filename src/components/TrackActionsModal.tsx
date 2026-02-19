@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Track } from '@/types/music';
 import { usePlaylists } from '@/hooks/usePlaylists';
-import { usePlayer } from '@/contexts/PlayerContext';
+import { usePlayer, type PlaybackSource } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useToast } from '@/hooks/use-toast';
 import { getTrackRadio } from '@/lib/deezer';
@@ -44,8 +44,8 @@ const TrackActionsModal: React.FC<TrackActionsModalProps> = ({
   canDownload,
   currentStreamUrl,
 }) => {
-  const { playlists, addTrackToPlaylist, isLoading: playlistsLoading } = usePlaylists();
-  const { playTrack } = usePlayer();
+  const { playlists, addTrackToPlaylist, addTracksToPlaylist, createPlaylist, isLoading: playlistsLoading } = usePlaylists();
+  const { playTrack, setPlaybackSource } = usePlayer();
   const { settings } = useSettings();
   const { toast } = useToast();
   const isIt = settings.language === 'it';
@@ -87,12 +87,36 @@ const TrackActionsModal: React.FC<TrackActionsModalProps> = ({
     try {
       const radioTracks = await getTrackRadio(track.id);
       if (radioTracks.length > 0) {
+        // Create a playlist with the radio tracks
+        const radioName = isIt
+          ? `Radio di "${track.title}"`
+          : `Radio of "${track.title}"`;
+        const createdPlaylist = await createPlaylist(
+          radioName,
+          track.coverUrl,
+          isIt
+            ? `${radioTracks.length} brani simili a "${track.title}" di ${track.artist}`
+            : `${radioTracks.length} tracks similar to "${track.title}" by ${track.artist}`
+        );
+
+        if (createdPlaylist) {
+          // Add all radio tracks to the new playlist
+          await addTracksToPlaylist(createdPlaylist.id, radioTracks);
+
+          // Set playback source to the new playlist
+          setPlaybackSource({
+            type: 'radio',
+            name: radioName,
+            path: `/playlist/${createdPlaylist.id}`,
+          });
+        }
+
         playTrack(radioTracks[0], radioTracks);
         toast({
           title: isIt ? 'Radio avviata' : 'Radio started',
           description: isIt
-            ? `${radioTracks.length} brani simili a "${track.title}"`
-            : `${radioTracks.length} tracks similar to "${track.title}"`,
+            ? `${radioTracks.length} brani simili a "${track.title}" salvati in una playlist`
+            : `${radioTracks.length} tracks similar to "${track.title}" saved as a playlist`,
         });
         onClose();
       } else {
