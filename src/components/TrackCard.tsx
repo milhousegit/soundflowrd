@@ -48,10 +48,11 @@ interface TrackCardProps {
   onCreatePlaylist?: () => void;
   onRemoveFromPlaylist?: (trackId: string) => void;
   playlistId?: string;
+  onPlay?: () => void;
 }
 
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
-  ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading, onCreatePlaylist, onRemoveFromPlaylist, playlistId }, ref) => {
+  ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading, onCreatePlaylist, onRemoveFromPlaylist, playlistId, onPlay }, ref) => {
     const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase } = usePlayer();
     const { profile, isAdmin } = useAuth();
     const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
@@ -199,9 +200,10 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       if (isCurrentTrack) {
         toggle();
       } else {
+        onPlay?.();
         playTrack(track, queue);
       }
-    }, [isMenuOpen, isCurrentTrack, toggle, playTrack, track, queue]);
+    }, [isMenuOpen, isCurrentTrack, toggle, playTrack, track, queue, onPlay]);
 
     // Handle copy ID
     const handleCopyId = (e: React.MouseEvent) => {

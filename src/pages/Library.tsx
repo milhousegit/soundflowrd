@@ -36,7 +36,7 @@ const Library: React.FC = () => {
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const { t, settings } = useSettings();
-  const { playTrack } = usePlayer();
+  const { playTrack, setPlaybackSource } = usePlayer();
   const { isAuthenticated, profile, isAdmin, simulateFreeUser } = useAuth();
   const { getFavoritesByType, isLoading } = useFavorites();
   const { playlists, isLoading: isPlaylistsLoading } = usePlaylists();
@@ -264,6 +264,7 @@ const Library: React.FC = () => {
                       track={track} 
                       queue={tracks}
                       index={index}
+                      onPlay={() => setPlaybackSource({ type: 'playlist', name: settings.language === 'it' ? 'Brani salvati' : 'Saved Songs', path: '/library' })}
                     />
                   ))}
                 </div>
