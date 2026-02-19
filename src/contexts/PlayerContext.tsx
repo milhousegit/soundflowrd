@@ -377,7 +377,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
   const [currentAudioSource, setCurrentAudioSource] = useState<AudioSource>(null);
-  const [playbackSource, setPlaybackSource] = useState<PlaybackSource>({ type: null, name: null, path: null });
+  const [playbackSource, setPlaybackSourceInternal] = useState<PlaybackSource>({ type: null, name: null, path: null });
+  const manualSourceRef = useRef(false);
+  
+  const setPlaybackSource = useCallback((source: PlaybackSource) => {
+    manualSourceRef.current = true;
+    setPlaybackSourceInternal(source);
+  }, []);
 
   const [isShuffled, setIsShuffled] = useState(false);
   const originalQueueRef = useRef<Track[]>([]);
@@ -1566,6 +1572,12 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const updateSourceForTrack = async () => {
       if (!state.currentTrack?.id || !user?.id) return;
       
+      // Skip auto-lookup if source was manually set (e.g. from Library, Home, Playlist page)
+      if (manualSourceRef.current) {
+        manualSourceRef.current = false;
+        return;
+      }
+      
       try {
         // Check if the track is in any user playlist
         const { data: playlistTrack } = await supabase
@@ -1577,7 +1589,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         
         if (playlistTrack && playlistTrack.playlists) {
           const pl = playlistTrack.playlists as any;
-          setPlaybackSource({
+          setPlaybackSourceInternal({
             type: 'playlist',
             name: pl.name || null,
             path: `/playlist/${pl.id}`,
@@ -1587,7 +1599,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         // If track has albumId, show album as source
         if (state.currentTrack.albumId) {
-          setPlaybackSource({
+          setPlaybackSourceInternal({
             type: 'album',
             name: state.currentTrack.album || null,
             path: `/album/${state.currentTrack.albumId}`,
@@ -1597,7 +1609,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         // Fallback: show artist as source
         if (state.currentTrack.artistId) {
-          setPlaybackSource({
+          setPlaybackSourceInternal({
             type: 'artist',
             name: state.currentTrack.artist || null,
             path: `/artist/${state.currentTrack.artistId}`,
