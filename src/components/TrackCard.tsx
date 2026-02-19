@@ -1,10 +1,11 @@
-import React, { forwardRef, useState, useCallback } from 'react';
+import React, { forwardRef, useState, useCallback, useRef } from 'react';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, Loader2, ListMusic, Plus, Download, HardDrive, Copy, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
+import TrackActionsModal from './TrackActionsModal';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useOfflineStorage } from '@/hooks/useOfflineStorage';
@@ -57,9 +58,12 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const { playlists, addTrackToPlaylist } = usePlaylists();
     const { saveTrackOffline, isTrackOffline } = useOfflineStorage();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [showTrackActionsModal, setShowTrackActionsModal] = useState(false);
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
     const [isDownloadingSingle, setIsDownloadingSingle] = useState(false);
     const isMobile = useIsMobile();
+    const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const longPressTriggeredRef = useRef(false);
     
     const isCurrentTrack = currentTrack?.id === track.id;
     const isSynced = propIsSynced !== undefined ? propIsSynced : hookIsSynced(track.id);
@@ -159,15 +163,39 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     };
 
     const handleContextMenu = useCallback((e: React.MouseEvent) => {
-      // Prevent default context menu on mobile to let Radix handle it
       if (isMobile) {
         e.preventDefault();
       }
     }, [isMobile]);
 
+    // Long press handlers for mobile → open TrackActionsModal
+    const handleTouchStartLongPress = useCallback((e: React.TouchEvent) => {
+      longPressTriggeredRef.current = false;
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTriggeredRef.current = true;
+        setShowTrackActionsModal(true);
+        // Vibrate for haptic feedback
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, 500);
+    }, []);
+
+    const handleTouchEndLongPress = useCallback(() => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }, []);
+
+    const handleTouchMoveLongPress = useCallback(() => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }, []);
+
     // Combined click handler
     const handleTapClick = useCallback(() => {
-      if (isMenuOpen) return;
+      if (isMenuOpen || longPressTriggeredRef.current) return;
       if (isCurrentTrack) {
         toggle();
       } else {
@@ -296,11 +324,15 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
         ref={ref}
         {...tap}
         onContextMenu={handleContextMenu}
+        {...(isMobile ? {
+          onTouchStart: handleTouchStartLongPress,
+          onTouchEnd: handleTouchEndLongPress,
+          onTouchMove: handleTouchMoveLongPress,
+        } : {})}
         className={cn(
           "group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200 touch-manipulation select-none",
           "hover:bg-secondary/80 active:scale-[0.99]",
           isCurrentTrack && "bg-secondary",
-          // Disable text selection on long press
           "-webkit-touch-callout-none"
         )}
         style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}
@@ -313,7 +345,6 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
           ) : (
             <Music className="w-4 h-4 text-muted-foreground" />
           )}
-          {/* Show loading overlay on cover for current track */}
           {isCurrentTrackLoading && (
             <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
               <Loader2 className="w-5 h-5 text-primary animate-spin" />
@@ -330,7 +361,6 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
             )}>
               {track.title}
             </p>
-            {/* Sync status icon */}
             {renderStatusIcon()}
           </div>
           {showArtist && (
@@ -338,9 +368,8 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
           )}
         </div>
 
-        {/* Actions container - Order: Favorite → More menu → Duration */}
+        {/* Actions container */}
         <div className="flex items-center gap-1">
-          {/* Favorite button - FIRST */}
           {showFavorite && (
             <FavoriteButton
               itemType="track"
@@ -351,7 +380,7 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
             />
           )}
 
-          {/* More menu - DESKTOP ONLY - SECOND */}
+          {/* More menu - DESKTOP ONLY */}
           {!isMobile && (
             <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -369,7 +398,6 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
             </DropdownMenu>
           )}
 
-          {/* Duration - LAST */}
           <span className="text-xs md:text-sm text-muted-foreground flex-shrink-0 min-w-[36px] text-right">
             {formatDuration(track.duration)}
           </span>
@@ -377,22 +405,37 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
       </div>
     );
 
-    // On mobile, wrap with ContextMenu for long-press
+    // On mobile, wrap with ContextMenu for long-press → use TrackActionsModal instead
     if (isMobile) {
       return (
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            {trackCardContent}
-          </ContextMenuTrigger>
-          <ContextMenuContent className="w-48 bg-popover z-[100]">
-            {renderMenuItems(true)}
-          </ContextMenuContent>
-        </ContextMenu>
+        <>
+          {trackCardContent}
+          <TrackActionsModal
+            isOpen={showTrackActionsModal}
+            onClose={() => setShowTrackActionsModal(false)}
+            track={track}
+            onOpenDebugModal={() => {}}
+            onAddToQueue={() => {
+              addToQueue([track]);
+              toast.success('Aggiunto alla coda');
+            }}
+            onRemoveFromPlaylist={onRemoveFromPlaylist ? () => onRemoveFromPlaylist(track.id) : undefined}
+          />
+        </>
       );
     }
 
-    // Desktop: just return the content
-    return trackCardContent;
+    // Desktop: just return the content (with ContextMenu for right-click)
+    return (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          {trackCardContent}
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-48 bg-popover z-[100]">
+          {renderMenuItems(true)}
+        </ContextMenuContent>
+      </ContextMenu>
+    );
   }
 );
 
