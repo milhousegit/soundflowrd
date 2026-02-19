@@ -1560,6 +1560,56 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       playedTrackIdsRef.current.add(state.currentTrack.id);
     }
   }, [state.currentTrack?.id]);
+
+  // Update playback source when track changes - look up which playlist/album contains it
+  useEffect(() => {
+    const updateSourceForTrack = async () => {
+      if (!state.currentTrack?.id || !user?.id) return;
+      
+      try {
+        // Check if the track is in any user playlist
+        const { data: playlistTrack } = await supabase
+          .from('playlist_tracks')
+          .select('playlist_id, playlists!inner(id, name)')
+          .eq('track_id', state.currentTrack.id)
+          .limit(1)
+          .maybeSingle();
+        
+        if (playlistTrack && playlistTrack.playlists) {
+          const pl = playlistTrack.playlists as any;
+          setPlaybackSource({
+            type: 'playlist',
+            name: pl.name || null,
+            path: `/playlist/${pl.id}`,
+          });
+          return;
+        }
+
+        // If track has albumId, show album as source
+        if (state.currentTrack.albumId) {
+          setPlaybackSource({
+            type: 'album',
+            name: state.currentTrack.album || null,
+            path: `/album/${state.currentTrack.albumId}`,
+          });
+          return;
+        }
+
+        // Fallback: show artist as source
+        if (state.currentTrack.artistId) {
+          setPlaybackSource({
+            type: 'artist',
+            name: state.currentTrack.artist || null,
+            path: `/artist/${state.currentTrack.artistId}`,
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to update playback source:', err);
+      }
+    };
+
+    updateSourceForTrack();
+  }, [state.currentTrack?.id, user?.id]);
   
   // Fetch similar tracks - mix of same artists from queue + related artists
   const fetchSimilarTracks = useCallback(async (currentTrack: Track): Promise<Track[]> => {
