@@ -289,10 +289,7 @@ const Player: React.FC = () => {
                 }}
                 className="w-10 hover:bg-transparent"
               >
-                <div className="relative">
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500/50 to-blue-500/50 blur-md animate-pulse scale-150" />
-                  <Mic2 className="w-5 h-5 relative z-10 text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.9)]" />
-                </div>
+              <Mic2 className="w-5 h-5 text-primary" />
               </Button>
             </div>
             <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2 max-w-[50%]">
