@@ -253,16 +253,6 @@ const Library: React.FC = () => {
                   <h2 className="text-2xl md:text-4xl font-bold text-foreground mb-1 md:mb-2">{t('savedSongs')}</h2>
                   <p className="text-sm md:text-base text-muted-foreground">{tracks.length} {t('tracks').toLowerCase()}</p>
                 </div>
-                {tracks.length > 0 && (
-                  <Button
-                    variant="player"
-                    size="player"
-                    className="ml-auto"
-                    onClick={() => playTrack(tracks[0], tracks)}
-                  >
-                    <Music className="w-6 h-6" />
-                  </Button>
-                )}
               </div>
 
               {/* Tracks List */}
