@@ -305,7 +305,6 @@ const Player: React.FC = () => {
                   className="text-sm text-muted-foreground hover:text-primary transition-colors truncate"
                 >
                   {playbackSource.name}
-                  {playbackSource.name}
                 </button>
               ) : (
                 <span className="text-sm text-muted-foreground">Now Playing</span>
