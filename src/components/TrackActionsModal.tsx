@@ -29,7 +29,7 @@ interface TrackActionsModalProps {
   isOpen: boolean;
   onClose: () => void;
   track: Track;
-  onOpenDebugModal: () => void;
+  onOpenDebugModal?: () => void;
   onDownload?: () => void;
   isDownloading?: boolean;
   canDownload?: boolean;
@@ -164,7 +164,7 @@ const TrackActionsModal: React.FC<TrackActionsModalProps> = ({
 
   const handleSettings = () => {
     onClose();
-    onOpenDebugModal();
+    onOpenDebugModal?.();
   };
 
   const handleDownload = () => {
