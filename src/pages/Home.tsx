@@ -55,7 +55,7 @@ const Home: React.FC = () => {
   const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
   
   const { settings, t } = useSettings();
-  const { currentTrack, isPlaying, playTrack, toggle, addToQueue } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, toggle, addToQueue, setPlaybackSource } = usePlayer();
   const { favorites, getFavoritesByType } = useFavorites();
   const { playlists, isLoading: isLoadingPlaylists, addTrackToPlaylist } = usePlaylists();
   const { recentTracks, isLoading: isLoadingRecent } = useRecentlyPlayed();
@@ -348,7 +348,14 @@ const Home: React.FC = () => {
 
               const trackContent = (
                 <TapArea
-                  onTap={() => (isCurrentTrack ? toggle() : playTrack(track, displayRecent))}
+                  onTap={() => {
+                    if (isCurrentTrack) {
+                      toggle();
+                    } else {
+                      setPlaybackSource({ type: 'playlist', name: settings.language === 'it' ? 'Ascoltati di recente' : 'Recently Played', path: '/' });
+                      playTrack(track, displayRecent);
+                    }
+                  }}
                   className="group flex items-center gap-2 md:gap-4 p-2 md:p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-all cursor-pointer touch-manipulation"
                 >
                   <div className="w-10 h-10 md:w-16 md:h-16 rounded overflow-hidden flex-shrink-0 bg-muted relative">
