@@ -11,7 +11,7 @@ import FavoriteButton from '@/components/FavoriteButton';
 import AdminArtistEditor from '@/components/AdminArtistEditor';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useSettings } from '@/contexts/SettingsContext';
-import { usePlayer } from '@/contexts/PlayerContext';
+import { usePlayer, type PlaybackSource } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getArtist, getArtistPlaylists, DeezerPlaylist } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,7 +28,7 @@ interface HiddenItem {
 const Artist: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { playTrack } = usePlayer();
+  const { playTrack, setPlaybackSource } = usePlayer();
   const { t } = useSettings();
   const [artist, setArtist] = useState<ArtistType | null>(null);
   const [releases, setReleases] = useState<Album[]>([]);
@@ -163,6 +163,7 @@ const Artist: React.FC = () => {
 
   const handlePlayAll = () => {
     if (visibleTopTracks.length > 0) {
+      setPlaybackSource({ type: 'artist', name: artist?.name || null, path: `/artist/${id}` });
       playTrack(visibleTopTracks[0], visibleTopTracks);
     }
   };
@@ -170,6 +171,7 @@ const Artist: React.FC = () => {
   const handleShuffle = () => {
     if (visibleTopTracks.length > 0) {
       const shuffled = [...visibleTopTracks].sort(() => Math.random() - 0.5);
+      setPlaybackSource({ type: 'artist', name: artist?.name || null, path: `/artist/${id}` });
       playTrack(shuffled[0], shuffled);
     }
   };

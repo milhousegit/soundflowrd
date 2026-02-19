@@ -83,6 +83,7 @@ const Player: React.FC = () => {
     lastSearchQuery,
     currentAudioSource,
     updateTrackMetadata,
+    playbackSource,
   } = usePlayer();
 
   const { t, settings } = useSettings();
@@ -294,9 +295,24 @@ const Player: React.FC = () => {
                 </div>
               </Button>
             </div>
-            <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2">
-              {isSearchingStreams && <Loader2 className="w-4 h-4 text-primary animate-spin" />}
-              <span className="text-sm text-muted-foreground">Now Playing</span>
+            <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2 max-w-[50%]">
+              {isSearchingStreams && <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />}
+              {playbackSource.type && playbackSource.name ? (
+                <button
+                  onClick={() => {
+                    if (playbackSource.path) {
+                      navigate(playbackSource.path);
+                      setIsExpanded(false);
+                    }
+                  }}
+                  className="text-sm text-muted-foreground hover:text-primary transition-colors truncate"
+                >
+                  {playbackSource.type === 'playlist' ? '📋' : playbackSource.type === 'album' ? '💿' : playbackSource.type === 'artist' ? '🎤' : playbackSource.type === 'radio' ? '📻' : '🎵'}{' '}
+                  {playbackSource.name}
+                </button>
+              ) : (
+                <span className="text-sm text-muted-foreground">Now Playing</span>
+              )}
             </div>
             <div className="flex items-center">
               <Button

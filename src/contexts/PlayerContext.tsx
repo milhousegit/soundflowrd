@@ -76,6 +76,12 @@ export interface DebugLogEntry {
 export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading' | 'unavailable';
 export type AudioSource = 'squidwtf' | 'monochrome' | 'real-debrid' | 'offline' | null;
 
+export interface PlaybackSource {
+  type: 'playlist' | 'album' | 'artist' | 'radio' | 'search' | 'queue' | null;
+  name: string | null;
+  path: string | null; // e.g. /playlist/123, /album/456, /artist/789
+}
+
 interface PlayerContextType extends PlayerState {
   play: (track?: Track) => void;
   pause: () => void;
@@ -116,6 +122,9 @@ interface PlayerContextType extends PlayerState {
   toggleShuffle: () => void;
   
   currentAudioSource: AudioSource;
+  
+  playbackSource: PlaybackSource;
+  setPlaybackSource: (source: PlaybackSource) => void;
   
   updateTrackMetadata: (oldTrackId: string, newData: { id: string; title: string; artist: string; album?: string; coverUrl?: string; duration?: number }) => void;
 }
@@ -368,6 +377,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null);
   const [currentAudioSource, setCurrentAudioSource] = useState<AudioSource>(null);
+  const [playbackSource, setPlaybackSource] = useState<PlaybackSource>({ type: null, name: null, path: null });
 
   const [isShuffled, setIsShuffled] = useState(false);
   const originalQueueRef = useRef<Track[]>([]);
@@ -2031,6 +2041,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         isShuffled,
         toggleShuffle,
         currentAudioSource,
+        playbackSource,
+        setPlaybackSource,
         updateTrackMetadata,
       }}
     >

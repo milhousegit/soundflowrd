@@ -8,7 +8,7 @@ import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import CommentSection from '@/components/social/CommentSection';
 import { useSettings } from '@/contexts/SettingsContext';
-import { usePlayer } from '@/contexts/PlayerContext';
+import { usePlayer, type PlaybackSource } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAlbum } from '@/lib/deezer';
 import { mockAlbums, mockTracks } from '@/data/mockData';
@@ -21,7 +21,7 @@ import { isPast } from 'date-fns';
 const Album: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { playTrack } = usePlayer();
+  const { playTrack, setPlaybackSource } = usePlayer();
   const { t, settings } = useSettings();
   const { profile, isAdmin } = useAuth();
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
@@ -108,6 +108,7 @@ const Album: React.FC = () => {
 
   const handlePlayAll = () => {
     if (displayTracks.length > 0) {
+      setPlaybackSource({ type: 'album', name: album?.title || null, path: `/album/${id}` });
       playTrack(displayTracks[0], displayTracks);
     }
   };
