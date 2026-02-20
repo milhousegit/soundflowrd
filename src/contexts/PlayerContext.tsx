@@ -1490,7 +1490,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, []);
 
   const addToQueue = useCallback((tracks: Track[]) => {
-    setState((prev) => ({ ...prev, queue: [...prev.queue, ...tracks] }));
+    setState((prev) => {
+      const insertAt = prev.queueIndex + 1;
+      const newQueue = [
+        ...prev.queue.slice(0, insertAt),
+        ...tracks,
+        ...prev.queue.slice(insertAt),
+      ];
+      return { ...prev, queue: newQueue };
+    });
   }, []);
 
   const clearQueue = useCallback(() => {
