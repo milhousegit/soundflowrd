@@ -282,18 +282,32 @@ serve(async (req) => {
 
       console.log(`Syncing ${config.country_code}: Spotify ${spotifyId} -> SoundFlow ${sfId}`);
 
-      // 1. Get Spotify tracks
-      const token = await getAnonymousToken();
-      if (!token) {
-        results.push({ country: config.country_code, status: 'error', reason: 'no spotify token' });
+      // 1. Get Spotify tracks - use the spotify-import function
+      console.log(`Calling spotify-import for ${playlist.spotify_url}`);
+      const importRes = await fetch(`${supabaseUrl}/functions/v1/spotify-import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({ url: playlist.spotify_url }),
+      });
+
+      if (!importRes.ok) {
+        const err = await importRes.text();
+        console.error(`spotify-import failed: ${importRes.status} ${err}`);
+        results.push({ country: config.country_code, status: 'error', reason: `import failed: ${importRes.status}` });
         continue;
       }
 
-      const spotifyTracks = await fetchPlaylistTracks(spotifyId, token);
-      if (spotifyTracks.length === 0) {
-        results.push({ country: config.country_code, status: 'error', reason: 'no spotify tracks fetched' });
+      const importData = await importRes.json();
+      if (importData.error || !importData.tracks?.length) {
+        results.push({ country: config.country_code, status: 'error', reason: importData.error || 'no tracks' });
         continue;
       }
+
+      const spotifyTracks = importData.tracks;
+      console.log(`Got ${spotifyTracks.length} tracks from spotify-import for ${config.country_code}`);
 
       console.log(`Got ${spotifyTracks.length} Spotify tracks for ${config.country_code}`);
 
