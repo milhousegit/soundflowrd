@@ -37,10 +37,10 @@ const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
   return (
     <button
       onClick={handleClick}
-      className="flex-shrink-0 w-44 md:w-auto group text-left touch-manipulation"
+      className="group cursor-pointer touch-manipulation text-left"
     >
       {/* Cover with branded overlay */}
-      <div className="relative aspect-square rounded-2xl overflow-hidden mb-2 md:mb-3 shadow-lg">
+      <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted shadow-lg">
         <BrandedPlaylistCover
           type="daily-mix"
           backgroundUrl={mix.cover_url ? hdCover(mix.cover_url) : undefined}
