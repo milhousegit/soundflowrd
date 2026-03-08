@@ -34,6 +34,7 @@ import {
 import NotificationsDropdown from '@/components/NotificationsDropdown';
 import DailyMixSection from '@/components/DailyMixSection';
 import { useGeoLanguage } from '@/hooks/useGeoLanguage';
+import ChartPlaylistCover from '@/components/ChartPlaylistCover';
 interface ChartConfig {
   id: string;
   country_code: string;
