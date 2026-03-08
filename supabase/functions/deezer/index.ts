@@ -540,7 +540,7 @@ serve(async (req) => {
             album: track.album?.title || 'Unknown Album',
             albumId: String(track.album?.id || ''),
             duration: track.duration || 0,
-            coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+            coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
             previewUrl: track.preview || undefined,
             position: index + 1,
           }));
