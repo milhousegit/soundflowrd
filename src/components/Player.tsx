@@ -331,7 +331,7 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          <div className="px-8 pt-6 pb-2 py-[63px]">
+          <div className="px-8 pt-6 pb-2 py-[65px]">
             <div
             className="w-full aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none cursor-pointer"
             onClick={handleCoverTripleTap}>
