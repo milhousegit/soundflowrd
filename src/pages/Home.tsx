@@ -135,6 +135,7 @@ const RecentTrackItem: React.FC<{
 };
 
 const Home: React.FC = () => {
+  const { country: geoCountry } = useGeoLanguage();
   const [newReleases, setNewReleases] = useState<Album[]>([]);
   const [trendingAlbums, setTrendingAlbums] = useState<Album[]>([]);
   const [isLoadingTrending, setIsLoadingTrending] = useState(true);
