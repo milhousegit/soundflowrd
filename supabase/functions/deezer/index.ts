@@ -156,7 +156,7 @@ serve(async (req) => {
             title: album.title,
             artist: artistData.name,
             artistId: String(artistData.id),
-            coverUrl: album.cover_medium || album.cover_big || album.cover || undefined,
+            coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
             releaseDate: album.release_date || undefined,
             trackCount: album.nb_tracks || undefined,
             recordType: album.record_type || 'album',
