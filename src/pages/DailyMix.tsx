@@ -136,35 +136,36 @@ const DailyMixPage: React.FC = () => {
         {/* Action buttons */}
         <div className="flex items-center justify-center gap-3 mt-5">
           <Button
+            variant="player"
+            size="player"
             onClick={handlePlayAll}
-            size="sm"
-            className="rounded-full gap-2 px-5"
+            disabled={mix.tracks.length === 0}
           >
-            <Play className="w-4 h-4 fill-current" />
-            {settings.language === 'it' ? 'Riproduci' : 'Play'}
+            <Play className="w-5 md:w-6 h-5 md:h-6 ml-0.5" />
           </Button>
+
           <Button
+            variant="ghost"
+            size="icon"
             onClick={handleShuffle}
-            variant="outline"
-            size="sm"
-            className="rounded-full gap-2 px-5 border-white/30 text-white hover:bg-white/10"
+            disabled={mix.tracks.length === 0}
+            className="w-12 h-12"
           >
-            <Shuffle className="w-4 h-4" />
-            Shuffle
+            <Shuffle className="w-5 h-5 text-muted-foreground" />
           </Button>
+
           <Button
+            variant="ghost"
+            size="icon"
             onClick={handleSaveAsPlaylist}
-            variant="outline"
-            size="sm"
             disabled={isSaving}
-            className="rounded-full gap-2 px-5 border-white/30 text-white hover:bg-white/10"
+            className="w-12 h-12"
           >
             {isSaving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             ) : (
-              <ListPlus className="w-4 h-4" />
+              <ListPlus className="w-5 h-5 text-muted-foreground" />
             )}
-            {settings.language === 'it' ? 'Salva' : 'Save'}
           </Button>
         </div>
       </div>
