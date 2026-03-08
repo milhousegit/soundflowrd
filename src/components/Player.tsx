@@ -470,45 +470,30 @@ const Player: React.FC = () => {
             <FavoriteButton itemType="track" item={currentTrack} size="md" variant="ghost" className="h-11 w-11" />
           </div>
 
-          {/* Queue button */}
-          <div className="px-6 pt-3">
-            <button
-              onClick={() => setShowQueueModal(true)}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-secondary/30 hover:bg-secondary/50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <ListMusic className="w-5 h-5 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">
-                  {settings.language === 'it' ? 'Coda di riproduzione' : 'Playback queue'}
-                </span>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
-          </div>
-
-          {/* Lyrics card */}
+          {/* Lyrics card - hidden below fold, scroll to discover */}
           <div 
-            className="px-6 pt-3 pb-safe"
+            className="px-6 pt-6 pb-safe"
             style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
           >
-            <button
-              onClick={() => {
-                if (contextIsAdmin || isPremiumActive) {
-                  setShowLyricsModal(true);
-                } else {
-                  setShowPremiumModal(true);
-                }
-              }}
-              className="w-full rounded-2xl border border-border bg-secondary/40 p-4 text-left hover:bg-secondary/60 transition-colors relative overflow-hidden"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Lyrics</span>
-                <Sparkles className="w-5 h-5 text-muted-foreground" />
-              </div>
-              <p className="text-base font-medium text-foreground/90 line-clamp-2">
-                {settings.language === 'it' ? 'Tocca per vedere il testo' : 'Tap to view lyrics'}
-              </p>
-            </button>
+            {(contextIsAdmin || isPremiumActive) ? (
+              <InlineLyricsCard 
+                track={currentTrack} 
+                onTap={() => setShowLyricsModal(true)} 
+              />
+            ) : (
+              <button
+                onClick={() => setShowPremiumModal(true)}
+                className="w-full rounded-2xl border border-border bg-secondary/40 p-4 text-left md:hover:bg-secondary/60 transition-colors relative overflow-hidden min-h-[140px]"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Lyrics</span>
+                  <Sparkles className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {settings.language === 'it' ? 'Sblocca i testi con Premium' : 'Unlock lyrics with Premium'}
+                </p>
+              </button>
+            )}
           </div>
         </div>
       )}
