@@ -65,6 +65,7 @@ const PlaylistPage: React.FC = () => {
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [activeTab, setActiveTab] = useState<'tracks' | 'comments'>('tracks');
   const [commentsCount, setCommentsCount] = useState(0);
+  const [chartCountryCode, setChartCountryCode] = useState<string | null>(null);
   const coverInputRef = React.useRef<HTMLInputElement>(null);
   
   // Check if user can download (premium or admin)
