@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/context-menu';
 import NotificationsDropdown from '@/components/NotificationsDropdown';
 import DailyMixSection from '@/components/DailyMixSection';
+import { useGeoLanguage } from '@/hooks/useGeoLanguage';
 interface ChartConfig {
   id: string;
   country_code: string;
