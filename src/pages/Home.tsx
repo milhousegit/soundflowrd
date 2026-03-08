@@ -141,7 +141,6 @@ const Home: React.FC = () => {
   const [popularArtists, setPopularArtists] = useState<Artist[]>([]);
   const [chartConfigs, setChartConfigs] = useState<ChartConfig[]>([]);
   const [chartDisplayData, setChartDisplayData] = useState<Record<string, ChartDisplayData>>({});
-  const [isLoadingReleases, setIsLoadingReleases] = useState(true);
   const [isLoadingArtists, setIsLoadingArtists] = useState(true);
   const [isLoadingCharts, setIsLoadingCharts] = useState(true);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
