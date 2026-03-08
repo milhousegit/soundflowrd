@@ -32,6 +32,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import NotificationsDropdown from '@/components/NotificationsDropdown';
+import DailyMixSection from '@/components/DailyMixSection';
 interface ChartConfig {
   id: string;
   country_code: string;
