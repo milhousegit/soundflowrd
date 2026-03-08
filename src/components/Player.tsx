@@ -470,12 +470,10 @@ const Player: React.FC = () => {
             <FavoriteButton itemType="track" item={currentTrack} size="md" variant="ghost" className="h-11 w-11" />
           </div>
 
-          {/* Spacer to push lyrics below the fold */}
-          <div style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }} />
 
-          {/* Lyrics card - hidden below fold, scroll to discover */}
+          {/* Lyrics card - scroll to discover */}
           <div 
-            className="px-6 pt-6 pb-safe"
+            className="px-6 pt-8 pb-safe"
             style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
           >
             {(contextIsAdmin || isPremiumActive) ? (
