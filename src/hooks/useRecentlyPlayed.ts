@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Track } from '@/types/music';
+import { hdCover } from '@/lib/utils';
 
 const RECENTLY_PLAYED_KEY = 'recentlyPlayed';
 const MAX_RECENT_TRACKS = 50;
