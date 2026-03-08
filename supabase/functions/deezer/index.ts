@@ -109,7 +109,7 @@ serve(async (req) => {
             title: album.title,
             artist: album.artist?.name || 'Unknown Artist',
             artistId: String(album.artist?.id || ''),
-            coverUrl: album.cover_medium || album.cover_big || album.cover || undefined,
+            coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
             trackCount: album.nb_tracks || undefined,
             releaseDate: detail?.release_date || undefined,
             recordType: detail?.record_type || album.record_type || undefined,
