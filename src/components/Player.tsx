@@ -33,6 +33,9 @@ import {
   SkipForward,
   Volume2,
   VolumeX,
+  Tv,
+  Sparkles,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
