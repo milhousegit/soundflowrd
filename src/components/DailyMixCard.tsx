@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { DailyMix } from '@/hooks/useDailyMixes';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { hdCover } from '@/lib/utils';
