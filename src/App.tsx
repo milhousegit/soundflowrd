@@ -32,6 +32,7 @@ import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
 import DeezerPlaylist from "@/pages/DeezerPlaylist";
+import DailyMix from "@/pages/DailyMix";
 import NotFound from "./pages/NotFound";
 import TV from "./pages/TV";
 import { MobileRemotePage } from "./pages/TV";
