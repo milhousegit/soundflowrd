@@ -32,6 +32,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import NotificationsDropdown from '@/components/NotificationsDropdown';
+import DailyMixSection from '@/components/DailyMixSection';
 interface ChartConfig {
   id: string;
   country_code: string;
@@ -439,6 +440,9 @@ const Home: React.FC = () => {
           </div>
         </section>
       )}
+
+      {/* Daily Mix */}
+      <DailyMixSection />
 
       {/* Playlists - Horizontal scroll on mobile */}
       {homeDisplayOptions.showPlaylists && (

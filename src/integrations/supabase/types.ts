@@ -346,6 +346,48 @@ export type Database = {
           },
         ]
       }
+      daily_mixes: {
+        Row: {
+          cover_url: string | null
+          dominant_color: string | null
+          expires_at: string
+          generated_at: string
+          genre_tags: string[]
+          id: string
+          mix_index: number
+          mix_label: string
+          top_artists: string[]
+          tracks: Json
+          user_id: string
+        }
+        Insert: {
+          cover_url?: string | null
+          dominant_color?: string | null
+          expires_at?: string
+          generated_at?: string
+          genre_tags?: string[]
+          id?: string
+          mix_index?: number
+          mix_label?: string
+          top_artists?: string[]
+          tracks?: Json
+          user_id: string
+        }
+        Update: {
+          cover_url?: string | null
+          dominant_color?: string | null
+          expires_at?: string
+          generated_at?: string
+          genre_tags?: string[]
+          id?: string
+          mix_index?: number
+          mix_label?: string
+          top_artists?: string[]
+          tracks?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       deezer_playlist_covers: {
         Row: {
           cover_url: string
