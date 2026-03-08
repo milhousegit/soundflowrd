@@ -574,11 +574,38 @@ const Home: React.FC = () => {
         onOpenChange={setShowCreatePlaylist}
       />
 
-      {/* New Releases - ordered by popularity in selected language */}
+      {/* Tendenze - Trending chart albums */}
+      <section>
+        <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
+          <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+          <h2 className="text-lg md:text-2xl font-bold text-foreground">
+            {settings.language === 'it' ? 'Tendenze' : 'Trending'}
+          </h2>
+        </div>
+        {isLoadingTrending ? (
+          <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex-shrink-0 w-32 md:w-auto">
+                <AlbumCardSkeleton />
+              </div>
+            ))}
+          </div>
+        ) : trendingAlbums.length > 0 ? (
+          <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
+            {trendingAlbums.map((album) => (
+              <div key={album.id} className="flex-shrink-0 w-32 md:w-auto">
+                <AlbumCard album={album} />
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      {/* New Releases - from favorite artists */}
       {homeDisplayOptions.showNewReleases && (
         <section>
           <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
-            <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+            <Music className="w-5 h-5 md:w-6 md:h-6 text-primary" />
             <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('newReleases')}</h2>
           </div>
           {isLoadingReleases ? (
