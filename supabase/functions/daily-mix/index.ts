@@ -225,12 +225,14 @@ serve(async (req) => {
       await supabase.from('daily_mixes').delete().eq('user_id', user.id);
 
       // 1. Fetch user's top artists from stats
-      const { data: artistStats } = await supabase
+      const { data: rawArtistStats } = await supabase
         .from('user_artist_stats')
         .select('artist_id, artist_name, total_plays, artist_image_url')
         .eq('user_id', user.id)
         .order('total_plays', { ascending: false })
         .limit(30);
+
+      const artistStats: { artist_id: string; artist_name: string; total_plays: number; artist_image_url: string | null }[] = [...(rawArtistStats || [])];
 
       if (!artistStats || artistStats.length === 0) {
         // Try recently_played as fallback
