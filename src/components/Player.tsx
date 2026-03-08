@@ -11,6 +11,7 @@ import FavoriteButton from './FavoriteButton';
 import LyricsModal from './LyricsModal';
 import AlwaysOnDisplay from './AlwaysOnDisplay';
 import TrackActionsModal from './TrackActionsModal';
+import InlineLyricsCard from './InlineLyricsCard';
 import { useToast } from '@/hooks/use-toast';
 import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 import { isPast } from 'date-fns';
