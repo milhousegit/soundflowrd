@@ -124,7 +124,7 @@ const InlineLyricsCard: React.FC<InlineLyricsCardProps> = ({ track, onTap }) => 
     >
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Lyrics</span>
-        <Sparkles className="w-5 h-5 text-muted-foreground" />
+        <Maximize2 className="w-5 h-5 text-muted-foreground" />
       </div>
 
       {isLoading ? (
