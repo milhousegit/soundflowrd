@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Maximize2, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
@@ -124,7 +124,7 @@ const InlineLyricsCard: React.FC<InlineLyricsCardProps> = ({ track, onTap }) => 
     >
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Lyrics</span>
-        <Sparkles className="w-5 h-5 text-muted-foreground" />
+        <Maximize2 className="w-5 h-5 text-muted-foreground" />
       </div>
 
       {isLoading ? (

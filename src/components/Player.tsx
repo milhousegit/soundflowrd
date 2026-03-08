@@ -35,7 +35,7 @@ import {
   Volume2,
   VolumeX,
   Tv,
-  Sparkles,
+   Maximize2,
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -487,7 +487,7 @@ const Player: React.FC = () => {
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Lyrics</span>
-                  <Sparkles className="w-5 h-5 text-muted-foreground" />
+                  <Maximize2 className="w-5 h-5 text-muted-foreground" />
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {settings.language === 'it' ? 'Sblocca i testi con Premium' : 'Unlock lyrics with Premium'}
