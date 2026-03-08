@@ -226,7 +226,7 @@ serve(async (req) => {
             album: data.title,
             albumId: String(data.id),
             duration: track.duration || 0,
-            coverUrl: data.cover_medium || data.cover || undefined,
+            coverUrl: data.cover_big || data.cover_medium || data.cover || undefined,
             previewUrl: track.preview || undefined,
             trackNumber: index + 1,
           })),
