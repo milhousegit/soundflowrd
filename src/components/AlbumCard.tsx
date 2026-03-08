@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import FavoriteButton from './FavoriteButton';
 import { useTap } from '@/hooks/useTap';
 import { hdCover } from '@/lib/utils';
-import { useTap } from '@/hooks/useTap';
 
 interface AlbumCardProps {
   album: Album;
