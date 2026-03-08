@@ -241,6 +241,23 @@ const Home: React.FC = () => {
     fetchNewReleases();
   }, [favorites.length]);
 
+  // Fetch trending chart albums
+  useEffect(() => {
+    const fetchTrending = async () => {
+      setIsLoadingTrending(true);
+      try {
+        const chart = await getTrendingChart();
+        setTrendingAlbums(chart.albums.slice(0, 12));
+      } catch (error) {
+        console.error('Failed to fetch trending:', error);
+        setTrendingAlbums([]);
+      } finally {
+        setIsLoadingTrending(false);
+      }
+    };
+    fetchTrending();
+  }, []);
+
   useEffect(() => {
     const fetchArtistsForYou = async () => {
       setIsLoadingArtists(true);
