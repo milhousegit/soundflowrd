@@ -69,7 +69,9 @@ const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
         </div>
 
         {/* Play button on hover */}
-        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          onClick={handlePlay}
+        >
           <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-xl">
             <Play className="w-5 h-5 text-primary-foreground ml-0.5" />
           </div>
