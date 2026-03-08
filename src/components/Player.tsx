@@ -35,7 +35,7 @@ import {
   Volume2,
   VolumeX,
   Tv,
-  Sparkles,
+   Maximize2,
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
