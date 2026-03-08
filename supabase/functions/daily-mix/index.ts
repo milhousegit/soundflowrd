@@ -406,11 +406,18 @@ serve(async (req) => {
         });
       }
 
+      // Filter out empty mixes and re-index
+      const validMixes = mixes
+        .filter(m => Array.isArray(m.tracks) && m.tracks.length > 0)
+        .map((m, idx) => ({ ...m, mix_index: idx, mix_label: `Daily Mix ${idx + 1}` }));
+
+      console.log(`Valid mixes: ${validMixes.length} out of ${mixes.length} generated`);
+
       // Save to DB
-      if (mixes.length > 0) {
+      if (validMixes.length > 0) {
         const { error: insertError } = await supabase
           .from('daily_mixes')
-          .insert(mixes);
+          .insert(validMixes);
 
         if (insertError) {
           console.error('Error saving mixes:', insertError);
