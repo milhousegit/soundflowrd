@@ -331,7 +331,7 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          <div className="px-8 pt-4 pb-2">
+          <div className="px-8 pt-6 pb-2">
             <div 
               className="w-full aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none cursor-pointer"
               onClick={handleCoverTripleTap}
@@ -389,7 +389,7 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          <div className="px-8 pt-4 text-center">
+          <div className="px-8 pt-6 text-center">
             <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <button onClick={handleNavigateToArtist} className="hover:text-primary hover:underline transition-colors truncate">
@@ -426,7 +426,7 @@ const Player: React.FC = () => {
           </div>
 
           <div 
-            className="px-8 py-4"
+            className="px-8 pt-6 pb-2"
             onTouchStart={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
@@ -439,7 +439,7 @@ const Player: React.FC = () => {
           </div>
 
           <div
-            className="flex items-center justify-between px-6 pb-4"
+            className="flex items-center justify-between px-6 pt-2 pb-4"
           >
             <Button
               variant="ghost"
