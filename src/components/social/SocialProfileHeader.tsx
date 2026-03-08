@@ -314,83 +314,100 @@ const SocialProfileHeader: React.FC<SocialProfileHeaderProps> = ({ userId, onSet
         </div>
       </div>
 
-      {/* Edit modal */}
-      <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>
-              {settings.language === 'it' ? 'Modifica profilo' : 'Edit profile'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Avatar change in edit modal */}
-            <div className="flex flex-col items-center">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="relative w-20 h-20 rounded-full bg-muted overflow-hidden ring-2 ring-border group"
-              >
-                {profile.avatar_url ? (
-                  <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <User className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  {isUploading ? (
-                    <Loader2 className="w-5 h-5 text-white animate-spin" />
-                  ) : (
-                    <Camera className="w-5 h-5 text-white" />
-                  )}
-                </div>
-              </button>
-              <p className="text-xs text-muted-foreground mt-2">
-                {settings.language === 'it' ? 'Tocca per cambiare' : 'Tap to change'}
-              </p>
+      {/* Edit modal - bottom sheet style */}
+      {isEditing && (
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsEditing(false)}
+          />
+          <div className="relative w-full md:w-[480px] max-h-[85vh] bg-card rounded-t-2xl md:rounded-2xl shadow-xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
+            {/* Handle bar for mobile */}
+            <div className="flex justify-center pt-3 pb-1 md:hidden">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+            
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+              <h2 className="text-lg font-semibold text-foreground">
+                {settings.language === 'it' ? 'Modifica profilo' : 'Edit profile'}
+              </h2>
+              <Button variant="ghost" size="icon" onClick={() => setIsEditing(false)}>
+                <X className="w-5 h-5" />
+              </Button>
             </div>
 
-            <div>
-              <label className="text-sm font-medium">
-                {settings.language === 'it' ? 'Nome visualizzato' : 'Display name'}
-              </label>
-              <Input
-                value={editForm.display_name}
-                onChange={(e) => setEditForm(prev => ({ ...prev, display_name: e.target.value }))}
-                placeholder="Il tuo nome"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Bio</label>
-              <Textarea
-                value={editForm.bio}
-                onChange={(e) => setEditForm(prev => ({ ...prev, bio: e.target.value }))}
-                placeholder={settings.language === 'it' ? 'Scrivi qualcosa su di te...' : 'Write something about yourself...'}
-                maxLength={200}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">
-                {settings.language === 'it' ? 'Profilo privato' : 'Private profile'}
-              </label>
-              <Switch
-                checked={editForm.is_private}
-                onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, is_private: checked }))}
-              />
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" onClick={() => setIsEditing(false)} className="flex-1">
-                {settings.language === 'it' ? 'Annulla' : 'Cancel'}
-              </Button>
-              <Button onClick={handleSave} disabled={isUpdating} className="flex-1">
-                {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : (
-                  settings.language === 'it' ? 'Salva' : 'Save'
-                )}
-              </Button>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Avatar change */}
+              <div className="flex flex-col items-center">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="relative w-20 h-20 rounded-full bg-muted overflow-hidden ring-2 ring-border group"
+                >
+                  {profile.avatar_url ? (
+                    <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <User className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    {isUploading ? (
+                      <Loader2 className="w-5 h-5 text-white animate-spin" />
+                    ) : (
+                      <Camera className="w-5 h-5 text-white" />
+                    )}
+                  </div>
+                </button>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {settings.language === 'it' ? 'Tocca per cambiare' : 'Tap to change'}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">
+                  {settings.language === 'it' ? 'Nome visualizzato' : 'Display name'}
+                </label>
+                <Input
+                  value={editForm.display_name}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, display_name: e.target.value }))}
+                  placeholder="Il tuo nome"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Bio</label>
+                <Textarea
+                  value={editForm.bio}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, bio: e.target.value }))}
+                  placeholder={settings.language === 'it' ? 'Scrivi qualcosa su di te...' : 'Write something about yourself...'}
+                  maxLength={200}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">
+                  {settings.language === 'it' ? 'Profilo privato' : 'Private profile'}
+                </label>
+                <Switch
+                  checked={editForm.is_private}
+                  onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, is_private: checked }))}
+                />
+              </div>
+              <div className="flex gap-2 pt-2 pb-4">
+                <Button variant="outline" onClick={() => setIsEditing(false)} className="flex-1">
+                  {settings.language === 'it' ? 'Annulla' : 'Cancel'}
+                </Button>
+                <Button onClick={handleSave} disabled={isUpdating} className="flex-1">
+                  {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                    settings.language === 'it' ? 'Salva' : 'Save'
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
       {/* Bio track search modal */}
       <Dialog open={showBioTrackSearch} onOpenChange={setShowBioTrackSearch}>
