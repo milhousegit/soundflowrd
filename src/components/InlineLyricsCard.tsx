@@ -142,7 +142,7 @@ const InlineLyricsCard: React.FC<InlineLyricsCardProps> = ({ track, onTap }) => 
               className={cn(
                 "text-sm transition-all duration-300",
                 index === currentLineIndex
-                  ? "text-foreground font-semibold text-base"
+                  ? "text-foreground font-semibold"
                   : index < currentLineIndex
                   ? "text-muted-foreground/50"
                   : "text-muted-foreground/70"
