@@ -426,7 +426,7 @@ const Player: React.FC = () => {
           </div>
 
           <div 
-            className="px-8 py-4"
+            className="px-8 pt-6 pb-2"
             onTouchStart={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
