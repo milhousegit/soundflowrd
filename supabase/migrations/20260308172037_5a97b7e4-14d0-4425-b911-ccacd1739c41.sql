@@ -1,0 +1,1 @@
+TRUNCATE TABLE home_content_cache;
