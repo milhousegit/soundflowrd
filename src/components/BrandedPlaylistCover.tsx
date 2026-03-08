@@ -7,48 +7,48 @@ interface BrandedPlaylistCoverProps {
   backgroundUrl?: string | null;
   /** Label shown on the cover */
   label?: string;
-  /** Gradient colors as [color1, color2] */
-  gradientColors?: [string, string];
+  /** Sub-label (genre / artist info) */
+  subtitle?: string;
   className?: string;
 }
-
-const TYPE_DEFAULTS: Record<string, [string, string]> = {
-  radio: ['#0D9488', '#06B6D4'],
-  'daily-mix': ['#6366F1', '#EC4899'],
-};
 
 const BrandedPlaylistCover: React.FC<BrandedPlaylistCoverProps> = ({
   type,
   backgroundUrl,
   label,
-  gradientColors,
+  subtitle,
   className = '',
 }) => {
-  const [c1, c2] = gradientColors || TYPE_DEFAULTS[type] || TYPE_DEFAULTS['daily-mix'];
-
   return (
     <div
-      className={`relative w-full h-full overflow-hidden ${className}`}
-      style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
+      className={`relative w-full h-full overflow-hidden bg-background ${className}`}
     >
-      {/* Background image - bright, no darkening */}
+      {/* Background image */}
       {backgroundUrl && (
         <img
           src={backgroundUrl}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-50"
+          className="absolute inset-0 w-full h-full object-cover"
         />
       )}
 
-      {/* Logo silhouette - bottom right, subtle watermark */}
-      <div className="absolute bottom-2 right-2 w-10 h-10 opacity-25">
-        <img src={logoImg} alt="" className="w-full h-full object-contain" />
+      {/* Subtle gradient overlay at bottom for text readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+      {/* Top-left: Logo + subtitle */}
+      <div className="absolute top-3 left-3 flex items-center gap-1.5">
+        <img src={logoImg} alt="" className="w-5 h-5 object-contain" />
+        {subtitle && (
+          <span className="text-[10px] font-semibold tracking-widest uppercase text-primary drop-shadow-md">
+            {subtitle}
+          </span>
+        )}
       </div>
 
-      {/* Label at bottom left */}
+      {/* Bottom-left: Label */}
       {label && (
-        <div className="absolute bottom-3 left-3 right-14">
-          <p className="text-white text-sm font-bold drop-shadow-md truncate">{label}</p>
+        <div className="absolute bottom-3 left-3 right-3">
+          <p className="text-foreground text-sm font-bold drop-shadow-lg truncate">{label}</p>
         </div>
       )}
     </div>
