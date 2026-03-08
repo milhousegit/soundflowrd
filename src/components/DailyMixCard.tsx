@@ -46,6 +46,7 @@ const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
           backgroundUrl={mix.cover_url ? hdCover(mix.cover_url) : undefined}
           label={mix.mix_label}
           subtitle={mix.genre_tags[0] || `Mix ${mix.mix_index + 1}`}
+          mixIndex={mix.mix_index}
         />
 
         {/* Play button on hover */}
