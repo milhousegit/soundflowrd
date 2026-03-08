@@ -14,6 +14,17 @@ const requestHeaders = {
   'Accept-Language': 'en-US,en;q=0.9',
 };
 
+// Helper to get highest quality cover
+function albumCover(obj: any, field = 'cover') {
+  return obj?.[`${field}_xl`] || obj?.[`${field}_big`] || obj?.[`${field}_medium`] || obj?.[field] || undefined;
+}
+function artistPic(obj: any) {
+  return obj?.picture_xl || obj?.picture_big || obj?.picture_medium || obj?.picture || undefined;
+}
+function playlistPic(obj: any) {
+  return obj?.picture_xl || obj?.picture_big || obj?.picture_medium || obj?.picture || undefined;
+}
+
 // Fetch with timeout
 async function fetchWithTimeout(url: string, timeout = 10000): Promise<Response> {
   const controller = new AbortController();
@@ -35,7 +46,6 @@ async function fetchWithRetry(url: string, retries = 3): Promise<any> {
     try {
       const response = await fetchWithTimeout(url);
       if (!response.ok) {
-        // Log response body for debugging
         const text = await response.text();
         console.error(`Deezer API response ${response.status}:`, text.substring(0, 200));
         throw new Error(`HTTP ${response.status}`);
@@ -50,7 +60,6 @@ async function fetchWithRetry(url: string, retries = 3): Promise<any> {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -74,7 +83,7 @@ serve(async (req) => {
           album: track.album?.title || 'Unknown Album',
           albumId: String(track.album?.id || ''),
           duration: track.duration || 0,
-          coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
+          coverUrl: albumCover(track.album),
           previewUrl: track.preview || undefined,
         }));
 
@@ -88,7 +97,6 @@ serve(async (req) => {
           `${DEEZER_API}/search/album?q=${encodeURIComponent(query)}&limit=${limit}`
         );
         
-        // Fetch full album details to get release_date for each album
         const albumIds = (data.data || []).slice(0, 10).map((a: any) => a.id);
         const albumDetailsPromises = albumIds.map((albumId: number) =>
           fetchWithRetry(`${DEEZER_API}/album/${albumId}`).catch(() => null)
@@ -109,7 +117,7 @@ serve(async (req) => {
             title: album.title,
             artist: album.artist?.name || 'Unknown Artist',
             artistId: String(album.artist?.id || ''),
-            coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
+            coverUrl: albumCover(album),
             trackCount: album.nb_tracks || undefined,
             releaseDate: detail?.release_date || undefined,
             recordType: detail?.record_type || album.record_type || undefined,
@@ -129,7 +137,7 @@ serve(async (req) => {
         const artists = (data.data || []).map((artist: any) => ({
           id: String(artist.id),
           name: artist.name,
-          imageUrl: artist.picture_big || artist.picture_medium || artist.picture || undefined,
+          imageUrl: artistPic(artist),
           popularity: artist.nb_fan || 0,
         }));
 
@@ -149,14 +157,14 @@ serve(async (req) => {
         const artist = {
           id: String(artistData.id),
           name: artistData.name,
-          imageUrl: artistData.picture_big || artistData.picture_medium || artistData.picture || undefined,
+          imageUrl: artistPic(artistData),
           popularity: artistData.nb_fan || 0,
           releases: (albumsData.data || []).map((album: any) => ({
             id: String(album.id),
             title: album.title,
             artist: artistData.name,
             artistId: String(artistData.id),
-            coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
+            coverUrl: albumCover(album),
             releaseDate: album.release_date || undefined,
             trackCount: album.nb_tracks || undefined,
             recordType: album.record_type || 'album',
@@ -169,13 +177,13 @@ serve(async (req) => {
             album: track.album?.title || 'Unknown Album',
             albumId: String(track.album?.id || ''),
             duration: track.duration || 0,
-            coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
+            coverUrl: albumCover(track.album),
             previewUrl: track.preview || undefined,
           })),
           relatedArtists: (relatedData.data || []).map((artist: any) => ({
             id: String(artist.id),
             name: artist.name,
-            imageUrl: artist.picture_big || artist.picture_medium || artist.picture || undefined,
+            imageUrl: artistPic(artist),
             popularity: artist.nb_fan || 0,
           })),
         };
@@ -198,7 +206,7 @@ serve(async (req) => {
           album: track.album?.title || 'Unknown Album',
           albumId: String(track.album?.id || ''),
           duration: track.duration || 0,
-          coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
+          coverUrl: albumCover(track.album),
           previewUrl: track.preview || undefined,
         }));
 
@@ -215,7 +223,7 @@ serve(async (req) => {
           title: data.title,
           artist: data.artist?.name || 'Unknown Artist',
           artistId: String(data.artist?.id || ''),
-          coverUrl: data.cover_big || data.cover_medium || data.cover || undefined,
+          coverUrl: albumCover(data),
           releaseDate: data.release_date || undefined,
           trackCount: data.nb_tracks || undefined,
           tracks: (data.tracks?.data || []).map((track: any, index: number) => ({
@@ -226,7 +234,7 @@ serve(async (req) => {
             album: data.title,
             albumId: String(data.id),
             duration: track.duration || 0,
-            coverUrl: data.cover_big || data.cover_medium || data.cover || undefined,
+            coverUrl: albumCover(data),
             previewUrl: track.preview || undefined,
             trackNumber: index + 1,
           })),
@@ -238,7 +246,6 @@ serve(async (req) => {
       }
 
       case 'get-chart': {
-        // Get charts - Deezer provides global charts
         const data = await fetchWithRetry(`${DEEZER_API}/chart`);
         
         const result = {
@@ -250,7 +257,7 @@ serve(async (req) => {
             album: track.album?.title || 'Unknown Album',
             albumId: String(track.album?.id || ''),
             duration: track.duration || 0,
-            coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
+            coverUrl: albumCover(track.album),
             previewUrl: track.preview || undefined,
           })),
           albums: (data.albums?.data || []).slice(0, limit).map((album: any) => ({
@@ -258,12 +265,12 @@ serve(async (req) => {
             title: album.title,
             artist: album.artist?.name || 'Unknown Artist',
             artistId: String(album.artist?.id || ''),
-            coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
+            coverUrl: albumCover(album),
           })),
           artists: (data.artists?.data || []).slice(0, limit).map((artist: any) => ({
             id: String(artist.id),
             name: artist.name,
-            imageUrl: artist.picture_big || artist.picture_medium || artist.picture || undefined,
+            imageUrl: artistPic(artist),
             popularity: artist.nb_fan || 0,
           })),
         };
@@ -274,7 +281,6 @@ serve(async (req) => {
       }
 
       case 'get-new-releases': {
-        // Deezer doesn't have a direct new releases endpoint, use editorial/releases
         const data = await fetchWithRetry(`${DEEZER_API}/editorial/0/releases?limit=${limit}`);
         
         const albums = (data.data || []).map((album: any) => ({
@@ -282,7 +288,7 @@ serve(async (req) => {
           title: album.title,
           artist: album.artist?.name || 'Unknown Artist',
           artistId: String(album.artist?.id || ''),
-          coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
+          coverUrl: albumCover(album),
           releaseDate: album.release_date || undefined,
           trackCount: album.nb_tracks || undefined,
         }));
@@ -293,13 +299,12 @@ serve(async (req) => {
       }
 
       case 'get-popular-artists': {
-        // Use chart artists
         const data = await fetchWithRetry(`${DEEZER_API}/chart/0/artists?limit=${limit}`);
         
         const artists = (data.data || []).map((artist: any) => ({
           id: String(artist.id),
           name: artist.name,
-          imageUrl: artist.picture_big || artist.picture_medium || artist.picture || undefined,
+          imageUrl: artistPic(artist),
           popularity: artist.position || 0,
         }));
 
@@ -317,7 +322,7 @@ serve(async (req) => {
           id: String(playlist.id),
           title: playlist.title,
           description: playlist.description || '',
-          coverUrl: playlist.picture_big || playlist.picture_medium || playlist.picture || undefined,
+          coverUrl: playlistPic(playlist),
           trackCount: playlist.nb_tracks || 0,
           creator: playlist.user?.name || 'Deezer',
           isEditable: false,
@@ -337,7 +342,7 @@ serve(async (req) => {
             id: String(data.id),
             title: data.title,
             description: data.description || '',
-            coverUrl: data.picture_big || data.picture_medium || data.picture || undefined,
+            coverUrl: playlistPic(data),
             trackCount: data.nb_tracks || 0,
             creator: data.creator?.name || 'Deezer',
             duration: data.duration || 0,
@@ -349,7 +354,7 @@ serve(async (req) => {
               album: track.album?.title || 'Unknown Album',
               albumId: String(track.album?.id || ''),
               duration: track.duration || 0,
-              coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
+              coverUrl: albumCover(track.album),
               previewUrl: track.preview || undefined,
               trackNumber: index + 1,
             })),
@@ -359,7 +364,6 @@ serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         } catch (error) {
-          // Return empty playlist on error (403, etc.) instead of throwing
           console.error(`Error fetching playlist ${id}:`, error);
           return new Response(JSON.stringify({
             id: String(id),
@@ -378,7 +382,6 @@ serve(async (req) => {
       }
 
       case 'get-artist-playlists': {
-        // Search for "100% ArtistName" playlists on Deezer
         const artistName = query;
         const searchQueries = [
           `100% ${artistName}`,
@@ -408,7 +411,7 @@ serve(async (req) => {
                 id: String(playlist.id),
                 title: playlist.title,
                 description: playlist.description || '',
-                coverUrl: playlist.picture_big || playlist.picture_medium || playlist.picture || undefined,
+                coverUrl: playlistPic(playlist),
                 trackCount: playlist.nb_tracks || 0,
                 creator: playlist.user?.name || 'Deezer',
               }));
@@ -419,7 +422,6 @@ serve(async (req) => {
           }
         }
         
-        // Dedupe by ID
         const unique = allPlaylists.reduce((acc, p) => {
           if (!acc.find((x: any) => x.id === p.id)) acc.push(p);
           return acc;
@@ -431,7 +433,6 @@ serve(async (req) => {
       }
 
       case 'get-country-chart': {
-        // Fallback country codes to Deezer chart IDs mapping
         const defaultCountryToEditorial: Record<string, string> = {
           'IT': '116',
           'US': '0',
@@ -443,7 +444,6 @@ serve(async (req) => {
           'BR': '91',
         };
         
-        // Try to fetch from database configuration
         let playlistId = defaultCountryToEditorial[country?.toUpperCase()] ?? '0';
         let usePlaylist = false;
         let useSoundFlowPlaylist = false;
@@ -468,12 +468,10 @@ serve(async (req) => {
               if (configData && configData.length > 0 && configData[0].playlist_id) {
                 playlistId = configData[0].playlist_id;
                 
-                // Check if it's a SoundFlow playlist (prefixed with "sf:")
                 if (playlistId.startsWith('sf:')) {
                   useSoundFlowPlaylist = true;
                   playlistId = playlistId.replace('sf:', '');
                 } else if (playlistId.length > 3) {
-                  // If playlist_id is a long number (more than 3 digits), it's a Deezer playlist ID
                   usePlaylist = true;
                 }
               }
@@ -488,7 +486,6 @@ serve(async (req) => {
         let tracks: any[] = [];
         
         if (useSoundFlowPlaylist) {
-          // Fetch tracks from SoundFlow (local) playlist
           try {
             const supabaseUrl = Deno.env.get('SUPABASE_URL');
             const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -525,10 +522,8 @@ serve(async (req) => {
         } else {
           let data;
           if (usePlaylist) {
-            // Fetch tracks from a Deezer playlist
             data = await fetchWithRetry(`${DEEZER_API}/playlist/${playlistId}/tracks?limit=${limit}`);
           } else {
-            // Fetch from editorial chart
             data = await fetchWithRetry(`${DEEZER_API}/chart/${playlistId}/tracks?limit=${limit}`);
           }
           
@@ -540,7 +535,7 @@ serve(async (req) => {
             album: track.album?.title || 'Unknown Album',
             albumId: String(track.album?.id || ''),
             duration: track.duration || 0,
-            coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
+            coverUrl: albumCover(track.album),
             previewUrl: track.preview || undefined,
             position: index + 1,
           }));
@@ -555,7 +550,6 @@ serve(async (req) => {
         const trackLimit = limit || 50;
         let radioTracks: any[] = [];
 
-        // Strategy 1: Try track radio
         try {
           const data = await fetchWithRetry(`${DEEZER_API}/track/${id}/radio?limit=${trackLimit}`);
           if (data.data && data.data.length > 0) {
@@ -565,7 +559,6 @@ serve(async (req) => {
           console.log('Track radio failed, trying alternatives:', e);
         }
 
-        // Strategy 2: If track radio failed, get the track info and try artist radio
         if (radioTracks.length === 0) {
           try {
             const trackData = await fetchWithRetry(`${DEEZER_API}/track/${id}`);
@@ -581,17 +574,14 @@ serve(async (req) => {
           }
         }
 
-        // Strategy 3: If artist radio also failed, use related artists + top tracks
         if (radioTracks.length === 0) {
           try {
             const trackData = await fetchWithRetry(`${DEEZER_API}/track/${id}`);
             const artistId = trackData?.artist?.id;
             if (artistId) {
-              // Get related artists
               const related = await fetchWithRetry(`${DEEZER_API}/artist/${artistId}/related?limit=10`);
               const relatedArtists = related.data || [];
               
-              // Get top tracks from each related artist
               const topTracksPromises = relatedArtists.slice(0, 5).map((a: any) =>
                 fetchWithRetry(`${DEEZER_API}/artist/${a.id}/top?limit=10`).catch(() => ({ data: [] }))
               );
@@ -603,13 +593,11 @@ serve(async (req) => {
                 }
               }
               
-              // Also add top tracks from the original artist
               const ownTop = await fetchWithRetry(`${DEEZER_API}/artist/${artistId}/top?limit=10`).catch(() => ({ data: [] }));
               if (ownTop.data) {
                 radioTracks.push(...ownTop.data);
               }
               
-              // Shuffle the results for variety
               for (let i = radioTracks.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [radioTracks[i], radioTracks[j]] = [radioTracks[j], radioTracks[i]];
@@ -620,7 +608,6 @@ serve(async (req) => {
           }
         }
 
-        // Strategy 4: Last resort - search for similar tracks by query
         if (radioTracks.length === 0) {
           try {
             const trackData = await fetchWithRetry(`${DEEZER_API}/track/${id}`);
@@ -634,9 +621,8 @@ serve(async (req) => {
           }
         }
 
-        // Deduplicate by track ID and exclude the original track
         const seen = new Set<string>();
-        seen.add(String(id)); // Exclude original track
+        seen.add(String(id));
         const uniqueTracks = radioTracks.filter((t: any) => {
           const tid = String(t.id);
           if (seen.has(tid)) return false;
@@ -652,7 +638,7 @@ serve(async (req) => {
           album: track.album?.title || 'Unknown Album',
           albumId: String(track.album?.id || ''),
           duration: track.duration || 0,
-          coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
+          coverUrl: albumCover(track.album),
           previewUrl: track.preview || undefined,
         }));
 
@@ -679,7 +665,7 @@ serve(async (req) => {
           album: data.album?.title || 'Unknown Album',
           albumId: String(data.album?.id || ''),
           duration: data.duration || 0,
-          coverUrl: data.album?.cover_big || data.album?.cover_medium || data.album?.cover || undefined,
+          coverUrl: albumCover(data.album),
           previewUrl: data.preview || undefined,
         };
 
