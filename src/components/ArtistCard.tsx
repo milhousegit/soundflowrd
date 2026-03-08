@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useSettings } from '@/contexts/SettingsContext';
 import FavoriteButton from './FavoriteButton';
 import { useTap } from '@/hooks/useTap';
+import { hdCover } from '@/lib/utils';
 
 interface ArtistCardProps {
   artist: Artist;
