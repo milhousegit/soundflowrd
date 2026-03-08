@@ -11,6 +11,7 @@ interface DailyMixCardProps {
 
 const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
   const { playTrack, setPlaybackSource } = usePlayer();
+  const navigate = useNavigate();
 
   const [color1, color2] = mix.dominant_color.split(',');
   const artistLabel = mix.top_artists.length > 0
