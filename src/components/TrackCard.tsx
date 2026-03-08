@@ -333,7 +333,7 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
         } : {})}
         className={cn(
           "group flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200 touch-manipulation select-none",
-          "hover:bg-secondary/80 active:scale-[0.99]",
+          "md:hover:bg-secondary/80 active:scale-[0.99]",
           isCurrentTrack && "bg-secondary",
           "-webkit-touch-callout-none"
         )}
