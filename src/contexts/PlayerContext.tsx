@@ -1758,9 +1758,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     currentSearchTrackIdRef.current = track.id;
 
     // Update state: currentTrack + queueIndex, but do NOT touch queue
+    const hdTrackInternal = { ...track, coverUrl: hdCover(track.coverUrl) || track.coverUrl };
     setState((prev) => ({
       ...prev,
-      currentTrack: track,
+      currentTrack: hdTrackInternal,
       isPlaying: true,
       queueIndex: index,
       duration: track.duration,
