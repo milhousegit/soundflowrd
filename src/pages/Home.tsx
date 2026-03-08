@@ -7,7 +7,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getNewReleases, getPopularArtists, searchAlbums, getArtist, getCountryChart, getTrendingChart } from '@/lib/deezer';
+import { getPopularArtists, getArtist, getCountryChart, getTrendingChart } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
@@ -136,13 +136,11 @@ const RecentTrackItem: React.FC<{
 
 const Home: React.FC = () => {
   const { country: geoCountry } = useGeoLanguage();
-  const [newReleases, setNewReleases] = useState<Album[]>([]);
   const [trendingAlbums, setTrendingAlbums] = useState<Album[]>([]);
   const [isLoadingTrending, setIsLoadingTrending] = useState(true);
   const [popularArtists, setPopularArtists] = useState<Artist[]>([]);
   const [chartConfigs, setChartConfigs] = useState<ChartConfig[]>([]);
   const [chartDisplayData, setChartDisplayData] = useState<Record<string, ChartDisplayData>>({});
-  const [isLoadingReleases, setIsLoadingReleases] = useState(true);
   const [isLoadingArtists, setIsLoadingArtists] = useState(true);
   const [isLoadingCharts, setIsLoadingCharts] = useState(true);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
@@ -185,63 +183,6 @@ const Home: React.FC = () => {
 
   // recentTracks now comes from useRecentlyPlayed hook (synced with database)
 
-  useEffect(() => {
-    const fetchNewReleases = async () => {
-      setIsLoadingReleases(true);
-      try {
-        const uniqueArtistNames = getUniqueArtistNames();
-        
-        // If user has favorites, search for releases from those artists
-        if (uniqueArtistNames.length > 0) {
-          const allReleases: Album[] = [];
-          
-          // Search releases for up to 5 artists using Deezer
-          for (const artistName of uniqueArtistNames.slice(0, 5)) {
-            try {
-              const albums = await searchAlbums(artistName);
-              // Filter to only include releases that match the artist name
-              const artistReleases = albums.filter((album: Album) => 
-                album.artist?.toLowerCase().includes(artistName.toLowerCase()) ||
-                artistName.toLowerCase().includes(album.artist?.toLowerCase() || '')
-              );
-              allReleases.push(...artistReleases.slice(0, 6));
-            } catch (e) {
-              console.error('Error fetching releases for', artistName, e);
-            }
-          }
-          
-          // Sort by release date (newest first) and dedupe
-          const uniqueReleases = allReleases
-            .reduce((acc, album) => {
-              if (!acc.find(a => a.id === album.id)) acc.push(album);
-              return acc;
-            }, [] as Album[])
-            .sort((a, b) => {
-              const dateA = a.releaseDate ? new Date(a.releaseDate).getTime() : 0;
-              const dateB = b.releaseDate ? new Date(b.releaseDate).getTime() : 0;
-              return dateB - dateA;
-            });
-          
-          setNewReleases(uniqueReleases.slice(0, 12));
-        } else {
-          // No favorites - get new releases from Deezer
-          try {
-            const releases = await getNewReleases();
-            setNewReleases(releases.slice(0, 12));
-          } catch (cacheError) {
-            console.error('Failed to fetch new releases:', cacheError);
-            setNewReleases([]);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch new releases:', error);
-      } finally {
-        setIsLoadingReleases(false);
-      }
-    };
-
-    fetchNewReleases();
-  }, [favorites.length]);
 
   // Fetch trending chart albums
   useEffect(() => {
@@ -623,46 +564,6 @@ const Home: React.FC = () => {
         ) : null}
       </section>
 
-      {/* New Releases - from favorite artists */}
-      {homeDisplayOptions.showNewReleases && (
-        <section>
-          <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
-            <Music className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-            <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('newReleases')}</h2>
-          </div>
-          {isLoadingReleases ? (
-            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="flex-shrink-0 w-32 md:w-auto">
-                  <AlbumCardSkeleton />
-                </div>
-              ))}
-            </div>
-          ) : newReleases.length > 0 ? (
-            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
-              {newReleases.slice(0, 12).map((album) => (
-                <div key={album.id} className="flex-shrink-0 w-32 md:w-auto">
-                  <AlbumCard album={album} />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 bg-secondary/30 rounded-xl">
-              <TrendingUp className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-muted-foreground">
-                {hasAnyFavorites 
-                  ? (t('language') === 'it' 
-                      ? "Nessuna nuova uscita dai tuoi artisti preferiti" 
-                      : "No new releases from your favorite artists")
-                  : (t('language') === 'it' 
-                      ? "Aggiungi artisti, brani o album ai preferiti per vedere le loro nuove uscite" 
-                      : "Add artists, tracks or albums to favorites to see their new releases")
-                }
-              </p>
-            </div>
-          )}
-        </section>
-      )}
 
       {/* Popular Artists - Horizontal scroll on mobile */}
       {homeDisplayOptions.showPopularArtists && (
