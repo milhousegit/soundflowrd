@@ -38,7 +38,7 @@ import {
   Maximize2,
   ChevronRight } from
 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, hdCover } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
 
 const formatTime = (seconds: number) => {
