@@ -74,7 +74,7 @@ serve(async (req) => {
           album: track.album?.title || 'Unknown Album',
           albumId: String(track.album?.id || ''),
           duration: track.duration || 0,
-          coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+          coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
           previewUrl: track.preview || undefined,
         }));
 
@@ -109,7 +109,7 @@ serve(async (req) => {
             title: album.title,
             artist: album.artist?.name || 'Unknown Artist',
             artistId: String(album.artist?.id || ''),
-            coverUrl: album.cover_medium || album.cover_big || album.cover || undefined,
+            coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
             trackCount: album.nb_tracks || undefined,
             releaseDate: detail?.release_date || undefined,
             recordType: detail?.record_type || album.record_type || undefined,
@@ -129,7 +129,7 @@ serve(async (req) => {
         const artists = (data.data || []).map((artist: any) => ({
           id: String(artist.id),
           name: artist.name,
-          imageUrl: artist.picture_medium || artist.picture_big || artist.picture || undefined,
+          imageUrl: artist.picture_big || artist.picture_medium || artist.picture || undefined,
           popularity: artist.nb_fan || 0,
         }));
 
@@ -156,7 +156,7 @@ serve(async (req) => {
             title: album.title,
             artist: artistData.name,
             artistId: String(artistData.id),
-            coverUrl: album.cover_medium || album.cover_big || album.cover || undefined,
+            coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
             releaseDate: album.release_date || undefined,
             trackCount: album.nb_tracks || undefined,
             recordType: album.record_type || 'album',
@@ -169,13 +169,13 @@ serve(async (req) => {
             album: track.album?.title || 'Unknown Album',
             albumId: String(track.album?.id || ''),
             duration: track.duration || 0,
-            coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+            coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
             previewUrl: track.preview || undefined,
           })),
           relatedArtists: (relatedData.data || []).map((artist: any) => ({
             id: String(artist.id),
             name: artist.name,
-            imageUrl: artist.picture_medium || artist.picture_big || artist.picture || undefined,
+            imageUrl: artist.picture_big || artist.picture_medium || artist.picture || undefined,
             popularity: artist.nb_fan || 0,
           })),
         };
@@ -198,7 +198,7 @@ serve(async (req) => {
           album: track.album?.title || 'Unknown Album',
           albumId: String(track.album?.id || ''),
           duration: track.duration || 0,
-          coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+          coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
           previewUrl: track.preview || undefined,
         }));
 
@@ -226,7 +226,7 @@ serve(async (req) => {
             album: data.title,
             albumId: String(data.id),
             duration: track.duration || 0,
-            coverUrl: data.cover_medium || data.cover || undefined,
+            coverUrl: data.cover_big || data.cover_medium || data.cover || undefined,
             previewUrl: track.preview || undefined,
             trackNumber: index + 1,
           })),
@@ -250,7 +250,7 @@ serve(async (req) => {
             album: track.album?.title || 'Unknown Album',
             albumId: String(track.album?.id || ''),
             duration: track.duration || 0,
-            coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+            coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
             previewUrl: track.preview || undefined,
           })),
           albums: (data.albums?.data || []).slice(0, limit).map((album: any) => ({
@@ -258,12 +258,12 @@ serve(async (req) => {
             title: album.title,
             artist: album.artist?.name || 'Unknown Artist',
             artistId: String(album.artist?.id || ''),
-            coverUrl: album.cover_medium || album.cover_big || album.cover || undefined,
+            coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
           })),
           artists: (data.artists?.data || []).slice(0, limit).map((artist: any) => ({
             id: String(artist.id),
             name: artist.name,
-            imageUrl: artist.picture_medium || artist.picture_big || artist.picture || undefined,
+            imageUrl: artist.picture_big || artist.picture_medium || artist.picture || undefined,
             popularity: artist.nb_fan || 0,
           })),
         };
@@ -282,7 +282,7 @@ serve(async (req) => {
           title: album.title,
           artist: album.artist?.name || 'Unknown Artist',
           artistId: String(album.artist?.id || ''),
-          coverUrl: album.cover_medium || album.cover_big || album.cover || undefined,
+          coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
           releaseDate: album.release_date || undefined,
           trackCount: album.nb_tracks || undefined,
         }));
@@ -299,7 +299,7 @@ serve(async (req) => {
         const artists = (data.data || []).map((artist: any) => ({
           id: String(artist.id),
           name: artist.name,
-          imageUrl: artist.picture_medium || artist.picture_big || artist.picture || undefined,
+          imageUrl: artist.picture_big || artist.picture_medium || artist.picture || undefined,
           popularity: artist.position || 0,
         }));
 
@@ -317,7 +317,7 @@ serve(async (req) => {
           id: String(playlist.id),
           title: playlist.title,
           description: playlist.description || '',
-          coverUrl: playlist.picture_medium || playlist.picture_big || playlist.picture || undefined,
+          coverUrl: playlist.picture_big || playlist.picture_medium || playlist.picture || undefined,
           trackCount: playlist.nb_tracks || 0,
           creator: playlist.user?.name || 'Deezer',
           isEditable: false,
@@ -349,7 +349,7 @@ serve(async (req) => {
               album: track.album?.title || 'Unknown Album',
               albumId: String(track.album?.id || ''),
               duration: track.duration || 0,
-              coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+              coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
               previewUrl: track.preview || undefined,
               trackNumber: index + 1,
             })),
@@ -408,7 +408,7 @@ serve(async (req) => {
                 id: String(playlist.id),
                 title: playlist.title,
                 description: playlist.description || '',
-                coverUrl: playlist.picture_medium || playlist.picture_big || playlist.picture || undefined,
+                coverUrl: playlist.picture_big || playlist.picture_medium || playlist.picture || undefined,
                 trackCount: playlist.nb_tracks || 0,
                 creator: playlist.user?.name || 'Deezer',
               }));
@@ -540,7 +540,7 @@ serve(async (req) => {
             album: track.album?.title || 'Unknown Album',
             albumId: String(track.album?.id || ''),
             duration: track.duration || 0,
-            coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+            coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
             previewUrl: track.preview || undefined,
             position: index + 1,
           }));
@@ -652,7 +652,7 @@ serve(async (req) => {
           album: track.album?.title || 'Unknown Album',
           albumId: String(track.album?.id || ''),
           duration: track.duration || 0,
-          coverUrl: track.album?.cover_medium || track.album?.cover || undefined,
+          coverUrl: track.album?.cover_big || track.album?.cover_medium || track.album?.cover || undefined,
           previewUrl: track.preview || undefined,
         }));
 
@@ -679,7 +679,7 @@ serve(async (req) => {
           album: data.album?.title || 'Unknown Album',
           albumId: String(data.album?.id || ''),
           duration: data.duration || 0,
-          coverUrl: data.album?.cover_medium || data.album?.cover || undefined,
+          coverUrl: data.album?.cover_big || data.album?.cover_medium || data.album?.cover || undefined,
           previewUrl: data.preview || undefined,
         };
 
