@@ -35,9 +35,9 @@ import {
   Volume2,
   VolumeX,
   Tv,
-   Maximize2,
-  ChevronRight,
-} from 'lucide-react';
+  Maximize2,
+  ChevronRight } from
+'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
 
@@ -87,21 +87,21 @@ const Player: React.FC = () => {
     lastSearchQuery,
     currentAudioSource,
     updateTrackMetadata,
-    playbackSource,
+    playbackSource
   } = usePlayer();
 
   const { t, settings } = useSettings();
-  
+
   // Check if user has active premium
-  const isPremiumActive = !simulateFreeUser && (profile?.is_premium && 
-    (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at))));
+  const isPremiumActive = !simulateFreeUser && profile?.is_premium && (
+  !profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at)));
   const canDownload = contextIsAdmin || isPremiumActive;
-  
+
   const { saveTrackOffline } = useOfflineStorage();
   const [isDownloading, setIsDownloading] = useState(false);
-  
+
   // Get current stream URL from alternatives
-  const currentStreamUrl = alternativeStreams.find(s => s.id === currentStreamId)?.streamUrl;
+  const currentStreamUrl = alternativeStreams.find((s) => s.id === currentStreamId)?.streamUrl;
 
   const [showDebugModal, setShowDebugModal] = useState(false);
   const [showTrackActions, setShowTrackActions] = useState(false);
@@ -120,12 +120,12 @@ const Player: React.FC = () => {
   // Triple tap detection for Always On display (iOS only)
   const coverTapCountRef = useRef(0);
   const coverLastTapRef = useRef(0);
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
 
   const handleCoverTripleTap = useCallback(() => {
     if (!isIOS) return;
-    
+
     const now = Date.now();
     if (now - coverLastTapRef.current < 400) {
       coverTapCountRef.current += 1;
@@ -192,18 +192,18 @@ const Player: React.FC = () => {
   // Download handler for premium users
   const handleDownload = async () => {
     if (!currentTrack || !currentStreamUrl || isDownloading) return;
-    
+
     setIsDownloading(true);
     try {
       const response = await fetch(currentStreamUrl);
       if (!response.ok) throw new Error('Download failed');
-      
+
       const blob = await response.blob();
       const filename = `${currentTrack.artist} - ${currentTrack.title}.mp3`;
-      
+
       // Save to IndexedDB for offline playback
       await saveTrackOffline(currentTrack, blob);
-      
+
       // Also trigger browser download
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -213,19 +213,19 @@ const Player: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      
+
       toast({
         title: settings.language === 'it' ? 'Salvato offline!' : 'Saved offline!',
-        description: settings.language === 'it' 
-          ? `"${currentTrack.title}" disponibile anche senza connessione` 
-          : `"${currentTrack.title}" available offline`,
+        description: settings.language === 'it' ?
+        `"${currentTrack.title}" disponibile anche senza connessione` :
+        `"${currentTrack.title}" available offline`
       });
     } catch (error) {
       console.error('Download error:', error);
       toast({
         title: settings.language === 'it' ? 'Errore download' : 'Download error',
         description: settings.language === 'it' ? 'Impossibile scaricare il brano' : 'Could not download track',
-        variant: 'destructive',
+        variant: 'destructive'
       });
     } finally {
       setIsDownloading(false);
@@ -255,7 +255,7 @@ const Player: React.FC = () => {
   const expandedStyle = {
     transform: `translateY(${dragY}px) scale(${1 - dragProgress * 0.05})`,
     opacity: 1 - dragProgress * 0.3,
-    transition: isDragging ? 'none' : 'all 0.3s ease-out',
+    transition: isDragging ? 'none' : 'all 0.3s ease-out'
   };
 
   const navbarHeight = 56;
@@ -263,15 +263,15 @@ const Player: React.FC = () => {
   return (
     <>
       {/* Mobile expanded view */}
-      {isExpanded && (
-        <div
-          ref={containerRef}
-          className="fixed inset-0 z-[60] bg-background md:hidden overflow-y-auto"
-          style={expandedStyle}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
+      {isExpanded &&
+      <div
+        ref={containerRef}
+        className="fixed inset-0 z-[60] bg-background md:hidden overflow-y-auto"
+        style={expandedStyle}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}>
+        
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full" />
           </div>
@@ -282,77 +282,77 @@ const Player: React.FC = () => {
                 <ChevronDown className="w-6 h-6" />
               </Button>
               <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  navigate('/tv');
-                  setIsExpanded(false);
-                }}
-                className="w-10 hover:bg-transparent"
-              >
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                navigate('/tv');
+                setIsExpanded(false);
+              }}
+              className="w-10 hover:bg-transparent">
+              
                 <Tv className="w-5 h-5 text-muted-foreground" />
               </Button>
             </div>
             <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2 max-w-[50%]">
               {isSearchingStreams && <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />}
-              {playbackSource.type && playbackSource.name ? (
-                <button
-                  onClick={() => {
-                    if (playbackSource.path) {
-                      navigate(playbackSource.path);
-                      setIsExpanded(false);
-                    }
-                  }}
-                  className="text-sm text-muted-foreground hover:text-primary transition-colors truncate"
-                >
+              {playbackSource.type && playbackSource.name ?
+            <button
+              onClick={() => {
+                if (playbackSource.path) {
+                  navigate(playbackSource.path);
+                  setIsExpanded(false);
+                }
+              }}
+              className="text-sm text-muted-foreground hover:text-primary transition-colors truncate">
+              
                   {playbackSource.name}
-                </button>
-              ) : (
-                <span className="text-sm text-muted-foreground">Now Playing</span>
-              )}
+                </button> :
+
+            <span className="text-sm text-muted-foreground">Now Playing</span>
+            }
             </div>
             <div className="flex items-center">
               <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowQueueModal(true)}
-                className="text-muted-foreground hover:text-primary w-10"
-              >
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowQueueModal(true)}
+              className="text-muted-foreground hover:text-primary w-10">
+              
                 <ListMusic className="w-5 h-5" />
               </Button>
               <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowTrackActions(true)}
-                className="text-muted-foreground hover:text-foreground w-10"
-              >
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowTrackActions(true)}
+              className="text-muted-foreground hover:text-foreground w-10">
+              
                 <MoreVertical className="w-5 h-5" />
               </Button>
             </div>
           </div>
 
-          <div className="px-8 pt-6 pb-2">
-            <div 
-              className="w-full aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none cursor-pointer"
-              onClick={handleCoverTripleTap}
-            >
-              {currentTrack.coverUrl ? (
-                <img 
-                  src={currentTrack.coverUrl} 
-                  alt={currentTrack.album} 
-                  className="w-full h-full object-cover select-none pointer-events-none" 
-                  draggable={false}
-                  onContextMenu={(e) => e.preventDefault()}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
+          <div className="px-8 pt-6 pb-2 py-[63px]">
+            <div
+            className="w-full aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none cursor-pointer"
+            onClick={handleCoverTripleTap}>
+            
+              {currentTrack.coverUrl ?
+            <img
+              src={currentTrack.coverUrl}
+              alt={currentTrack.album}
+              className="w-full h-full object-cover select-none pointer-events-none"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()} /> :
+
+
+            <div className="w-full h-full flex items-center justify-center">
                   <Music className="w-24 h-24 text-muted-foreground" />
                 </div>
-              )}
+            }
 
               {/* Always On hint - only on iOS */}
-              {isIOS && !loadingPhase && isExpanded && (
-                <div className="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none animate-fade-in">
+              {isIOS && !loadingPhase && isExpanded &&
+            <div className="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none animate-fade-in">
                   <div className="bg-black/70 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-2 shadow-lg border border-white/10">
                     <div className="flex gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -362,30 +362,30 @@ const Player: React.FC = () => {
                     <span className="text-white text-xs font-medium">Always On</span>
                   </div>
                 </div>
-              )}
+            }
 
-              {loadingPhase === 'searching' && (
-                <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+              {loadingPhase === 'searching' &&
+            <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
                     <span className="text-sm text-foreground">{t('language') === 'it' ? 'Cercando…' : 'Searching…'}</span>
                   </div>
                 </div>
-              )}
+            }
 
-              {loadingPhase === 'downloading' && (
-                <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+              {loadingPhase === 'downloading' &&
+            <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Cloud className="w-8 h-8 text-primary animate-pulse mb-2" />
                     <span className="text-sm text-foreground">
-                      {t('language') === 'it'
-                        ? `Scaricando… ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}`
-                        : `Downloading… ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}`}
+                      {t('language') === 'it' ?
+                  `Scaricando… ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}` :
+                  `Downloading… ${downloadProgress !== null ? `${Math.round(downloadProgress)}%` : ''}`}
                     </span>
                     {downloadStatus && <span className="text-xs text-muted-foreground mt-1">{downloadStatus}</span>}
                   </div>
                 </div>
-              )}
+            }
             </div>
           </div>
 
@@ -395,42 +395,42 @@ const Player: React.FC = () => {
               <button onClick={handleNavigateToArtist} className="hover:text-primary hover:underline transition-colors truncate">
                 {currentTrack.artist}
               </button>
-              {currentTrack.album && (
-                <>
+              {currentTrack.album &&
+            <>
                   <span>•</span>
                   <button onClick={handleNavigateToAlbum} className="hover:text-primary hover:underline transition-colors truncate">
                     {currentTrack.album}
                   </button>
                 </>
-              )}
+            }
             </div>
-            {currentAudioSource && (
-              <div className="mt-2">
+            {currentAudioSource &&
+          <div className="mt-2">
                 <span className={cn(
-                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
-                  currentAudioSource === 'squidwtf' 
-                    ? "bg-purple-500/20 text-purple-400"
-                    : currentAudioSource === 'monochrome'
-                      ? "bg-sky-500/20 text-sky-400" 
-                      : currentAudioSource === 'offline'
-                        ? "bg-emerald-500/20 text-emerald-400"
-                        : "bg-orange-500/20 text-orange-400"
-                )}>
-                  {currentAudioSource === 'squidwtf' ? '🎵 SquidWTF' 
-                    : currentAudioSource === 'monochrome' ? '🎵 Monochrome'
-                    : currentAudioSource === 'offline' ? '📱 Offline' 
-                    : '📦 Real-Debrid'}
+              "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
+              currentAudioSource === 'squidwtf' ?
+              "bg-purple-500/20 text-purple-400" :
+              currentAudioSource === 'monochrome' ?
+              "bg-sky-500/20 text-sky-400" :
+              currentAudioSource === 'offline' ?
+              "bg-emerald-500/20 text-emerald-400" :
+              "bg-orange-500/20 text-orange-400"
+            )}>
+                  {currentAudioSource === 'squidwtf' ? '🎵 SquidWTF' :
+              currentAudioSource === 'monochrome' ? '🎵 Monochrome' :
+              currentAudioSource === 'offline' ? '📱 Offline' :
+              '📦 Real-Debrid'}
                 </span>
               </div>
-            )}
+          }
           </div>
 
-          <div 
-            className="px-8 pt-6 pb-2"
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchMove={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => e.stopPropagation()}
-          >
+          <div
+          className="px-8 pt-6 pb-2"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}>
+          
             <Slider value={[progress]} max={duration || 100} step={1} onValueChange={([value]) => handleSeek(value)} />
             <div className="flex justify-between mt-2">
               <span className="text-xs text-muted-foreground">{formatTime(progress)}</span>
@@ -439,30 +439,30 @@ const Player: React.FC = () => {
           </div>
 
           <div
-            className="flex items-center justify-between px-6 pt-2 pb-4"
-          >
+          className="flex items-center justify-between px-6 pt-2 pb-4">
+          
             <Button
-              variant="ghost"
-              size="icon"
-              className={cn('h-11 w-11', isShuffled ? 'text-primary' : 'text-muted-foreground')}
-              onClick={toggleShuffle}
-            >
+            variant="ghost"
+            size="icon"
+            className={cn('h-11 w-11', isShuffled ? 'text-primary' : 'text-muted-foreground')}
+            onClick={toggleShuffle}>
+            
               <Shuffle className="w-5 h-5" />
             </Button>
 
             <div
-              className="flex items-center gap-4"
-              onTouchStart={(e) => e.stopPropagation()}
-              onTouchMove={(e) => e.stopPropagation()}
-              onTouchEnd={(e) => e.stopPropagation()}
-            >
-              <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={(e) => { e.stopPropagation(); previous(); }}>
+            className="flex items-center gap-4"
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}>
+            
+              <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={(e) => {e.stopPropagation();previous();}}>
                 <SkipBack className="w-6 h-6" />
               </Button>
-              <Button variant="player" className="h-16 w-16" onClick={(e) => { e.stopPropagation(); handleToggle(); }}>
+              <Button variant="player" className="h-16 w-16" onClick={(e) => {e.stopPropagation();handleToggle();}}>
                 {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
               </Button>
-              <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={(e) => { e.stopPropagation(); next(); }}>
+              <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={(e) => {e.stopPropagation();next();}}>
                 <SkipForward className="w-6 h-6" />
               </Button>
             </div>
@@ -472,20 +472,20 @@ const Player: React.FC = () => {
 
 
           {/* Lyrics card - scroll to discover */}
-          <div 
-            className="px-6 pt-8 pb-safe"
-            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
-          >
-            {(contextIsAdmin || isPremiumActive) ? (
-              <InlineLyricsCard 
-                track={currentTrack} 
-                onTap={() => setShowLyricsModal(true)} 
-              />
-            ) : (
-              <button
-                onClick={() => setShowPremiumModal(true)}
-                className="w-full rounded-2xl border border-border bg-secondary/40 p-4 text-left md:hover:bg-secondary/60 transition-colors relative overflow-hidden min-h-[140px]"
-              >
+          <div
+          className="px-6 pt-8 pb-safe"
+          style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
+          
+            {contextIsAdmin || isPremiumActive ?
+          <InlineLyricsCard
+            track={currentTrack}
+            onTap={() => setShowLyricsModal(true)} /> :
+
+
+          <button
+            onClick={() => setShowPremiumModal(true)}
+            className="w-full rounded-2xl border border-border bg-secondary/40 p-4 text-left md:hover:bg-secondary/60 transition-colors relative overflow-hidden min-h-[140px]">
+            
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Lyrics</span>
                   <Maximize2 className="w-5 h-5 text-muted-foreground" />
@@ -494,52 +494,52 @@ const Player: React.FC = () => {
                   {settings.language === 'it' ? 'Sblocca i testi con Premium' : 'Unlock lyrics with Premium'}
                 </p>
               </button>
-            )}
+          }
           </div>
         </div>
-      )}
+      }
 
       {/* Mobile mini player */}
-      {!isExpanded && (
-        <div
-          className="fixed left-0 right-0 h-14 glass border-t border-border z-50 md:hidden"
-          style={{ bottom: `calc(${navbarHeight}px + env(safe-area-inset-bottom, 0px))` }}
-          onClick={() => setIsExpanded(true)}
-        >
+      {!isExpanded &&
+      <div
+        className="fixed left-0 right-0 h-14 glass border-t border-border z-50 md:hidden"
+        style={{ bottom: `calc(${navbarHeight}px + env(safe-area-inset-bottom, 0px))` }}
+        onClick={() => setIsExpanded(true)}>
+        
           <div className="h-full flex items-center px-3 gap-3">
             <div className="w-10 h-10 rounded-lg bg-secondary overflow-hidden flex-shrink-0 relative">
-              {currentTrack.coverUrl ? (
-                <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
+              {currentTrack.coverUrl ?
+            <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" /> :
+
+            <div className="w-full h-full flex items-center justify-center">
                   <Music className="w-4 h-4 text-muted-foreground" />
                 </div>
-              )}
-              {loadingPhase === 'searching' && (
-                <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+            }
+              {loadingPhase === 'searching' &&
+            <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Loader2 className="w-4 h-4 text-primary animate-spin" />
                 </div>
-              )}
-              {loadingPhase === 'downloading' && (
-                <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+            }
+              {loadingPhase === 'downloading' &&
+            <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Cloud className="w-4 h-4 text-primary animate-pulse" />
                 </div>
-              )}
+            }
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-foreground truncate text-sm">{currentTrack.title}</p>
               <p className="text-xs text-muted-foreground truncate">{currentTrack.artist}</p>
             </div>
-            <Button variant="playerSecondary" size="icon" className="h-9 w-9" onClick={(e) => { e.stopPropagation(); handleToggle(); }}>
+            <Button variant="playerSecondary" size="icon" className="h-9 w-9" onClick={(e) => {e.stopPropagation();handleToggle();}}>
               {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
             </Button>
             <ChevronUp className="w-4 h-4 text-muted-foreground" />
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary">
-            <div className="h-full bg-primary transition-all" style={{ width: `${(progress / (duration || 1)) * 100}%` }} />
+            <div className="h-full bg-primary transition-all" style={{ width: `${progress / (duration || 1) * 100}%` }} />
           </div>
         </div>
-      )}
+      }
 
       {/* Desktop player */}
       <div className="fixed bottom-0 left-0 right-0 h-24 glass border-t border-border z-50 animate-slide-up hidden md:block">
@@ -547,21 +547,21 @@ const Player: React.FC = () => {
           {/* Left section - Track info */}
           <div className="flex items-center gap-4 min-w-0">
             <div className="w-14 h-14 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0 relative">
-              {currentTrack.coverUrl ? (
-                <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
-              ) : (
-                <Music className="w-6 h-6 text-muted-foreground" />
-              )}
-              {loadingPhase === 'searching' && (
-                <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+              {currentTrack.coverUrl ?
+              <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" /> :
+
+              <Music className="w-6 h-6 text-muted-foreground" />
+              }
+              {loadingPhase === 'searching' &&
+              <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Loader2 className="w-5 h-5 text-primary animate-spin" />
                 </div>
-              )}
-              {loadingPhase === 'downloading' && (
-                <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+              }
+              {loadingPhase === 'downloading' &&
+              <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
                   <Cloud className="w-5 h-5 text-primary animate-pulse" />
                 </div>
-              )}
+              }
             </div>
             <div className="min-w-0">
               <p className="font-medium text-foreground truncate">{currentTrack.title}</p>
@@ -569,14 +569,14 @@ const Player: React.FC = () => {
                 <button onClick={handleNavigateToArtist} className="hover:text-primary hover:underline transition-colors truncate">
                   {currentTrack.artist}
                 </button>
-                {currentTrack.album && (
-                  <>
+                {currentTrack.album &&
+                <>
                     <span>•</span>
                     <button onClick={handleNavigateToAlbum} className="hover:text-primary hover:underline transition-colors truncate">
                       {currentTrack.album}
                     </button>
                   </>
-                )}
+                }
               </div>
             </div>
           </div>
@@ -615,8 +615,8 @@ const Player: React.FC = () => {
                 }
               }}
               className="text-muted-foreground hover:text-primary"
-              title={settings.language === 'it' ? 'Testo' : 'Lyrics'}
-            >
+              title={settings.language === 'it' ? 'Testo' : 'Lyrics'}>
+              
               <Mic2 className="w-5 h-5" />
             </Button>
             <Button
@@ -624,8 +624,8 @@ const Player: React.FC = () => {
               size="icon"
               onClick={() => setShowQueueModal(true)}
               className="text-muted-foreground hover:text-primary"
-              title="Coda"
-            >
+              title="Coda">
+              
               <ListMusic className="w-5 h-5" />
             </Button>
             <Button
@@ -633,22 +633,22 @@ const Player: React.FC = () => {
               size="icon"
               onClick={handleOpenDebugModal}
               className={cn('text-muted-foreground hover:text-destructive relative', isSearchingStreams && 'text-primary')}
-              title={t('bugs')}
-            >
+              title={t('bugs')}>
+              
               {isSearchingStreams ? <Loader2 className="w-5 h-5 animate-spin" /> : <Settings2 className="w-5 h-5" />}
             </Button>
-            {canDownload && currentStreamUrl && (
-              <Button
-                variant="playerSecondary"
-                size="icon"
-                onClick={handleDownload}
-                disabled={isDownloading}
-                className="text-muted-foreground hover:text-primary"
-                title={settings.language === 'it' ? 'Scarica' : 'Download'}
-              >
+            {canDownload && currentStreamUrl &&
+            <Button
+              variant="playerSecondary"
+              size="icon"
+              onClick={handleDownload}
+              disabled={isDownloading}
+              className="text-muted-foreground hover:text-primary"
+              title={settings.language === 'it' ? 'Scarica' : 'Download'}>
+              
                 {isDownloading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
               </Button>
-            )}
+            }
             <Button variant="playerSecondary" size="icon" onClick={() => setVolume(volume === 0 ? 0.7 : 0)}>
               {volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </Button>
@@ -675,8 +675,8 @@ const Player: React.FC = () => {
         downloadStatus={downloadStatus}
         currentMappedFileId={currentMappedFileId}
         lastSearchQuery={lastSearchQuery}
-        onMetadataSaved={updateTrackMetadata}
-      />
+        onMetadataSaved={updateTrackMetadata} />
+      
 
       <TrackActionsModal
         isOpen={showTrackActions}
@@ -686,8 +686,8 @@ const Player: React.FC = () => {
         onDownload={handleDownload}
         isDownloading={isDownloading}
         canDownload={canDownload}
-        currentStreamUrl={currentStreamUrl}
-      />
+        currentStreamUrl={currentStreamUrl} />
+      
 
       <QueueModal
         isOpen={showQueueModal}
@@ -696,18 +696,18 @@ const Player: React.FC = () => {
         currentIndex={queueIndex}
         onPlayTrack={playQueueIndex}
         onClearQueue={clearQueue}
-        onReorderQueue={reorderQueue}
-      />
+        onReorderQueue={reorderQueue} />
+      
 
       <LyricsModal
         isOpen={showLyricsModal}
         onClose={() => setShowLyricsModal(false)}
-        track={currentTrack}
-      />
+        track={currentTrack} />
+      
 
       {/* Premium Modal for Lyrics */}
-      {showPremiumModal && (
-        <div className="fixed inset-0 z-[70] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPremiumModal(false)}>
+      {showPremiumModal &&
+      <div className="fixed inset-0 z-[70] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPremiumModal(false)}>
           <div className="bg-card rounded-2xl p-6 max-w-sm w-full shadow-xl border border-border" onClick={(e) => e.stopPropagation()}>
             <div className="text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center">
@@ -719,12 +719,12 @@ const Player: React.FC = () => {
               </p>
               <div className="flex flex-col gap-2">
                 <Button
-                  className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
-                  onClick={() => {
-                    setShowPremiumModal(false);
-                    navigate('/profile');
-                  }}
-                >
+                className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
+                onClick={() => {
+                  setShowPremiumModal(false);
+                  navigate('/profile');
+                }}>
+                
                   Sblocca Premium
                 </Button>
                 <Button variant="ghost" onClick={() => setShowPremiumModal(false)}>
@@ -734,14 +734,14 @@ const Player: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      }
 
       {/* Always On Display - iOS only */}
-      {showAlwaysOn && isIOS && (
-        <AlwaysOnDisplay onClose={() => setShowAlwaysOn(false)} />
-      )}
-    </>
-  );
+      {showAlwaysOn && isIOS &&
+      <AlwaysOnDisplay onClose={() => setShowAlwaysOn(false)} />
+      }
+    </>);
+
 };
 
 export default Player;
