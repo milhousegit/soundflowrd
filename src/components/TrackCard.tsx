@@ -3,7 +3,7 @@ import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, Loader2, ListMusic, Plus, Download, HardDrive, Copy, Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, hdCover } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import TrackActionsModal from './TrackActionsModal';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
