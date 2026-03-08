@@ -266,7 +266,7 @@ const Player: React.FC = () => {
       {isExpanded && (
         <div
           ref={containerRef}
-          className="fixed inset-0 z-[60] bg-background flex flex-col md:hidden overflow-y-auto"
+          className="fixed inset-0 z-[60] bg-background md:hidden overflow-y-auto"
           style={expandedStyle}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -331,9 +331,9 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 flex items-center justify-center px-8 pt-2 pb-1">
+          <div className="px-8 pt-4 pb-2">
             <div 
-              className="w-full max-w-sm aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none cursor-pointer"
+              className="w-full aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none cursor-pointer"
               onClick={handleCoverTripleTap}
             >
               {currentTrack.coverUrl ? (
@@ -389,7 +389,7 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          <div className="px-8 pt-1 text-center">
+          <div className="px-8 pt-4 text-center">
             <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <button onClick={handleNavigateToArtist} className="hover:text-primary hover:underline transition-colors truncate">
@@ -426,7 +426,7 @@ const Player: React.FC = () => {
           </div>
 
           <div 
-            className="px-8 py-3"
+            className="px-8 py-4"
             onTouchStart={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
@@ -439,7 +439,7 @@ const Player: React.FC = () => {
           </div>
 
           <div
-            className="flex items-center justify-between px-6"
+            className="flex items-center justify-between px-6 pb-4"
           >
             <Button
               variant="ghost"
@@ -470,12 +470,10 @@ const Player: React.FC = () => {
             <FavoriteButton itemType="track" item={currentTrack} size="md" variant="ghost" className="h-11 w-11" />
           </div>
 
-          {/* Spacer to push lyrics below the fold */}
-          <div style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }} />
 
-          {/* Lyrics card - hidden below fold, scroll to discover */}
+          {/* Lyrics card - scroll to discover */}
           <div 
-            className="px-6 pt-6 pb-safe"
+            className="px-6 pt-8 pb-safe"
             style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
           >
             {(contextIsAdmin || isPremiumActive) ? (
