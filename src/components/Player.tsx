@@ -389,7 +389,7 @@ const Player: React.FC = () => {
             </div>
           </div>
 
-          <div className="px-8 pt-1 text-center">
+          <div className="px-8 pt-4 text-center">
             <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <button onClick={handleNavigateToArtist} className="hover:text-primary hover:underline transition-colors truncate">
