@@ -37,7 +37,7 @@ const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
   return (
     <button
       onClick={handleClick}
-      className="group cursor-pointer touch-manipulation text-left"
+      className="group cursor-pointer touch-manipulation text-left w-full"
     >
       {/* Cover with branded overlay */}
       <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted shadow-lg">
