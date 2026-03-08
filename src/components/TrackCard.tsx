@@ -343,7 +343,7 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
         {/* Cover */}
         <div className="w-10 h-10 md:w-10 md:h-10 rounded bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 relative">
           {track.coverUrl ? (
-            <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover pointer-events-none" draggable={false} />
+            <img src={hdCover(track.coverUrl) || track.coverUrl} alt={track.album} className="w-full h-full object-cover pointer-events-none" draggable={false} />
           ) : (
             <Music className="w-4 h-4 text-muted-foreground" />
           )}
