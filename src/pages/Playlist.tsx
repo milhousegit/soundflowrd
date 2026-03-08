@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, Clock, Music, Loader2, Trash2, Pencil, Shuffle, Download, GripVertical, X, Check, Globe, Lock, Share2, Copy, CheckCircle, Upload, ImageIcon, ListMusic, MessageCircle } from 'lucide-react';
 import BrandedPlaylistCover from '@/components/BrandedPlaylistCover';
+import ChartPlaylistCover from '@/components/ChartPlaylistCover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -64,6 +65,7 @@ const PlaylistPage: React.FC = () => {
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [activeTab, setActiveTab] = useState<'tracks' | 'comments'>('tracks');
   const [commentsCount, setCommentsCount] = useState(0);
+  const [chartCountryCode, setChartCountryCode] = useState<string | null>(null);
   const coverInputRef = React.useRef<HTMLInputElement>(null);
   
   // Check if user can download (premium or admin)
@@ -100,6 +102,16 @@ const PlaylistPage: React.FC = () => {
         setEditedName(fetchedPlaylist.name);
         setEditedCoverUrl(fetchedPlaylist.cover_url || '');
         setEditedIsPublic(fetchedPlaylist.is_public || false);
+
+        // Check if this is a chart playlist
+        const { data: chartConfig } = await supabase
+          .from('chart_configurations')
+          .select('country_code')
+          .eq('playlist_id', `sf:${id}`)
+          .maybeSingle();
+        if (chartConfig) {
+          setChartCountryCode(chartConfig.country_code);
+        }
 
         // Fetch owner profile if not the current user
         if (fetchedPlaylist.user_id !== user?.id) {
@@ -407,6 +419,12 @@ const PlaylistPage: React.FC = () => {
                 <div className="w-full h-full flex items-center justify-center bg-muted">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
+              );
+            }
+
+            if (chartCountryCode && !isEditing) {
+              return (
+                <ChartPlaylistCover countryCode={chartCountryCode} size="lg" />
               );
             }
 
