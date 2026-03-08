@@ -18,12 +18,17 @@ const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
     ? `Con ${mix.top_artists.slice(0, 3).join(', ')}${mix.top_artists.length > 3 ? '...' : ''}`
     : mix.genre_tags[0] || '';
 
-  const handlePlay = () => {
+  const handleClick = () => {
+    navigate(`/daily-mix/${mix.mix_index}`);
+  };
+
+  const handlePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (mix.tracks.length === 0) return;
     setPlaybackSource({
       type: 'playlist',
       name: mix.mix_label,
-      path: '/',
+      path: `/daily-mix/${mix.mix_index}`,
     });
     playTrack(mix.tracks[0], mix.tracks);
   };
