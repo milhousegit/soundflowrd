@@ -106,7 +106,7 @@ const DailyMixPage: React.FC = () => {
               type="daily-mix"
               backgroundUrl={mix.cover_url ? hdCover(mix.cover_url) : undefined}
               label={mix.mix_label}
-              gradientColors={[color1.trim(), color2.trim()]}
+              subtitle={mix.genre_tags[0] || `Mix ${mix.mix_index + 1}`}
             />
           </div>
 

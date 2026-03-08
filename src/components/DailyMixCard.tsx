@@ -45,15 +45,8 @@ const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
           type="daily-mix"
           backgroundUrl={mix.cover_url ? hdCover(mix.cover_url) : undefined}
           label={mix.mix_label}
-          gradientColors={[color1.trim(), color2.trim()]}
+          subtitle={mix.genre_tags[0] || `Mix ${mix.mix_index + 1}`}
         />
-
-        {/* Genre tag */}
-        <div className="absolute top-3 left-10">
-          <span className="text-white/90 text-xs font-bold tracking-wider uppercase drop-shadow-md">
-            {mix.genre_tags[0] || `Mix ${mix.mix_index + 1}`}
-          </span>
-        </div>
 
         {/* Play button on hover */}
         <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
