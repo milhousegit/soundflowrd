@@ -213,6 +213,15 @@ export async function getNewReleases(): Promise<Album[]> {
   return data || [];
 }
 
+export async function getTrendingChart(): Promise<{ tracks: Track[]; albums: Album[] }> {
+  const { data, error } = await supabase.functions.invoke('deezer', {
+    body: { action: 'get-chart', limit: 20 },
+  });
+
+  if (error) throw error;
+  return { tracks: data?.tracks || [], albums: data?.albums || [] };
+}
+
 export async function getPopularArtists(): Promise<Artist[]> {
   const { data, error } = await supabase.functions.invoke('deezer', {
     body: { action: 'get-popular-artists', limit: 12 },
