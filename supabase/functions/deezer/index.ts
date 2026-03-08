@@ -282,7 +282,7 @@ serve(async (req) => {
           title: album.title,
           artist: album.artist?.name || 'Unknown Artist',
           artistId: String(album.artist?.id || ''),
-          coverUrl: album.cover_medium || album.cover_big || album.cover || undefined,
+          coverUrl: album.cover_big || album.cover_medium || album.cover || undefined,
           releaseDate: album.release_date || undefined,
           trackCount: album.nb_tracks || undefined,
         }));
