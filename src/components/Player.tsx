@@ -284,15 +284,12 @@ const Player: React.FC = () => {
                 variant="ghost"
                 size="icon"
                 onClick={() => {
-                  if (contextIsAdmin || isPremiumActive) {
-                    setShowLyricsModal(true);
-                  } else {
-                    setShowPremiumModal(true);
-                  }
+                  navigate('/tv');
+                  setIsExpanded(false);
                 }}
                 className="w-10 hover:bg-transparent"
               >
-              <Mic2 className="w-5 h-5 text-primary" />
+                <Tv className="w-5 h-5 text-muted-foreground" />
               </Button>
             </div>
             <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2 max-w-[50%]">
