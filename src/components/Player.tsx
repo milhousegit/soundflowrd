@@ -265,7 +265,7 @@ const Player: React.FC = () => {
       {isExpanded && (
         <div
           ref={containerRef}
-          className="fixed inset-0 z-[60] bg-background flex flex-col md:hidden"
+          className="fixed inset-0 z-[60] bg-background flex flex-col md:hidden overflow-y-auto"
           style={expandedStyle}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
