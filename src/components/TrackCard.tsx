@@ -3,7 +3,7 @@ import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Play, Pause, Music, Cloud, MoreVertical, ListPlus, Loader2, ListMusic, Plus, Download, HardDrive, Copy, Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, hdCover } from '@/lib/utils';
 import FavoriteButton from './FavoriteButton';
 import TrackActionsModal from './TrackActionsModal';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
@@ -343,7 +343,7 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
         {/* Cover */}
         <div className="w-10 h-10 md:w-10 md:h-10 rounded bg-muted flex items-center justify-center overflow-hidden flex-shrink-0 relative">
           {track.coverUrl ? (
-            <img src={track.coverUrl} alt={track.album} className="w-full h-full object-cover pointer-events-none" draggable={false} />
+            <img src={hdCover(track.coverUrl) || track.coverUrl} alt={track.album} className="w-full h-full object-cover pointer-events-none" draggable={false} />
           ) : (
             <Music className="w-4 h-4 text-muted-foreground" />
           )}

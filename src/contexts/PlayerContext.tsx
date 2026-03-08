@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
 import { Track, type PlayerState } from '@/types/music';
+import { hdCover } from '@/lib/utils';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 
@@ -800,13 +801,14 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         pendingManualSourceRef.current = false;
       }
 
-      // Initialize queue with original track
-      const initialQueue = queue ? [...queue] : [track];
-      const calculatedIndex = startIndex !== undefined ? startIndex : initialQueue.findIndex((t) => t.id === track.id);
+      // Upgrade cover URLs to HD
+      const hdTrack = { ...track, coverUrl: hdCover(track.coverUrl) || track.coverUrl };
+      const initialQueue = (queue ? [...queue] : [hdTrack]).map(t => ({ ...t, coverUrl: hdCover(t.coverUrl) || t.coverUrl }));
+      const calculatedIndex = startIndex !== undefined ? startIndex : initialQueue.findIndex((t) => t.id === hdTrack.id);
 
       setState((prev) => ({
         ...prev,
-        currentTrack: track,
+        currentTrack: hdTrack,
         isPlaying: true,
         queue: initialQueue,
         queueIndex: calculatedIndex >= 0 ? calculatedIndex : 0,
@@ -1756,9 +1758,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     currentSearchTrackIdRef.current = track.id;
 
     // Update state: currentTrack + queueIndex, but do NOT touch queue
+    const hdTrackInternal = { ...track, coverUrl: hdCover(track.coverUrl) || track.coverUrl };
     setState((prev) => ({
       ...prev,
-      currentTrack: track,
+      currentTrack: hdTrackInternal,
       isPlaying: true,
       queueIndex: index,
       duration: track.duration,

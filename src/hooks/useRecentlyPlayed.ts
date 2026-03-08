@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Track } from '@/types/music';
+import { hdCover } from '@/lib/utils';
 
 const RECENTLY_PLAYED_KEY = 'recentlyPlayed';
 const MAX_RECENT_TRACKS = 50;
@@ -37,7 +38,7 @@ export const useRecentlyPlayed = () => {
             artist: record.track_artist,
             album: record.track_album || undefined,
             albumId: record.track_album_id || undefined,
-            coverUrl: record.track_cover_url || undefined,
+            coverUrl: hdCover(record.track_cover_url) || undefined,
             duration: record.track_duration || 0,
             artistId: record.artist_id || undefined,
           }));

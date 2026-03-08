@@ -5,6 +5,7 @@ import { Play, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FavoriteButton from './FavoriteButton';
 import { useTap } from '@/hooks/useTap';
+import { hdCover } from '@/lib/utils';
 
 interface AlbumCardProps {
   album: Album;
@@ -28,7 +29,7 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
       <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted">
         {album.coverUrl ? (
           <img 
-            src={album.coverUrl} 
+            src={hdCover(album.coverUrl) || album.coverUrl} 
             alt={album.title} 
             className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
