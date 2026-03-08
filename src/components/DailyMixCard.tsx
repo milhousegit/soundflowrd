@@ -35,7 +35,7 @@ const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
 
   return (
     <button
-      onClick={handlePlay}
+      onClick={handleClick}
       className="flex-shrink-0 w-44 md:w-auto group text-left touch-manipulation"
     >
       {/* Cover with gradient overlay */}
