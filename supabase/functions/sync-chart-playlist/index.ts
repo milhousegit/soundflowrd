@@ -23,28 +23,56 @@ interface SpotifyTrack {
 
 async function getAnonymousToken(): Promise<string | null> {
   try {
+    console.log('Fetching anonymous Spotify token...');
     const tokenResponse = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
         'Referer': 'https://open.spotify.com/',
         'Origin': 'https://open.spotify.com',
       },
     });
+    console.log('Token response status:', tokenResponse.status);
     if (tokenResponse.ok) {
       const data = await tokenResponse.json();
-      if (data.accessToken) return data.accessToken;
+      if (data.accessToken) {
+        console.log('Got anonymous token via get_access_token');
+        return data.accessToken;
+      }
+      console.log('No accessToken in response:', JSON.stringify(data).substring(0, 200));
     }
+    
+    console.log('Trying embed page for token...');
     const embedResponse = await fetch('https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M', {
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
     });
+    console.log('Embed response status:', embedResponse.status);
     if (embedResponse.ok) {
       const html = await embedResponse.text();
       const m = html.match(/"accessToken":"([^"]+)"/);
-      if (m) return m[1];
+      if (m) {
+        console.log('Got anonymous token via embed page');
+        return m[1];
+      }
+      // Try alt pattern
+      const altM = html.match(/accessToken['"]\s*:\s*['"]([^'"]+)['"]/);
+      if (altM) {
+        console.log('Got anonymous token via embed page (alt)');
+        return altM[1];
+      }
+      console.log('No token found in embed HTML');
     }
+    
     return null;
-  } catch { return null; }
+  } catch (e) {
+    console.error('Token fetch error:', e);
+    return null;
+  }
 }
 
 async function fetchPlaylistTracks(playlistId: string, token: string): Promise<SpotifyTrack[]> {
