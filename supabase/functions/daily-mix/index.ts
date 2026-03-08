@@ -233,10 +233,41 @@ serve(async (req) => {
         .limit(30);
 
       if (!artistStats || artistStats.length === 0) {
-        // No listening history - return empty
-        return new Response(JSON.stringify([]), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        // Try recently_played as fallback
+        const { data: recentArtists } = await supabase
+          .from('recently_played')
+          .select('artist_id, track_artist')
+          .eq('user_id', user.id)
+          .order('played_at', { ascending: false })
+          .limit(50);
+
+        if (!recentArtists || recentArtists.length === 0) {
+          return new Response(JSON.stringify([]), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Build pseudo artist stats from recently_played
+        const artistCountMap = new Map<string, { artist_id: string; artist_name: string; total_plays: number; artist_image_url: string | null }>();
+        for (const r of recentArtists) {
+          if (!r.artist_id) continue;
+          const existing = artistCountMap.get(r.artist_id);
+          if (existing) {
+            existing.total_plays++;
+          } else {
+            artistCountMap.set(r.artist_id, {
+              artist_id: r.artist_id,
+              artist_name: r.track_artist,
+              total_plays: 1,
+              artist_image_url: null,
+            });
+          }
+        }
+        // Use these as artistStats fallback
+        const fallbackStats = Array.from(artistCountMap.values())
+          .sort((a, b) => b.total_plays - a.total_plays)
+          .slice(0, 30);
+        artistStats.push(...(fallbackStats as any[]));
       }
 
       // 2. Get user's known track IDs (to exclude from discovery)
