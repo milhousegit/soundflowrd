@@ -564,46 +564,6 @@ const Home: React.FC = () => {
         ) : null}
       </section>
 
-      {/* New Releases - from favorite artists */}
-      {homeDisplayOptions.showNewReleases && (
-        <section>
-          <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
-            <Music className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-            <h2 className="text-lg md:text-2xl font-bold text-foreground">{t('newReleases')}</h2>
-          </div>
-          {isLoadingReleases ? (
-            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="flex-shrink-0 w-32 md:w-auto">
-                  <AlbumCardSkeleton />
-                </div>
-              ))}
-            </div>
-          ) : newReleases.length > 0 ? (
-            <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
-              {newReleases.slice(0, 12).map((album) => (
-                <div key={album.id} className="flex-shrink-0 w-32 md:w-auto">
-                  <AlbumCard album={album} />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 bg-secondary/30 rounded-xl">
-              <TrendingUp className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-muted-foreground">
-                {hasAnyFavorites 
-                  ? (t('language') === 'it' 
-                      ? "Nessuna nuova uscita dai tuoi artisti preferiti" 
-                      : "No new releases from your favorite artists")
-                  : (t('language') === 'it' 
-                      ? "Aggiungi artisti, brani o album ai preferiti per vedere le loro nuove uscite" 
-                      : "Add artists, tracks or albums to favorites to see their new releases")
-                }
-              </p>
-            </div>
-          )}
-        </section>
-      )}
 
       {/* Popular Artists - Horizontal scroll on mobile */}
       {homeDisplayOptions.showPopularArtists && (
