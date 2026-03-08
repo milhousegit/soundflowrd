@@ -105,28 +105,33 @@ async function fetchPlaylistTracks(playlistId: string, token: string): Promise<S
     const data = await response.json();
     console.log(`GraphQL response keys: ${Object.keys(data || {}).join(', ')}`);
     const items = data?.data?.playlistV2?.content?.items || [];
-  const tracks: SpotifyTrack[] = [];
+    const tracks: SpotifyTrack[] = [];
 
-  for (let i = 0; i < items.length; i++) {
-    const track = items[i]?.itemV2?.data;
-    if (!track || track.__typename !== 'Track') continue;
-    const artists = track.artists?.items || [];
-    const artistNames = artists.map((a: any) => a?.profile?.name).filter(Boolean).join(', ');
-    const album = track.albumOfTrack || {};
-    tracks.push({
-      id: track.uri?.replace('spotify:track:', '') || `sp-${i}`,
-      title: track.name || 'Unknown',
-      artist: artistNames || 'Unknown',
-      artistId: (artists[0]?.uri || '').replace('spotify:artist:', ''),
-      album: album.name || '',
-      albumId: (album.uri || '').replace('spotify:album:', ''),
-      coverUrl: album.coverArt?.sources?.[0]?.url || '',
-      duration: Math.floor((track.duration?.totalMilliseconds || 0) / 1000),
-    });
+    for (let i = 0; i < items.length; i++) {
+      const track = items[i]?.itemV2?.data;
+      if (!track || track.__typename !== 'Track') continue;
+      const artists = track.artists?.items || [];
+      const artistNames = artists.map((a: any) => a?.profile?.name).filter(Boolean).join(', ');
+      const album = track.albumOfTrack || {};
+      tracks.push({
+        id: track.uri?.replace('spotify:track:', '') || `sp-${i}`,
+        title: track.name || 'Unknown',
+        artist: artistNames || 'Unknown',
+        artistId: (artists[0]?.uri || '').replace('spotify:artist:', ''),
+        album: album.name || '',
+        albumId: (album.uri || '').replace('spotify:album:', ''),
+        coverUrl: album.coverArt?.sources?.[0]?.url || '',
+        duration: Math.floor((track.duration?.totalMilliseconds || 0) / 1000),
+      });
+    }
+
+    console.log(`GraphQL: got ${tracks.length} tracks`);
+    if (tracks.length === 0) return await fetchPlaylistTracksWebAPI(playlistId, token);
+    return tracks;
+  } catch (e) {
+    console.error('fetchPlaylistTracks error:', e);
+    return await fetchPlaylistTracksWebAPI(playlistId, token);
   }
-
-  if (tracks.length === 0) return await fetchPlaylistTracksWebAPI(playlistId, token);
-  return tracks;
 }
 
 async function fetchPlaylistTracksWebAPI(playlistId: string, token: string): Promise<SpotifyTrack[]> {
