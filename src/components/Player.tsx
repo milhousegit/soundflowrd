@@ -33,6 +33,9 @@ import {
   SkipForward,
   Volume2,
   VolumeX,
+  Tv,
+  Sparkles,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamResult } from '@/lib/realdebrid';
@@ -262,7 +265,7 @@ const Player: React.FC = () => {
       {isExpanded && (
         <div
           ref={containerRef}
-          className="fixed inset-0 z-[60] bg-background flex flex-col md:hidden"
+          className="fixed inset-0 z-[60] bg-background flex flex-col md:hidden overflow-y-auto"
           style={expandedStyle}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -281,15 +284,12 @@ const Player: React.FC = () => {
                 variant="ghost"
                 size="icon"
                 onClick={() => {
-                  if (contextIsAdmin || isPremiumActive) {
-                    setShowLyricsModal(true);
-                  } else {
-                    setShowPremiumModal(true);
-                  }
+                  navigate('/tv');
+                  setIsExpanded(false);
                 }}
                 className="w-10 hover:bg-transparent"
               >
-              <Mic2 className="w-5 h-5 text-primary" />
+                <Tv className="w-5 h-5 text-muted-foreground" />
               </Button>
             </div>
             <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2 max-w-[50%]">
@@ -311,14 +311,6 @@ const Player: React.FC = () => {
               )}
             </div>
             <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowQueueModal(true)}
-                className="text-muted-foreground hover:text-primary w-10"
-              >
-                <ListMusic className="w-5 h-5" />
-              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -438,8 +430,7 @@ const Player: React.FC = () => {
           </div>
 
           <div
-            className="flex items-center justify-between px-6 pb-safe"
-            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
+            className="flex items-center justify-between px-6"
           >
             <Button
               variant="ghost"
@@ -468,6 +459,47 @@ const Player: React.FC = () => {
             </div>
 
             <FavoriteButton itemType="track" item={currentTrack} size="md" variant="ghost" className="h-11 w-11" />
+          </div>
+
+          {/* Queue button */}
+          <div className="px-6 pt-3">
+            <button
+              onClick={() => setShowQueueModal(true)}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-secondary/30 hover:bg-secondary/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <ListMusic className="w-5 h-5 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">
+                  {settings.language === 'it' ? 'Coda di riproduzione' : 'Playback queue'}
+                </span>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </button>
+          </div>
+
+          {/* Lyrics card */}
+          <div 
+            className="px-6 pt-3 pb-safe"
+            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
+          >
+            <button
+              onClick={() => {
+                if (contextIsAdmin || isPremiumActive) {
+                  setShowLyricsModal(true);
+                } else {
+                  setShowPremiumModal(true);
+                }
+              }}
+              className="w-full rounded-2xl border border-border bg-secondary/40 p-4 text-left hover:bg-secondary/60 transition-colors relative overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Lyrics</span>
+                <Sparkles className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <p className="text-base font-medium text-foreground/90 line-clamp-2">
+                {settings.language === 'it' ? 'Tocca per vedere il testo' : 'Tap to view lyrics'}
+              </p>
+            </button>
           </div>
         </div>
       )}
