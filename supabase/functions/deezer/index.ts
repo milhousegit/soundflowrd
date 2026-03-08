@@ -263,7 +263,7 @@ serve(async (req) => {
           artists: (data.artists?.data || []).slice(0, limit).map((artist: any) => ({
             id: String(artist.id),
             name: artist.name,
-            imageUrl: artist.picture_medium || artist.picture_big || artist.picture || undefined,
+            imageUrl: artist.picture_big || artist.picture_medium || artist.picture || undefined,
             popularity: artist.nb_fan || 0,
           })),
         };
