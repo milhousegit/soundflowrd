@@ -38,7 +38,7 @@ export const useRecentlyPlayed = () => {
             artist: record.track_artist,
             album: record.track_album || undefined,
             albumId: record.track_album_id || undefined,
-            coverUrl: record.track_cover_url || undefined,
+            coverUrl: hdCover(record.track_cover_url) || undefined,
             duration: record.track_duration || 0,
             artistId: record.artist_id || undefined,
           }));
