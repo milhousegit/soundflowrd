@@ -135,6 +135,8 @@ const RecentTrackItem: React.FC<{
 
 const Home: React.FC = () => {
   const [newReleases, setNewReleases] = useState<Album[]>([]);
+  const [trendingAlbums, setTrendingAlbums] = useState<Album[]>([]);
+  const [isLoadingTrending, setIsLoadingTrending] = useState(true);
   const [popularArtists, setPopularArtists] = useState<Artist[]>([]);
   const [chartConfigs, setChartConfigs] = useState<ChartConfig[]>([]);
   const [chartDisplayData, setChartDisplayData] = useState<Record<string, ChartDisplayData>>({});
