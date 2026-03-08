@@ -56,7 +56,7 @@ async function getPopularArtists(): Promise<Artist[]> {
     return artists.map((artist: any) => ({
       id: String(artist.id),
       name: artist.name,
-      imageUrl: artist.picture_medium || artist.picture_big || artist.picture || undefined,
+      imageUrl: artist.picture_xl || artist.picture_big || artist.picture_medium || artist.picture || undefined,
       popularity: artist.position || 0,
     }));
   } catch (error) {
