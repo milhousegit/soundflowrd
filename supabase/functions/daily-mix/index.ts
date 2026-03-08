@@ -98,14 +98,28 @@ function clusterArtistsByGenre(
       return bTotal - aTotal;
     });
 
-  // If fewer than 3 clusters, split the biggest one
-  while (clusters.length < 3 && clusters.length > 0) {
+  // Ensure at least 2 clusters by splitting or duplicating
+  while (clusters.length < 2 && clusters.length > 0) {
     const biggest = clusters[0];
     if (biggest.artists.length >= 2) {
       const half = Math.ceil(biggest.artists.length / 2);
       const split1 = { genre: biggest.genre, artists: biggest.artists.slice(0, half) };
       const split2 = { genre: `${biggest.genre} (2)`, artists: biggest.artists.slice(half) };
       clusters.splice(0, 1, split1, split2);
+    } else {
+      // Duplicate the single artist into a second mix (discovery-focused)
+      clusters.push({ genre: `${biggest.genre} Discovery`, artists: [...biggest.artists] });
+    }
+  }
+  // Try to reach 3 if possible
+  while (clusters.length < 3) {
+    const biggest = clusters.reduce((a, b) => a.artists.length > b.artists.length ? a : b);
+    if (biggest.artists.length >= 2) {
+      const half = Math.ceil(biggest.artists.length / 2);
+      const idx = clusters.indexOf(biggest);
+      const split1 = { genre: biggest.genre, artists: biggest.artists.slice(0, half) };
+      const split2 = { genre: `${biggest.genre} (${clusters.length + 1})`, artists: biggest.artists.slice(half) };
+      clusters.splice(idx, 1, split1, split2);
     } else {
       break;
     }
