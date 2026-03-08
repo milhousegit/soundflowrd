@@ -368,6 +368,31 @@ serve(async (req) => {
           }
         }
 
+        // Fallback: use user's most played tracks for these artists from DB
+        if (comfortTracks.length < 5) {
+          const clusterArtistIds = cluster.artists.map(a => a.id);
+          const { data: dbTracks } = await supabase
+            .from('user_track_stats')
+            .select('track_id, track_title, track_artist, artist_id, track_album, track_album_id, track_cover_url, track_duration')
+            .eq('user_id', user.id)
+            .in('artist_id', clusterArtistIds)
+            .order('play_count', { ascending: false })
+            .limit(15);
+
+          for (const dt of (dbTracks || [])) {
+            if (!comfortTracks.find((ct: any) => String(ct.id) === dt.track_id)) {
+              comfortTracks.push({
+                id: dt.track_id,
+                title: dt.track_title,
+                artist: { name: dt.track_artist, id: dt.artist_id },
+                album: { title: dt.track_album, id: dt.track_album_id, cover_medium: dt.track_cover_url },
+                duration: dt.track_duration || 0,
+              });
+            }
+            if (comfortTracks.length >= 10) break;
+          }
+        }
+
         // Dedupe and take 10
         const seenIds = new Set<string>();
         const comfort10: any[] = [];
