@@ -103,6 +103,16 @@ const PlaylistPage: React.FC = () => {
         setEditedCoverUrl(fetchedPlaylist.cover_url || '');
         setEditedIsPublic(fetchedPlaylist.is_public || false);
 
+        // Check if this is a chart playlist
+        const { data: chartConfig } = await supabase
+          .from('chart_configurations')
+          .select('country_code')
+          .eq('playlist_id', `sf:${id}`)
+          .maybeSingle();
+        if (chartConfig) {
+          setChartCountryCode(chartConfig.country_code);
+        }
+
         // Fetch owner profile if not the current user
         if (fetchedPlaylist.user_id !== user?.id) {
           const { data: profileData } = await supabase
