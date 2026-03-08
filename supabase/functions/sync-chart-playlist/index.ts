@@ -311,9 +311,10 @@ serve(async (req) => {
 
       console.log(`Got ${spotifyTracks.length} Spotify tracks for ${config.country_code}`);
 
-      // 2. Match with Deezer
-      const deezerTracks = await matchAll(spotifyTracks);
-      console.log(`Matched ${deezerTracks.length}/${spotifyTracks.length} with Deezer`);
+      // 2. The tracks are already Deezer-matched from spotify-import
+      // Insert them directly
+      const deezerTracks = spotifyTracks.filter((t: any) => !t.id.startsWith('spotify-'));
+      console.log(`${deezerTracks.length}/${spotifyTracks.length} matched with Deezer`);
 
       if (deezerTracks.length === 0) {
         results.push({ country: config.country_code, status: 'error', reason: 'no deezer matches' });
