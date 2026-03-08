@@ -314,14 +314,6 @@ const Player: React.FC = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setShowQueueModal(true)}
-                className="text-muted-foreground hover:text-primary w-10"
-              >
-                <ListMusic className="w-5 h-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
                 onClick={() => setShowTrackActions(true)}
                 className="text-muted-foreground hover:text-foreground w-10"
               >
