@@ -98,14 +98,28 @@ function clusterArtistsByGenre(
       return bTotal - aTotal;
     });
 
-  // If fewer than 3 clusters, split the biggest one
-  while (clusters.length < 3 && clusters.length > 0) {
+  // Ensure at least 2 clusters by splitting or duplicating
+  while (clusters.length < 2 && clusters.length > 0) {
     const biggest = clusters[0];
     if (biggest.artists.length >= 2) {
       const half = Math.ceil(biggest.artists.length / 2);
       const split1 = { genre: biggest.genre, artists: biggest.artists.slice(0, half) };
       const split2 = { genre: `${biggest.genre} (2)`, artists: biggest.artists.slice(half) };
       clusters.splice(0, 1, split1, split2);
+    } else {
+      // Duplicate the single artist into a second mix (discovery-focused)
+      clusters.push({ genre: `${biggest.genre} Discovery`, artists: [...biggest.artists] });
+    }
+  }
+  // Try to reach 3 if possible
+  while (clusters.length < 3) {
+    const biggest = clusters.reduce((a, b) => a.artists.length > b.artists.length ? a : b);
+    if (biggest.artists.length >= 2) {
+      const half = Math.ceil(biggest.artists.length / 2);
+      const idx = clusters.indexOf(biggest);
+      const split1 = { genre: biggest.genre, artists: biggest.artists.slice(0, half) };
+      const split2 = { genre: `${biggest.genre} (${clusters.length + 1})`, artists: biggest.artists.slice(half) };
+      clusters.splice(idx, 1, split1, split2);
     } else {
       break;
     }
@@ -211,18 +225,51 @@ serve(async (req) => {
       await supabase.from('daily_mixes').delete().eq('user_id', user.id);
 
       // 1. Fetch user's top artists from stats
-      const { data: artistStats } = await supabase
+      const { data: rawArtistStats } = await supabase
         .from('user_artist_stats')
         .select('artist_id, artist_name, total_plays, artist_image_url')
         .eq('user_id', user.id)
         .order('total_plays', { ascending: false })
         .limit(30);
 
+      const artistStats: { artist_id: string; artist_name: string; total_plays: number; artist_image_url: string | null }[] = [...(rawArtistStats || [])];
+
       if (!artistStats || artistStats.length === 0) {
-        // No listening history - return empty
-        return new Response(JSON.stringify([]), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        // Try recently_played as fallback
+        const { data: recentArtists } = await supabase
+          .from('recently_played')
+          .select('artist_id, track_artist')
+          .eq('user_id', user.id)
+          .order('played_at', { ascending: false })
+          .limit(50);
+
+        if (!recentArtists || recentArtists.length === 0) {
+          return new Response(JSON.stringify([]), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Build pseudo artist stats from recently_played
+        const artistCountMap = new Map<string, { artist_id: string; artist_name: string; total_plays: number; artist_image_url: string | null }>();
+        for (const r of recentArtists) {
+          if (!r.artist_id) continue;
+          const existing = artistCountMap.get(r.artist_id);
+          if (existing) {
+            existing.total_plays++;
+          } else {
+            artistCountMap.set(r.artist_id, {
+              artist_id: r.artist_id,
+              artist_name: r.track_artist,
+              total_plays: 1,
+              artist_image_url: null,
+            });
+          }
+        }
+        // Use these as artistStats fallback
+        const fallbackStats = Array.from(artistCountMap.values())
+          .sort((a, b) => b.total_plays - a.total_plays)
+          .slice(0, 30);
+        artistStats.push(...(fallbackStats as any[]));
       }
 
       // 2. Get user's known track IDs (to exclude from discovery)
@@ -316,6 +363,31 @@ serve(async (req) => {
               }
             } catch {
               // Skip
+            }
+            if (comfortTracks.length >= 10) break;
+          }
+        }
+
+        // Fallback: use user's most played tracks for these artists from DB
+        if (comfortTracks.length < 5) {
+          const clusterArtistIds = cluster.artists.map(a => a.id);
+          const { data: dbTracks } = await supabase
+            .from('user_track_stats')
+            .select('track_id, track_title, track_artist, artist_id, track_album, track_album_id, track_cover_url, track_duration')
+            .eq('user_id', user.id)
+            .in('artist_id', clusterArtistIds)
+            .order('play_count', { ascending: false })
+            .limit(15);
+
+          for (const dt of (dbTracks || [])) {
+            if (!comfortTracks.find((ct: any) => String(ct.id) === dt.track_id)) {
+              comfortTracks.push({
+                id: dt.track_id,
+                title: dt.track_title,
+                artist: { name: dt.track_artist, id: dt.artist_id },
+                album: { title: dt.track_album, id: dt.track_album_id, cover_medium: dt.track_cover_url },
+                duration: dt.track_duration || 0,
+              });
             }
             if (comfortTracks.length >= 10) break;
           }

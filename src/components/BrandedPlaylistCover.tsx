@@ -3,10 +3,10 @@ import { Music } from 'lucide-react';
 import logoImg from '@/assets/logo.png';
 
 /** Three distinct gradient palettes for daily mixes */
-const MIX_GRADIENTS: [string, string][] = [
-  ['hsl(200, 85%, 55%)', 'hsl(168, 80%, 45%)'],   // blue → teal
-  ['hsl(280, 70%, 55%)', 'hsl(330, 90%, 55%)'],    // purple → pink
-  ['hsl(10, 85%, 55%)', 'hsl(40, 90%, 55%)'],      // red → orange
+const MIX_GRADIENTS: { colors: [string, string]; tint: string }[] = [
+  { colors: ['hsl(200, 85%, 55%)', 'hsl(168, 80%, 45%)'], tint: 'rgba(30, 120, 160, 0.55)' },   // blue → teal
+  { colors: ['hsl(280, 70%, 55%)', 'hsl(330, 90%, 55%)'], tint: 'rgba(160, 40, 140, 0.55)' },    // purple → pink
+  { colors: ['hsl(10, 85%, 55%)', 'hsl(40, 90%, 55%)'], tint: 'rgba(180, 80, 30, 0.55)' },       // red → orange
 ];
 
 interface BrandedPlaylistCoverProps {
@@ -30,12 +30,11 @@ const BrandedPlaylistCover: React.FC<BrandedPlaylistCoverProps> = ({
   mixIndex = 0,
   className = '',
 }) => {
-  // Pick gradient based on mix index (cycles if >3)
-  const [c1, c2] = type === 'daily-mix'
+  const palette = type === 'daily-mix'
     ? MIX_GRADIENTS[mixIndex % MIX_GRADIENTS.length]
-    : ['hsl(174, 72%, 40%)', 'hsl(187, 85%, 35%)'];
+    : { colors: ['hsl(174, 72%, 40%)', 'hsl(187, 85%, 35%)'] as [string, string], tint: 'rgba(20, 100, 100, 0.55)' };
 
-  const gradient = `linear-gradient(160deg, ${c1} 0%, ${c2} 100%)`;
+  const gradient = `linear-gradient(160deg, ${palette.colors[0]} 0%, ${palette.colors[1]} 100%)`;
 
   return (
     <div
@@ -44,20 +43,33 @@ const BrandedPlaylistCover: React.FC<BrandedPlaylistCoverProps> = ({
     >
       {/* Background image if available */}
       {backgroundUrl ? (
-        <img
-          src={backgroundUrl}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+        <>
+          <img
+            src={backgroundUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          {/* Color toning overlay matching the mix gradient */}
+          <div
+            className="absolute inset-0 mix-blend-multiply"
+            style={{ background: gradient, opacity: 0.6 }}
+          />
+          {/* Extra tint for text contrast */}
+          <div
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(180deg, ${palette.tint} 0%, rgba(0,0,0,0.7) 100%)` }}
+          />
+        </>
       ) : (
         /* Centred music icon as placeholder */
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Music className="w-12 h-12 text-white/80 drop-shadow-lg" />
-        </div>
+        <>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Music className="w-12 h-12 text-white/80 drop-shadow-lg" />
+          </div>
+          {/* Bottom gradient for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+        </>
       )}
-
-      {/* Subtle gradient overlay at bottom for text readability */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
       {/* Top-left: Logo + subtitle */}
       <div className="absolute top-3 left-3 flex items-center gap-1.5">
