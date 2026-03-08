@@ -130,12 +130,19 @@ async function fetchPlaylistTracks(playlistId: string, token: string): Promise<S
 }
 
 async function fetchPlaylistTracksWebAPI(playlistId: string, token: string): Promise<SpotifyTrack[]> {
+  console.log(`Trying Spotify Web API for ${playlistId}...`);
   const response = await fetch(
     `https://api.spotify.com/v1/playlists/${playlistId}?fields=tracks.items(track(id,name,duration_ms,artists(id,name),album(id,name,images)))&limit=100`,
-    { headers: { 'Authorization': `Bearer ${token}`, 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } }
+    { headers: { 'Authorization': `Bearer ${token}`, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' } }
   );
-  if (!response.ok) return [];
+  console.log(`Web API response status: ${response.status}`);
+  if (!response.ok) {
+    const body = await response.text();
+    console.log(`Web API error body: ${body.substring(0, 300)}`);
+    return [];
+  }
   const data = await response.json();
+  console.log(`Web API tracks count: ${data.tracks?.items?.length || 0}`);
   return (data.tracks?.items || []).filter((i: any) => i?.track).map((item: any, idx: number) => ({
     id: item.track.id || `sp-${idx}`,
     title: item.track.name || 'Unknown',
