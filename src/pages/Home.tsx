@@ -441,6 +441,9 @@ const Home: React.FC = () => {
         </section>
       )}
 
+      {/* Daily Mix */}
+      <DailyMixSection />
+
       {/* Playlists - Horizontal scroll on mobile */}
       {homeDisplayOptions.showPlaylists && (
         <section>
