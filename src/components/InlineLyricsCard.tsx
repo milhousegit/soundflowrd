@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Maximize2, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Track } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
