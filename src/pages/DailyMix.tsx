@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Shuffle, ListPlus, Loader2 } from 'lucide-react';
+import { Play, Shuffle, ListPlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useDailyMixes } from '@/hooks/useDailyMixes';
 import { usePlayer } from '@/contexts/PlayerContext';
@@ -9,6 +9,7 @@ import { usePlaylists } from '@/hooks/usePlaylists';
 import { useToast } from '@/hooks/use-toast';
 import TrackCard from '@/components/TrackCard';
 import BackButton from '@/components/BackButton';
+import BrandedPlaylistCover from '@/components/BrandedPlaylistCover';
 import { hdCover } from '@/lib/utils';
 import { Track } from '@/types/music';
 
