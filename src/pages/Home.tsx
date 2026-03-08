@@ -183,63 +183,6 @@ const Home: React.FC = () => {
 
   // recentTracks now comes from useRecentlyPlayed hook (synced with database)
 
-  useEffect(() => {
-    const fetchNewReleases = async () => {
-      setIsLoadingReleases(true);
-      try {
-        const uniqueArtistNames = getUniqueArtistNames();
-        
-        // If user has favorites, search for releases from those artists
-        if (uniqueArtistNames.length > 0) {
-          const allReleases: Album[] = [];
-          
-          // Search releases for up to 5 artists using Deezer
-          for (const artistName of uniqueArtistNames.slice(0, 5)) {
-            try {
-              const albums = await searchAlbums(artistName);
-              // Filter to only include releases that match the artist name
-              const artistReleases = albums.filter((album: Album) => 
-                album.artist?.toLowerCase().includes(artistName.toLowerCase()) ||
-                artistName.toLowerCase().includes(album.artist?.toLowerCase() || '')
-              );
-              allReleases.push(...artistReleases.slice(0, 6));
-            } catch (e) {
-              console.error('Error fetching releases for', artistName, e);
-            }
-          }
-          
-          // Sort by release date (newest first) and dedupe
-          const uniqueReleases = allReleases
-            .reduce((acc, album) => {
-              if (!acc.find(a => a.id === album.id)) acc.push(album);
-              return acc;
-            }, [] as Album[])
-            .sort((a, b) => {
-              const dateA = a.releaseDate ? new Date(a.releaseDate).getTime() : 0;
-              const dateB = b.releaseDate ? new Date(b.releaseDate).getTime() : 0;
-              return dateB - dateA;
-            });
-          
-          setNewReleases(uniqueReleases.slice(0, 12));
-        } else {
-          // No favorites - get new releases from Deezer
-          try {
-            const releases = await getNewReleases();
-            setNewReleases(releases.slice(0, 12));
-          } catch (cacheError) {
-            console.error('Failed to fetch new releases:', cacheError);
-            setNewReleases([]);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch new releases:', error);
-      } finally {
-        setIsLoadingReleases(false);
-      }
-    };
-
-    fetchNewReleases();
-  }, [favorites.length]);
 
   // Fetch trending chart albums
   useEffect(() => {
