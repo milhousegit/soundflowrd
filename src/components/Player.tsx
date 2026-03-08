@@ -470,21 +470,8 @@ const Player: React.FC = () => {
             <FavoriteButton itemType="track" item={currentTrack} size="md" variant="ghost" className="h-11 w-11" />
           </div>
 
-          {/* Queue button */}
-          <div className="px-6 pt-3">
-            <button
-              onClick={() => setShowQueueModal(true)}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-secondary/30 md:hover:bg-secondary/50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <ListMusic className="w-5 h-5 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">
-                  {settings.language === 'it' ? 'Coda di riproduzione' : 'Playback queue'}
-                </span>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
-          </div>
+          {/* Spacer to push lyrics below the fold */}
+          <div style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }} />
 
           {/* Lyrics card - hidden below fold, scroll to discover */}
           <div 
