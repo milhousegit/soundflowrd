@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { DailyMix } from '@/hooks/useDailyMixes';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { hdCover } from '@/lib/utils';
@@ -10,25 +11,31 @@ interface DailyMixCardProps {
 
 const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
   const { playTrack, setPlaybackSource } = usePlayer();
+  const navigate = useNavigate();
 
   const [color1, color2] = mix.dominant_color.split(',');
   const artistLabel = mix.top_artists.length > 0
     ? `Con ${mix.top_artists.slice(0, 3).join(', ')}${mix.top_artists.length > 3 ? '...' : ''}`
     : mix.genre_tags[0] || '';
 
-  const handlePlay = () => {
+  const handleClick = () => {
+    navigate(`/daily-mix/${mix.mix_index}`);
+  };
+
+  const handlePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (mix.tracks.length === 0) return;
     setPlaybackSource({
       type: 'playlist',
       name: mix.mix_label,
-      path: '/',
+      path: `/daily-mix/${mix.mix_index}`,
     });
     playTrack(mix.tracks[0], mix.tracks);
   };
 
   return (
     <button
-      onClick={handlePlay}
+      onClick={handleClick}
       className="flex-shrink-0 w-44 md:w-auto group text-left touch-manipulation"
     >
       {/* Cover with gradient overlay */}
@@ -62,7 +69,9 @@ const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
         </div>
 
         {/* Play button on hover */}
-        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          onClick={handlePlay}
+        >
           <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-xl">
             <Play className="w-5 h-5 text-primary-foreground ml-0.5" />
           </div>

@@ -32,6 +32,7 @@ import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
 import DeezerPlaylist from "@/pages/DeezerPlaylist";
+import DailyMix from "@/pages/DailyMix";
 import NotFound from "./pages/NotFound";
 import TV from "./pages/TV";
 import { MobileRemotePage } from "./pages/TV";
@@ -96,6 +97,7 @@ const AppRoutes = () => {
         <Route path="album/:id" element={<Album />} />
         <Route path="playlist/:id" element={<Playlist />} />
         <Route path="deezer-playlist/:id" element={<DeezerPlaylist />} />
+        <Route path="daily-mix/:index" element={<DailyMix />} />
         <Route path="remote" element={<MobileRemotePage />} />
       </Route>
       <Route path="/tv" element={<TV />} />

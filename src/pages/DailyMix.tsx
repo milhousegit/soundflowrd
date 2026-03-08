@@ -1,0 +1,188 @@
+import React, { useState, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Play, Shuffle, ListPlus, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useDailyMixes } from '@/hooks/useDailyMixes';
+import { usePlayer } from '@/contexts/PlayerContext';
+import { useSettings } from '@/contexts/SettingsContext';
+import { usePlaylists } from '@/hooks/usePlaylists';
+import { useToast } from '@/hooks/use-toast';
+import TrackCard from '@/components/TrackCard';
+import BackButton from '@/components/BackButton';
+import { hdCover } from '@/lib/utils';
+import { Track } from '@/types/music';
+
+const DailyMixPage: React.FC = () => {
+  const { index } = useParams<{ index: string }>();
+  const navigate = useNavigate();
+  const { mixes, isLoading } = useDailyMixes();
+  const { playTrack, setPlaybackSource, currentTrack, isPlaying, toggle } = usePlayer();
+  const { settings } = useSettings();
+  const { createPlaylist, addTracksToPlaylist } = usePlaylists();
+  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
+
+  const mixIndex = parseInt(index || '0', 10);
+  const mix = mixes.find(m => m.mix_index === mixIndex);
+
+  const [color1, color2] = useMemo(() => {
+    if (!mix) return ['#6366F1', '#EC4899'];
+    return mix.dominant_color.split(',');
+  }, [mix]);
+
+  const handlePlayAll = () => {
+    if (!mix || mix.tracks.length === 0) return;
+    setPlaybackSource({ type: 'playlist', name: mix.mix_label, path: `/daily-mix/${mixIndex}` });
+    playTrack(mix.tracks[0], mix.tracks);
+  };
+
+  const handleShuffle = () => {
+    if (!mix || mix.tracks.length === 0) return;
+    const shuffled = [...mix.tracks].sort(() => Math.random() - 0.5);
+    setPlaybackSource({ type: 'playlist', name: mix.mix_label, path: `/daily-mix/${mixIndex}` });
+    playTrack(shuffled[0], shuffled);
+  };
+
+  const handleSaveAsPlaylist = async () => {
+    if (!mix || mix.tracks.length === 0) return;
+    setIsSaving(true);
+    try {
+      const playlist = await createPlaylist(mix.mix_label, mix.cover_url || undefined);
+      if (playlist) {
+        const success = await addTracksToPlaylist(playlist.id, mix.tracks);
+        if (success) {
+          toast({
+            title: settings.language === 'it' ? 'Playlist creata!' : 'Playlist created!',
+            description: `${mix.mix_label} — ${mix.tracks.length} ${settings.language === 'it' ? 'brani' : 'tracks'}`,
+          });
+          navigate(`/playlist/${playlist.id}`);
+        }
+      }
+    } catch {
+      toast({
+        title: settings.language === 'it' ? 'Errore' : 'Error',
+        description: settings.language === 'it' ? 'Impossibile creare la playlist' : 'Failed to create playlist',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!mix) {
+    return (
+      <div className="p-4">
+        <BackButton />
+        <p className="text-center text-muted-foreground mt-10">
+          {settings.language === 'it' ? 'Mix non trovato' : 'Mix not found'}
+        </p>
+      </div>
+    );
+  }
+
+  const artistLabel = mix.top_artists.slice(0, 4).join(', ');
+
+  return (
+    <div className="pb-32">
+      {/* Header */}
+      <div
+        className="relative px-4 pt-4 pb-6"
+        style={{ background: `linear-gradient(180deg, ${color1} 0%, ${color2}88 60%, transparent 100%)` }}
+      >
+        <BackButton />
+
+        <div className="flex flex-col items-center mt-4 gap-3">
+          <div
+            className="w-44 h-44 md:w-52 md:h-52 rounded-2xl overflow-hidden shadow-2xl relative"
+            style={{ background: `linear-gradient(135deg, ${color1}, ${color2})` }}
+          >
+            {mix.cover_url && (
+              <img
+                src={hdCover(mix.cover_url)}
+                alt={mix.mix_label}
+                className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-60"
+              />
+            )}
+            <div
+              className="absolute inset-0"
+              style={{ background: `linear-gradient(180deg, transparent 30%, ${color1}cc 100%)` }}
+            />
+            <div className="absolute bottom-3 left-3">
+              <span className="text-white text-xl font-bold drop-shadow-lg">{mix.mix_label}</span>
+            </div>
+          </div>
+
+          <div className="text-center">
+            <p className="text-sm text-white/80 font-medium">
+              {mix.genre_tags[0] || ''}
+            </p>
+            <p className="text-xs text-white/60 mt-0.5">
+              {artistLabel}
+            </p>
+            <p className="text-xs text-white/50 mt-1">
+              {mix.tracks.length} {settings.language === 'it' ? 'brani' : 'tracks'}
+            </p>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center justify-center gap-3 mt-5">
+          <Button
+            onClick={handlePlayAll}
+            size="sm"
+            className="rounded-full gap-2 px-5"
+          >
+            <Play className="w-4 h-4 fill-current" />
+            {settings.language === 'it' ? 'Riproduci' : 'Play'}
+          </Button>
+          <Button
+            onClick={handleShuffle}
+            variant="outline"
+            size="sm"
+            className="rounded-full gap-2 px-5 border-white/30 text-white hover:bg-white/10"
+          >
+            <Shuffle className="w-4 h-4" />
+            Shuffle
+          </Button>
+          <Button
+            onClick={handleSaveAsPlaylist}
+            variant="outline"
+            size="sm"
+            disabled={isSaving}
+            className="rounded-full gap-2 px-5 border-white/30 text-white hover:bg-white/10"
+          >
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ListPlus className="w-4 h-4" />
+            )}
+            {settings.language === 'it' ? 'Salva' : 'Save'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Tracklist */}
+      <div className="px-2 md:px-4 mt-4 space-y-1">
+        {mix.tracks.map((track, i) => (
+          <TrackCard
+            key={`${track.id}-${i}`}
+            track={track}
+            queue={mix.tracks}
+            showArtist
+            index={i + 1}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default DailyMixPage;
