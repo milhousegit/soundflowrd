@@ -101,24 +101,13 @@ const DailyMixPage: React.FC = () => {
         <BackButton />
 
         <div className="flex flex-col items-center mt-4 gap-3">
-          <div
-            className="w-44 h-44 md:w-52 md:h-52 rounded-2xl overflow-hidden shadow-2xl relative"
-            style={{ background: `linear-gradient(135deg, ${color1}, ${color2})` }}
-          >
-            {mix.cover_url && (
-              <img
-                src={hdCover(mix.cover_url)}
-                alt={mix.mix_label}
-                className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-60"
-              />
-            )}
-            <div
-              className="absolute inset-0"
-              style={{ background: `linear-gradient(180deg, transparent 30%, ${color1}cc 100%)` }}
+          <div className="w-44 h-44 md:w-52 md:h-52 rounded-2xl overflow-hidden shadow-2xl">
+            <BrandedPlaylistCover
+              type="daily-mix"
+              backgroundUrl={mix.cover_url ? hdCover(mix.cover_url) : undefined}
+              label={mix.mix_label}
+              gradientColors={[color1.trim(), color2.trim()]}
             />
-            <div className="absolute bottom-3 left-3">
-              <span className="text-white text-xl font-bold drop-shadow-lg">{mix.mix_label}</span>
-            </div>
           </div>
 
           <div className="text-center">
