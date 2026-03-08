@@ -246,8 +246,28 @@ const Home: React.FC = () => {
     const fetchTrending = async () => {
       setIsLoadingTrending(true);
       try {
-        const chart = await getTrendingChart();
-        setTrendingAlbums(chart.albums.slice(0, 12));
+        if (geoCountry) {
+          // Use country-specific chart
+          const tracks = await getCountryChart(geoCountry);
+          // Convert tracks to album-like cards (use unique albums from tracks)
+          const albumMap = new Map<string, Album>();
+          for (const track of tracks) {
+            if (track.albumId && !albumMap.has(track.albumId)) {
+              albumMap.set(track.albumId, {
+                id: track.albumId,
+                title: track.album || track.title,
+                artist: track.artist,
+                artistId: track.artistId,
+                coverUrl: track.coverUrl,
+              });
+            }
+          }
+          setTrendingAlbums(Array.from(albumMap.values()).slice(0, 12));
+        } else {
+          // Fallback to global chart
+          const chart = await getTrendingChart();
+          setTrendingAlbums(chart.albums.slice(0, 12));
+        }
       } catch (error) {
         console.error('Failed to fetch trending:', error);
         setTrendingAlbums([]);
@@ -256,7 +276,7 @@ const Home: React.FC = () => {
       }
     };
     fetchTrending();
-  }, []);
+  }, [geoCountry]);
 
   useEffect(() => {
     const fetchArtistsForYou = async () => {
