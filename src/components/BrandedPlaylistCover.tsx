@@ -19,17 +19,24 @@ const BrandedPlaylistCover: React.FC<BrandedPlaylistCoverProps> = ({
   subtitle,
   className = '',
 }) => {
+  const fallbackGradient = type === 'radio'
+    ? 'linear-gradient(135deg, hsl(174, 72%, 40%), hsl(187, 85%, 35%))'
+    : 'linear-gradient(135deg, hsl(174, 72%, 30%), hsl(220, 18%, 12%))';
+
   return (
     <div
-      className={`relative w-full h-full overflow-hidden bg-background ${className}`}
+      className={`relative w-full h-full overflow-hidden ${className}`}
+      style={!backgroundUrl ? { background: fallbackGradient } : undefined}
     >
       {/* Background image */}
-      {backgroundUrl && (
+      {backgroundUrl ? (
         <img
           src={backgroundUrl}
           alt=""
           className="absolute inset-0 w-full h-full object-cover"
         />
+      ) : (
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_70%_30%,hsl(174,72%,50%)_0%,transparent_60%)]" />
       )}
 
       {/* Subtle gradient overlay at bottom for text readability */}
