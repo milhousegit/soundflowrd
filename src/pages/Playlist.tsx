@@ -398,21 +398,44 @@ const PlaylistPage: React.FC = () => {
             disabled={isUploadingCover}
           />
           
-          {isUploadingCover ? (
-            <div className="w-full h-full flex items-center justify-center bg-muted">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
-          ) : (editedCoverUrl || playlist.cover_url) ? (
-            <img 
-              src={isEditing ? editedCoverUrl || playlist.cover_url : playlist.cover_url} 
-              alt={playlist.name} 
-              className="w-full h-full object-cover" 
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-              <Music className="w-16 md:w-24 h-16 md:h-24 text-primary/50" />
-            </div>
-          )}
+          {(() => {
+            const isRadio = playlist.name.startsWith('Radio di ') || playlist.name.startsWith('Radio of ');
+            const coverUrl = isEditing ? editedCoverUrl || playlist.cover_url : playlist.cover_url;
+
+            if (isUploadingCover) {
+              return (
+                <div className="w-full h-full flex items-center justify-center bg-muted">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              );
+            }
+
+            if (isRadio && !isEditing) {
+              return (
+                <BrandedPlaylistCover
+                  type="radio"
+                  backgroundUrl={coverUrl}
+                  label={playlist.name}
+                />
+              );
+            }
+
+            if (coverUrl) {
+              return (
+                <img 
+                  src={coverUrl} 
+                  alt={playlist.name} 
+                  className="w-full h-full object-cover" 
+                />
+              );
+            }
+
+            return (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
+                <Music className="w-16 md:w-24 h-16 md:h-24 text-primary/50" />
+              </div>
+            );
+          })()}
           
           {/* Edit overlay */}
           {isEditing && canEdit && !isUploadingCover && (
