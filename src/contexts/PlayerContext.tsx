@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
 import { Track, type PlayerState } from '@/types/music';
+import { hdCover } from '@/lib/utils';
 import { useAuth } from './AuthContext';
 import { useSettings } from './SettingsContext';
 
