@@ -640,17 +640,7 @@ const Home: React.FC = () => {
                     className="flex-shrink-0 w-32 md:w-auto cursor-pointer group touch-manipulation"
                   >
                     <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted">
-                      {coverUrl ? (
-                        <img 
-                          src={coverUrl} 
-                          alt={displayName} 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-                          <ListMusic className="w-12 h-12 text-muted-foreground" />
-                        </div>
-                      )}
+                      <ChartPlaylistCover countryCode={chart.country_code} size="sm" />
                     </div>
                     <h3 className="font-medium text-sm text-foreground truncate">
                       {displayName}
