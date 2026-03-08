@@ -76,28 +76,35 @@ async function getAnonymousToken(): Promise<string | null> {
 }
 
 async function fetchPlaylistTracks(playlistId: string, token: string): Promise<SpotifyTrack[]> {
+  console.log(`fetchPlaylistTracks: playlistId=${playlistId}`);
   const variables = { uri: `spotify:playlist:${playlistId}`, offset: 0, limit: 100 };
   const extensions = { persistedQuery: { version: 1, sha256Hash: "b39f62e9b566aa849b1780927de1f9583b1e753861cc9eb4e7db49ec82a9a76a" } };
   const url = `https://api-partner.spotify.com/pathfinder/v1/query?operationName=fetchPlaylist&variables=${encodeURIComponent(JSON.stringify(variables))}&extensions=${encodeURIComponent(JSON.stringify(extensions))}`;
 
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Accept': 'application/json',
-      'Origin': 'https://open.spotify.com',
-      'Referer': 'https://open.spotify.com/',
-      'app-platform': 'WebPlayer',
-    },
-  });
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Origin': 'https://open.spotify.com',
+        'Referer': 'https://open.spotify.com/',
+        'app-platform': 'WebPlayer',
+        'spotify-app-version': '1.2.0.0',
+      },
+    });
 
-  if (!response.ok) {
-    // Fallback to web API
-    return await fetchPlaylistTracksWebAPI(playlistId, token);
-  }
+    console.log(`GraphQL response status: ${response.status}`);
 
-  const data = await response.json();
-  const items = data?.data?.playlistV2?.content?.items || [];
+    if (!response.ok) {
+      console.log(`GraphQL failed, trying web API...`);
+      return await fetchPlaylistTracksWebAPI(playlistId, token);
+    }
+
+    const data = await response.json();
+    console.log(`GraphQL response keys: ${Object.keys(data || {}).join(', ')}`);
+    const items = data?.data?.playlistV2?.content?.items || [];
   const tracks: SpotifyTrack[] = [];
 
   for (let i = 0; i < items.length; i++) {
