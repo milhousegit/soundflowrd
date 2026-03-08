@@ -679,7 +679,7 @@ serve(async (req) => {
           album: data.album?.title || 'Unknown Album',
           albumId: String(data.album?.id || ''),
           duration: data.duration || 0,
-          coverUrl: data.album?.cover_medium || data.album?.cover || undefined,
+          coverUrl: data.album?.cover_big || data.album?.cover_medium || data.album?.cover || undefined,
           previewUrl: data.preview || undefined,
         };
 
