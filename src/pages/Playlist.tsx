@@ -422,6 +422,12 @@ const PlaylistPage: React.FC = () => {
               );
             }
 
+            if (chartCountryCode && !isEditing) {
+              return (
+                <ChartPlaylistCover countryCode={chartCountryCode} size="lg" />
+              );
+            }
+
             if (isRadio && !isEditing) {
               return (
                 <BrandedPlaylistCover
