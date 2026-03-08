@@ -317,7 +317,7 @@ serve(async (req) => {
           id: String(playlist.id),
           title: playlist.title,
           description: playlist.description || '',
-          coverUrl: playlist.picture_medium || playlist.picture_big || playlist.picture || undefined,
+          coverUrl: playlist.picture_big || playlist.picture_medium || playlist.picture || undefined,
           trackCount: playlist.nb_tracks || 0,
           creator: playlist.user?.name || 'Deezer',
           isEditable: false,
