@@ -258,7 +258,7 @@ Deno.serve(async (req) => {
     }
 
     // Limit batch size
-    const batch = tracks.slice(0, 50);
+    const batch = tracks.slice(0, 10);
 
     console.log(`Processing ${batch.length} tracks for canvas...`);
 
