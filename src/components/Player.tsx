@@ -374,7 +374,7 @@ const Player: React.FC = () => {
                 </div>
             }
 
-              {loadingPhase === 'searching' &&
+              {loadingPhase === 'searching' && !canvasUrl &&
             <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
@@ -383,7 +383,7 @@ const Player: React.FC = () => {
                 </div>
             }
 
-              {loadingPhase === 'downloading' &&
+              {loadingPhase === 'downloading' && !canvasUrl &&
             <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
                   <div className="bg-card rounded-xl p-4 flex flex-col items-center">
                     <Cloud className="w-8 h-8 text-primary animate-pulse mb-2" />
