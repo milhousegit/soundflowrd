@@ -507,6 +507,7 @@ const Player: React.FC = () => {
           }
           </div>
         </div>
+        </div>
       }
 
       {/* Mobile mini player */}
