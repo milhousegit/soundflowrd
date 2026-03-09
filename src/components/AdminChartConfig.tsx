@@ -116,8 +116,8 @@ const AdminChartConfig: React.FC<AdminChartConfigProps> = ({ language }) => {
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
         {language === 'it' 
-          ? 'Configura le playlist Deezer da usare per le classifiche nazionali. Usa l\'ID della playlist Deezer (es. 1234567890).'
-          : 'Configure Deezer playlists for country charts. Use Deezer playlist IDs (e.g. 1234567890).'}
+          ? 'Configura le playlist SoundFlow da usare per le classifiche nazionali. Usa l\'ID della playlist Deezer (es. 1234567890).'
+          : 'Configure SoundFlow playlists for country charts. Use Deezer playlist IDs (e.g. 1234567890).'}
       </p>
       
       <div className="space-y-2">
