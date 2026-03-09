@@ -1000,6 +1000,30 @@ export type Database = {
           },
         ]
       }
+      track_canvases: {
+        Row: {
+          canvas_url: string
+          created_at: string | null
+          id: string
+          track_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          canvas_url: string
+          created_at?: string | null
+          id?: string
+          track_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          canvas_url?: string
+          created_at?: string | null
+          id?: string
+          track_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       track_file_mappings: {
         Row: {
           album_mapping_id: string

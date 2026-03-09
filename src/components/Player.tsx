@@ -12,6 +12,8 @@ import LyricsModal from './LyricsModal';
 import AlwaysOnDisplay from './AlwaysOnDisplay';
 import TrackActionsModal from './TrackActionsModal';
 import InlineLyricsCard from './InlineLyricsCard';
+import CanvasBackground from './CanvasBackground';
+import { useTrackCanvas } from '@/hooks/useTrackCanvas';
 import { useToast } from '@/hooks/use-toast';
 import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 import { isPast } from 'date-fns';
@@ -98,6 +100,7 @@ const Player: React.FC = () => {
   const canDownload = contextIsAdmin || isPremiumActive;
 
   const { saveTrackOffline } = useOfflineStorage();
+  const { canvasUrl } = useTrackCanvas(currentTrack?.id);
   const [isDownloading, setIsDownloading] = useState(false);
 
   // Get current stream URL from alternatives
@@ -266,12 +269,14 @@ const Player: React.FC = () => {
       {isExpanded &&
       <div
         ref={containerRef}
-        className="fixed inset-0 z-[60] bg-background md:hidden overflow-y-auto"
+        className={cn("fixed inset-0 z-[60] bg-background md:hidden overflow-y-auto", canvasUrl && "bg-transparent dark")}
         style={expandedStyle}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}>
         
+          {canvasUrl && <CanvasBackground canvasUrl={canvasUrl} isPlaying={isPlaying} />}
+
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full" />
           </div>
@@ -333,10 +338,14 @@ const Player: React.FC = () => {
 
           <div className="px-8 py-[60px]">
             <div
-            className="w-full aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none cursor-pointer"
+            className={cn(
+              "w-full aspect-square relative select-none cursor-pointer",
+              !canvasUrl && "rounded-2xl bg-secondary overflow-hidden shadow-2xl"
+            )}
             onClick={handleCoverTripleTap}>
             
-              {currentTrack.coverUrl ?
+              {!canvasUrl && (
+                currentTrack.coverUrl ?
             <img
               src={currentTrack.coverUrl}
               alt={currentTrack.album}
@@ -348,7 +357,7 @@ const Player: React.FC = () => {
             <div className="w-full h-full flex items-center justify-center">
                   <Music className="w-24 h-24 text-muted-foreground" />
                 </div>
-            }
+              )}
 
               {/* Always On hint - only on iOS */}
               {isIOS && !loadingPhase && isExpanded &&
