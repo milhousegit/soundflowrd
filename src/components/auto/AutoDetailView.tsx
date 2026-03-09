@@ -6,7 +6,7 @@ import { usePlayer } from '@/contexts/PlayerContext';
 import { getAlbum, getArtistTopTracks, getArtist, getDeezerPlaylist } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
 
-export type DetailType = 'album' | 'artist' | 'playlist' | 'deezer-playlist';
+export type DetailType = 'album' | 'artist' | 'playlist' | 'soundflow-playlist';
 
 interface DetailData {
   type: DetailType;
