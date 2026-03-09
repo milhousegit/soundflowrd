@@ -33,7 +33,7 @@ const SoundFlowPlaylistPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [linkCopied, setLinkCopied] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
-  const shareUrl = `${window.location.origin}/deezer-playlist/${id}`;
+  const shareUrl = `${window.location.origin}/soundflow-playlist/${id}`;
 
   const handleCopyShareLink = async () => {
     try {
