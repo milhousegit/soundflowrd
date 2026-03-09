@@ -418,7 +418,6 @@ const Settings: React.FC = () => {
                   {[
                     { icon: <Sparkles className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Modalità ibrida multi-sorgente' : 'Hybrid multi-source mode' },
                     { icon: <Download className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Download illimitati' : 'Unlimited downloads' },
-                    { icon: <Mic2 className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Testi e karaoke sincronizzati' : 'Synced lyrics & karaoke' },
                     { icon: <Smartphone className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Collegamento con la TV' : 'TV connection' },
                     { icon: <Car className="w-3.5 h-3.5" />, text: settings.language === 'it' ? 'Modalità Auto' : 'Auto Mode' },
                   ].map((feature, i) => (

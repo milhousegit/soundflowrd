@@ -110,7 +110,7 @@ const Player: React.FC = () => {
   const [showTrackActions, setShowTrackActions] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
   const [showLyricsModal, setShowLyricsModal] = useState(false);
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  
   const [isExpanded, setIsExpanded] = useState(false);
   const [showAlwaysOn, setShowAlwaysOn] = useState(false);
 
@@ -486,25 +486,9 @@ const Player: React.FC = () => {
           className="px-6 pt-8 pb-safe"
           style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
           
-            {contextIsAdmin || isPremiumActive ?
           <InlineLyricsCard
             track={currentTrack}
-            onTap={() => setShowLyricsModal(true)} /> :
-
-
-          <button
-            onClick={() => setShowPremiumModal(true)}
-            className="w-full rounded-2xl border border-border bg-secondary/40 p-4 text-left md:hover:bg-secondary/60 transition-colors relative overflow-hidden min-h-[140px]">
-            
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Lyrics</span>
-                  <Maximize2 className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {settings.language === 'it' ? 'Sblocca i testi con Premium' : 'Unlock lyrics with Premium'}
-                </p>
-              </button>
-          }
+            onTap={() => setShowLyricsModal(true)} />
           </div>
         </div>
         </div>
@@ -618,13 +602,7 @@ const Player: React.FC = () => {
             <Button
               variant="playerSecondary"
               size="icon"
-              onClick={() => {
-                if (contextIsAdmin || isPremiumActive) {
-                  setShowLyricsModal(true);
-                } else {
-                  setShowPremiumModal(true);
-                }
-              }}
+              onClick={() => setShowLyricsModal(true)}
               className="text-muted-foreground hover:text-primary"
               title={settings.language === 'it' ? 'Testo' : 'Lyrics'}>
               
@@ -716,36 +694,6 @@ const Player: React.FC = () => {
         track={currentTrack} />
       
 
-      {/* Premium Modal for Lyrics */}
-      {showPremiumModal &&
-      <div className="fixed inset-0 z-[70] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPremiumModal(false)}>
-          <div className="bg-card rounded-2xl p-6 max-w-sm w-full shadow-xl border border-border" onClick={(e) => e.stopPropagation()}>
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center">
-                <Mic2 className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Testi Sincronizzati</h3>
-              <p className="text-muted-foreground text-sm mb-4">
-                Sblocca i testi karaoke con scorrimento automatico sincronizzato con la musica.
-              </p>
-              <div className="flex flex-col gap-2">
-                <Button
-                className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
-                onClick={() => {
-                  setShowPremiumModal(false);
-                  navigate('/profile');
-                }}>
-                
-                  Sblocca Premium
-                </Button>
-                <Button variant="ghost" onClick={() => setShowPremiumModal(false)}>
-                  Chiudi
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      }
 
       {/* Always On Display - iOS only */}
       {showAlwaysOn && isIOS &&
