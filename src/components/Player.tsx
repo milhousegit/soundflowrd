@@ -338,10 +338,14 @@ const Player: React.FC = () => {
 
           <div className="px-8 py-[60px]">
             <div
-            className="w-full aspect-square rounded-2xl bg-secondary overflow-hidden shadow-2xl relative select-none cursor-pointer"
+            className={cn(
+              "w-full aspect-square relative select-none cursor-pointer",
+              !canvasUrl && "rounded-2xl bg-secondary overflow-hidden shadow-2xl"
+            )}
             onClick={handleCoverTripleTap}>
             
-              {currentTrack.coverUrl ?
+              {!canvasUrl && (
+                currentTrack.coverUrl ?
             <img
               src={currentTrack.coverUrl}
               alt={currentTrack.album}
