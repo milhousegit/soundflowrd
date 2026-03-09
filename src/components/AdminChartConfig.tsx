@@ -141,7 +141,7 @@ const AdminChartConfig: React.FC<AdminChartConfigProps> = ({ language }) => {
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <Input
-                      placeholder={language === 'it' ? 'ID Playlist Deezer' : 'Deezer Playlist ID'}
+                      placeholder={language === 'it' ? 'ID Playlist SoundFlow' : 'SoundFlow Playlist ID'}
                       value={draftPlaylistId}
                       onChange={(e) => setDraftPlaylistId(e.target.value)}
                       className="h-8 text-sm flex-1"
