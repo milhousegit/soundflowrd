@@ -86,11 +86,6 @@ const PremiumExpiredBanner: React.FC<PremiumExpiredBannerProps> = ({ forceShow =
       desc: isItalian ? 'Non puoi più scaricare brani' : 'You can no longer download tracks'
     },
     {
-      icon: Mic2,
-      label: isItalian ? 'Testi Sincronizzati' : 'Synced Lyrics',
-      desc: isItalian ? 'Karaoke e testi non disponibili' : 'Karaoke and lyrics not available'
-    },
-    {
       icon: Zap,
       label: isItalian ? 'Modalità Ibrida' : 'Hybrid Mode',
       desc: isItalian ? 'Fallback audio disattivato' : 'Audio fallback disabled'
