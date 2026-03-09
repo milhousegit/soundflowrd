@@ -19,6 +19,7 @@ import AdminBannerTester from '@/components/AdminBannerTester';
 import AdminArtistMerge from '@/components/AdminArtistMerge';
 import AdminReferralSettings from '@/components/AdminReferralSettings';
 import AdminChartConfig from '@/components/AdminChartConfig';
+import AdminCanvasManager from '@/components/AdminCanvasManager';
 
 import KofiModal from '@/components/KofiModal';
 import FundingGoalBar from '@/components/FundingGoalBar';
