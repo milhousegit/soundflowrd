@@ -229,7 +229,7 @@ const Search: React.FC = () => {
         navigate(`/album/${item.id}`);
         break;
       case 'playlist':
-        navigate(`/deezer-playlist/${item.id}`);
+        navigate(`/soundflow-playlist/${item.id}`);
         break;
       case 'track':
         // For tracks, we just update the item as "opened" but stay on search
