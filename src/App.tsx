@@ -31,7 +31,7 @@ import Info from "@/pages/Info";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
-import DeezerPlaylist from "@/pages/DeezerPlaylist";
+import SoundFlowPlaylist from "@/pages/SoundFlowPlaylist";
 import DailyMix from "@/pages/DailyMix";
 import NotFound from "./pages/NotFound";
 import TV from "./pages/TV";
