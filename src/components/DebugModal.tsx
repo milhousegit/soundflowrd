@@ -178,6 +178,7 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       { id: 'realdebrid', label: 'RealDebrid', icon: <Database className="w-4 h-4" />, show: hasRdKey },
       { id: 'scraping', label: 'Scraping', icon: <Headphones className="w-4 h-4" />, show: true },
       { id: 'metadati', label: 'Metadati', icon: <Tag className="w-4 h-4" />, show: true },
+      { id: 'canvas', label: 'Canvas', icon: <Video className="w-4 h-4" />, show: isAdmin },
     ];
 
     const visibleTabs = tabs.filter(tab => tab.show);
