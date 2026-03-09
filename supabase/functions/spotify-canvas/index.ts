@@ -183,60 +183,25 @@ function normalizeString(str: string): string {
     .trim();
 }
 
-async function searchSpotifyTrack(deezerId: string, title: string, artist: string, token: string): Promise<string | null> {
+async function getSpotifyUriFromDeezer(deezerId: string): Promise<string | null> {
   try {
-    // Step 1: Get ISRC from Deezer
-    const deezerRes = await fetch(`https://api.deezer.com/track/${deezerId}`);
-    if (deezerRes.ok) {
-      const deezerData = await deezerRes.json();
-      if (deezerData.isrc) {
-        // Step 2: Search Spotify by ISRC
-        const isrcQuery = encodeURIComponent(`isrc:${deezerData.isrc}`);
-        const isrcRes = await fetch(`https://api.spotify.com/v1/search?q=${isrcQuery}&type=track&limit=1`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (isrcRes.ok) {
-          const isrcData = await isrcRes.json();
-          const uri = isrcData.tracks?.items?.[0]?.uri;
-          if (uri) return uri;
-        } else {
-          console.log(`ISRC search returned ${isrcRes.status}`);
-        }
-      }
+    // Use Odesli/Songlink API to map Deezer track to Spotify
+    const url = `https://api.song.link/v1-alpha.1/links?url=https%3A%2F%2Fwww.deezer.com%2Ftrack%2F${deezerId}&userCountry=US`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.log(`Songlink API returned ${res.status} for ${deezerId}`);
+      return null;
     }
-
-    // Fallback: text search
-    const cleanTitle = title.replace(/\(feat\..*?\)/gi, '').replace(/\[.*?\]/g, '').trim();
-    const q = encodeURIComponent(`track:${cleanTitle} artist:${artist}`);
-    const res = await fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=5`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const items = data.tracks?.items;
-      if (items?.length) {
-        const normalTitle = normalizeString(cleanTitle);
-        const normalArtist = normalizeString(artist);
-
-        for (const item of items) {
-          const itemTitle = normalizeString(item.name);
-          const itemArtist = normalizeString(item.artists?.[0]?.name || '');
-          if (itemTitle.includes(normalTitle) || normalTitle.includes(itemTitle)) {
-            if (itemArtist.includes(normalArtist) || normalArtist.includes(itemArtist)) {
-              return item.uri;
-            }
-          }
-        }
-        return items[0].uri;
-      }
-    } else {
-      console.log(`Text search returned ${res.status}: ${await res.text().catch(() => 'unknown')}`);
+    const data = await res.json();
+    const spotifyId = data?.linksByPlatform?.spotify?.entityUniqueId;
+    if (spotifyId) {
+      // entityUniqueId is like "SPOTIFY_SONG::3n3Ppam7vgaVa1iaRUc9Lp"
+      const id = spotifyId.replace('SPOTIFY_SONG::', '');
+      return `spotify:track:${id}`;
     }
-
     return null;
   } catch (err) {
-    console.error('Search error:', err);
+    console.error(`Songlink error for ${deezerId}:`, err);
     return null;
   }
 }
