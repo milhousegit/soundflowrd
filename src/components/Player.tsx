@@ -357,7 +357,7 @@ const Player: React.FC = () => {
             <div className="w-full h-full flex items-center justify-center">
                   <Music className="w-24 h-24 text-muted-foreground" />
                 </div>
-            }
+              )}
 
               {/* Always On hint - only on iOS */}
               {isIOS && !loadingPhase && isExpanded &&
