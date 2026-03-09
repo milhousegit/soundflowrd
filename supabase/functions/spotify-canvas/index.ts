@@ -186,32 +186,79 @@ function normalizeString(str: string): string {
 async function searchSpotifyTrack(title: string, artist: string, token: string): Promise<string | null> {
   try {
     const cleanTitle = title.replace(/\(feat\..*?\)/gi, '').replace(/\[.*?\]/g, '').trim();
+
+    // Try Web API first
     const q = encodeURIComponent(`track:${cleanTitle} artist:${artist}`);
     const res = await fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=5`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const items = data.tracks?.items;
-    if (!items?.length) return null;
 
-    // Try to find best match
-    const normalTitle = normalizeString(cleanTitle);
-    const normalArtist = normalizeString(artist);
+    if (res.ok) {
+      const data = await res.json();
+      const items = data.tracks?.items;
+      if (items?.length) {
+        const normalTitle = normalizeString(cleanTitle);
+        const normalArtist = normalizeString(artist);
 
-    for (const item of items) {
-      const itemTitle = normalizeString(item.name);
-      const itemArtist = normalizeString(item.artists?.[0]?.name || '');
-      if (itemTitle.includes(normalTitle) || normalTitle.includes(itemTitle)) {
-        if (itemArtist.includes(normalArtist) || normalArtist.includes(itemArtist)) {
-          return item.uri;
+        for (const item of items) {
+          const itemTitle = normalizeString(item.name);
+          const itemArtist = normalizeString(item.artists?.[0]?.name || '');
+          if (itemTitle.includes(normalTitle) || normalTitle.includes(itemTitle)) {
+            if (itemArtist.includes(normalArtist) || normalArtist.includes(itemArtist)) {
+              return item.uri;
+            }
+          }
         }
+        return items[0].uri;
       }
+    } else {
+      console.log(`Web API search failed (${res.status}), trying GraphQL...`);
     }
 
-    // Fallback to first result
-    return items[0].uri;
-  } catch {
+    // Fallback: Partner GraphQL API
+    const searchQuery = `${cleanTitle} ${artist}`;
+    const variables = JSON.stringify({
+      searchTerm: searchQuery,
+      offset: 0,
+      limit: 5,
+      numberOfTopResults: 5,
+      includeAudiobooks: false,
+    });
+    const extensions = JSON.stringify({
+      persistedQuery: {
+        version: 1,
+        sha256Hash: '7a60179c5e6c2e29e9ae86467e11f tried searching via GraphQL',
+      },
+    });
+
+    // Use a simpler GraphQL search
+    const gqlUrl = `https://api-partner.spotify.com/pathfinder/v1/query?operationName=searchTracks&variables=${encodeURIComponent(JSON.stringify({ searchTerm: searchQuery, offset: 0, limit: 5 }))}&extensions=${encodeURIComponent(JSON.stringify({ persistedQuery: { version: 1, sha256Hash: 'cb38f9c23d9b40b8b83fea940d3e0e4a5ae3a2f9e71f9c9c3fec4e6e8b69a30e' } }))}`;
+
+    const gqlRes = await fetch(gqlUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Origin': 'https://open.spotify.com',
+        'Referer': 'https://open.spotify.com/',
+      },
+    });
+
+    if (gqlRes.ok) {
+      const gqlData = await gqlRes.json();
+      const tracks = gqlData?.data?.searchV2?.tracksV2?.items || gqlData?.data?.search?.tracks?.items || [];
+      if (tracks.length > 0) {
+        const firstTrack = tracks[0]?.item || tracks[0];
+        const uri = firstTrack?.uri || firstTrack?.data?.uri;
+        if (uri) return uri;
+      }
+    } else {
+      console.log(`GraphQL search also failed (${gqlRes.status})`);
+    }
+
+    return null;
+  } catch (err) {
+    console.error('Search error:', err);
     return null;
   }
 }
