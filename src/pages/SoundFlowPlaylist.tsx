@@ -138,7 +138,7 @@ const SoundFlowPlaylistPage: React.FC = () => {
             )}
           </div>
           <div className="flex-1 min-w-0 text-center md:text-left">
-            <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">Playlist Deezer</p>
+            <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">Playlist SoundFlow</p>
             <h1 className="text-2xl md:text-5xl font-bold text-foreground mb-2 truncate">{playlist.title}</h1>
             {playlist.description && (
               <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{playlist.description}</p>
