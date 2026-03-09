@@ -486,25 +486,9 @@ const Player: React.FC = () => {
           className="px-6 pt-8 pb-safe"
           style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
           
-            {contextIsAdmin || isPremiumActive ?
           <InlineLyricsCard
             track={currentTrack}
-            onTap={() => setShowLyricsModal(true)} /> :
-
-
-          <button
-            onClick={() => setShowPremiumModal(true)}
-            className="w-full rounded-2xl border border-border bg-secondary/40 p-4 text-left md:hover:bg-secondary/60 transition-colors relative overflow-hidden min-h-[140px]">
-            
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Lyrics</span>
-                  <Maximize2 className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {settings.language === 'it' ? 'Sblocca i testi con Premium' : 'Unlock lyrics with Premium'}
-                </p>
-              </button>
-          }
+            onTap={() => setShowLyricsModal(true)} />
           </div>
         </div>
         </div>
