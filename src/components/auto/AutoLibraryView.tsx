@@ -75,7 +75,7 @@ const AutoLibraryView: React.FC = () => {
 
   const handleDeezerPlaylistClick = (deezerId: string, title: string, coverUrl?: string | null) => {
     setSelectedDetail({
-      type: 'deezer-playlist',
+      type: 'soundflow-playlist',
       id: deezerId,
       title: title,
       subtitle: 'Playlist Deezer',
