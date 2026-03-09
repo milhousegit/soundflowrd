@@ -110,7 +110,7 @@ const Player: React.FC = () => {
   const [showTrackActions, setShowTrackActions] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
   const [showLyricsModal, setShowLyricsModal] = useState(false);
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  
   const [isExpanded, setIsExpanded] = useState(false);
   const [showAlwaysOn, setShowAlwaysOn] = useState(false);
 
