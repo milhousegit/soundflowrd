@@ -277,7 +277,7 @@ const Player: React.FC = () => {
         
           {canvasUrl && <CanvasBackground canvasUrl={canvasUrl} isPlaying={isPlaying} />}
 
-          <div className="flex justify-center pt-3 pb-1">
+          <div className="relative z-[1] flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full" />
           </div>
 
