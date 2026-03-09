@@ -274,12 +274,12 @@ Deno.serve(async (req) => {
     // Search Spotify for each track
     const spotifyMatches: { deezerId: string; spotifyUri: string }[] = [];
     for (const track of batch) {
-      const uri = await searchSpotifyTrack(track.deezer_id, track.title, track.artist, token);
+      const uri = await getSpotifyUriFromDeezer(track.deezer_id);
       if (uri) {
         spotifyMatches.push({ deezerId: track.deezer_id, spotifyUri: uri });
       }
-      // Small delay to avoid rate limiting
-      await new Promise(r => setTimeout(r, 100));
+      // Songlink has rate limits, wait between requests
+      await new Promise(r => setTimeout(r, 500));
     }
 
     console.log(`Found ${spotifyMatches.length}/${batch.length} Spotify matches`);
