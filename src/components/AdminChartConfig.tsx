@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Save, Check, Music } from 'lucide-react';
+import { Loader2, Save, Check, Music, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+
+// System UUID for chart playlists - not tied to any real user
+const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 interface ChartConfig {
   id: string;
@@ -34,6 +37,7 @@ const AdminChartConfig: React.FC<AdminChartConfigProps> = ({ language }) => {
   const [draftPlaylistId, setDraftPlaylistId] = useState('');
   const [draftPlaylistTitle, setDraftPlaylistTitle] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [creatingForId, setCreatingForId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchConfigs();
@@ -87,7 +91,6 @@ const AdminChartConfig: React.FC<AdminChartConfigProps> = ({ language }) => {
 
       if (error) throw error;
 
-      // Update local state
       setConfigs(prev => prev.map(c => 
         c.id === config.id 
           ? { ...c, playlist_id: draftPlaylistId.trim(), playlist_title: draftPlaylistTitle.trim() || null }
@@ -104,6 +107,52 @@ const AdminChartConfig: React.FC<AdminChartConfigProps> = ({ language }) => {
     }
   };
 
+  const createSystemPlaylist = async (config: ChartConfig) => {
+    setCreatingForId(config.id);
+    const label = COUNTRY_LABELS[config.country_code]?.[language === 'it' ? 'it' : 'en'] || config.country_code;
+    const playlistName = language === 'it' ? `Top ${label}` : `${label} Top`;
+
+    try {
+      // Create a public system playlist not tied to any user
+      const { data: playlist, error: createError } = await supabase
+        .from('playlists')
+        .insert({
+          user_id: SYSTEM_USER_ID,
+          name: playlistName,
+          is_public: true,
+          track_count: 0,
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+
+      // Update chart config to point to new playlist
+      const { error: updateError } = await supabase
+        .from('chart_configurations')
+        .update({
+          playlist_id: playlist.id,
+          playlist_title: playlistName,
+        })
+        .eq('id', config.id);
+
+      if (updateError) throw updateError;
+
+      setConfigs(prev => prev.map(c =>
+        c.id === config.id
+          ? { ...c, playlist_id: playlist.id, playlist_title: playlistName }
+          : c
+      ));
+
+      toast.success(language === 'it' ? `Playlist "${playlistName}" creata` : `Playlist "${playlistName}" created`);
+    } catch (error: any) {
+      console.error('Failed to create system playlist:', error);
+      toast.error(error.message || (language === 'it' ? 'Errore creazione playlist' : 'Failed to create playlist'));
+    } finally {
+      setCreatingForId(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -116,13 +165,14 @@ const AdminChartConfig: React.FC<AdminChartConfigProps> = ({ language }) => {
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
         {language === 'it' 
-          ? 'Configura le playlist SoundFlow da usare per le classifiche nazionali. Usa l\'ID della playlist Deezer (es. 1234567890).'
-          : 'Configure SoundFlow playlists for country charts. Use Deezer playlist IDs (e.g. 1234567890).'}
+          ? 'Configura le playlist SoundFlow per le classifiche nazionali. Usa "Crea Playlist" per creare una playlist di sistema indipendente.'
+          : 'Configure SoundFlow playlists for country charts. Use "Create Playlist" for an independent system playlist.'}
       </p>
       
       <div className="space-y-2">
         {configs.map((config) => {
           const isEditing = editingId === config.id;
+          const isCreating = creatingForId === config.id;
           const label = COUNTRY_LABELS[config.country_code]?.[language === 'it' ? 'it' : 'en'] || config.country_code;
 
           return (
@@ -130,11 +180,29 @@ const AdminChartConfig: React.FC<AdminChartConfigProps> = ({ language }) => {
               key={config.id}
               className="p-3 rounded-lg bg-muted/50 border border-border"
             >
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded bg-primary/20 flex items-center justify-center">
-                  <span className="text-xs font-bold text-primary">{config.country_code}</span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-primary/20 flex items-center justify-center">
+                    <span className="text-xs font-bold text-primary">{config.country_code}</span>
+                  </div>
+                  <span className="text-sm font-medium text-foreground">{label}</span>
                 </div>
-                <span className="text-sm font-medium text-foreground">{label}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => createSystemPlaylist(config)}
+                  disabled={isCreating || isSaving}
+                >
+                  {isCreating ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <>
+                      <Plus className="w-3 h-3 mr-1" />
+                      {language === 'it' ? 'Crea Playlist' : 'Create Playlist'}
+                    </>
+                  )}
+                </Button>
               </div>
 
               {isEditing ? (
