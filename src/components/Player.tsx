@@ -269,12 +269,14 @@ const Player: React.FC = () => {
       {isExpanded &&
       <div
         ref={containerRef}
-        className="fixed inset-0 z-[60] bg-background md:hidden overflow-y-auto"
+        className={cn("fixed inset-0 z-[60] bg-background md:hidden overflow-y-auto", canvasUrl && "bg-transparent dark")}
         style={expandedStyle}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}>
         
+          {canvasUrl && <CanvasBackground canvasUrl={canvasUrl} isPlaying={isPlaying} />}
+
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full" />
           </div>
