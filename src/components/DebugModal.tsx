@@ -972,6 +972,55 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
                 )}
               </>
             )}
+
+            {/* Canvas Tab */}
+            {activeTab === 'canvas' && isAdmin && (
+              <div className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  {isItalian
+                    ? 'Incolla l\'URL del canvas video (da canvasdownloader.com) per questa traccia.'
+                    : 'Paste the canvas video URL (from canvasdownloader.com) for this track.'}
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="https://canvaz.scdn.co/.../video.mp4"
+                    value={canvasUrl}
+                    onChange={(e) => setCanvasUrl(e.target.value)}
+                    className="flex-1 text-sm"
+                  />
+                  <Button
+                    onClick={async () => {
+                      if (!canvasUrl.trim() || !currentTrack?.id) return;
+                      setSavingCanvas(true);
+                      try {
+                        const { error } = await supabase
+                          .from('track_canvases')
+                          .upsert(
+                            { track_id: currentTrack.id, canvas_url: canvasUrl.trim(), updated_at: new Date().toISOString() },
+                            { onConflict: 'track_id' }
+                          );
+                        if (error) throw error;
+                        toast.success(isItalian ? 'Canvas salvato!' : 'Canvas saved!');
+                        setCanvasUrl('');
+                      } catch (err) {
+                        toast.error(String(err));
+                      } finally {
+                        setSavingCanvas(false);
+                      }
+                    }}
+                    disabled={savingCanvas || !canvasUrl.trim() || !currentTrack?.id}
+                    size="icon"
+                  >
+                    {savingCanvas ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  </Button>
+                </div>
+                {currentTrack && (
+                  <p className="text-xs text-muted-foreground">
+                    Track ID: {currentTrack.id}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
