@@ -39,7 +39,7 @@ const CanvasBackground: React.FC<CanvasBackgroundProps> = ({
       />
       {/* Dark gradient overlay for text readability */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-transparent" />
-      <div className="absolute bottom-0 left-0 right-0 h-[40%] bg-gradient-to-t from-black to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-[60%] bg-gradient-to-t from-black to-transparent" />
       <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" />
     </div>
   );
