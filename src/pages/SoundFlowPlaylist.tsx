@@ -103,9 +103,9 @@ const SoundFlowPlaylistPage: React.FC = () => {
 
   // Create a playlist object for the favorite button
   const playlistForFavorite: Album = {
-    id: `deezer-playlist-${id}`,
+    id: `soundflow-playlist-${id}`,
     title: playlist.title,
-    artist: playlist.creator || 'Deezer',
+    artist: playlist.creator || 'SoundFlow',
     coverUrl: playlist.coverUrl || '',
     artistId: '',
   };
