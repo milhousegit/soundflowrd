@@ -601,7 +601,7 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
                 )}
               >
                 {tab.icon}
-                {tab.label}
+                <span className="hidden md:inline">{tab.label}</span>
               </button>
             ))}
           </div>
