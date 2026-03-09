@@ -700,36 +700,6 @@ const Player: React.FC = () => {
         track={currentTrack} />
       
 
-      {/* Premium Modal for Lyrics */}
-      {showPremiumModal &&
-      <div className="fixed inset-0 z-[70] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPremiumModal(false)}>
-          <div className="bg-card rounded-2xl p-6 max-w-sm w-full shadow-xl border border-border" onClick={(e) => e.stopPropagation()}>
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center">
-                <Mic2 className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Testi Sincronizzati</h3>
-              <p className="text-muted-foreground text-sm mb-4">
-                Sblocca i testi karaoke con scorrimento automatico sincronizzato con la musica.
-              </p>
-              <div className="flex flex-col gap-2">
-                <Button
-                className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
-                onClick={() => {
-                  setShowPremiumModal(false);
-                  navigate('/profile');
-                }}>
-                
-                  Sblocca Premium
-                </Button>
-                <Button variant="ghost" onClick={() => setShowPremiumModal(false)}>
-                  Chiudi
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      }
 
       {/* Always On Display - iOS only */}
       {showAlwaysOn && isIOS &&
