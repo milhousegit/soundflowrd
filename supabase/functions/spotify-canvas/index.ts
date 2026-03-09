@@ -128,15 +128,48 @@ function extractCanvasResults(data: Uint8Array): { trackUri: string; canvasUrl: 
 // --- Spotify helpers ---
 async function getSpotifyToken(): Promise<string | null> {
   try {
-    const res = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=embed', {
+    console.log('Fetching Spotify token...');
+    const res = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://open.spotify.com/',
+        'Origin': 'https://open.spotify.com',
       },
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.accessToken || null;
-  } catch {
+    console.log('Token response status:', res.status);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.accessToken) {
+        console.log('Got token via get_access_token');
+        return data.accessToken;
+      }
+      console.log('No accessToken in response');
+    }
+
+    // Fallback: extract from embed page
+    console.log('Trying embed fallback...');
+    const embedRes = await fetch('https://open.spotify.com/embed/track/4cOdK2wGLETKBW3PvgPWqT', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+    if (embedRes.ok) {
+      const html = await embedRes.text();
+      const m = html.match(/"accessToken":"([^"]+)"/);
+      if (m) {
+        console.log('Got token via embed page');
+        return m[1];
+      }
+    }
+
+    console.error('All token methods failed');
+    return null;
+  } catch (err) {
+    console.error('Token error:', err);
     return null;
   }
 }
