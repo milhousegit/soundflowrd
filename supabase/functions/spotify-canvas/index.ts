@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
     // Search Spotify for each track
     const spotifyMatches: { deezerId: string; spotifyUri: string }[] = [];
     for (const track of batch) {
-      const uri = await searchSpotifyTrack(track.title, track.artist, token);
+      const uri = await searchSpotifyTrack(track.deezer_id, track.title, track.artist, token);
       if (uri) {
         spotifyMatches.push({ deezerId: track.deezer_id, spotifyUri: uri });
       }
