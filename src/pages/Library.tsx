@@ -341,9 +341,9 @@ const Library: React.FC = () => {
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
                     {favoritePlaylists.map((fav) => {
                       const playlistData = fav.item_data as any;
-                      // Check if it's a Deezer playlist
-                      const isDeezerPlaylist = fav.item_id.startsWith('deezer-playlist-');
-                      const deezerId = isDeezerPlaylist ? fav.item_id.replace('deezer-playlist-', '') : null;
+                      // Check if it's a SoundFlow playlist
+                      const isSoundFlowPlaylist = fav.item_id.startsWith('soundflow-playlist-');
+                      const soundflowId = isSoundFlowPlaylist ? fav.item_id.replace('soundflow-playlist-', '') : null;
                       
                       return (
                         <TapArea
