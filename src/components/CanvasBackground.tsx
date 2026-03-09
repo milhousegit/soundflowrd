@@ -27,7 +27,7 @@ const CanvasBackground: React.FC<CanvasBackgroundProps> = ({
   if (!canvasUrl) return null;
 
   return (
-    <div className={cn('fixed inset-0 z-[-1] pointer-events-none overflow-hidden bg-black', className)}>
+    <div className={cn('fixed inset-0 z-[0] pointer-events-none overflow-hidden', className)}>
       <video
         ref={videoRef}
         src={canvasUrl}
