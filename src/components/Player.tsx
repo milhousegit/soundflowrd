@@ -602,13 +602,7 @@ const Player: React.FC = () => {
             <Button
               variant="playerSecondary"
               size="icon"
-              onClick={() => {
-                if (contextIsAdmin || isPremiumActive) {
-                  setShowLyricsModal(true);
-                } else {
-                  setShowPremiumModal(true);
-                }
-              }}
+              onClick={() => setShowLyricsModal(true)}
               className="text-muted-foreground hover:text-primary"
               title={settings.language === 'it' ? 'Testo' : 'Lyrics'}>
               
