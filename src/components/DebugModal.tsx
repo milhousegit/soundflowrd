@@ -123,6 +123,10 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
     const [savingMetadata, setSavingMetadata] = useState<string | null>(null);
     const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
+    // Canvas state
+    const [canvasUrl, setCanvasUrl] = useState('');
+    const [savingCanvas, setSavingCanvas] = useState(false);
+
     // Check if user has RD API key
     const hasRdKey = !!credentials?.realDebridApiKey;
 
