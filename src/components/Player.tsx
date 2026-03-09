@@ -12,6 +12,8 @@ import LyricsModal from './LyricsModal';
 import AlwaysOnDisplay from './AlwaysOnDisplay';
 import TrackActionsModal from './TrackActionsModal';
 import InlineLyricsCard from './InlineLyricsCard';
+import CanvasBackground from './CanvasBackground';
+import { useTrackCanvas } from '@/hooks/useTrackCanvas';
 import { useToast } from '@/hooks/use-toast';
 import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 import { isPast } from 'date-fns';
