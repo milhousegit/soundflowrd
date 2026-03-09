@@ -348,7 +348,7 @@ const Library: React.FC = () => {
                       return (
                         <TapArea
                           key={fav.id}
-                          onTap={() => navigate(deezerId ? `/deezer-playlist/${deezerId}` : `/playlist/${fav.item_id}`)}
+                          onTap={() => navigate(soundflowId ? `/soundflow-playlist/${soundflowId}` : `/playlist/${fav.item_id}`)}
                           className="group cursor-pointer touch-manipulation"
                         >
                           <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted">

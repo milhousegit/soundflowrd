@@ -96,7 +96,7 @@ const AppRoutes = () => {
         <Route path="artist/:id" element={<Artist />} />
         <Route path="album/:id" element={<Album />} />
         <Route path="playlist/:id" element={<Playlist />} />
-        <Route path="deezer-playlist/:id" element={<DeezerPlaylist />} />
+        <Route path="soundflow-playlist/:id" element={<SoundFlowPlaylist />} />
         <Route path="daily-mix/:index" element={<DailyMix />} />
         <Route path="remote" element={<MobileRemotePage />} />
       </Route>

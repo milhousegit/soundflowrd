@@ -367,8 +367,8 @@ const Home: React.FC = () => {
       const sfId = playlistId.replace('sf:', '');
       navigate(`/playlist/${sfId}`);
     } else {
-      // Deezer playlist - navigate to deezer playlist page
-      navigate(`/deezer-playlist/${playlistId}`);
+      // SoundFlow playlist - navigate to soundflow playlist page
+      navigate(`/soundflow-playlist/${playlistId}`);
     }
   };
 

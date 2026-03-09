@@ -256,4 +256,4 @@ const SoundFlowPlaylistPage: React.FC = () => {
   );
 };
 
-export default DeezerPlaylistPage;
+export default SoundFlowPlaylistPage;
