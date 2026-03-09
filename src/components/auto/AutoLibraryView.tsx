@@ -240,8 +240,8 @@ const AutoLibraryView: React.FC = () => {
                 
                 {/* Favorite Deezer playlists */}
                 {favoritePlaylists.slice(0, 6 - playlists.length).map((fav) => {
-                  const isDeezerPlaylist = fav.item_id.startsWith('deezer-playlist-');
-                  const deezerId = isDeezerPlaylist ? fav.item_id.replace('deezer-playlist-', '') : null;
+                  const isSoundFlowPlaylist = fav.item_id.startsWith('soundflow-playlist-');
+                  const deezerId = isSoundFlowPlaylist ? fav.item_id.replace('soundflow-playlist-', '') : null;
                   
                   if (!deezerId) return null;
                   

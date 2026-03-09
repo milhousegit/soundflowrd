@@ -61,7 +61,7 @@ const AutoDetailView: React.FC<AutoDetailViewProps> = ({ detail, onBack }) => {
             }));
             setTracks(mappedTracks);
           }
-        } else if (detail.type === 'deezer-playlist') {
+        } else if (detail.type === 'soundflow-playlist') {
           // Load from Deezer API
           const playlistData = await getDeezerPlaylist(detail.id);
           setTracks(playlistData.tracks || []);
