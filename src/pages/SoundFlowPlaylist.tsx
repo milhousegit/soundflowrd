@@ -179,7 +179,7 @@ const SoundFlowPlaylistPage: React.FC = () => {
             <div className="space-y-3">
               <h4 className="font-medium">Condividi playlist</h4>
               <p className="text-sm text-muted-foreground">
-                Condividi questa playlist Deezer con altri utenti
+                Condividi questa playlist SoundFlow con altri utenti
               </p>
               <div className="flex gap-2">
                 <Input
