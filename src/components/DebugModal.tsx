@@ -27,6 +27,7 @@ import {
   Database,
   Headphones,
   Tag,
+  Video,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TapArea from '@/components/TapArea';
@@ -56,7 +57,7 @@ interface DebugModalProps {
   onMetadataSaved?: (oldTrackId: string, newTrack: { id: string; title: string; artist: string; album?: string; coverUrl?: string; duration?: number }) => void;
 }
 
-type DebugTab = 'realdebrid' | 'scraping' | 'metadati';
+type DebugTab = 'realdebrid' | 'scraping' | 'metadati' | 'canvas';
 
 interface DeezerResult {
   id: string;
@@ -122,6 +123,10 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
     const [savingMetadata, setSavingMetadata] = useState<string | null>(null);
     const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
+    // Canvas state
+    const [canvasUrl, setCanvasUrl] = useState('');
+    const [savingCanvas, setSavingCanvas] = useState(false);
+
     // Check if user has RD API key
     const hasRdKey = !!credentials?.realDebridApiKey;
 
@@ -173,6 +178,7 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       { id: 'realdebrid', label: 'RealDebrid', icon: <Database className="w-4 h-4" />, show: hasRdKey },
       { id: 'scraping', label: 'Scraping', icon: <Headphones className="w-4 h-4" />, show: true },
       { id: 'metadati', label: 'Metadati', icon: <Tag className="w-4 h-4" />, show: true },
+      { id: 'canvas', label: 'Canvas', icon: <Video className="w-4 h-4" />, show: isAdmin },
     ];
 
     const visibleTabs = tabs.filter(tab => tab.show);
@@ -595,7 +601,7 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
                 )}
               >
                 {tab.icon}
-                {tab.label}
+                <span className="hidden md:inline">{tab.label}</span>
               </button>
             ))}
           </div>
@@ -965,6 +971,55 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
                   </div>
                 )}
               </>
+            )}
+
+            {/* Canvas Tab */}
+            {activeTab === 'canvas' && isAdmin && (
+              <div className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  {isItalian
+                    ? 'Incolla l\'URL del canvas video (da canvasdownloader.com) per questa traccia.'
+                    : 'Paste the canvas video URL (from canvasdownloader.com) for this track.'}
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="https://canvaz.scdn.co/.../video.mp4"
+                    value={canvasUrl}
+                    onChange={(e) => setCanvasUrl(e.target.value)}
+                    className="flex-1 text-sm"
+                  />
+                  <Button
+                    onClick={async () => {
+                      if (!canvasUrl.trim() || !currentTrack?.id) return;
+                      setSavingCanvas(true);
+                      try {
+                        const { error } = await supabase
+                          .from('track_canvases')
+                          .upsert(
+                            { track_id: currentTrack.id, canvas_url: canvasUrl.trim(), updated_at: new Date().toISOString() },
+                            { onConflict: 'track_id' }
+                          );
+                        if (error) throw error;
+                        toast.success(isItalian ? 'Canvas salvato!' : 'Canvas saved!');
+                        setCanvasUrl('');
+                      } catch (err) {
+                        toast.error(String(err));
+                      } finally {
+                        setSavingCanvas(false);
+                      }
+                    }}
+                    disabled={savingCanvas || !canvasUrl.trim() || !currentTrack?.id}
+                    size="icon"
+                  >
+                    {savingCanvas ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  </Button>
+                </div>
+                {currentTrack && (
+                  <p className="text-xs text-muted-foreground">
+                    Track ID: {currentTrack.id}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
