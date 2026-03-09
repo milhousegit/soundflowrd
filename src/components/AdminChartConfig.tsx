@@ -116,8 +116,8 @@ const AdminChartConfig: React.FC<AdminChartConfigProps> = ({ language }) => {
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
         {language === 'it' 
-          ? 'Configura le playlist Deezer da usare per le classifiche nazionali. Usa l\'ID della playlist Deezer (es. 1234567890).'
-          : 'Configure Deezer playlists for country charts. Use Deezer playlist IDs (e.g. 1234567890).'}
+          ? 'Configura le playlist SoundFlow da usare per le classifiche nazionali. Usa l\'ID della playlist Deezer (es. 1234567890).'
+          : 'Configure SoundFlow playlists for country charts. Use Deezer playlist IDs (e.g. 1234567890).'}
       </p>
       
       <div className="space-y-2">
@@ -141,7 +141,7 @@ const AdminChartConfig: React.FC<AdminChartConfigProps> = ({ language }) => {
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <Input
-                      placeholder={language === 'it' ? 'ID Playlist Deezer' : 'Deezer Playlist ID'}
+                      placeholder={language === 'it' ? 'ID Playlist SoundFlow' : 'SoundFlow Playlist ID'}
                       value={draftPlaylistId}
                       onChange={(e) => setDraftPlaylistId(e.target.value)}
                       className="h-8 text-sm flex-1"

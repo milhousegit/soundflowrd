@@ -6,7 +6,7 @@ import { usePlayer } from '@/contexts/PlayerContext';
 import { getAlbum, getArtistTopTracks, getArtist, getDeezerPlaylist } from '@/lib/deezer';
 import { supabase } from '@/integrations/supabase/client';
 
-export type DetailType = 'album' | 'artist' | 'playlist' | 'deezer-playlist';
+export type DetailType = 'album' | 'artist' | 'playlist' | 'soundflow-playlist';
 
 interface DetailData {
   type: DetailType;
@@ -61,7 +61,7 @@ const AutoDetailView: React.FC<AutoDetailViewProps> = ({ detail, onBack }) => {
             }));
             setTracks(mappedTracks);
           }
-        } else if (detail.type === 'deezer-playlist') {
+        } else if (detail.type === 'soundflow-playlist') {
           // Load from Deezer API
           const playlistData = await getDeezerPlaylist(detail.id);
           setTracks(playlistData.tracks || []);

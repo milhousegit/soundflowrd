@@ -229,7 +229,7 @@ const Search: React.FC = () => {
         navigate(`/album/${item.id}`);
         break;
       case 'playlist':
-        navigate(`/deezer-playlist/${item.id}`);
+        navigate(`/soundflow-playlist/${item.id}`);
         break;
       case 'track':
         // For tracks, we just update the item as "opened" but stay on search
@@ -451,11 +451,11 @@ const Search: React.FC = () => {
                         subtitle: `${playlist.trackCount} brani • ${playlist.creator}`,
                         coverUrl: playlist.coverUrl 
                       });
-                      // Navigate to local playlist page if it's not a Deezer playlist
+                      // Navigate to local playlist page if it's not a SoundFlow playlist
                       if (playlist.isDeezerPlaylist === false) {
                         navigate(`/playlist/${playlist.id}`);
                       } else {
-                        navigate(`/deezer-playlist/${playlist.id}`);
+                        navigate(`/soundflow-playlist/${playlist.id}`);
                       }
                     }}
                     className="group cursor-pointer"

@@ -17,7 +17,7 @@ import { Track, Album } from '@/types/music';
 import { isPast } from 'date-fns';
 import { toast } from 'sonner';
 
-const DeezerPlaylistPage: React.FC = () => {
+const SoundFlowPlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
@@ -33,7 +33,7 @@ const DeezerPlaylistPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [linkCopied, setLinkCopied] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
-  const shareUrl = `${window.location.origin}/deezer-playlist/${id}`;
+  const shareUrl = `${window.location.origin}/soundflow-playlist/${id}`;
 
   const handleCopyShareLink = async () => {
     try {
@@ -103,9 +103,9 @@ const DeezerPlaylistPage: React.FC = () => {
 
   // Create a playlist object for the favorite button
   const playlistForFavorite: Album = {
-    id: `deezer-playlist-${id}`,
+    id: `soundflow-playlist-${id}`,
     title: playlist.title,
-    artist: playlist.creator || 'Deezer',
+    artist: playlist.creator || 'SoundFlow',
     coverUrl: playlist.coverUrl || '',
     artistId: '',
   };
@@ -138,7 +138,7 @@ const DeezerPlaylistPage: React.FC = () => {
             )}
           </div>
           <div className="flex-1 min-w-0 text-center md:text-left">
-            <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">Playlist Deezer</p>
+            <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">Playlist SoundFlow</p>
             <h1 className="text-2xl md:text-5xl font-bold text-foreground mb-2 truncate">{playlist.title}</h1>
             {playlist.description && (
               <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{playlist.description}</p>
@@ -179,7 +179,7 @@ const DeezerPlaylistPage: React.FC = () => {
             <div className="space-y-3">
               <h4 className="font-medium">Condividi playlist</h4>
               <p className="text-sm text-muted-foreground">
-                Condividi questa playlist Deezer con altri utenti
+                Condividi questa playlist SoundFlow con altri utenti
               </p>
               <div className="flex gap-2">
                 <Input
@@ -256,4 +256,4 @@ const DeezerPlaylistPage: React.FC = () => {
   );
 };
 
-export default DeezerPlaylistPage;
+export default SoundFlowPlaylistPage;

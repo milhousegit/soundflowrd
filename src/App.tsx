@@ -31,7 +31,7 @@ import Info from "@/pages/Info";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
-import DeezerPlaylist from "@/pages/DeezerPlaylist";
+import SoundFlowPlaylist from "@/pages/SoundFlowPlaylist";
 import DailyMix from "@/pages/DailyMix";
 import NotFound from "./pages/NotFound";
 import TV from "./pages/TV";
@@ -96,7 +96,7 @@ const AppRoutes = () => {
         <Route path="artist/:id" element={<Artist />} />
         <Route path="album/:id" element={<Album />} />
         <Route path="playlist/:id" element={<Playlist />} />
-        <Route path="deezer-playlist/:id" element={<DeezerPlaylist />} />
+        <Route path="soundflow-playlist/:id" element={<SoundFlowPlaylist />} />
         <Route path="daily-mix/:index" element={<DailyMix />} />
         <Route path="remote" element={<MobileRemotePage />} />
       </Route>

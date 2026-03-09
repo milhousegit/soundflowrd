@@ -334,7 +334,7 @@ const Artist: React.FC = () => {
                 <div 
                   key={playlist.id} 
                   className="flex-shrink-0 w-32 md:w-40"
-                  onClick={() => navigate(`/deezer-playlist/${playlist.id}`)}
+                  onClick={() => navigate(`/soundflow-playlist/${playlist.id}`)}
                 >
                   <div className="group relative cursor-pointer">
                     <div className="relative aspect-square rounded-lg overflow-hidden bg-muted mb-2">

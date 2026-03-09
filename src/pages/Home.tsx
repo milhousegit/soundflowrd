@@ -367,8 +367,8 @@ const Home: React.FC = () => {
       const sfId = playlistId.replace('sf:', '');
       navigate(`/playlist/${sfId}`);
     } else {
-      // Deezer playlist - navigate to deezer playlist page
-      navigate(`/deezer-playlist/${playlistId}`);
+      // SoundFlow playlist - navigate to soundflow playlist page
+      navigate(`/soundflow-playlist/${playlistId}`);
     }
   };
 
@@ -490,17 +490,17 @@ const Home: React.FC = () => {
                     <PlaylistCard playlist={playlist} />
                   </div>
                 ))}
-                {/* Deezer favorite playlists */}
+                {/* SoundFlow favorite playlists */}
                 {favoritePlaylists.map((fav) => {
-                  const isDeezerPlaylist = fav.item_id.startsWith('deezer-playlist-');
-                  const deezerId = isDeezerPlaylist ? fav.item_id.replace('deezer-playlist-', '') : null;
+                  const isSoundFlowPlaylist = fav.item_id.startsWith('soundflow-playlist-');
+                  const soundflowId = isSoundFlowPlaylist ? fav.item_id.replace('soundflow-playlist-', '') : null;
                   
                   return (
                     <TapArea
                       key={fav.id}
                       onTap={() => {
-                        if (deezerId) {
-                          navigate(`/deezer-playlist/${deezerId}`);
+                        if (soundflowId) {
+                          navigate(`/soundflow-playlist/${soundflowId}`);
                         }
                       }}
                       className="flex-shrink-0 w-32 md:w-auto group cursor-pointer touch-manipulation"
