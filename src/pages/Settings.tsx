@@ -1038,6 +1038,22 @@ const Settings: React.FC = () => {
                   <AdminChartConfig language={settings.language} />
                 </div>
               </details>
+
+              {/* Canvas Manager */}
+              <details className="group">
+                <summary className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Play className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-sm text-foreground">
+                      {settings.language === 'it' ? 'Canvas Video' : 'Canvas Videos'}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="px-4 pb-4">
+                  <AdminCanvasManager language={settings.language} />
+                </div>
+              </details>
             </div>
           </section>
         )}
