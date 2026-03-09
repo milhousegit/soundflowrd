@@ -17,7 +17,7 @@ import { Track, Album } from '@/types/music';
 import { isPast } from 'date-fns';
 import { toast } from 'sonner';
 
-const DeezerPlaylistPage: React.FC = () => {
+const SoundFlowPlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
