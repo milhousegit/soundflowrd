@@ -1013,15 +1013,55 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               if (trackMapping?.direct_link && audioRef.current) {
                 setLoadingPhase('loading');
                 audioRef.current.src = trackMapping.direct_link;
-                if (await safePlay(audioRef.current)) {
+                const cachedPlayOk = await safePlay(audioRef.current);
+                if (cachedPlayOk) {
                   setState((prev) => ({ ...prev, isPlaying: true }));
+                  setLoadingPhase('idle');
+                  setCurrentAudioSource('real-debrid');
+                  setCurrentMappedFileId(trackMapping.file_id);
+                  addDebugLog('✅ Riproduzione RD (cache)', 'Stream da mappatura salvata', 'success');
+                  startTrackingPlayback();
+                  return;
+                }
+                // Cached link expired — try to get a fresh one
+                addDebugLog('⚠️ Link RD scaduto', 'Rigenero link...', 'warning');
+                const torrentId = trackMapping.album_torrent_mappings?.torrent_id;
+                const fileId = trackMapping.file_id;
+                if (torrentId && Number.isFinite(fileId) && fileId > 0 && credentials?.realDebridApiKey) {
+                  try {
+                    const freshResult = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
+                    if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
+                    if (freshResult.streams?.length > 0 && freshResult.streams[0].streamUrl && audioRef.current) {
+                      audioRef.current.src = freshResult.streams[0].streamUrl;
+                      if (await safePlay(audioRef.current)) {
+                        setState((prev) => ({ ...prev, isPlaying: true }));
+                      }
+                      setLoadingPhase('idle');
+                      setCurrentAudioSource('real-debrid');
+                      setCurrentMappedFileId(fileId);
+                      setAlternativeStreams(freshResult.streams);
+                      setCurrentStreamId(freshResult.streams[0].id);
+                      await saveFileMapping({
+                        track: enrichedTrack,
+                        torrentId,
+                        torrentTitle: trackMapping.album_torrent_mappings?.torrent_title || '',
+                        fileId,
+                        fileName: trackMapping.file_name,
+                        filePath: trackMapping.file_path,
+                        directLink: freshResult.streams[0].streamUrl,
+                      });
+                      addDebugLog('✅ Riproduzione RD (rigenerato)', freshResult.streams[0].title || 'Link fresco', 'success');
+                      startTrackingPlayback();
+                      return;
+                    } else if (['error', 'dead', 'magnet_error', 'not_found'].includes(freshResult.status)) {
+                      addDebugLog('⚠️ Torrent RD scaduto', 'Rimuovo mappatura', 'warning');
+                      await supabase.from('track_file_mappings').delete().eq('track_id', enrichedTrack.id);
+                    }
+                  } catch (e) {
+                    console.error('Failed to refresh RD link in hybrid:', e);
+                  }
                 }
                 setLoadingPhase('idle');
-                setCurrentAudioSource('real-debrid');
-                setCurrentMappedFileId(trackMapping.file_id);
-                addDebugLog('✅ Riproduzione RD (cache)', 'Stream da mappatura salvata', 'success');
-                startTrackingPlayback();
-                return;
               }
             } catch (error) {
               console.error('Failed to check RD mapping in hybrid mode:', error);
@@ -1188,13 +1228,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               if (directLink && audioRef.current) {
                 setLoadingPhase('loading');
                 audioRef.current.src = directLink;
-                if (await safePlay(audioRef.current)) {
+                const cachedOk = await safePlay(audioRef.current);
+                if (cachedOk) {
                   setState((prev) => ({ ...prev, isPlaying: true }));
+                  setLoadingPhase('idle');
+                  setCurrentAudioSource('real-debrid');
+                  startTrackingPlayback();
+                  return;
                 }
-                setLoadingPhase('idle');
-                setCurrentAudioSource('real-debrid');
-                startTrackingPlayback();
-                return;
+                // Cached link expired — fall through to selectFilesAndPlay below
+                addDebugLog('⚠️ Link RD scaduto', 'Rigenero link...', 'warning');
               }
 
               setLoadingPhase('loading');
