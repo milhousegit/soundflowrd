@@ -31,3 +31,6 @@ verify_jwt = false
 [functions.kofi-webhook]
 verify_jwt = false
 
+[functions.hifi]
+verify_jwt = false
+

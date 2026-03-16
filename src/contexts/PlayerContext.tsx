@@ -394,7 +394,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const currentSearchTrackIdRef = useRef<string | null>(null);
   const nextRef = useRef<() => void>(() => {});
   const previousRef = useRef<() => void>(() => {});
-  const autoSkipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const autoSkipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Pre-fetching system for seamless background playback on iOS
   const prefetchedNextUrlRef = useRef<{ trackId: string; url: string; source: AudioSource } | null>(null);

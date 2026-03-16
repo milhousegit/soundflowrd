@@ -63,7 +63,7 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
     const [isDownloadingSingle, setIsDownloadingSingle] = useState(false);
     const isMobile = useIsMobile();
-    const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const longPressTriggeredRef = useRef(false);
     
     const isCurrentTrack = currentTrack?.id === track.id;
