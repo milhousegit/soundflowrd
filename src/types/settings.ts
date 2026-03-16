@@ -12,10 +12,11 @@ export const SCRAPING_SOURCES: ScrapingSource[] = [
   { id: 'monochrome', name: 'Monochrome', edgeFunctionName: 'monochrome' },
 ];
 
-export type FallbackSourceId = 'real-debrid' | 'squidwtf' | 'monochrome';
+export type FallbackSourceId = 'real-debrid' | 'hifi' | 'squidwtf' | 'monochrome';
 
 export const ALL_FALLBACK_SOURCES: { id: FallbackSourceId; name: string }[] = [
   { id: 'real-debrid', name: 'Real-Debrid' },
+  { id: 'hifi', name: 'HiFi' },
   { id: 'squidwtf', name: 'SquidWTF' },
   { id: 'monochrome', name: 'Monochrome' },
 ];
