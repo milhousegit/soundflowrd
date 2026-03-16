@@ -396,6 +396,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const nextRef = useRef<() => void>(() => {});
   const previousRef = useRef<() => void>(() => {});
   const autoSkipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRdDownloadRef = useRef<{ torrent: TorrentInfo; matchingFile: AudioFile; track: Track; selectResult: any } | null>(null);
   
   // Pre-fetching system for seamless background playback on iOS
   const prefetchedNextUrlRef = useRef<{ trackId: string; url: string; source: AudioSource } | null>(null);
