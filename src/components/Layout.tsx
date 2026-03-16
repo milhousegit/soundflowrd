@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import Player from './Player';
 import MobileNav from './MobileNav';
 import TVBanner from './TVBanner';
+import ServiceBanner from './ServiceBanner';
 import { usePlayer } from '@/contexts/PlayerContext';
 
 const Layout: React.FC = () => {
@@ -14,6 +15,7 @@ const Layout: React.FC = () => {
     <div className="flex h-screen bg-background overflow-hidden pt-[env(safe-area-inset-top)]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
+        <ServiceBanner />
         <TVBanner />
         <main className={`flex-1 overflow-y-auto ${currentTrack ? 'pb-28 md:pb-24' : 'pb-14 md:pb-0'}`}>
           <Outlet />
