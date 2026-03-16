@@ -64,9 +64,9 @@ export const defaultSettings: AppSettings = {
   crossfade: 0,
   realDebridApiKey: undefined,
   audioSourceMode: 'deezer_priority',
-  selectedScrapingSource: 'hifi',
-  bridgeUrl: 'https://hifi.401658.xyz',
-  hybridFallbackChain: ['hifi', 'squidwtf'],
+  selectedScrapingSource: 'squidwtf',
+  bridgeUrl: 'https://tidal.squid.wtf',
+  hybridFallbackChain: ['squidwtf', 'hifi', 'monochrome'],
 };
 
 export const translations = {
