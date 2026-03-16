@@ -8,6 +8,7 @@ const corsHeaders = {
 // Public Tidal API mirrors used by tidal.squid.wtf.
 // We avoid calling api.binimum.org directly because DNS resolution can fail in our runtime.
 const API_TARGETS = [
+  'https://hifitui.401658.xyz',
   'https://triton.squid.wtf',
   'https://tidal-api.binimum.org',
   'https://tidal.kinoplus.online',

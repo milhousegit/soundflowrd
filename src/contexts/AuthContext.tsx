@@ -176,7 +176,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     let isSubscribed = true;
-    let loadingTimeout: NodeJS.Timeout;
+    let loadingTimeout: ReturnType<typeof setTimeout>;
 
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
