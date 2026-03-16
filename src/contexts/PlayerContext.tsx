@@ -974,12 +974,21 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // =============== SCRAPING PONTE MODE ===============
       if (isDeezerPriorityMode) {
         setLoadingPhase('searching');
+        
+        // Try the selected source first
         const success = await playWithScrapingSource(selectedScrapingSource);
         if (success) return;
 
+        // Try ALL other scraping sources before giving up
+        const allSourceIds = SCRAPING_SOURCES.map(s => s.id).filter(id => id !== selectedScrapingSource);
+        for (const fallbackId of allSourceIds) {
+          addDebugLog(`🔄 Fallback a ${fallbackId === 'monochrome' ? 'Monochrome' : fallbackId === 'hifi' ? 'HiFi' : 'SquidWTF'}`, '', 'info');
+          const fallbackSuccess = await playWithScrapingSource(fallbackId);
+          if (fallbackSuccess) return;
+        }
+
         setLoadingPhase('unavailable');
-        const sourceName = selectedScrapingSource === 'monochrome' ? 'Monochrome' : 'SquidWTF';
-        toast.error(`Traccia non trovata su ${sourceName}`, { description: 'Passo alla prossima...' });
+        toast.error('Traccia non trovata su nessuna sorgente', { description: 'Passo alla prossima...' });
         autoSkipToNext();
         return;
       }
