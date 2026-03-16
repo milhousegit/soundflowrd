@@ -1192,7 +1192,39 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
         }
         
-        // All failed
+        // All scraping sources failed — check if we have a pending RD download to wait for
+        if (pendingRdDownloadRef.current && pendingRdDownloadRef.current.track.id === enrichedTrack.id) {
+          const pending = pendingRdDownloadRef.current;
+          addDebugLog('📥 In attesa download RD', `${pending.selectResult.progress ?? 0}% — nessun fallback disponibile`, 'warning');
+          
+          // Update torrent status so polling picks it up
+          const updatedTorrent = { ...pending.torrent, status: pending.selectResult.status };
+          setAvailableTorrents([updatedTorrent]);
+          setLoadingPhase('downloading');
+          setDownloadProgress(pending.selectResult.progress ?? 0);
+          setDownloadStatus(pending.selectResult.status);
+          setCurrentAudioSource('real-debrid');
+          
+          // Save mapping without direct_link (downloading)
+          await saveFileMapping({
+            track: enrichedTrack,
+            torrentId: pending.torrent.torrentId,
+            torrentTitle: pending.torrent.title,
+            fileId: pending.matchingFile.id,
+            fileName: pending.matchingFile.filename,
+            filePath: pending.matchingFile.path,
+            directLink: null,
+          });
+          
+          toast.info('Brano in download da RealDebrid', {
+            description: 'Partirà automaticamente appena pronto',
+          });
+          pendingRdDownloadRef.current = null;
+          startTrackingPlayback();
+          return;
+        }
+        
+        pendingRdDownloadRef.current = null;
         setLoadingPhase('unavailable');
         toast.error('Nessuna sorgente disponibile', {
           description: 'Passo alla prossima...',
