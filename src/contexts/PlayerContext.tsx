@@ -2139,7 +2139,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }, 1000);
 
     return () => clearInterval(pollInterval);
-  }, [addDebugLog, availableTorrents, credentials, loadingPhase]);
+  }, [addDebugLog, availableTorrents, credentials, loadingPhase, safePlay, state.currentTrack]);
 
   // Pre-sync next track in queue (kept behavior)
   useEffect(() => {
