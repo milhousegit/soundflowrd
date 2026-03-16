@@ -396,6 +396,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const nextRef = useRef<() => void>(() => {});
   const previousRef = useRef<() => void>(() => {});
   const autoSkipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRdDownloadRef = useRef<{ torrent: TorrentInfo; matchingFile: AudioFile; track: Track; selectResult: any } | null>(null);
   
   // Pre-fetching system for seamless background playback on iOS
   const prefetchedNextUrlRef = useRef<{ trackId: string; url: string; source: AudioSource } | null>(null);
@@ -834,6 +835,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setDownloadStatus(null);
       setLoadingPhase('idle');
       setCurrentAudioSource(null);
+      pendingRdDownloadRef.current = null;
 
       // PRIORITY 1: Check for offline availability first (works without network)
       const offlineUrl = await getOfflineTrackUrl(enrichedTrack.id);
@@ -1141,10 +1143,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 return;
               }
 
-              // If downloading, fall through to Tidal but start background download
+              // If downloading, save info and fall through to Tidal but start background download
               if (['downloading', 'queued', 'magnet_conversion'].includes(selectResult.status)) {
                 addDebugLog('⏳ RD in download', `${selectResult.progress}% - uso fallback Tidal`, 'warning');
-                // Don't block - fall through to Tidal fallback
+                // Save torrent info so we can poll if all fallbacks fail
+                pendingRdDownloadRef.current = {
+                  torrent,
+                  matchingFile,
+                  track: enrichedTrack,
+                  selectResult,
+                };
                 break;
               }
             }
@@ -1185,7 +1193,39 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
         }
         
-        // All failed
+        // All scraping sources failed — check if we have a pending RD download to wait for
+        if (pendingRdDownloadRef.current && pendingRdDownloadRef.current.track.id === enrichedTrack.id) {
+          const pending = pendingRdDownloadRef.current;
+          addDebugLog('📥 In attesa download RD', `${pending.selectResult.progress ?? 0}% — nessun fallback disponibile`, 'warning');
+          
+          // Update torrent status so polling picks it up
+          const updatedTorrent = { ...pending.torrent, status: pending.selectResult.status };
+          setAvailableTorrents([updatedTorrent]);
+          setLoadingPhase('downloading');
+          setDownloadProgress(pending.selectResult.progress ?? 0);
+          setDownloadStatus(pending.selectResult.status);
+          setCurrentAudioSource('real-debrid');
+          
+          // Save mapping without direct_link (downloading)
+          await saveFileMapping({
+            track: enrichedTrack,
+            torrentId: pending.torrent.torrentId,
+            torrentTitle: pending.torrent.title,
+            fileId: pending.matchingFile.id,
+            fileName: pending.matchingFile.filename,
+            filePath: pending.matchingFile.path,
+            directLink: null,
+          });
+          
+          toast.info('Brano in download da RealDebrid', {
+            description: 'Partirà automaticamente appena pronto',
+          });
+          pendingRdDownloadRef.current = null;
+          startTrackingPlayback();
+          return;
+        }
+        
+        pendingRdDownloadRef.current = null;
         setLoadingPhase('unavailable');
         toast.error('Nessuna sorgente disponibile', {
           description: 'Passo alla prossima...',
@@ -2049,7 +2089,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setDownloadStatus(result.status);
 
             const elapsedSeconds = (Date.now() - startTime) / 1000;
-            if (result.progress === 0 && elapsedSeconds >= 10) {
+            if (result.progress === 0 && elapsedSeconds >= 30) {
               addDebugLog('⏱️ Timeout', `Download fermo a 0% per ${Math.round(elapsedSeconds)}s`, 'error');
               setLoadingPhase('unavailable');
               setDownloadProgress(null);
@@ -2069,6 +2109,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setDownloadProgress(null);
             setDownloadStatus(null);
             setLoadingPhase('idle');
+            setCurrentAudioSource('real-debrid');
+            addDebugLog('✅ Download RD completato', 'Riproduzione automatica', 'success');
+
+            // Update direct_link in DB for this track
+            if (state.currentTrack) {
+              supabase.from('track_file_mappings')
+                .update({ direct_link: streamUrl })
+                .eq('track_id', state.currentTrack.id)
+                .then(() => {
+                  addSyncedTrack(state.currentTrack!.id);
+                });
+            }
 
             if (audioRef.current && streamUrl) {
               audioRef.current.src = streamUrl;
@@ -2087,7 +2139,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }, 1000);
 
     return () => clearInterval(pollInterval);
-  }, [addDebugLog, availableTorrents, credentials, loadingPhase]);
+  }, [addDebugLog, availableTorrents, credentials, loadingPhase, safePlay, state.currentTrack]);
 
   // Pre-sync next track in queue (kept behavior)
   useEffect(() => {
