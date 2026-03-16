@@ -902,7 +902,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               
               setState((prev) => ({ ...prev, isPlaying: true }));
               setLoadingPhase('idle');
-              setCurrentAudioSource(sourceId === 'monochrome' ? 'monochrome' : 'squidwtf');
+              setCurrentAudioSource(sourceId === 'monochrome' ? 'monochrome' : sourceId === 'hifi' ? 'squidwtf' : 'squidwtf');
               startTrackingPlayback();
               
               const qualityInfo = result.bitDepth && result.sampleRate 
