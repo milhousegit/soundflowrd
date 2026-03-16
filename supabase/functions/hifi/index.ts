@@ -5,251 +5,130 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// HiFi managed server (OpenSubsonic API)
-const HIFI_BASE = 'https://hifi.401658.xyz';
-const HIFI_USER = 'hifi';
-const HIFI_PASS = 'local';
-const SUBSONIC_VERSION = '1.16.1';
-const CLIENT_NAME = 'SoundFlow';
+// HiFi public REST API (same format as squidwtf mirrors)
+const API_TARGETS = [
+  'https://hifitui.401658.xyz',
+  'https://hifitui.pages.dev',
+] as const;
 
-function subsonicParams(): string {
-  return `u=${HIFI_USER}&p=${HIFI_PASS}&v=${SUBSONIC_VERSION}&c=${CLIENT_NAME}&f=json`;
+async function fetchJsonWithFallback(path: string): Promise<any> {
+  let lastErr: unknown;
+  for (const baseUrl of API_TARGETS) {
+    const url = `${baseUrl}${path}`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+        },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error(`[HiFi] ${url} -> ${res.status} (${text.substring(0, 120)})`);
+        lastErr = new Error(`HTTP ${res.status}`);
+        continue;
+      }
+      return await res.json();
+    } catch (e) {
+      console.error(`[HiFi] Fetch failed for ${url}:`, e);
+      lastErr = e;
+      continue;
+    }
+  }
+  throw new Error(`All HiFi API targets failed${lastErr ? `: ${(lastErr as any)?.message ?? String(lastErr)}` : ''}`);
 }
 
-async function fetchSubsonic(path: string): Promise<any> {
-  const url = `${HIFI_BASE}${path}${path.includes('?') ? '&' : '?'}${subsonicParams()}`;
-  console.log(`[HiFi] Fetching: ${url.replace(HIFI_PASS, '***')}`);
-  
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'SoundFlow/1.0',
-      'Accept': 'application/json',
-    },
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    console.error(`[HiFi] HTTP ${res.status}: ${text.substring(0, 200)}`);
-    throw new Error(`HiFi API error: HTTP ${res.status}`);
-  }
-
-  const data = await res.json();
-  
-  // OpenSubsonic wraps responses in subsonic-response
-  const resp = data['subsonic-response'];
-  if (resp && resp.status === 'failed') {
-    throw new Error(resp.error?.message || 'HiFi API error');
-  }
-  
-  return resp || data;
-}
-
-/**
- * Search for tracks on HiFi (Tidal via OpenSubsonic)
- */
-async function searchTracks(query: string, count = 20): Promise<any[]> {
+async function searchTrack(query: string): Promise<any[]> {
   console.log(`[HiFi] Searching: ${query}`);
-  
-  const data = await fetchSubsonic(`/rest/search3?query=${encodeURIComponent(query)}&songCount=${count}&artistCount=0&albumCount=0`);
-  
-  const songs = data?.searchResult3?.song || [];
-  console.log(`[HiFi] Found ${songs.length} results`);
-  return songs;
+  const data = await fetchJsonWithFallback(`/search/?s=${encodeURIComponent(query)}`);
+  console.log(`[HiFi] Found ${data?.data?.items?.length || data?.items?.length || 0} results`);
+  return data?.data?.items || data?.items || [];
 }
 
-/**
- * Get stream URL for a track
- */
-function getStreamUrl(songId: string): string {
-  return `${HIFI_BASE}/rest/stream?id=${encodeURIComponent(songId)}&${subsonicParams()}`;
+async function getTrackStream(
+  tidalId: string,
+  quality = 'LOSSLESS'
+): Promise<{ streamUrl: string; quality: string; bitDepth?: number; sampleRate?: number }> {
+  console.log(`[HiFi] Getting stream for Tidal ID: ${tidalId}, quality: ${quality}`);
+  const data = await fetchJsonWithFallback(`/track/?id=${encodeURIComponent(tidalId)}&quality=${encodeURIComponent(quality)}`);
+  if (!data?.data) throw new Error('No track data returned');
+  const trackData = data.data;
+
+  if (trackData.manifestMimeType === 'application/vnd.tidal.bts') {
+    const manifestJson = JSON.parse(atob(trackData.manifest));
+    if (!manifestJson.urls || manifestJson.urls.length === 0) throw new Error('No stream URLs in manifest');
+    return { streamUrl: manifestJson.urls[0], quality: trackData.audioQuality, bitDepth: trackData.bitDepth, sampleRate: trackData.sampleRate };
+  } else if (trackData.manifestMimeType === 'application/dash+xml') {
+    const manifestXml = atob(trackData.manifest);
+    const initMatch = manifestXml.match(/initialization="([^"]+)"/);
+    if (initMatch) {
+      return { streamUrl: initMatch[1].replace(/&amp;/g, '&'), quality: trackData.audioQuality, bitDepth: trackData.bitDepth, sampleRate: trackData.sampleRate };
+    }
+    throw new Error('Could not parse DASH manifest');
+  }
+  throw new Error(`Unknown manifest type: ${trackData.manifestMimeType}`);
 }
 
-/**
- * Normalize strings for matching
- */
 function normalize(str: string): string {
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-/**
- * Score how well a HiFi song matches the requested track
- */
-function scoreMatch(song: any, title: string, artist: string): number {
-  const normalizedTitle = normalize(title);
-  const normalizedArtist = normalize(artist);
-  const songTitle = normalize(song.title || '');
-  const songArtist = normalize(song.artist || '');
-  
+function scoreMatch(tidalTrack: any, title: string, artist: string): number {
+  const nTitle = normalize(title), nArtist = normalize(artist);
+  const tTitle = normalize(tidalTrack.title || ''), tArtist = normalize(tidalTrack.artist?.name || tidalTrack.artists?.[0]?.name || '');
   let score = 0;
-  
-  // Title matching
-  if (songTitle === normalizedTitle) {
-    score += 100;
-  } else if (songTitle.includes(normalizedTitle) || normalizedTitle.includes(songTitle)) {
-    score += 50;
-  } else {
-    const titleWords = normalizedTitle.split(' ').filter((w: string) => w.length > 2);
-    const matchingWords = titleWords.filter((w: string) => songTitle.includes(w));
-    score += (matchingWords.length / Math.max(titleWords.length, 1)) * 40;
-  }
-  
-  // Artist matching
-  if (songArtist === normalizedArtist) {
-    score += 100;
-  } else if (songArtist.includes(normalizedArtist) || normalizedArtist.includes(songArtist)) {
-    score += 50;
-  } else {
-    const artistWords = normalizedArtist.split(' ').filter((w: string) => w.length > 2);
-    const matchingWords = artistWords.filter((w: string) => songArtist.includes(w));
-    score += (matchingWords.length / Math.max(artistWords.length, 1)) * 40;
-  }
-  
+  if (tTitle === nTitle) score += 100;
+  else if (tTitle.includes(nTitle) || nTitle.includes(tTitle)) score += 50;
+  else { const w = nTitle.split(' ').filter(x => x.length > 2); score += (w.filter(x => tTitle.includes(x)).length / Math.max(w.length, 1)) * 40; }
+  if (tArtist === nArtist) score += 100;
+  else if (tArtist.includes(nArtist) || nArtist.includes(tArtist)) score += 50;
+  else { const w = nArtist.split(' ').filter(x => x.length > 2); score += (w.filter(x => tArtist.includes(x)).length / Math.max(w.length, 1)) * 40; }
   return score;
 }
 
-/**
- * Find the best matching track
- */
-async function findBestMatch(title: string, artist: string): Promise<{ songId: string; score: number; song: any } | null> {
-  const queries = [
-    `${artist} ${title}`,
-    `${title} ${artist}`,
-    title,
-  ];
-
-  let bestOverall: { songId: string; score: number; song: any } | null = null;
-  
-  for (const query of queries) {
+async function findBestMatch(title: string, artist: string): Promise<{ tidalId: string; score: number } | null> {
+  const queries = [`${artist} ${title}`, `${title} ${artist}`, title];
+  let best: { id: string; score: number; track: any } | null = null;
+  for (const q of queries) {
     try {
-      const results = await searchTracks(query);
-      
-      if (results.length === 0) continue;
-      
-      const scored = results.map((song: any) => ({
-        songId: String(song.id),
-        score: scoreMatch(song, title, artist),
-        song,
-      }));
-      
-      scored.sort((a: any, b: any) => b.score - a.score);
-      
-      if (scored[0].score > (bestOverall?.score ?? 0)) {
-        bestOverall = scored[0];
-      }
-
-      if (scored[0].score >= 80) {
-        console.log(`[HiFi] Best match: "${scored[0].song.title}" by ${scored[0].song.artist} (score: ${scored[0].score})`);
-        return bestOverall;
-      }
-    } catch (e) {
-      console.error(`[HiFi] Search error for "${query}":`, e);
-    }
+      const results = await searchTrack(q);
+      if (!results.length) continue;
+      const scored = results.map(t => ({ id: String(t.id), score: scoreMatch(t, title, artist), track: t }));
+      scored.sort((a, b) => b.score - a.score);
+      if (scored[0].score > (best?.score ?? 0)) best = scored[0];
+      if (scored[0].score >= 80) return { tidalId: scored[0].id, score: scored[0].score };
+    } catch (e) { console.error(`[HiFi] Search error for "${q}":`, e); }
   }
-
-  if (bestOverall && bestOverall.score >= 40) {
-    console.log(`[HiFi] Low-confidence match: "${bestOverall.song.title}" by ${bestOverall.song.artist} (score: ${bestOverall.score})`);
-    return bestOverall;
-  }
-  
+  if (best && best.score >= 40) return { tidalId: best.id, score: best.score };
   return null;
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { action, title, artist, songId, quality } = await req.json();
-    
+    const { action, title, artist, tidalId, quality } = await req.json();
     console.log(`[HiFi] Request: action=${action}`);
-
     switch (action) {
       case 'search-and-stream': {
-        if (!title || !artist) {
-          return new Response(
-            JSON.stringify({ error: 'Title and artist are required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
+        if (!title || !artist) return new Response(JSON.stringify({ error: 'Title and artist are required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         const match = await findBestMatch(title, artist);
-        
-        if (!match) {
-          console.log(`[HiFi] No match found for "${title}" by ${artist}`);
-          return new Response(
-            JSON.stringify({ error: 'Track not found on HiFi' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
-        const streamUrl = getStreamUrl(match.songId);
-        
-        return new Response(
-          JSON.stringify({
-            streamUrl,
-            songId: match.songId,
-            quality: quality || 'LOSSLESS',
-            matchScore: match.score,
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        if (!match) return new Response(JSON.stringify({ error: 'Track not found on HiFi' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const stream = await getTrackStream(match.tidalId, quality || 'LOSSLESS');
+        return new Response(JSON.stringify({ streamUrl: stream.streamUrl, tidalId: match.tidalId, quality: stream.quality, bitDepth: stream.bitDepth, sampleRate: stream.sampleRate, matchScore: match.score }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-
       case 'get-stream': {
-        if (!songId) {
-          return new Response(
-            JSON.stringify({ error: 'Song ID is required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
-        const streamUrl = getStreamUrl(songId);
-        
-        return new Response(
-          JSON.stringify({
-            streamUrl,
-            quality: quality || 'LOSSLESS',
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        if (!tidalId) return new Response(JSON.stringify({ error: 'Tidal ID is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const stream = await getTrackStream(tidalId, quality || 'LOSSLESS');
+        return new Response(JSON.stringify({ streamUrl: stream.streamUrl, quality: stream.quality, bitDepth: stream.bitDepth, sampleRate: stream.sampleRate }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-
       case 'search': {
-        if (!title) {
-          return new Response(
-            JSON.stringify({ error: 'Search query (title) is required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
-        const query = artist ? `${artist} ${title}` : title;
-        const results = await searchTracks(query);
-        
-        return new Response(
-          JSON.stringify({ results }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        if (!title) return new Response(JSON.stringify({ error: 'Search query required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ results: await searchTrack(artist ? `${artist} ${title}` : title) }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-
-      default:
-        return new Response(
-          JSON.stringify({ error: 'Unknown action' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      default: return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
   } catch (error) {
     console.error('[HiFi] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
