@@ -1141,10 +1141,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 return;
               }
 
-              // If downloading, fall through to Tidal but start background download
+              // If downloading, save info and fall through to Tidal but start background download
               if (['downloading', 'queued', 'magnet_conversion'].includes(selectResult.status)) {
                 addDebugLog('⏳ RD in download', `${selectResult.progress}% - uso fallback Tidal`, 'warning');
-                // Don't block - fall through to Tidal fallback
+                // Save torrent info so we can poll if all fallbacks fail
+                pendingRdDownloadRef.current = {
+                  torrent,
+                  matchingFile,
+                  track: enrichedTrack,
+                  selectResult,
+                };
                 break;
               }
             }
