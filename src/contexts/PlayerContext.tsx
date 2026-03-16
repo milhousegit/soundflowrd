@@ -835,6 +835,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setDownloadStatus(null);
       setLoadingPhase('idle');
       setCurrentAudioSource(null);
+      pendingRdDownloadRef.current = null;
 
       // PRIORITY 1: Check for offline availability first (works without network)
       const offlineUrl = await getOfflineTrackUrl(enrichedTrack.id);
