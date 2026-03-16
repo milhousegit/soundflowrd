@@ -1228,13 +1228,16 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               if (directLink && audioRef.current) {
                 setLoadingPhase('loading');
                 audioRef.current.src = directLink;
-                if (await safePlay(audioRef.current)) {
+                const cachedOk = await safePlay(audioRef.current);
+                if (cachedOk) {
                   setState((prev) => ({ ...prev, isPlaying: true }));
+                  setLoadingPhase('idle');
+                  setCurrentAudioSource('real-debrid');
+                  startTrackingPlayback();
+                  return;
                 }
-                setLoadingPhase('idle');
-                setCurrentAudioSource('real-debrid');
-                startTrackingPlayback();
-                return;
+                // Cached link expired — fall through to selectFilesAndPlay below
+                addDebugLog('⚠️ Link RD scaduto', 'Rigenero link...', 'warning');
               }
 
               setLoadingPhase('loading');
