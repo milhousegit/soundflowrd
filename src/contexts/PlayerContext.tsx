@@ -1113,14 +1113,31 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
         }
 
-        // RD not available or downloading - try remaining fallback chain sources
+        // RD not available or downloading - try ALL scraping sources in fallback chain order
         const scrapingSources = hybridFallbackChain.filter(s => s !== 'real-debrid');
+        const triedSources = new Set<string>();
+        
         for (const sourceId of scrapingSources) {
-          addDebugLog(`🔄 Fallback a ${sourceId === 'monochrome' ? 'Monochrome' : 'SquidWTF'}`, '', 'info');
+          triedSources.add(sourceId);
+          addDebugLog(`🔄 Fallback a ${sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF'}`, '', 'info');
           setLoadingPhase('searching');
           const success = await playWithScrapingSource(sourceId);
           if (success) {
             // Start background RD download while playing via scraping
+            if (hasRdKey) {
+              startBackgroundRdDownload(enrichedTrack);
+            }
+            return;
+          }
+        }
+        
+        // Try remaining scraping sources not in fallback chain
+        const remainingSources = SCRAPING_SOURCES.map(s => s.id).filter(id => !triedSources.has(id));
+        for (const sourceId of remainingSources) {
+          addDebugLog(`🔄 Fallback extra a ${sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF'}`, '', 'info');
+          setLoadingPhase('searching');
+          const success = await playWithScrapingSource(sourceId);
+          if (success) {
             if (hasRdKey) {
               startBackgroundRdDownload(enrichedTrack);
             }
