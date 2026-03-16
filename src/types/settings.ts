@@ -7,6 +7,7 @@ export interface ScrapingSource {
 }
 
 export const SCRAPING_SOURCES: ScrapingSource[] = [
+  { id: 'hifi', name: 'HiFi', edgeFunctionName: 'hifi' },
   { id: 'squidwtf', name: 'SquidWTF', edgeFunctionName: 'squidwtf' },
   { id: 'monochrome', name: 'Monochrome', edgeFunctionName: 'monochrome' },
 ];
