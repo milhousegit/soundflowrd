@@ -2089,7 +2089,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setDownloadStatus(result.status);
 
             const elapsedSeconds = (Date.now() - startTime) / 1000;
-            if (result.progress === 0 && elapsedSeconds >= 10) {
+            if (result.progress === 0 && elapsedSeconds >= 30) {
               addDebugLog('⏱️ Timeout', `Download fermo a 0% per ${Math.round(elapsedSeconds)}s`, 'error');
               setLoadingPhase('unavailable');
               setDownloadProgress(null);
