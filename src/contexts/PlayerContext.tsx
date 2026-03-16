@@ -2109,6 +2109,18 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setDownloadProgress(null);
             setDownloadStatus(null);
             setLoadingPhase('idle');
+            setCurrentAudioSource('real-debrid');
+            addDebugLog('✅ Download RD completato', 'Riproduzione automatica', 'success');
+
+            // Update direct_link in DB for this track
+            if (state.currentTrack) {
+              supabase.from('track_file_mappings')
+                .update({ direct_link: streamUrl })
+                .eq('track_id', state.currentTrack.id)
+                .then(() => {
+                  addSyncedTrack(state.currentTrack!.id);
+                });
+            }
 
             if (audioRef.current && streamUrl) {
               audioRef.current.src = streamUrl;
