@@ -1061,6 +1061,7 @@ export type Database = {
           track_id: string
           track_position: number | null
           track_title: string
+          user_id: string | null
         }
         Insert: {
           album_mapping_id: string
@@ -1074,6 +1075,7 @@ export type Database = {
           track_id: string
           track_position?: number | null
           track_title: string
+          user_id?: string | null
         }
         Update: {
           album_mapping_id?: string
@@ -1087,6 +1089,7 @@ export type Database = {
           track_id?: string
           track_position?: number | null
           track_title?: string
+          user_id?: string | null
         }
         Relationships: [
           {
