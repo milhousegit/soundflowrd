@@ -52,8 +52,10 @@ export function useSocialProfile(userId?: string) {
     }
 
     try {
+      // Use public_profiles view for other users, profiles table for own profile
+      const isOwnProfile = user?.id === targetUserId;
       const { data, error } = await supabase
-        .from('profiles')
+        .from(isOwnProfile ? 'profiles' : 'public_profiles')
         .select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at')
         .eq('id', targetUserId)
         .single();

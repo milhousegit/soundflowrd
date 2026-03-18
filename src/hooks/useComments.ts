@@ -171,7 +171,7 @@ export function useComments({ postId, albumId }: UseCommentsOptions) {
       // Fetch profile
       const { data: profile } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at')
         .eq('id', user.id)
         .single();
 
