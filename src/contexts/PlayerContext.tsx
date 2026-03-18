@@ -726,6 +726,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       if (!albumMappingId) return;
 
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
       await supabase.from('track_file_mappings').upsert(
         {
           album_mapping_id: albumMappingId,
@@ -736,8 +738,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           file_path: filePath || '',
           file_name: fileName || track.title,
           direct_link: directLink || null,
+          user_id: currentUser.id,
         },
-        { onConflict: 'track_id' }
+        { onConflict: 'track_id,user_id' }
       );
 
       setCurrentMappedFileId(fileId);

@@ -62,6 +62,9 @@ const flexibleMatch = (fileName: string, trackTitle: string): boolean => {
 
 // Standalone function to sync a single track in background
 export const syncTrackInBackground = async (track: Track, apiKey: string): Promise<void> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
   // Check if already synced
   const { data: existingMapping } = await supabase
     .from('track_file_mappings')
@@ -167,8 +170,9 @@ export const syncTrackInBackground = async (track: Track, apiKey: string): Promi
             file_path: matchingFile.path || '',
             file_name: matchingFile.filename || track.title,
             direct_link: selectResult.streams[0].streamUrl,
+            user_id: user.id,
           },
-          { onConflict: 'track_id' }
+          { onConflict: 'track_id,user_id' }
         );
 
       removeSyncingTrack(track.id);
@@ -187,8 +191,9 @@ export const syncTrackInBackground = async (track: Track, apiKey: string): Promi
             file_path: matchingFile.path || '',
             file_name: matchingFile.filename || track.title,
             direct_link: null,
+            user_id: user.id,
           },
-          { onConflict: 'track_id' }
+          { onConflict: 'track_id,user_id' }
         );
 
       removeSyncingTrack(track.id);
