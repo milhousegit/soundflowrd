@@ -825,6 +825,7 @@ export type Database = {
           email_confirmed: boolean | null
           followers_count: number | null
           following_count: number | null
+          hybrid_fallback_chain: string[] | null
           id: string
           is_premium: boolean | null
           is_private: boolean | null
@@ -857,6 +858,7 @@ export type Database = {
           email_confirmed?: boolean | null
           followers_count?: number | null
           following_count?: number | null
+          hybrid_fallback_chain?: string[] | null
           id: string
           is_premium?: boolean | null
           is_private?: boolean | null
@@ -889,6 +891,7 @@ export type Database = {
           email_confirmed?: boolean | null
           followers_count?: number | null
           following_count?: number | null
+          hybrid_fallback_chain?: string[] | null
           id?: string
           is_premium?: boolean | null
           is_private?: boolean | null
