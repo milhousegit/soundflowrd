@@ -165,15 +165,17 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <SettingsProvider>
-        <PlayerProvider>
-          <AutoModeProvider>
-            <TVConnectionProvider>
-              <TooltipProvider>
-                <AppContent />
-              </TooltipProvider>
-            </TVConnectionProvider>
-          </AutoModeProvider>
-        </PlayerProvider>
+        <ServiceStatusProvider>
+          <PlayerProvider>
+            <AutoModeProvider>
+              <TVConnectionProvider>
+                <TooltipProvider>
+                  <AppContent />
+                </TooltipProvider>
+              </TVConnectionProvider>
+            </AutoModeProvider>
+          </PlayerProvider>
+        </ServiceStatusProvider>
       </SettingsProvider>
     </AuthProvider>
   </QueryClientProvider>
