@@ -415,44 +415,52 @@ serve(async (req) => {
         });
       }
 
-      // 5. Build mixes
+      // 5. Build mixes (up to 50 tracks each: ~25 comfort + ~25 discovery)
+      const MIX_TARGET = 50;
+      const COMFORT_TARGET = 25;
+      const DISCOVERY_TARGET = 25;
       const mixes = [];
 
       for (let i = 0; i < clusters.length; i++) {
         const cluster = clusters[i];
-        const mixTracks: any[] = [];
+        const seenIds = new Set<string>();
 
-        // 50% Known tracks - get top tracks from these artists
+        // --- Comfort tracks: top tracks from cluster artists ---
         const comfortTracks: any[] = [];
-        for (const artist of cluster.artists.slice(0, 5)) {
+        // First pass: known tracks only
+        for (const artist of cluster.artists.slice(0, 8)) {
           try {
-            const data = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/top?limit=10`);
-            const tracks = (data?.data || []).filter((t: any) => knownTrackIds.has(String(t.id)));
-            comfortTracks.push(...tracks);
-          } catch {
-            // Skip
-          }
+            const data = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/top?limit=15`);
+            for (const t of (data?.data || [])) {
+              const tid = String(t.id);
+              if (knownTrackIds.has(tid) && !seenIds.has(tid)) {
+                comfortTracks.push(t);
+                seenIds.add(tid);
+              }
+            }
+          } catch { /* skip */ }
+          if (comfortTracks.length >= COMFORT_TARGET) break;
         }
 
-        // If not enough known tracks, add top tracks regardless
-        if (comfortTracks.length < 10) {
-          for (const artist of cluster.artists.slice(0, 5)) {
+        // Second pass: fill with top tracks regardless of known status
+        if (comfortTracks.length < COMFORT_TARGET) {
+          for (const artist of cluster.artists.slice(0, 8)) {
             try {
-              const data = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/top?limit=5`);
+              const data = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/top?limit=10`);
               for (const t of (data?.data || [])) {
-                if (!comfortTracks.find((ct: any) => ct.id === t.id)) {
+                const tid = String(t.id);
+                if (!seenIds.has(tid)) {
                   comfortTracks.push(t);
+                  seenIds.add(tid);
                 }
               }
-            } catch {
-              // Skip
-            }
-            if (comfortTracks.length >= 10) break;
+            } catch { /* skip */ }
+            if (comfortTracks.length >= COMFORT_TARGET) break;
           }
         }
 
-        // Fallback: use user's most played tracks for these artists from DB
-        if (comfortTracks.length < 5) {
+        // DB fallback for comfort
+        if (comfortTracks.length < 15) {
           const clusterArtistIds = cluster.artists.map(a => a.id);
           const { data: dbTracks } = await supabase
             .from('user_track_stats')
@@ -460,10 +468,10 @@ serve(async (req) => {
             .eq('user_id', user.id)
             .in('artist_id', clusterArtistIds)
             .order('play_count', { ascending: false })
-            .limit(15);
+            .limit(30);
 
           for (const dt of (dbTracks || [])) {
-            if (!comfortTracks.find((ct: any) => String(ct.id) === dt.track_id)) {
+            if (!seenIds.has(dt.track_id)) {
               comfortTracks.push({
                 id: dt.track_id,
                 title: dt.track_title,
@@ -471,27 +479,16 @@ serve(async (req) => {
                 album: { title: dt.track_album, id: dt.track_album_id, cover_medium: dt.track_cover_url },
                 duration: dt.track_duration || 0,
               });
+              seenIds.add(dt.track_id);
             }
-            if (comfortTracks.length >= 10) break;
+            if (comfortTracks.length >= COMFORT_TARGET) break;
           }
         }
 
-        // Dedupe and take 10
-        const seenIds = new Set<string>();
-        const comfort10: any[] = [];
-        for (const t of comfortTracks) {
-          const tid = String(t.id);
-          if (!seenIds.has(tid)) {
-            seenIds.add(tid);
-            comfort10.push(t);
-            if (comfort10.length >= 10) break;
-          }
-        }
-
-        // 50% Discovery tracks - from artist radio
+        // --- Discovery tracks: artist radio + related artists ---
         const discoveryTracks: any[] = [];
-        for (const artist of cluster.artists.slice(0, 5)) {
-          const radio = await getArtistRadioTracks(artist.id, 20);
+        for (const artist of cluster.artists.slice(0, 8)) {
+          const radio = await getArtistRadioTracks(artist.id, 30);
           for (const t of radio) {
             const tid = String(t.id);
             if (!knownTrackIds.has(tid) && !seenIds.has(tid)) {
@@ -499,15 +496,15 @@ serve(async (req) => {
               seenIds.add(tid);
             }
           }
-          if (discoveryTracks.length >= 10) break;
+          if (discoveryTracks.length >= DISCOVERY_TARGET) break;
         }
 
-        // If not enough discovery, try related artists
-        if (discoveryTracks.length < 10 && cluster.artists.length > 0) {
+        // Fill with related artists if needed
+        if (discoveryTracks.length < DISCOVERY_TARGET && cluster.artists.length > 0) {
           try {
-            const related = await fetchDeezer(`${DEEZER_API}/artist/${cluster.artists[0].id}/related?limit=5`);
+            const related = await fetchDeezer(`${DEEZER_API}/artist/${cluster.artists[0].id}/related?limit=8`);
             for (const relArtist of (related?.data || [])) {
-              const radio = await getArtistRadioTracks(String(relArtist.id), 10);
+              const radio = await getArtistRadioTracks(String(relArtist.id), 15);
               for (const t of radio) {
                 const tid = String(t.id);
                 if (!knownTrackIds.has(tid) && !seenIds.has(tid)) {
@@ -515,24 +512,22 @@ serve(async (req) => {
                   seenIds.add(tid);
                 }
               }
-              if (discoveryTracks.length >= 10) break;
+              if (discoveryTracks.length >= DISCOVERY_TARGET) break;
             }
-          } catch {
-            // Skip
-          }
+          } catch { /* skip */ }
         }
 
-        const discovery10 = discoveryTracks.slice(0, 10);
-
-        // Interleave comfort and discovery
-        const allTracks = [...comfort10, ...discovery10];
-        // Shuffle lightly - keep comfort first half, discovery second half mostly
+        // Combine and shuffle
+        const allTracks = [
+          ...comfortTracks.slice(0, COMFORT_TARGET),
+          ...discoveryTracks.slice(0, DISCOVERY_TARGET),
+        ];
         for (let j = allTracks.length - 1; j > 0; j--) {
           const k = Math.floor(Math.random() * (j + 1));
           [allTracks[j], allTracks[k]] = [allTracks[k], allTracks[j]];
         }
 
-        const formattedTracks = allTracks.slice(0, 20).map((t: any) => ({
+        const formattedTracks = allTracks.slice(0, MIX_TARGET).map((t: any) => ({
           id: String(t.id),
           title: t.title,
           artist: t.artist?.name || 'Unknown Artist',
