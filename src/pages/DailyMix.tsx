@@ -169,42 +169,12 @@ const DailyMixPage: React.FC = () => {
           <TrackCard
             key={`${track.id}-${i}`}
             track={track}
-            queue={[...mix.tracks, ...recommendations]}
+            queue={mix.tracks}
             showArtist
             index={i + 1}
           />
         ))}
       </div>
-
-      {/* Recommendations */}
-      {recommendations.length > 0 && (
-        <div className="px-2 md:px-4 mt-6">
-          <div className="flex items-center gap-2 mb-3 px-1">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-semibold text-muted-foreground">
-              {settings.language === 'it' ? 'Brani consigliati' : 'Recommended tracks'}
-            </h3>
-          </div>
-          <div className="space-y-1">
-            {recommendations.map((track, i) => (
-              <TrackCard
-                key={`rec-${track.id}-${i}`}
-                track={track}
-                queue={[...mix.tracks, ...recommendations]}
-                showArtist
-                index={mix.tracks.length + i + 1}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Infinite scroll trigger */}
-      {hasMoreRecs && (
-        <div ref={loadMoreRef} className="flex justify-center py-6">
-          {isLoadingRecs && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
-        </div>
-      )}
     </div>
   );
 };
