@@ -32,25 +32,14 @@ async function fetchDeezer(url: string, retries = 2): Promise<any> {
   }
 }
 
-// Get genre info for an artist from Deezer (check multiple albums for accuracy)
+// Get genre info for an artist from Deezer (single album check for speed)
 async function getArtistGenre(artistId: string): Promise<string> {
   try {
-    const data = await fetchDeezer(`${DEEZER_API}/artist/${artistId}`);
-    if (data?.nb_album > 0) {
-      const albums = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/albums?limit=3`);
-      const genreCounts = new Map<string, number>();
-      for (const albumEntry of (albums?.data || []).slice(0, 3)) {
-        try {
-          const album = await fetchDeezer(`${DEEZER_API}/album/${albumEntry.id}`);
-          for (const g of (album?.genres?.data || [])) {
-            const name = g.name || '';
-            genreCounts.set(name, (genreCounts.get(name) || 0) + 1);
-          }
-        } catch { /* skip */ }
-      }
-      if (genreCounts.size > 0) {
-        // Return most frequent genre
-        return [...genreCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const albums = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/albums?limit=1`);
+    if (albums?.data?.[0]?.id) {
+      const album = await fetchDeezer(`${DEEZER_API}/album/${albums.data[0].id}`);
+      if (album?.genres?.data?.[0]?.name) {
+        return album.genres.data[0].name;
       }
     }
     return 'Unknown';
