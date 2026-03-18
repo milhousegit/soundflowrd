@@ -10,6 +10,7 @@ import { PlayerProvider } from "@/contexts/PlayerContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { AutoModeProvider, useAutoMode } from "@/components/auto/AutoModeContext";
 import { TVConnectionProvider } from "@/contexts/TVConnectionContext";
+import { ServiceStatusProvider } from "@/contexts/ServiceStatusContext";
 import { supabase } from "@/integrations/supabase/client";
 import Login from "@/components/Login";
 import Layout from "@/components/Layout";
