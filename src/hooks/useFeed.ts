@@ -133,7 +133,7 @@ export function useFeed() {
           const postIds = allPosts.map(p => p.id);
 
           const [profilesResult, adminRolesResult, likesResult] = await Promise.all([
-            supabase.from('profiles').select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at').in('id', userIds),
+            supabase.from('public_profiles').select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at').in('id', userIds),
             supabase.from('user_roles').select('user_id').in('user_id', userIds).eq('role', 'admin'),
             supabase.from('post_likes').select('post_id').eq('user_id', user.id).in('post_id', postIds),
           ]);
@@ -216,7 +216,7 @@ export function useFeed() {
           const commentIds = comments.map(c => c.id);
 
           const [profilesResult, adminRolesResult, likesResult] = await Promise.all([
-            supabase.from('profiles').select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at').in('id', commentUserIds),
+            supabase.from('public_profiles').select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at').in('id', commentUserIds),
             supabase.from('user_roles').select('user_id').in('user_id', commentUserIds).eq('role', 'admin'),
             supabase.from('comment_likes').select('comment_id').eq('user_id', user.id).in('comment_id', commentIds),
           ]);
@@ -263,7 +263,7 @@ export function useFeed() {
           const uniquePlaylistUserIds = [...new Set(playlists.map(p => p.user_id))];
 
           const [profilesResult, adminRolesResult] = await Promise.all([
-            supabase.from('profiles').select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at').in('id', uniquePlaylistUserIds),
+            supabase.from('public_profiles').select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at').in('id', uniquePlaylistUserIds),
             supabase.from('user_roles').select('user_id').in('user_id', uniquePlaylistUserIds).eq('role', 'admin'),
           ]);
 
@@ -377,7 +377,7 @@ export function useFeed() {
       // Add to local state with profile
       const { data: profile } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at')
         .eq('id', user.id)
         .single();
 
