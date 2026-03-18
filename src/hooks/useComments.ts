@@ -56,7 +56,7 @@ export function useComments({ postId, albumId }: UseCommentsOptions) {
       // Fetch profiles
       const userIds = [...new Set(commentsData?.map(c => c.user_id) || [])];
       const { data: profiles } = await supabase
-        .from('profiles')
+        .from('public_profiles' as any)
         .select('*')
         .in('id', userIds);
 

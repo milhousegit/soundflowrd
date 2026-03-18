@@ -53,7 +53,7 @@ export function useSocialProfile(userId?: string) {
 
     try {
       const { data, error } = await supabase
-        .from('profiles')
+        .from('public_profiles' as any)
         .select('*')
         .eq('id', targetUserId)
         .single();

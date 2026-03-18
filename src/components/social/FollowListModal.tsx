@@ -68,7 +68,7 @@ const FollowListModal: React.FC<FollowListModalProps> = ({ open, onOpenChange, u
             
             // Fetch profiles
             const { data: profiles } = await supabase
-              .from('profiles')
+              .from('public_profiles' as any)
               .select('*')
               .in('id', followingIds);
 

@@ -263,7 +263,7 @@ export function useFeed() {
           const uniquePlaylistUserIds = [...new Set(playlists.map(p => p.user_id))];
 
           const [profilesResult, adminRolesResult] = await Promise.all([
-            supabase.from('profiles').select('*').in('id', uniquePlaylistUserIds),
+            supabase.from('public_profiles' as any).select('*').in('id', uniquePlaylistUserIds),
             supabase.from('user_roles').select('user_id').in('user_id', uniquePlaylistUserIds).eq('role', 'admin'),
           ]);
 

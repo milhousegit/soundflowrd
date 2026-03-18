@@ -18,9 +18,9 @@ export function useUserSearch() {
       // Search by display_name (username) - case insensitive, partial match
       const searchTerm = query.toLowerCase().trim();
       const { data, error } = await supabase
-        .from('profiles')
+        .from('public_profiles' as any)
         .select('*')
-        .or(`display_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
+        .or(`display_name.ilike.%${searchTerm}%`)
         .not('display_name', 'is', null)
         .limit(10);
 
