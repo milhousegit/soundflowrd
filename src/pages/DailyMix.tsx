@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Shuffle, ListPlus, Loader2 } from 'lucide-react';
+import { Play, Shuffle, ListPlus, Loader2, Sparkles, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useDailyMixes } from '@/hooks/useDailyMixes';
 import { usePlayer } from '@/contexts/PlayerContext';
@@ -10,8 +10,9 @@ import { useToast } from '@/hooks/use-toast';
 import TrackCard from '@/components/TrackCard';
 import BackButton from '@/components/BackButton';
 import BrandedPlaylistCover from '@/components/BrandedPlaylistCover';
-import { hdCover } from '@/lib/utils';
+import { hdCover, cn } from '@/lib/utils';
 import { Track } from '@/types/music';
+import { searchTracks } from '@/lib/deezer';
 
 const DailyMixPage: React.FC = () => {
   const { index } = useParams<{ index: string }>();
@@ -22,9 +23,71 @@ const DailyMixPage: React.FC = () => {
   const { createPlaylist, addTracksToPlaylist } = usePlaylists();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
+  const [recommendations, setRecommendations] = useState<Track[]>([]);
+  const [isLoadingRecs, setIsLoadingRecs] = useState(false);
+  const [hasMoreRecs, setHasMoreRecs] = useState(true);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const loadedArtistsRef = useRef<Set<string>>(new Set());
+  const MAX_RECS = 50;
 
   const mixIndex = parseInt(index || '0', 10);
   const mix = mixes.find(m => m.mix_index === mixIndex);
+
+  const fetchMoreRecommendations = useCallback(async () => {
+    if (!mix || mix.tracks.length === 0 || isLoadingRecs || !hasMoreRecs) return;
+    
+    setIsLoadingRecs(true);
+    try {
+      const uniqueArtists = [...new Set(mix.tracks.map(t => t.artist))];
+      const existingIds = new Set([
+        ...mix.tracks.map(t => t.id),
+        ...recommendations.map(t => t.id),
+      ]);
+      
+      const unqueried = uniqueArtists.filter(a => !loadedArtistsRef.current.has(a));
+      const artistPool = unqueried.length > 0 ? unqueried : uniqueArtists;
+      const selected = artistPool.sort(() => Math.random() - 0.5).slice(0, 2);
+      selected.forEach(a => loadedArtistsRef.current.add(a));
+
+      const newTracks: Track[] = [];
+      for (const artist of selected) {
+        try {
+          const results = await searchTracks(artist);
+          for (const t of results) {
+            if (!existingIds.has(t.id) && newTracks.length < 10) {
+              existingIds.add(t.id);
+              newTracks.push(t);
+            }
+          }
+        } catch (err) {
+          console.error(`Rec fetch failed for ${artist}:`, err);
+        }
+      }
+
+      setRecommendations(prev => {
+        const combined = [...prev, ...newTracks];
+        if (combined.length >= MAX_RECS) {
+          setHasMoreRecs(false);
+          return combined.slice(0, MAX_RECS);
+        }
+        if (newTracks.length === 0) setHasMoreRecs(false);
+        return combined;
+      });
+    } finally {
+      setIsLoadingRecs(false);
+    }
+  }, [mix, recommendations, isLoadingRecs, hasMoreRecs]);
+
+  // Intersection observer for infinite scroll
+  useEffect(() => {
+    if (!loadMoreRef.current || !mix) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) fetchMoreRecommendations(); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [fetchMoreRecommendations, mix]);
 
   const [color1, color2] = useMemo(() => {
     if (!mix) return ['#6366F1', '#EC4899'];
@@ -89,7 +152,9 @@ const DailyMixPage: React.FC = () => {
     );
   }
 
-  const artistLabel = mix.top_artists.slice(0, 4).join(', ');
+  // Derive artists from actual tracks
+  const trackArtists = [...new Set(mix.tracks.map(t => t.artist))];
+  const artistLabel = trackArtists.slice(0, 4).join(', ');
 
   return (
     <div className="pb-32">
@@ -167,12 +232,42 @@ const DailyMixPage: React.FC = () => {
           <TrackCard
             key={`${track.id}-${i}`}
             track={track}
-            queue={mix.tracks}
+            queue={[...mix.tracks, ...recommendations]}
             showArtist
             index={i + 1}
           />
         ))}
       </div>
+
+      {/* Recommendations */}
+      {recommendations.length > 0 && (
+        <div className="px-2 md:px-4 mt-6">
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              {settings.language === 'it' ? 'Brani consigliati' : 'Recommended tracks'}
+            </h3>
+          </div>
+          <div className="space-y-1">
+            {recommendations.map((track, i) => (
+              <TrackCard
+                key={`rec-${track.id}-${i}`}
+                track={track}
+                queue={[...mix.tracks, ...recommendations]}
+                showArtist
+                index={mix.tracks.length + i + 1}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Infinite scroll trigger */}
+      {hasMoreRecs && (
+        <div ref={loadMoreRef} className="flex justify-center py-6">
+          {isLoadingRecs && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
+        </div>
+      )}
     </div>
   );
 };
