@@ -913,6 +913,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 ? `${result.bitDepth}bit/${result.sampleRate/1000}kHz` 
                 : result.quality || 'LOSSLESS';
               addDebugLog(`✅ ${sourceName} avviato`, `Stream ${qualityInfo}`, 'success');
+              reportSuccess(sourceId);
               return true;
             } catch (playError) {
               if (playError instanceof Error && (playError.name === 'AbortError' || playError.name === 'NotAllowedError')) {
@@ -921,9 +922,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               throw playError;
             }
           }
+          reportFailure(sourceId);
           return false;
         } catch (error) {
           addDebugLog(`❌ ${sourceName} fallito`, error instanceof Error ? error.message : 'Errore', 'error');
+          reportFailure(sourceId);
           return false;
         }
       };
