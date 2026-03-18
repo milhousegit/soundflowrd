@@ -369,39 +369,44 @@ serve(async (req) => {
         knownTrackIds.add(f.item_id);
       }
 
-      // 3. Get genres for top artists (limit API calls)
-      const topArtistsForGenre = artistStats.slice(0, 15);
-      const artistGenreMap = new Map<string, { genre: string; name: string; playCount: number; imageUrl?: string }>();
+      // 3. Get genres AND related artists for top artists (affinity clustering)
+      const topArtistsForLookup = artistStats.slice(0, 15);
 
-      // Batch genre lookups
-      const genrePromises = topArtistsForGenre.map(async (a) => {
-        const genre = await getArtistGenre(a.artist_id);
-        return { ...a, genre };
+      // Batch genre + related lookups in parallel
+      const lookupPromises = topArtistsForLookup.map(async (a) => {
+        const [genre, relatedIds] = await Promise.all([
+          getArtistGenre(a.artist_id),
+          getRelatedArtistIds(a.artist_id),
+        ]);
+        return { ...a, genre, relatedIds };
       });
 
-      const genreResults = await Promise.all(genrePromises);
+      const lookupResults = await Promise.all(lookupPromises);
 
-      for (const a of genreResults) {
-        artistGenreMap.set(a.artist_id, {
-          genre: a.genre,
-          name: a.artist_name,
-          playCount: a.total_plays,
-          imageUrl: a.artist_image_url || undefined,
-        });
-      }
+      // Build enriched artist list
+      const enrichedArtists = lookupResults.map(a => ({
+        id: a.artist_id,
+        name: a.artist_name,
+        playCount: a.total_plays,
+        genre: a.genre,
+        imageUrl: a.artist_image_url || undefined,
+        relatedIds: a.relatedIds,
+      }));
 
-      // Add remaining artists with 'Unknown' genre
+      // Add remaining artists with Unknown genre and no related data
       for (const a of artistStats.slice(15)) {
-        artistGenreMap.set(a.artist_id, {
-          genre: 'Unknown',
+        enrichedArtists.push({
+          id: a.artist_id,
           name: a.artist_name,
           playCount: a.total_plays,
+          genre: 'Unknown',
           imageUrl: a.artist_image_url || undefined,
+          relatedIds: [],
         });
       }
 
-      // 4. Cluster artists
-      const clusters = clusterArtistsByGenre(artistGenreMap);
+      // 4. Cluster artists by affinity (related artists + genre)
+      const clusters = clusterArtistsByAffinity(enrichedArtists);
 
       if (clusters.length === 0) {
         return new Response(JSON.stringify([]), {
