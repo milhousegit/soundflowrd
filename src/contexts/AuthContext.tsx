@@ -425,6 +425,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { error: error as Error | null };
   };
 
+  const updateHybridFallbackChain = async (chain: string[]) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id ?? user?.id;
+
+    if (!userId) return { error: new Error('Not authenticated') };
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ hybrid_fallback_chain: chain } as any)
+      .eq('id', userId);
+
+    if (!error) {
+      setProfile(prev => prev ? { ...prev, hybrid_fallback_chain: chain } : prev);
+    }
+
+    return { error: error as Error | null };
+  };
+
   // Build credentials from profile for compatibility
   const credentials: UserCredentials | null = profile?.real_debrid_api_key
     ? {
