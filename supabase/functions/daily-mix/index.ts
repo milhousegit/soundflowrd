@@ -415,67 +415,61 @@ serve(async (req) => {
         });
       }
 
-      // 5. Build mixes (up to 50 tracks, diverse across genre, max 3 per artist)
+      // 5. Build mixes (up to 50 tracks, no per-artist cap, but ensure multiple artists)
       const MIX_TARGET = 50;
-      const MAX_PER_ARTIST = 3;
       const mixes = [];
 
       for (let i = 0; i < clusters.length; i++) {
         const cluster = clusters[i];
         const seenIds = new Set<string>();
-        const artistTrackCount = new Map<string, number>();
+        const allTracks: any[] = [];
 
-        const canAddArtist = (artistId: string) => (artistTrackCount.get(artistId) || 0) < MAX_PER_ARTIST;
-        const countArtist = (artistId: string) => artistTrackCount.set(artistId, (artistTrackCount.get(artistId) || 0) + 1);
-
-        const addTrack = (t: any): boolean => {
+        const tryAdd = (t: any): boolean => {
           const tid = String(t.id);
-          const aid = String(t.artist?.id || '');
-          if (seenIds.has(tid) || !canAddArtist(aid)) return false;
+          if (seenIds.has(tid)) return false;
           seenIds.add(tid);
-          countArtist(aid);
+          allTracks.push(t);
           return true;
         };
 
-        const allTracks: any[] = [];
-
-        // --- Phase 1: Seed tracks from user's known artists (max 3 per artist) ---
+        // --- Phase 1: Top tracks from cluster artists ---
         for (const artist of cluster.artists.slice(0, 10)) {
           try {
-            const data = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/top?limit=5`);
-            for (const t of (data?.data || [])) {
-              if (addTrack(t)) allTracks.push(t);
-            }
-          } catch { /* skip */ }
-        }
-
-        // --- Phase 2: Genre-based discovery via related artists (spread wide) ---
-        // Collect many related artists across the cluster for diversity
-        const relatedArtistIds = new Set<string>();
-        const clusterArtistIds = new Set(cluster.artists.map(a => a.id));
-
-        for (const artist of cluster.artists.slice(0, 5)) {
-          try {
-            const related = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/related?limit=15`);
-            for (const r of (related?.data || [])) {
-              if (!clusterArtistIds.has(String(r.id))) {
-                relatedArtistIds.add(String(r.id));
-              }
-            }
-          } catch { /* skip */ }
-        }
-
-        // Get top tracks from related artists (diverse genre pool)
-        const relatedArr = [...relatedArtistIds].sort(() => Math.random() - 0.5);
-        for (const relId of relatedArr.slice(0, 20)) {
-          if (allTracks.length >= MIX_TARGET) break;
-          try {
-            const data = await fetchDeezer(`${DEEZER_API}/artist/${relId}/top?limit=5`);
+            const data = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/top?limit=15`);
             for (const t of (data?.data || [])) {
               if (allTracks.length >= MIX_TARGET) break;
-              if (addTrack(t)) allTracks.push(t);
+              tryAdd(t);
             }
           } catch { /* skip */ }
+        }
+
+        // --- Phase 2: Related artists to broaden the mix ---
+        if (allTracks.length < MIX_TARGET) {
+          const relatedArtistIds = new Set<string>();
+          const clusterArtistIds = new Set(cluster.artists.map(a => a.id));
+
+          for (const artist of cluster.artists.slice(0, 5)) {
+            try {
+              const related = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/related?limit=15`);
+              for (const r of (related?.data || [])) {
+                if (!clusterArtistIds.has(String(r.id))) {
+                  relatedArtistIds.add(String(r.id));
+                }
+              }
+            } catch { /* skip */ }
+          }
+
+          const relatedArr = [...relatedArtistIds].sort(() => Math.random() - 0.5);
+          for (const relId of relatedArr.slice(0, 20)) {
+            if (allTracks.length >= MIX_TARGET) break;
+            try {
+              const data = await fetchDeezer(`${DEEZER_API}/artist/${relId}/top?limit=5`);
+              for (const t of (data?.data || [])) {
+                if (allTracks.length >= MIX_TARGET) break;
+                tryAdd(t);
+              }
+            } catch { /* skip */ }
+          }
         }
 
         // --- Phase 3: Artist radio for remaining slots ---
@@ -485,12 +479,12 @@ serve(async (req) => {
             const radio = await getArtistRadioTracks(artist.id, 30);
             for (const t of radio) {
               if (allTracks.length >= MIX_TARGET) break;
-              if (addTrack(t)) allTracks.push(t);
+              tryAdd(t);
             }
           }
         }
 
-        // Shuffle all tracks
+        // Shuffle
         for (let j = allTracks.length - 1; j > 0; j--) {
           const k = Math.floor(Math.random() * (j + 1));
           [allTracks[j], allTracks[k]] = [allTracks[k], allTracks[j]];
