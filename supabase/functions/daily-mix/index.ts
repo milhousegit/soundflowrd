@@ -32,23 +32,40 @@ async function fetchDeezer(url: string, retries = 2): Promise<any> {
   }
 }
 
-// Get genre info for an artist from Deezer
+// Get genre info for an artist from Deezer (check multiple albums for accuracy)
 async function getArtistGenre(artistId: string): Promise<string> {
   try {
     const data = await fetchDeezer(`${DEEZER_API}/artist/${artistId}`);
-    // Deezer doesn't expose genre directly on artist, but we can check via the artist's top track album
     if (data?.nb_album > 0) {
-      const albums = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/albums?limit=1`);
-      if (albums?.data?.[0]?.id) {
-        const album = await fetchDeezer(`${DEEZER_API}/album/${albums.data[0].id}`);
-        if (album?.genres?.data?.[0]?.name) {
-          return album.genres.data[0].name;
-        }
+      const albums = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/albums?limit=3`);
+      const genreCounts = new Map<string, number>();
+      for (const albumEntry of (albums?.data || []).slice(0, 3)) {
+        try {
+          const album = await fetchDeezer(`${DEEZER_API}/album/${albumEntry.id}`);
+          for (const g of (album?.genres?.data || [])) {
+            const name = g.name || '';
+            genreCounts.set(name, (genreCounts.get(name) || 0) + 1);
+          }
+        } catch { /* skip */ }
+      }
+      if (genreCounts.size > 0) {
+        // Return most frequent genre
+        return [...genreCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
       }
     }
     return 'Unknown';
   } catch {
     return 'Unknown';
+  }
+}
+
+// Get related artist IDs for affinity clustering
+async function getRelatedArtistIds(artistId: string): Promise<string[]> {
+  try {
+    const data = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/related?limit=20`);
+    return (data?.data || []).map((a: any) => String(a.id));
+  } catch {
+    return [];
   }
 }
 
