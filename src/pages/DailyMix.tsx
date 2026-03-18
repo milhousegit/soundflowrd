@@ -23,6 +23,69 @@ const DailyMixPage: React.FC = () => {
   const { createPlaylist, addTracksToPlaylist } = usePlaylists();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
+  const [recommendations, setRecommendations] = useState<Track[]>([]);
+  const [isLoadingRecs, setIsLoadingRecs] = useState(false);
+  const [hasMoreRecs, setHasMoreRecs] = useState(true);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const loadedArtistsRef = useRef<Set<string>>(new Set());
+  const MAX_RECS = 50;
+
+  const fetchMoreRecommendations = useCallback(async () => {
+    if (!mix || mix.tracks.length === 0 || isLoadingRecs || !hasMoreRecs) return;
+    
+    setIsLoadingRecs(true);
+    try {
+      const uniqueArtists = [...new Set(mix.tracks.map(t => t.artist))];
+      const existingIds = new Set([
+        ...mix.tracks.map(t => t.id),
+        ...recommendations.map(t => t.id),
+      ]);
+      
+      // Pick artists we haven't queried yet, or cycle back
+      const unqueried = uniqueArtists.filter(a => !loadedArtistsRef.current.has(a));
+      const artistPool = unqueried.length > 0 ? unqueried : uniqueArtists;
+      const selected = artistPool.sort(() => Math.random() - 0.5).slice(0, 2);
+      selected.forEach(a => loadedArtistsRef.current.add(a));
+
+      const newTracks: Track[] = [];
+      for (const artist of selected) {
+        try {
+          const results = await searchTracks(artist);
+          for (const t of results) {
+            if (!existingIds.has(t.id) && newTracks.length < 10) {
+              existingIds.add(t.id);
+              newTracks.push(t);
+            }
+          }
+        } catch (err) {
+          console.error(`Rec fetch failed for ${artist}:`, err);
+        }
+      }
+
+      setRecommendations(prev => {
+        const combined = [...prev, ...newTracks];
+        if (combined.length >= MAX_RECS) {
+          setHasMoreRecs(false);
+          return combined.slice(0, MAX_RECS);
+        }
+        if (newTracks.length === 0) setHasMoreRecs(false);
+        return combined;
+      });
+    } finally {
+      setIsLoadingRecs(false);
+    }
+  }, [mix, recommendations, isLoadingRecs, hasMoreRecs]);
+
+  // Intersection observer for infinite scroll
+  useEffect(() => {
+    if (!loadMoreRef.current || !mix) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) fetchMoreRecommendations(); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [fetchMoreRecommendations, mix]);
 
   const mixIndex = parseInt(index || '0', 10);
   const mix = mixes.find(m => m.mix_index === mixIndex);
