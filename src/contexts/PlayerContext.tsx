@@ -367,7 +367,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials, user } = useAuth();
   const { audioSourceMode, settings, selectedScrapingSource, hybridFallbackChain } = useSettings();
-  const serviceStatus = React.useContext(ServiceStatusContextRef);
+  const { reportFailure, reportSuccess } = useServiceStatus();
 
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
