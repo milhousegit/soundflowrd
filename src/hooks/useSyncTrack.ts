@@ -191,8 +191,9 @@ export const syncTrackInBackground = async (track: Track, apiKey: string): Promi
             file_path: matchingFile.path || '',
             file_name: matchingFile.filename || track.title,
             direct_link: null,
+            user_id: user.id,
           },
-          { onConflict: 'track_id' }
+          { onConflict: 'track_id,user_id' }
         );
 
       removeSyncingTrack(track.id);
