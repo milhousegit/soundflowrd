@@ -507,6 +507,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       updateApiKey,
       updateAudioSourceMode,
       updateBridgeUrl,
+      updateHybridFallbackChain,
       refreshProfile,
       login,
       logout,
