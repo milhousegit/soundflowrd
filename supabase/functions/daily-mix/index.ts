@@ -85,70 +85,131 @@ interface ArtistCluster {
   artists: { id: string; name: string; playCount: number; imageUrl?: string }[];
 }
 
-function clusterArtistsByGenre(
-  artistGenreMap: Map<string, { genre: string; name: string; playCount: number; imageUrl?: string }>
+// Affinity-based clustering: group artists that are related to each other on Deezer
+function clusterArtistsByAffinity(
+  artists: { id: string; name: string; playCount: number; genre: string; imageUrl?: string; relatedIds: string[] }[]
 ): ArtistCluster[] {
-  const genreGroups = new Map<string, ArtistCluster>();
+  if (artists.length === 0) return [];
 
-  for (const [id, info] of artistGenreMap) {
-    const normalizedGenre = normalizeGenre(info.genre);
-    if (!genreGroups.has(normalizedGenre)) {
-      genreGroups.set(normalizedGenre, { genre: normalizedGenre, artists: [] });
+  const assigned = new Set<string>();
+  const clusters: ArtistCluster[] = [];
+
+  // Sort by play count descending - most listened artists seed the clusters
+  const sorted = [...artists].sort((a, b) => b.playCount - a.playCount);
+
+  for (const seed of sorted) {
+    if (assigned.has(seed.id)) continue;
+
+    // Start a new cluster with this seed
+    const clusterArtists = [seed];
+    assigned.add(seed.id);
+
+    // Find artists related to the seed (mutual or one-way)
+    for (const candidate of sorted) {
+      if (assigned.has(candidate.id)) continue;
+      
+      // Check affinity: seed's related list contains candidate, or vice versa
+      const seedRelated = seed.relatedIds.includes(candidate.id);
+      const candidateRelated = candidate.relatedIds.includes(seed.id);
+      // Also check genre match as secondary signal
+      const sameGenre = normalizeGenre(seed.genre) === normalizeGenre(candidate.genre) && 
+                        normalizeGenre(seed.genre) !== 'Mixed';
+      
+      if (seedRelated || candidateRelated || sameGenre) {
+        clusterArtists.push(candidate);
+        assigned.add(candidate.id);
+      }
     }
-    genreGroups.get(normalizedGenre)!.artists.push({
-      id,
-      name: info.name,
-      playCount: info.playCount,
-      imageUrl: info.imageUrl,
+
+    const genre = getMostCommonGenre(clusterArtists.map(a => a.genre));
+    clusters.push({
+      genre,
+      artists: clusterArtists.map(a => ({
+        id: a.id,
+        name: a.name,
+        playCount: a.playCount,
+        imageUrl: a.imageUrl,
+      })),
     });
+
+    if (clusters.length >= 3) break;
   }
 
-  // Sort clusters by total play count (most listened first)
-  const clusters = Array.from(genreGroups.values())
-    .map(c => ({
-      ...c,
-      artists: c.artists.sort((a, b) => b.playCount - a.playCount),
-    }))
-    .sort((a, b) => {
-      const aTotal = a.artists.reduce((s, ar) => s + ar.playCount, 0);
-      const bTotal = b.artists.reduce((s, ar) => s + ar.playCount, 0);
-      return bTotal - aTotal;
-    });
+  // Add remaining unassigned artists to the closest cluster
+  for (const artist of sorted) {
+    if (assigned.has(artist.id)) continue;
+    // Find cluster with most affinity
+    let bestCluster = 0;
+    let bestScore = -1;
+    for (let i = 0; i < clusters.length; i++) {
+      let score = 0;
+      for (const ca of clusters[i].artists) {
+        const orig = sorted.find(a => a.id === ca.id);
+        if (orig?.relatedIds.includes(artist.id)) score += 2;
+        if (normalizeGenre(orig?.genre || '') === normalizeGenre(artist.genre) &&
+            normalizeGenre(artist.genre) !== 'Mixed') score += 1;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestCluster = i;
+      }
+    }
+    if (clusters[bestCluster]) {
+      clusters[bestCluster].artists.push({
+        id: artist.id,
+        name: artist.name,
+        playCount: artist.playCount,
+        imageUrl: artist.imageUrl,
+      });
+    }
+    assigned.add(artist.id);
+  }
 
-  // Ensure at least 2 clusters by splitting or duplicating
+  // Ensure at least 2 clusters
   while (clusters.length < 2 && clusters.length > 0) {
     const biggest = clusters[0];
     if (biggest.artists.length >= 2) {
       const half = Math.ceil(biggest.artists.length / 2);
-      const split1 = { genre: biggest.genre, artists: biggest.artists.slice(0, half) };
-      const split2 = { genre: `${biggest.genre} (2)`, artists: biggest.artists.slice(half) };
-      clusters.splice(0, 1, split1, split2);
+      clusters.splice(0, 1,
+        { genre: biggest.genre, artists: biggest.artists.slice(0, half) },
+        { genre: `${biggest.genre} (2)`, artists: biggest.artists.slice(half) },
+      );
     } else {
-      // Duplicate the single artist into a second mix (discovery-focused)
       clusters.push({ genre: `${biggest.genre} Discovery`, artists: [...biggest.artists] });
     }
   }
-  // Try to reach 3 if possible
-  while (clusters.length < 3) {
-    const biggest = clusters.reduce((a, b) => a.artists.length > b.artists.length ? a : b);
-    if (biggest.artists.length >= 2) {
-      const half = Math.ceil(biggest.artists.length / 2);
-      const idx = clusters.indexOf(biggest);
-      const split1 = { genre: biggest.genre, artists: biggest.artists.slice(0, half) };
-      const split2 = { genre: `${biggest.genre} (${clusters.length + 1})`, artists: biggest.artists.slice(half) };
-      clusters.splice(idx, 1, split1, split2);
-    } else {
-      break;
-    }
-  }
+
+  // Sort clusters by total play count
+  clusters.sort((a, b) => {
+    const aTotal = a.artists.reduce((s, ar) => s + ar.playCount, 0);
+    const bTotal = b.artists.reduce((s, ar) => s + ar.playCount, 0);
+    return bTotal - aTotal;
+  });
 
   return clusters.slice(0, 3);
 }
 
+function getMostCommonGenre(genres: string[]): string {
+  const counts = new Map<string, number>();
+  for (const g of genres) {
+    const n = normalizeGenre(g);
+    counts.set(n, (counts.get(n) || 0) + 1);
+  }
+  let best = 'Mixed';
+  let bestCount = 0;
+  for (const [genre, count] of counts) {
+    if (count > bestCount && genre !== 'Mixed') {
+      best = genre;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
 function normalizeGenre(genre: string): string {
   const g = genre.toLowerCase().trim();
-  // Group similar genres
   if (g.includes('rap') || g.includes('hip hop') || g.includes('hip-hop') || g.includes('trap')) return 'Hip-Hop/Rap';
+  if (g.includes('comedy') || g.includes('humor') || g.includes('parody') || g.includes('comico') || g.includes('commedia') || g.includes('umorismo')) return 'Comedy';
   if (g.includes('pop') && !g.includes('k-pop')) return 'Pop';
   if (g.includes('k-pop') || g.includes('kpop')) return 'K-Pop';
   if (g.includes('rock') || g.includes('punk') || g.includes('metal')) return 'Rock';
@@ -160,7 +221,6 @@ function normalizeGenre(genre: string): string {
   if (g.includes('indie') || g.includes('alternative')) return 'Indie/Alternative';
   if (g.includes('country')) return 'Country';
   if (g === 'unknown') return 'Mixed';
-  // Capitalize first letter
   return genre.charAt(0).toUpperCase() + genre.slice(1);
 }
 
