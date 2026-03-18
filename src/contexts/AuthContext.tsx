@@ -33,6 +33,8 @@ interface Profile {
   referral_code: string | null;
   // Email confirmation
   email_confirmed: boolean | null;
+  // Hybrid fallback chain
+  hybrid_fallback_chain: string[] | null;
 }
 
 interface AuthContextType {
