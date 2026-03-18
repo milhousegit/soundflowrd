@@ -32,25 +32,14 @@ async function fetchDeezer(url: string, retries = 2): Promise<any> {
   }
 }
 
-// Get genre info for an artist from Deezer (check multiple albums for accuracy)
+// Get genre info for an artist from Deezer (single album check for speed)
 async function getArtistGenre(artistId: string): Promise<string> {
   try {
-    const data = await fetchDeezer(`${DEEZER_API}/artist/${artistId}`);
-    if (data?.nb_album > 0) {
-      const albums = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/albums?limit=3`);
-      const genreCounts = new Map<string, number>();
-      for (const albumEntry of (albums?.data || []).slice(0, 3)) {
-        try {
-          const album = await fetchDeezer(`${DEEZER_API}/album/${albumEntry.id}`);
-          for (const g of (album?.genres?.data || [])) {
-            const name = g.name || '';
-            genreCounts.set(name, (genreCounts.get(name) || 0) + 1);
-          }
-        } catch { /* skip */ }
-      }
-      if (genreCounts.size > 0) {
-        // Return most frequent genre
-        return [...genreCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const albums = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/albums?limit=1`);
+    if (albums?.data?.[0]?.id) {
+      const album = await fetchDeezer(`${DEEZER_API}/album/${albums.data[0].id}`);
+      if (album?.genres?.data?.[0]?.name) {
+        return album.genres.data[0].name;
       }
     }
     return 'Unknown';
@@ -371,28 +360,32 @@ serve(async (req) => {
       }
 
       // 3. Get genres AND related artists for top artists (affinity clustering)
+      // Process in batches of 5 to avoid Deezer rate limits
       const topArtistsForLookup = artistStats.slice(0, 15);
+      const enrichedArtists: { id: string; name: string; playCount: number; genre: string; imageUrl?: string; relatedIds: string[] }[] = [];
 
-      // Batch genre + related lookups in parallel
-      const lookupPromises = topArtistsForLookup.map(async (a) => {
-        const [genre, relatedIds] = await Promise.all([
-          getArtistGenre(a.artist_id),
-          getRelatedArtistIds(a.artist_id),
-        ]);
-        return { ...a, genre, relatedIds };
-      });
+      for (let batch = 0; batch < topArtistsForLookup.length; batch += 5) {
+        const slice = topArtistsForLookup.slice(batch, batch + 5);
+        const results = await Promise.all(slice.map(async (a) => {
+          const [genre, relatedIds] = await Promise.all([
+            getArtistGenre(a.artist_id),
+            getRelatedArtistIds(a.artist_id),
+          ]);
+          return { ...a, genre, relatedIds };
+        }));
+        for (const a of results) {
+          enrichedArtists.push({
+            id: a.artist_id,
+            name: a.artist_name,
+            playCount: a.total_plays,
+            genre: a.genre,
+            imageUrl: a.artist_image_url || undefined,
+            relatedIds: a.relatedIds,
+          });
+        }
+      }
 
-      const lookupResults = await Promise.all(lookupPromises);
-
-      // Build enriched artist list
-      const enrichedArtists = lookupResults.map(a => ({
-        id: a.artist_id,
-        name: a.artist_name,
-        playCount: a.total_plays,
-        genre: a.genre,
-        imageUrl: a.artist_image_url || undefined,
-        relatedIds: a.relatedIds,
-      }));
+      console.log(`Enriched ${enrichedArtists.length} artists:`, enrichedArtists.map(a => `${a.name}(${a.genre})`).join(', '));
 
       // Add remaining artists with Unknown genre and no related data
       for (const a of artistStats.slice(15)) {
@@ -436,31 +429,40 @@ serve(async (req) => {
         for (const artist of cluster.artists.slice(0, 10)) {
           try {
             const data = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/top?limit=15`);
-            for (const t of (data?.data || [])) {
+            const tracks = data?.data || [];
+            console.log(`Artist ${artist.name} (${artist.id}): ${tracks.length} top tracks`);
+            for (const t of tracks) {
               if (allTracks.length >= MIX_TARGET) break;
               tryAdd(t);
             }
-          } catch { /* skip */ }
+          } catch (err) {
+            console.error(`Failed top tracks for ${artist.name}:`, err);
+          }
         }
+
+        console.log(`Cluster ${i} after phase 1: ${allTracks.length} tracks`);
 
         // --- Phase 2: Related artists to broaden the mix ---
         if (allTracks.length < MIX_TARGET) {
           const relatedArtistIds = new Set<string>();
           const clusterArtistIds = new Set(cluster.artists.map(a => a.id));
 
-          for (const artist of cluster.artists.slice(0, 5)) {
+          // Fetch related in parallel for speed
+          const relatedPromises = cluster.artists.slice(0, 3).map(async (artist) => {
             try {
-              const related = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/related?limit=15`);
-              for (const r of (related?.data || [])) {
-                if (!clusterArtistIds.has(String(r.id))) {
-                  relatedArtistIds.add(String(r.id));
-                }
-              }
-            } catch { /* skip */ }
+              const related = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/related?limit=10`);
+              return (related?.data || []).map((r: any) => String(r.id)).filter((id: string) => !clusterArtistIds.has(id));
+            } catch { return []; }
+          });
+          const relatedResults = await Promise.all(relatedPromises);
+          for (const ids of relatedResults) {
+            for (const id of ids) relatedArtistIds.add(id);
           }
 
+          console.log(`Cluster ${i}: ${relatedArtistIds.size} related artists found`);
+
           const relatedArr = [...relatedArtistIds].sort(() => Math.random() - 0.5);
-          for (const relId of relatedArr.slice(0, 20)) {
+          for (const relId of relatedArr.slice(0, 15)) {
             if (allTracks.length >= MIX_TARGET) break;
             try {
               const data = await fetchDeezer(`${DEEZER_API}/artist/${relId}/top?limit=5`);
@@ -472,9 +474,11 @@ serve(async (req) => {
           }
         }
 
+        console.log(`Cluster ${i} after phase 2: ${allTracks.length} tracks`);
+
         // --- Phase 3: Artist radio for remaining slots ---
         if (allTracks.length < MIX_TARGET) {
-          for (const artist of cluster.artists.slice(0, 5)) {
+          for (const artist of cluster.artists.slice(0, 3)) {
             if (allTracks.length >= MIX_TARGET) break;
             const radio = await getArtistRadioTracks(artist.id, 30);
             for (const t of radio) {
@@ -483,6 +487,8 @@ serve(async (req) => {
             }
           }
         }
+
+        console.log(`Cluster ${i} final: ${allTracks.length} tracks`);
 
         // Shuffle
         for (let j = allTracks.length - 1; j > 0; j--) {
