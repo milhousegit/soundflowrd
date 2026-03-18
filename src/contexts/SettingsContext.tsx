@@ -19,11 +19,15 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { profile, updateAudioSourceMode, updateBridgeUrl, isAuthenticated } = useAuth();
+  const { profile, updateAudioSourceMode, updateBridgeUrl, updateHybridFallbackChain, isAuthenticated } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
 
   // Derive audio source mode from profile (DB) or default
   const audioSourceMode: AudioSourceMode = (profile?.audio_source_mode as AudioSourceMode) || 'rd_priority';
+
+  // Derive hybrid fallback chain from profile (DB) or default
+  const hybridFallbackChain: FallbackSourceId[] = 
+    (profile?.hybrid_fallback_chain as FallbackSourceId[] | null) || defaultSettings.hybridFallbackChain;
 
   useEffect(() => {
     const stored = localStorage.getItem('appSettings');
@@ -33,6 +37,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         // Remove deprecated fields
         delete parsed.streamingMode;
         delete parsed.audioSourceMode; // Remove from localStorage - now in DB
+        delete parsed.hybridFallbackChain; // Remove from localStorage - now in DB
         // Ensure feedDisplayOptions has defaults
         const feedDisplayOptions = {
           showArtistReleases: true,
@@ -43,9 +48,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         };
         // Ensure new fields have defaults
         const selectedScrapingSource = parsed.selectedScrapingSource || defaultSettings.selectedScrapingSource;
-        const hybridFallbackChain = parsed.hybridFallbackChain || defaultSettings.hybridFallbackChain;
         const bridgeUrl = parsed.bridgeUrl !== undefined ? parsed.bridgeUrl : defaultSettings.bridgeUrl;
-        setSettings({ ...defaultSettings, ...parsed, feedDisplayOptions, selectedScrapingSource, hybridFallbackChain, bridgeUrl });
+        setSettings({ ...defaultSettings, ...parsed, feedDisplayOptions, selectedScrapingSource, bridgeUrl });
       } catch {
         // Use defaults
       }
@@ -65,8 +69,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const updateSettings = (updates: Partial<AppSettings>) => {
     setSettings(prev => {
       const newSettings = { ...prev, ...updates };
-      // Don't save audioSourceMode to localStorage
-      const { audioSourceMode: _, ...settingsToStore } = newSettings as any;
+      // Don't save audioSourceMode or hybridFallbackChain to localStorage - they're in DB
+      const { audioSourceMode: _, hybridFallbackChain: _hfc, ...settingsToStore } = newSettings as any;
       localStorage.setItem('appSettings', JSON.stringify(settingsToStore));
       return newSettings;
     });
@@ -83,7 +87,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const setHybridFallbackChain = (chain: FallbackSourceId[]) => {
-    updateSettings({ hybridFallbackChain: chain });
+    if (isAuthenticated) {
+      updateHybridFallbackChain(chain);
+    }
   };
 
   // Bridge URL from DB profile
@@ -106,7 +112,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       settings, updateSettings, t, audioSourceMode, setAudioSourceMode,
       selectedScrapingSource: settings.selectedScrapingSource,
       setSelectedScrapingSource,
-      hybridFallbackChain: settings.hybridFallbackChain,
+      hybridFallbackChain,
       setHybridFallbackChain,
       bridgeUrl,
       setBridgeUrl,

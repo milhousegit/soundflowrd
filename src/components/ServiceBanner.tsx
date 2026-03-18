@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, HardDrive } from 'lucide-react';
+import { useServiceStatus } from '@/contexts/ServiceStatusContext';
 
 const messages = [
   { text: 'Servizio non disponibile', icon: AlertTriangle },
@@ -7,14 +8,18 @@ const messages = [
 ];
 
 const ServiceBanner: React.FC = () => {
+  const { isServiceDown } = useServiceStatus();
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
+    if (!isServiceDown) return;
     const interval = setInterval(() => {
       setIndex(prev => (prev + 1) % messages.length);
     }, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isServiceDown]);
+
+  if (!isServiceDown) return null;
 
   const current = messages[index];
   const Icon = current.icon;

@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS hybrid_fallback_chain text[] DEFAULT ARRAY['real-debrid', 'squidwtf', 'hifi', 'monochrome']::text[];

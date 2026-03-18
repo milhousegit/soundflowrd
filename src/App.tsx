@@ -10,6 +10,7 @@ import { PlayerProvider } from "@/contexts/PlayerContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { AutoModeProvider, useAutoMode } from "@/components/auto/AutoModeContext";
 import { TVConnectionProvider } from "@/contexts/TVConnectionContext";
+import { ServiceStatusProvider } from "@/contexts/ServiceStatusContext";
 import { supabase } from "@/integrations/supabase/client";
 import Login from "@/components/Login";
 import Layout from "@/components/Layout";
@@ -164,15 +165,17 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <SettingsProvider>
-        <PlayerProvider>
-          <AutoModeProvider>
-            <TVConnectionProvider>
-              <TooltipProvider>
-                <AppContent />
-              </TooltipProvider>
-            </TVConnectionProvider>
-          </AutoModeProvider>
-        </PlayerProvider>
+        <ServiceStatusProvider>
+          <PlayerProvider>
+            <AutoModeProvider>
+              <TVConnectionProvider>
+                <TooltipProvider>
+                  <AppContent />
+                </TooltipProvider>
+              </TVConnectionProvider>
+            </AutoModeProvider>
+          </PlayerProvider>
+        </ServiceStatusProvider>
       </SettingsProvider>
     </AuthProvider>
   </QueryClientProvider>
