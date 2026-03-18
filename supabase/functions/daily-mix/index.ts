@@ -360,28 +360,32 @@ serve(async (req) => {
       }
 
       // 3. Get genres AND related artists for top artists (affinity clustering)
+      // Process in batches of 5 to avoid Deezer rate limits
       const topArtistsForLookup = artistStats.slice(0, 15);
+      const enrichedArtists: { id: string; name: string; playCount: number; genre: string; imageUrl?: string; relatedIds: string[] }[] = [];
 
-      // Batch genre + related lookups in parallel
-      const lookupPromises = topArtistsForLookup.map(async (a) => {
-        const [genre, relatedIds] = await Promise.all([
-          getArtistGenre(a.artist_id),
-          getRelatedArtistIds(a.artist_id),
-        ]);
-        return { ...a, genre, relatedIds };
-      });
+      for (let batch = 0; batch < topArtistsForLookup.length; batch += 5) {
+        const slice = topArtistsForLookup.slice(batch, batch + 5);
+        const results = await Promise.all(slice.map(async (a) => {
+          const [genre, relatedIds] = await Promise.all([
+            getArtistGenre(a.artist_id),
+            getRelatedArtistIds(a.artist_id),
+          ]);
+          return { ...a, genre, relatedIds };
+        }));
+        for (const a of results) {
+          enrichedArtists.push({
+            id: a.artist_id,
+            name: a.artist_name,
+            playCount: a.total_plays,
+            genre: a.genre,
+            imageUrl: a.artist_image_url || undefined,
+            relatedIds: a.relatedIds,
+          });
+        }
+      }
 
-      const lookupResults = await Promise.all(lookupPromises);
-
-      // Build enriched artist list
-      const enrichedArtists = lookupResults.map(a => ({
-        id: a.artist_id,
-        name: a.artist_name,
-        playCount: a.total_plays,
-        genre: a.genre,
-        imageUrl: a.artist_image_url || undefined,
-        relatedIds: a.relatedIds,
-      }));
+      console.log(`Enriched ${enrichedArtists.length} artists:`, enrichedArtists.map(a => `${a.name}(${a.genre})`).join(', '));
 
       // Add remaining artists with Unknown genre and no related data
       for (const a of artistStats.slice(15)) {
