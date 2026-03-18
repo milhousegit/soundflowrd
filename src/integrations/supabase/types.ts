@@ -914,6 +914,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "profiles_referred_by_fkey"
+            columns: ["referred_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       recently_played: {
@@ -995,10 +1002,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "referrals_referred_id_fkey"
+            columns: ["referred_id"]
+            isOneToOne: true
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "referrals_referrer_id_fkey"
             columns: ["referrer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1247,7 +1268,60 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          bio_track_artist: string | null
+          bio_track_cover_url: string | null
+          bio_track_id: string | null
+          bio_track_title: string | null
+          created_at: string | null
+          currently_playing_at: string | null
+          currently_playing_track_id: string | null
+          display_name: string | null
+          followers_count: number | null
+          following_count: number | null
+          id: string | null
+          is_private: boolean | null
+          last_seen_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          bio_track_artist?: string | null
+          bio_track_cover_url?: string | null
+          bio_track_id?: string | null
+          bio_track_title?: string | null
+          created_at?: string | null
+          currently_playing_at?: string | null
+          currently_playing_track_id?: string | null
+          display_name?: string | null
+          followers_count?: number | null
+          following_count?: number | null
+          id?: string | null
+          is_private?: boolean | null
+          last_seen_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          bio_track_artist?: string | null
+          bio_track_cover_url?: string | null
+          bio_track_id?: string | null
+          bio_track_title?: string | null
+          created_at?: string | null
+          currently_playing_at?: string | null
+          currently_playing_track_id?: string | null
+          display_name?: string | null
+          followers_count?: number | null
+          following_count?: number | null
+          id?: string | null
+          is_private?: boolean | null
+          last_seen_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
@@ -1257,6 +1331,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_own_profile: { Args: { _profile_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "user"
