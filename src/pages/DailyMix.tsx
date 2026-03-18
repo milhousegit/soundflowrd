@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Shuffle, ListPlus, Loader2 } from 'lucide-react';
+import { Play, Shuffle, ListPlus, Loader2, Sparkles, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useDailyMixes } from '@/hooks/useDailyMixes';
 import { usePlayer } from '@/contexts/PlayerContext';
@@ -10,8 +10,9 @@ import { useToast } from '@/hooks/use-toast';
 import TrackCard from '@/components/TrackCard';
 import BackButton from '@/components/BackButton';
 import BrandedPlaylistCover from '@/components/BrandedPlaylistCover';
-import { hdCover } from '@/lib/utils';
+import { hdCover, cn } from '@/lib/utils';
 import { Track } from '@/types/music';
+import { searchTracks } from '@/lib/deezer';
 
 const DailyMixPage: React.FC = () => {
   const { index } = useParams<{ index: string }>();
