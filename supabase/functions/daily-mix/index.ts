@@ -237,6 +237,7 @@ const GENRE_COLORS: Record<string, string[]> = {
   'Jazz': ['#D97706', '#92400E'],
   'Classical': ['#6366F1', '#8B5CF6'],
   'Country': ['#D97706', '#65A30D'],
+  'Comedy': ['#FBBF24', '#F97316'],
   'Mixed': ['#6366F1', '#EC4899'],
 };
 
