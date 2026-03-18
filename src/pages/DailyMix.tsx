@@ -30,6 +30,9 @@ const DailyMixPage: React.FC = () => {
   const loadedArtistsRef = useRef<Set<string>>(new Set());
   const MAX_RECS = 50;
 
+  const mixIndex = parseInt(index || '0', 10);
+  const mix = mixes.find(m => m.mix_index === mixIndex);
+
   const fetchMoreRecommendations = useCallback(async () => {
     if (!mix || mix.tracks.length === 0 || isLoadingRecs || !hasMoreRecs) return;
     
@@ -41,7 +44,6 @@ const DailyMixPage: React.FC = () => {
         ...recommendations.map(t => t.id),
       ]);
       
-      // Pick artists we haven't queried yet, or cycle back
       const unqueried = uniqueArtists.filter(a => !loadedArtistsRef.current.has(a));
       const artistPool = unqueried.length > 0 ? unqueried : uniqueArtists;
       const selected = artistPool.sort(() => Math.random() - 0.5).slice(0, 2);
@@ -86,9 +88,6 @@ const DailyMixPage: React.FC = () => {
     observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
   }, [fetchMoreRecommendations, mix]);
-
-  const mixIndex = parseInt(index || '0', 10);
-  const mix = mixes.find(m => m.mix_index === mixIndex);
 
   const [color1, color2] = useMemo(() => {
     if (!mix) return ['#6366F1', '#EC4899'];
