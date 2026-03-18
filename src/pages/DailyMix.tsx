@@ -89,7 +89,9 @@ const DailyMixPage: React.FC = () => {
     );
   }
 
-  const artistLabel = mix.top_artists.slice(0, 4).join(', ');
+  // Derive artists from actual tracks
+  const trackArtists = [...new Set(mix.tracks.map(t => t.artist))];
+  const artistLabel = trackArtists.slice(0, 4).join(', ');
 
   return (
     <div className="pb-32">

@@ -15,8 +15,10 @@ const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
   const navigate = useNavigate();
 
   const [color1, color2] = mix.dominant_color.split(',');
-  const artistLabel = mix.top_artists.length > 0
-    ? `Con ${mix.top_artists.slice(0, 3).join(', ')}${mix.top_artists.length > 3 ? '...' : ''}`
+  // Derive artists from actual tracks instead of top_artists metadata
+  const trackArtists = [...new Set(mix.tracks.map(t => t.artist))];
+  const artistLabel = trackArtists.length > 0
+    ? `Con ${trackArtists.slice(0, 3).join(', ')}${trackArtists.length > 3 ? '...' : ''}`
     : mix.genre_tags[0] || '';
 
   const handleClick = () => {
