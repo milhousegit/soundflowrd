@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export interface SocialProfile {
   id: string;
-  email: string | null;
+  email?: string | null;
   display_name: string | null;
   avatar_url: string | null;
   bio: string | null;
@@ -15,7 +15,7 @@ export interface SocialProfile {
   is_private: boolean;
   followers_count: number;
   following_count: number;
-  is_premium: boolean | null;
+  is_premium?: boolean | null;
   is_admin?: boolean;
 }
 
