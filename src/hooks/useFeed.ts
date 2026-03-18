@@ -216,7 +216,7 @@ export function useFeed() {
           const commentIds = comments.map(c => c.id);
 
           const [profilesResult, adminRolesResult, likesResult] = await Promise.all([
-            supabase.from('profiles').select('*').in('id', commentUserIds),
+            supabase.from('public_profiles' as any).select('*').in('id', commentUserIds),
             supabase.from('user_roles').select('user_id').in('user_id', commentUserIds).eq('role', 'admin'),
             supabase.from('comment_likes').select('comment_id').eq('user_id', user.id).in('comment_id', commentIds),
           ]);
