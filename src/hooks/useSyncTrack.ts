@@ -62,6 +62,9 @@ const flexibleMatch = (fileName: string, trackTitle: string): boolean => {
 
 // Standalone function to sync a single track in background
 export const syncTrackInBackground = async (track: Track, apiKey: string): Promise<void> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
   // Check if already synced
   const { data: existingMapping } = await supabase
     .from('track_file_mappings')
