@@ -29,6 +29,7 @@ import { getTidalStream, mapQualityToTidal, type TidalStreamResult, type TidalSt
 import { getMonochromeStream } from '@/lib/monochrome';
 import { getHifiStream } from '@/lib/hifi';
 import { SCRAPING_SOURCES, type FallbackSourceId } from '@/types/settings';
+import { useServiceStatus } from '@/contexts/ServiceStatusContext';
 import { searchTracks, getArtistTopTracks } from '@/lib/deezer';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
 import { updateListeningStats } from '@/hooks/useListeningStats';
