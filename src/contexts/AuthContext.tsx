@@ -53,6 +53,7 @@ interface AuthContextType {
   updateApiKey: (apiKey: string) => Promise<{ error: Error | null }>;
   updateAudioSourceMode: (mode: string) => Promise<{ error: Error | null }>;
   updateBridgeUrl: (url: string) => Promise<{ error: Error | null }>;
+  updateHybridFallbackChain: (chain: string[]) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
   // Legacy support for existing code
   login: (credentials: UserCredentials) => void;
