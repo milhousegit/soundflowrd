@@ -37,7 +37,7 @@ const FollowListModal: React.FC<FollowListModalProps> = ({ open, onOpenChange, u
             // Fetch profiles
             const { data: profiles } = await supabase
               .from('profiles')
-              .select('*')
+              .select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at')
               .in('id', followerIds);
 
             // Check admin status for each user
@@ -69,7 +69,7 @@ const FollowListModal: React.FC<FollowListModalProps> = ({ open, onOpenChange, u
             // Fetch profiles
             const { data: profiles } = await supabase
               .from('profiles')
-              .select('*')
+              .select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at')
               .in('id', followingIds);
 
             // Check admin status for each user

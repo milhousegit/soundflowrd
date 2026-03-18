@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export interface SocialProfile {
   id: string;
-  email: string | null;
+  email?: string | null;
   display_name: string | null;
   avatar_url: string | null;
   bio: string | null;
@@ -15,7 +15,7 @@ export interface SocialProfile {
   is_private: boolean;
   followers_count: number;
   following_count: number;
-  is_premium: boolean | null;
+  is_premium?: boolean | null;
   is_admin?: boolean;
 }
 
@@ -54,7 +54,7 @@ export function useSocialProfile(userId?: string) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, display_name, avatar_url, bio, bio_track_id, bio_track_title, bio_track_artist, bio_track_cover_url, is_private, followers_count, following_count, currently_playing_track_id, currently_playing_at, last_seen_at, created_at')
         .eq('id', targetUserId)
         .single();
 
