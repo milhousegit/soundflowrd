@@ -133,7 +133,7 @@ export function useFeed() {
           const postIds = allPosts.map(p => p.id);
 
           const [profilesResult, adminRolesResult, likesResult] = await Promise.all([
-            supabase.from('profiles').select('*').in('id', userIds),
+            supabase.from('public_profiles' as any).select('*').in('id', userIds),
             supabase.from('user_roles').select('user_id').in('user_id', userIds).eq('role', 'admin'),
             supabase.from('post_likes').select('post_id').eq('user_id', user.id).in('post_id', postIds),
           ]);
