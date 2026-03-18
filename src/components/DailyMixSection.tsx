@@ -45,18 +45,18 @@ const DailyMixSection: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex-shrink-0 w-36 md:w-48">
+            <div key={i} className="flex-shrink-0 w-32 md:w-auto">
               <Skeleton className="aspect-square rounded-lg mb-2" />
               <Skeleton className="h-3 w-3/4" />
             </div>
           ))}
         </div>
       ) : (
-        <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex gap-3 md:gap-6 overflow-x-auto pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 md:overflow-visible scrollbar-hide">
           {mixes.map((mix) => (
-            <div key={mix.id} className="flex-shrink-0 w-36 md:w-48">
+            <div key={mix.id} className="flex-shrink-0 w-32 md:w-auto">
               <DailyMixCard mix={mix} />
             </div>
           ))}
