@@ -56,6 +56,21 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
+// When installed as PWA (standalone), skip landing and go to login/app
+const isStandalone = typeof window !== 'undefined' && (
+  window.matchMedia('(display-mode: standalone)').matches ||
+  window.matchMedia('(display-mode: minimal-ui)').matches ||
+  (window.navigator as any).standalone === true
+);
+
+const LandingOrLogin: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+  if (isStandalone) {
+    return isAuthenticated ? <Navigate to="/app" replace /> : <Navigate to="/login" replace />;
+  }
+  return isAuthenticated ? <Navigate to="/app" replace /> : <Landing />;
+};
+
 const AppRoutes = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const { isAutoMode } = useAutoMode();
