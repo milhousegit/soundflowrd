@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Play, Headphones, Radio, Heart, ListMusic, Zap, Shield, Smartphone } from 'lucide-react';
+import { Play, Headphones, Radio, Heart, ListMusic, Zap, Shield, Smartphone, Github, Download, Apple, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import appLogo from '@/assets/logo.png';
 
@@ -45,13 +45,11 @@ const Landing: React.FC = () => {
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* Hero Section */}
       <header className="relative min-h-[90vh] flex flex-col items-center justify-center px-6 text-center">
-        {/* Gradient background effects */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px]" />
           <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent" />
         </div>
 
-        {/* Nav */}
         <nav className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-5 md:px-12">
           <div className="flex items-center gap-3">
             <img src={appLogo} alt="SoundFlow" className="w-10 h-10 rounded-xl" />
@@ -81,7 +79,6 @@ const Landing: React.FC = () => {
           </div>
         </nav>
 
-        {/* Hero content */}
         <div className="relative z-10 max-w-3xl mx-auto space-y-8">
           <div className="flex justify-center">
             <img src={appLogo} alt="SoundFlow" className="w-24 h-24 md:w-32 md:h-32 rounded-3xl shadow-glow" />
@@ -105,7 +102,6 @@ const Landing: React.FC = () => {
           </div>
         </div>
 
-        {/* Scroll indicator */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
           <div className="w-6 h-10 rounded-full border-2 border-muted-foreground/30 flex items-start justify-center p-1.5">
             <div className="w-1.5 h-2.5 rounded-full bg-muted-foreground/50" />
@@ -142,6 +138,95 @@ const Landing: React.FC = () => {
         </div>
       </section>
 
+      {/* Open Source Section */}
+      <section className="py-24 px-6 md:px-12 bg-card/50">
+        <div className="max-w-4xl mx-auto text-center space-y-8">
+          <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
+            <Github className="w-10 h-10 text-primary" />
+          </div>
+          <h2 className="text-3xl md:text-5xl font-bold">
+            100% Open Source
+          </h2>
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
+            SoundFlow è un progetto completamente open source. Il codice sorgente è disponibile su GitHub: puoi esplorarlo, segnalare bug, proporre nuove funzionalità o contribuire direttamente.
+          </p>
+          <a
+            href="https://github.com/milhousegit/soundflowrd"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button size="lg" variant="outline" className="rounded-full px-8 py-6 text-lg gap-3 mt-2 border-primary/30 hover:bg-primary/10">
+              <Github className="w-5 h-5" />
+              Vedi su GitHub
+              <ExternalLink className="w-4 h-4" />
+            </Button>
+          </a>
+        </div>
+      </section>
+
+      {/* Download Section */}
+      <section className="py-24 px-6 md:px-12">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-16 space-y-4">
+            <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+              <Smartphone className="w-10 h-10 text-primary" />
+            </div>
+            <h2 className="text-3xl md:text-5xl font-bold">
+              Scarica SoundFlow
+            </h2>
+            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+              Disponibile per Android e iOS. Installa l'app e porta la tua musica ovunque.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+            {/* Android */}
+            <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/30 transition-all duration-300 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                  <Download className="w-6 h-6 text-emerald-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Android</h3>
+                  <p className="text-xs text-muted-foreground">Versione 2.1.0 • APK</p>
+                </div>
+              </div>
+              <p className="text-muted-foreground text-sm">
+                Scarica il file APK e installalo direttamente sul tuo dispositivo Android.
+              </p>
+              <a href="/downloads/SoundFlow.apk" download="SoundFlow.apk">
+                <Button className="w-full gap-2 rounded-xl">
+                  <Download className="w-4 h-4" />
+                  Scarica APK
+                </Button>
+              </a>
+            </div>
+
+            {/* iOS */}
+            <div className="p-6 rounded-2xl bg-card border border-border hover:border-primary/30 transition-all duration-300 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                  <Apple className="w-6 h-6 text-blue-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">iOS</h3>
+                  <p className="text-xs text-muted-foreground">Versione 2.1.0 • IPA (Sideload)</p>
+                </div>
+              </div>
+              <p className="text-muted-foreground text-sm">
+                Scarica il file IPA e installalo tramite AltStore, Sideloadly o TrollStore.
+              </p>
+              <a href="/downloads/SoundFlow.ipa" download="SoundFlow.ipa">
+                <Button className="w-full gap-2 rounded-xl">
+                  <Download className="w-4 h-4" />
+                  Scarica IPA
+                </Button>
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* How it works */}
       <section className="py-24 px-6 md:px-12 bg-card/50">
         <div className="max-w-4xl mx-auto text-center space-y-16">
@@ -168,21 +253,6 @@ const Landing: React.FC = () => {
         </div>
       </section>
 
-      {/* Device section */}
-      <section className="py-24 px-6 md:px-12">
-        <div className="max-w-4xl mx-auto text-center space-y-8">
-          <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-            <Smartphone className="w-10 h-10 text-primary" />
-          </div>
-          <h2 className="text-3xl md:text-5xl font-bold">
-            Ovunque tu sia
-          </h2>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            SoundFlow funziona su qualsiasi dispositivo. Installala come app sul tuo telefono, usala dal browser sul PC o collegala alla TV. La tua musica ti segue ovunque.
-          </p>
-        </div>
-      </section>
-
       {/* CTA Section */}
       <section className="py-24 px-6 md:px-12">
         <div className="max-w-3xl mx-auto text-center space-y-8 p-12 rounded-3xl bg-gradient-to-br from-primary/10 via-card to-accent/10 border border-primary/20">
@@ -203,9 +273,21 @@ const Landing: React.FC = () => {
 
       {/* Footer */}
       <footer className="py-8 px-6 border-t border-border text-center">
-        <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm">
-          <img src={appLogo} alt="SoundFlow" className="w-5 h-5 rounded" />
-          <span>SoundFlow © {new Date().getFullYear()}</span>
+        <div className="flex items-center justify-center gap-4 text-muted-foreground text-sm">
+          <div className="flex items-center gap-2">
+            <img src={appLogo} alt="SoundFlow" className="w-5 h-5 rounded" />
+            <span>SoundFlow © {new Date().getFullYear()}</span>
+          </div>
+          <span className="text-border">•</span>
+          <a
+            href="https://github.com/milhousegit/soundflowrd"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-foreground transition-colors flex items-center gap-1"
+          >
+            <Github className="w-4 h-4" />
+            GitHub
+          </a>
         </div>
       </footer>
     </div>
