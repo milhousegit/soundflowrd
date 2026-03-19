@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import appLogo from '@/assets/logo.png';
 import LandingFeatures from '@/components/landing/LandingFeatures';
 
+const Landing: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* Hero Section */}
