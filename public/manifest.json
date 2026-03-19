@@ -7,7 +7,7 @@
   "display": "minimal-ui",
   "orientation": "any",
   "scope": "/",
-  "start_url": "/",
+  "start_url": "/login",
   "id": "/",
   "handle_links": "preferred",
   "launch_handler": {
