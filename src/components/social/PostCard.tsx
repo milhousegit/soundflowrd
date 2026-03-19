@@ -76,7 +76,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, onLike, onUnlike, onDelete, o
       {/* Header */}
       <div className="flex items-center justify-between">
         <button 
-          onClick={() => navigate(`/profile/${post.user_id}`)}
+          onClick={() => navigate(`/app/profile/${post.user_id}`)}
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
         >
           <div className="w-10 h-10 rounded-full bg-muted overflow-hidden">

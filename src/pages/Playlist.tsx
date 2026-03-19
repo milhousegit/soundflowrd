@@ -158,7 +158,7 @@ const PlaylistPage: React.FC = () => {
       } catch (error) {
         console.error('Failed to fetch playlist:', error);
         toast.error('Playlist non trovata');
-        navigate('/library');
+        navigate('/app/library');
       } finally {
         setIsLoading(false);
       }
@@ -228,7 +228,7 @@ const PlaylistPage: React.FC = () => {
   const handleDelete = async () => {
     if (!playlist) return;
     await deletePlaylist(playlist.id);
-    navigate('/library');
+    navigate('/app/library');
   };
 
   const handleRemoveTrack = async (trackId: string) => {
@@ -540,7 +540,7 @@ const PlaylistPage: React.FC = () => {
                 ) : ownerProfile ? (
                   // Show owner profile link for non-owners
                   <button
-                    onClick={() => navigate(`/profile/${ownerProfile.id}`)}
+                    onClick={() => navigate(`/app/profile/${ownerProfile.id}`)}
                     className="flex items-center gap-1.5 hover:text-foreground transition-colors"
                   >
                     {ownerProfile.avatar_url ? (

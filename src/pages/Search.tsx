@@ -223,13 +223,13 @@ const Search: React.FC = () => {
   const handleRecentItemClick = (item: RecentItem) => {
     switch (item.type) {
       case 'artist':
-        navigate(`/artist/${item.id}`);
+        navigate(`/app/artist/${item.id}`);
         break;
       case 'album':
-        navigate(`/album/${item.id}`);
+        navigate(`/app/album/${item.id}`);
         break;
       case 'playlist':
-        navigate(`/soundflow-playlist/${item.id}`);
+        navigate(`/app/soundflow-playlist/${item.id}`);
         break;
       case 'track':
         // For tracks, we just update the item as "opened" but stay on search
@@ -453,9 +453,9 @@ const Search: React.FC = () => {
                       });
                       // Navigate to local playlist page if it's not a SoundFlow playlist
                       if (playlist.isDeezerPlaylist === false) {
-                        navigate(`/playlist/${playlist.id}`);
+                        navigate(`/app/playlist/${playlist.id}`);
                       } else {
-                        navigate(`/soundflow-playlist/${playlist.id}`);
+                        navigate(`/app/soundflow-playlist/${playlist.id}`);
                       }
                     }}
                     className="group cursor-pointer"

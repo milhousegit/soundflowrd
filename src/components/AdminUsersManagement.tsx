@@ -465,7 +465,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                 className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
               >
                 <button 
-                  onClick={() => navigate(`/profile/${user.id}`)}
+                  onClick={() => navigate(`/app/profile/${user.id}`)}
                   className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0 hover:ring-2 hover:ring-primary/50 transition-all overflow-hidden"
                 >
                   {user.avatar_url ? (
@@ -500,7 +500,7 @@ const AdminUsersManagement: React.FC<AdminUsersManagementProps> = ({ language })
                       </span>
                     )}
                     <button 
-                      onClick={() => navigate(`/profile/${user.id}`)}
+                      onClick={() => navigate(`/app/profile/${user.id}`)}
                       className="text-sm font-medium text-foreground truncate hover:text-primary transition-colors text-left"
                     >
                       {user.display_name || user.email || 'No email'}

@@ -22,7 +22,7 @@ const DailyMixCard: React.FC<DailyMixCardProps> = ({ mix }) => {
     : mix.genre_tags[0] || '';
 
   const handleClick = () => {
-    navigate(`/daily-mix/${mix.mix_index}`);
+    navigate(`/app/daily-mix/${mix.mix_index}`);
   };
 
   const handlePlay = (e: React.MouseEvent) => {

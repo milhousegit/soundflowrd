@@ -61,7 +61,7 @@ const Profile: React.FC = () => {
   }, [user]);
 
   const handleSettingsClick = () => {
-    navigate('/settings');
+    navigate('/app/settings');
   };
 
   const handleCreatePost = async (content: string, track?: {
@@ -220,7 +220,7 @@ const Profile: React.FC = () => {
 
                       {/* Playlist card - large image on mobile */}
                       <button
-                        onClick={() => navigate(`/playlist/${playlist.id}`)}
+                        onClick={() => navigate(`/app/playlist/${playlist.id}`)}
                         className="w-full text-left"
                       >
                         {/* Large cover on mobile */}
@@ -279,7 +279,7 @@ const Profile: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => navigate(`/playlist/${playlist.id}`)}
+                          onClick={() => navigate(`/app/playlist/${playlist.id}`)}
                           className="gap-1.5 text-muted-foreground"
                         >
                           <MessageCircle className="w-4 h-4" />

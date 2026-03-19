@@ -345,7 +345,7 @@ export const NotificationsDropdown: React.FC = () => {
   }, [isAuthenticated, user]);
 
   const handleReleaseClick = (release: NewRelease) => {
-    navigate(`/album/${release.albumId}`);
+    navigate(`/app/album/${release.albumId}`);
     setIsOpen(false);
   };
 

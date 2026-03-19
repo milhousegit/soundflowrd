@@ -21,6 +21,7 @@ import PremiumExpiredBanner from "@/components/PremiumExpiredBanner";
 import LandscapeBlocker from "@/components/LandscapeBlocker";
 import AutoModePrompt from "@/components/auto/AutoModePrompt";
 import AutoModeLayout from "@/components/auto/AutoModeLayout";
+import Landing from "@/pages/Landing";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Feed from "@/pages/Feed";
@@ -74,12 +75,13 @@ const AppRoutes = () => {
 
   return (
     <Routes>
+      <Route path="/" element={<Landing />} />
       <Route 
         path="/login" 
-        element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} 
+        element={isAuthenticated ? <Navigate to="/app" replace /> : <Login />} 
       />
       <Route
-        path="/"
+        path="/app"
         element={
           <ProtectedRoute>
             <Layout />

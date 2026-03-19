@@ -86,7 +86,7 @@ const InlineComment: React.FC<{
     <div className="flex gap-2">
       <Avatar 
         className="w-7 h-7 cursor-pointer shrink-0"
-        onClick={() => navigate(`/profile/${comment.user_id}`)}
+        onClick={() => navigate(`/app/profile/${comment.user_id}`)}
       >
         <AvatarImage src={comment.profile?.avatar_url || undefined} />
         <AvatarFallback className="text-xs">
@@ -98,7 +98,7 @@ const InlineComment: React.FC<{
         <div className="bg-muted/50 rounded-lg px-3 py-2">
           <span 
             className="text-xs font-medium text-foreground hover:underline cursor-pointer"
-            onClick={() => navigate(`/profile/${comment.user_id}`)}
+            onClick={() => navigate(`/app/profile/${comment.user_id}`)}
           >
             {comment.profile?.display_name || 'Utente'}
           </span>
@@ -412,7 +412,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
         {/* Header */}
         <div className="flex items-center justify-between">
           <button 
-            onClick={() => navigate(`/profile/${playlist.user_id}`)}
+            onClick={() => navigate(`/app/profile/${playlist.user_id}`)}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             <Avatar className="w-10 h-10">
@@ -436,7 +436,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
 
         {/* Playlist card */}
         <button
-          onClick={() => navigate(`/playlist/${playlist.id}`)}
+          onClick={() => navigate(`/app/playlist/${playlist.id}`)}
           className="w-full flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-left"
         >
           <div className="relative w-16 h-16 rounded-lg bg-muted overflow-hidden shrink-0">
@@ -480,7 +480,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate(`/playlist/${playlist.id}`)}
+                onClick={() => navigate(`/app/playlist/${playlist.id}`)}
                 className="gap-1.5 text-muted-foreground"
               >
                 <MessageCircle className="w-4 h-4" />
@@ -519,7 +519,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
         {/* Header */}
         <div className="flex items-center justify-between">
           <button 
-            onClick={() => navigate(`/profile/${post.user_id}`)}
+            onClick={() => navigate(`/app/profile/${post.user_id}`)}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             <Avatar className="w-10 h-10">
@@ -668,7 +668,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
         
         {/* Album info */}
         <button
-          onClick={() => navigate(`/album/${release.id}`)}
+          onClick={() => navigate(`/app/album/${release.id}`)}
           className="w-full flex gap-3 text-left hover:opacity-80 transition-opacity"
         >
           <img
@@ -736,7 +736,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
         <div className="flex items-start gap-3">
           <Avatar 
             className="w-10 h-10 cursor-pointer shrink-0"
-            onClick={() => navigate(`/profile/${comment.user_id}`)}
+            onClick={() => navigate(`/app/profile/${comment.user_id}`)}
           >
             <AvatarImage src={comment.profile?.avatar_url || undefined} />
             <AvatarFallback><User className="w-5 h-5" /></AvatarFallback>
@@ -746,7 +746,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
             <div className="flex items-center gap-2 mb-1">
               <span 
                 className="text-sm font-medium text-foreground hover:underline cursor-pointer"
-                onClick={() => navigate(`/profile/${comment.user_id}`)}
+                onClick={() => navigate(`/app/profile/${comment.user_id}`)}
               >
                 {comment.profile?.display_name || 'Utente'}
               </span>
@@ -758,7 +758,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
         {/* Album info */}
         {comment.album_title && (
           <button
-            onClick={() => navigate(`/album/${comment.album_id}`)}
+            onClick={() => navigate(`/app/album/${comment.album_id}`)}
             className="w-full flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-left"
           >
             {comment.album_cover && (
@@ -849,7 +849,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ type, data, onLikePost, onUnlikePos
               ))}
               {comments.length > 5 && albumId && (
                 <button 
-                  onClick={() => navigate(`/album/${albumId}`)}
+                  onClick={() => navigate(`/app/album/${albumId}`)}
                   className="text-xs text-primary hover:underline"
                 >
                   {settings.language === 'it' 

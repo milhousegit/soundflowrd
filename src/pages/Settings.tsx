@@ -918,7 +918,7 @@ const Settings: React.FC = () => {
         </section>
 
         {/* Info Link */}
-        <button onClick={() => navigate('/info')} className="w-full flex items-center justify-between p-4 rounded-xl bg-card hover:bg-card/80 transition-colors">
+        <button onClick={() => navigate('/app/info')} className="w-full flex items-center justify-between p-4 rounded-xl bg-card hover:bg-card/80 transition-colors">
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium text-foreground">

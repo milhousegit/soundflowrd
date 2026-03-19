@@ -74,7 +74,7 @@ const CommentItem: React.FC<{
     <div className="space-y-2">
       <div className="flex gap-3">
         <button 
-          onClick={() => navigate(`/profile/${comment.user_id}`)}
+          onClick={() => navigate(`/app/profile/${comment.user_id}`)}
           className="shrink-0"
         >
           <div className="w-8 h-8 rounded-full bg-muted overflow-hidden">
@@ -91,7 +91,7 @@ const CommentItem: React.FC<{
         <div className="flex-1 min-w-0">
           <div className="bg-secondary rounded-lg px-3 py-2">
             <button 
-              onClick={() => navigate(`/profile/${comment.user_id}`)}
+              onClick={() => navigate(`/app/profile/${comment.user_id}`)}
               className="text-sm font-medium text-foreground hover:underline"
             >
               {comment.profile?.display_name || comment.profile?.email?.split('@')[0] || 'Utente'}

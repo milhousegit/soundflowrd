@@ -56,7 +56,7 @@ const DailyMixPage: React.FC = () => {
             title: settings.language === 'it' ? 'Playlist creata!' : 'Playlist created!',
             description: `${mix.mix_label} — ${mix.tracks.length} ${settings.language === 'it' ? 'brani' : 'tracks'}`,
           });
-          navigate(`/playlist/${playlist.id}`);
+          navigate(`/app/playlist/${playlist.id}`);
         }
       }
     } catch {

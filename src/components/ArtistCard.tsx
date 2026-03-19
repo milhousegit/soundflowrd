@@ -19,7 +19,7 @@ const ArtistCard: React.FC<ArtistCardProps> = ({ artist, showFavorite = false, f
   const { t } = useSettings();
 
   const handleNavigate = () => {
-    navigate(`/artist/${artist.id}`);
+    navigate(`/app/artist/${artist.id}`);
   };
 
   const tap = useTap({ onTap: handleNavigate });

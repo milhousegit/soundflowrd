@@ -12,7 +12,7 @@ const Info: React.FC = () => {
   return <div className="p-4 md:p-8 pb-32 max-w-2xl animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6 md:mb-8">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} className="shrink-0">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/app/profile')} className="shrink-0">
           <ChevronLeft className="w-5 h-5" />
         </Button>
         <h1 className="text-2xl md:text-4xl font-bold text-foreground">

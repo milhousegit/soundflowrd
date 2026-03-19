@@ -365,10 +365,10 @@ const Home: React.FC = () => {
     if (playlistId.startsWith('sf:')) {
       // SoundFlow playlist - navigate to local playlist page
       const sfId = playlistId.replace('sf:', '');
-      navigate(`/playlist/${sfId}`);
+      navigate(`/app/playlist/${sfId}`);
     } else {
       // SoundFlow playlist - navigate to soundflow playlist page
-      navigate(`/soundflow-playlist/${playlistId}`);
+      navigate(`/app/soundflow-playlist/${playlistId}`);
     }
   };
 
@@ -500,7 +500,7 @@ const Home: React.FC = () => {
                       key={fav.id}
                       onTap={() => {
                         if (soundflowId) {
-                          navigate(`/soundflow-playlist/${soundflowId}`);
+                          navigate(`/app/soundflow-playlist/${soundflowId}`);
                         }
                       }}
                       className="flex-shrink-0 w-32 md:w-auto group cursor-pointer touch-manipulation"
