@@ -75,7 +75,7 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<Landing />} />
+      <Route path="/" element={<LandingOrLogin />} />
       <Route 
         path="/login" 
         element={isAuthenticated ? <Navigate to="/app" replace /> : <Login />} 
