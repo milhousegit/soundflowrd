@@ -303,7 +303,7 @@ const LandingFeatures: React.FC = () => {
 
     const step = () => {
       if (!paused && el) {
-        el.scrollLeft += 0.5;
+        el.scrollLeft += 0.2;
         // Loop: when past halfway, reset seamlessly
         if (el.scrollLeft >= el.scrollWidth - el.clientWidth) {
           el.scrollLeft = 0;
