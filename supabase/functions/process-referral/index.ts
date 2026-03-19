@@ -18,7 +18,32 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
+    // Auth check: verify the caller is the user being referred
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user: callerUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !callerUser) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const { referralCode, newUserId } = await req.json();
+
+    // Verify that the caller IS the newUserId to prevent granting premium to arbitrary users
+    if (callerUser.id !== newUserId) {
+      return new Response(JSON.stringify({ error: 'Forbidden: can only process referral for yourself' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     if (!referralCode || !newUserId) {
       return new Response(JSON.stringify({ error: 'Missing referralCode or newUserId' }), {
