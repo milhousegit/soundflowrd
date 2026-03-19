@@ -358,6 +358,14 @@
   100% { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes landing-progress {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+/* Hide scrollbar for landing features */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
 /* Auto Mode landscape styles - ensure full screen coverage */
 @media screen and (orientation: landscape) {
   .auto-mode-active {
