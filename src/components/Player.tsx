@@ -160,7 +160,7 @@ const Player: React.FC = () => {
   const handleNavigateToArtist = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (currentTrack.artistId) {
-      navigate(`/artist/${currentTrack.artistId}`);
+      navigate(`/app/artist/${currentTrack.artistId}`);
       setIsExpanded(false);
     }
   };
@@ -168,7 +168,7 @@ const Player: React.FC = () => {
   const handleNavigateToAlbum = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (currentTrack.albumId) {
-      navigate(`/album/${currentTrack.albumId}`);
+      navigate(`/app/album/${currentTrack.albumId}`);
       setIsExpanded(false);
     }
   };

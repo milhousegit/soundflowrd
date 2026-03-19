@@ -139,7 +139,7 @@ const Album: React.FC = () => {
           <h1 className="text-2xl md:text-5xl font-bold text-foreground mb-2 md:mb-4 line-clamp-2 break-words">{album.title}</h1>
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-1 md:gap-2 text-xs md:text-sm text-muted-foreground">
             <button 
-              onClick={() => navigate(`/artist/${album.artistId}`)}
+              onClick={() => navigate(`/app/artist/${album.artistId}`)}
               onTouchStart={(e) => e.stopPropagation()}
               className="font-semibold text-foreground hover:underline touch-manipulation"
             >

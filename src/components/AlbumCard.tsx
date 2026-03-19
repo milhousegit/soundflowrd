@@ -15,7 +15,7 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
   const navigate = useNavigate();
 
   const handleNavigate = () => {
-    navigate(`/album/${album.id}`);
+    navigate(`/app/album/${album.id}`);
   };
 
   const tap = useTap({ onTap: handleNavigate });

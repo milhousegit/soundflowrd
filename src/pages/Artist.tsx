@@ -298,7 +298,7 @@ const Artist: React.FC = () => {
           <h2 className="text-lg md:text-2xl font-bold text-foreground mb-3 md:mb-4">Ultima uscita</h2>
           <div 
             className="flex items-center gap-4 p-3 rounded-xl bg-card hover:bg-card/80 transition-colors cursor-pointer group"
-            onClick={() => navigate(`/album/${latestRelease.id}`)}
+            onClick={() => navigate(`/app/album/${latestRelease.id}`)}
           >
             <div className="w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden bg-muted flex-shrink-0">
               {latestRelease.coverUrl ? (
@@ -334,7 +334,7 @@ const Artist: React.FC = () => {
                 <div 
                   key={playlist.id} 
                   className="flex-shrink-0 w-32 md:w-40"
-                  onClick={() => navigate(`/soundflow-playlist/${playlist.id}`)}
+                  onClick={() => navigate(`/app/soundflow-playlist/${playlist.id}`)}
                 >
                   <div className="group relative cursor-pointer">
                     <div className="relative aspect-square rounded-lg overflow-hidden bg-muted mb-2">

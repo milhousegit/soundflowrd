@@ -241,7 +241,7 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
 
                       {/* Playlist card - large image on mobile */}
                       <button
-                        onClick={() => navigate(`/playlist/${playlist.id}`)}
+                        onClick={() => navigate(`/app/playlist/${playlist.id}`)}
                         className="w-full text-left"
                       >
                         {/* Large cover on mobile */}
@@ -325,7 +325,7 @@ const UserProfile: React.FC<ProfilePageProps> = ({ onSettingsClick }) => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => navigate(`/playlist/${playlist.id}`)}
+                              onClick={() => navigate(`/app/playlist/${playlist.id}`)}
                               className="gap-1.5 text-muted-foreground"
                             >
                               <MessageCircle className="w-4 h-4" />

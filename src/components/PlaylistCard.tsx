@@ -15,7 +15,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist, showPrivateIndica
 
   return (
     <TapArea
-      onTap={() => navigate(`/playlist/${playlist.id}`)}
+      onTap={() => navigate(`/app/playlist/${playlist.id}`)}
       className="group cursor-pointer touch-manipulation"
     >
       <div className="relative aspect-square rounded-lg overflow-hidden mb-2 md:mb-3 bg-muted">

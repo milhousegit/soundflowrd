@@ -12,7 +12,7 @@ const UserCard: React.FC<UserCardProps> = ({ user }) => {
 
   return (
     <button
-      onClick={() => navigate(`/profile/${user.id}`)}
+      onClick={() => navigate(`/app/profile/${user.id}`)}
       className="flex items-center gap-3 p-3 rounded-xl bg-card hover:bg-accent transition-colors w-full text-left"
     >
       <div className="w-12 h-12 rounded-full bg-muted overflow-hidden shrink-0">
