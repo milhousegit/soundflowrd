@@ -295,40 +295,21 @@ const LandingFeatures: React.FC = () => {
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
+  // Convert vertical wheel scroll to horizontal scroll
   React.useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    let raf: number;
-    let paused = false;
 
-    const step = () => {
-      if (!paused && el) {
-        el.scrollLeft += 0.2;
-        // Loop: when past halfway, reset seamlessly
-        if (el.scrollLeft >= el.scrollWidth - el.clientWidth) {
-          el.scrollLeft = 0;
-        }
+    const onWheel = (e: WheelEvent) => {
+      // Only hijack vertical scroll when the carousel is in view
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
       }
-      raf = requestAnimationFrame(step);
     };
-    raf = requestAnimationFrame(step);
 
-    const pause = () => { paused = true; };
-    const resume = () => { paused = false; };
-    el.addEventListener('pointerdown', pause);
-    el.addEventListener('pointerup', resume);
-    el.addEventListener('pointerleave', resume);
-    el.addEventListener('touchstart', pause, { passive: true });
-    el.addEventListener('touchend', resume);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      el.removeEventListener('pointerdown', pause);
-      el.removeEventListener('pointerup', resume);
-      el.removeEventListener('pointerleave', resume);
-      el.removeEventListener('touchstart', pause);
-      el.removeEventListener('touchend', resume);
-    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
   return (
