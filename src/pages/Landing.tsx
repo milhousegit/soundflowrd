@@ -145,10 +145,10 @@ const Landing: React.FC = () => {
             <Github className="w-10 h-10 text-primary" />
           </div>
           <h2 className="text-3xl md:text-5xl font-bold">
-            100% Open Source
+            100% Open Source e Vibecoding
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
-            SoundFlow è un progetto completamente open source. Il codice sorgente è disponibile su GitHub: puoi esplorarlo, segnalare bug, proporre nuove funzionalità o contribuire direttamente.
+            SoundFlow è nato dal vibecoding — pura sperimentazione, creatività e passione per la musica. Il codice sorgente è completamente open source e disponibile su GitHub: esplora, contribuisci o forkalo.
           </p>
           <a
             href="https://github.com/milhousegit/soundflowrd"
