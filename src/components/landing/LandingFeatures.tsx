@@ -326,16 +326,12 @@ const LandingFeatures: React.FC = () => {
       <div className="relative">
         <div
           ref={scrollRef}
-          className="flex gap-8 overflow-x-auto pb-8 px-8 scrollbar-hide"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          className="flex gap-8 overflow-x-auto pb-8 px-8 snap-x snap-mandatory scrollbar-hide"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollBehavior: 'smooth' }}
         >
           <div className="shrink-0 w-[calc((100vw-300px)/2-32px)] hidden lg:block" />
           {features.map((feature, i) => (
             <FeatureCard key={i} {...feature} />
-          ))}
-          {/* Duplicate for seamless loop */}
-          {features.map((feature, i) => (
-            <FeatureCard key={`dup-${i}`} {...feature} />
           ))}
           <div className="shrink-0 w-[calc((100vw-300px)/2-32px)] hidden lg:block" />
         </div>
