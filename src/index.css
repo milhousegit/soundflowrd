@@ -342,6 +342,22 @@
   }
 }
 
+/* Landing page feature card animations */
+@keyframes landing-scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+@keyframes landing-wave {
+  0%, 100% { height: 8px; }
+  50% { height: 40px; }
+}
+
+@keyframes landing-fade-in {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
 /* Auto Mode landscape styles - ensure full screen coverage */
 @media screen and (orientation: landscape) {
   .auto-mode-active {

@@ -1,45 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Play, Headphones, Radio, Heart, ListMusic, Zap, Shield, Smartphone, Github, Download, Apple, ExternalLink } from 'lucide-react';
+import { Play, Smartphone, Github, Download, Apple, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import appLogo from '@/assets/logo.png';
-
-const Landing: React.FC = () => {
-  const { isAuthenticated } = useAuth();
-
-  const features = [
-    {
-      icon: Headphones,
-      title: 'Streaming di qualità',
-      description: 'Ascolta milioni di brani in alta qualità, senza interruzioni pubblicitarie.',
-    },
-    {
-      icon: Radio,
-      title: 'Daily Mix personalizzati',
-      description: 'Ogni giorno mix creati su misura per te, basati sui tuoi gusti musicali.',
-    },
-    {
-      icon: Heart,
-      title: 'I tuoi preferiti',
-      description: 'Salva artisti, album e brani preferiti per accedervi in un istante.',
-    },
-    {
-      icon: ListMusic,
-      title: 'Playlist illimitate',
-      description: 'Crea e gestisci le tue playlist, importa da Spotify e condividile.',
-    },
-    {
-      icon: Zap,
-      title: 'Testi sincronizzati',
-      description: 'Segui i testi delle canzoni in tempo reale mentre ascolti.',
-    },
-    {
-      icon: Shield,
-      title: 'Sicuro e privato',
-      description: 'I tuoi dati sono protetti. Nessun tracciamento, nessuna pubblicità.',
-    },
-  ];
+import LandingFeatures from '@/components/landing/LandingFeatures';
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
