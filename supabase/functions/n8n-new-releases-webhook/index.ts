@@ -36,6 +36,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Webhook secret authentication
+  const webhookSecret = Deno.env.get("N8N_WEBHOOK_SECRET");
+  const incomingSecret = req.headers.get("x-webhook-secret");
+  if (!webhookSecret || incomingSecret !== webhookSecret) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
