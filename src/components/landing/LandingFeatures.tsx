@@ -294,6 +294,7 @@ const LandingFeatures: React.FC = () => {
   ];
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [hasScrolled, setHasScrolled] = React.useState(false);
 
   // Convert vertical wheel scroll to horizontal scroll
   React.useEffect(() => {
@@ -301,16 +302,45 @@ const LandingFeatures: React.FC = () => {
     if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
-      // Only hijack vertical scroll when the carousel is in view
       if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
         e.preventDefault();
         el.scrollLeft += e.deltaY;
       }
     };
 
+    const onScroll = () => {
+      if (el.scrollLeft > 10) setHasScrolled(true);
+    };
+
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('scroll', onScroll);
+    };
   }, []);
+
+  // Bounce hint on mobile when section enters viewport
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasScrolled) {
+          // Quick bounce: scroll right then back
+          el.scrollTo({ left: 60, behavior: 'smooth' });
+          setTimeout(() => {
+            el.scrollTo({ left: 0, behavior: 'smooth' });
+          }, 400);
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasScrolled]);
 
   return (
     <section className="py-24">
@@ -327,7 +357,7 @@ const LandingFeatures: React.FC = () => {
         <div
           ref={scrollRef}
           className="flex gap-8 overflow-x-auto pb-8 px-8 snap-x snap-mandatory scrollbar-hide"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollBehavior: 'smooth' }}
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           <div className="shrink-0 w-[calc((100vw-300px)/2-32px)] hidden lg:block" />
           {features.map((feature, i) => (
