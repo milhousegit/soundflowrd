@@ -293,6 +293,44 @@ const LandingFeatures: React.FC = () => {
     },
   ];
 
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let raf: number;
+    let paused = false;
+
+    const step = () => {
+      if (!paused && el) {
+        el.scrollLeft += 0.5;
+        // Loop: when past halfway, reset seamlessly
+        if (el.scrollLeft >= el.scrollWidth - el.clientWidth) {
+          el.scrollLeft = 0;
+        }
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+
+    const pause = () => { paused = true; };
+    const resume = () => { paused = false; };
+    el.addEventListener('pointerdown', pause);
+    el.addEventListener('pointerup', resume);
+    el.addEventListener('pointerleave', resume);
+    el.addEventListener('touchstart', pause, { passive: true });
+    el.addEventListener('touchend', resume);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener('pointerdown', pause);
+      el.removeEventListener('pointerup', resume);
+      el.removeEventListener('pointerleave', resume);
+      el.removeEventListener('touchstart', pause);
+      el.removeEventListener('touchend', resume);
+    };
+  }, []);
+
   return (
     <section className="py-24">
       <div className="text-center mb-12 space-y-4 px-6">
@@ -304,25 +342,25 @@ const LandingFeatures: React.FC = () => {
         </p>
       </div>
 
-      {/* Horizontal scrolling container */}
       <div className="relative">
-        <div className="flex gap-8 overflow-x-auto pb-8 px-8 snap-x snap-mandatory scrollbar-hide"
+        <div
+          ref={scrollRef}
+          className="flex gap-8 overflow-x-auto pb-8 px-8 scrollbar-hide"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {/* Spacer for centering first item on large screens */}
           <div className="shrink-0 w-[calc((100vw-300px)/2-32px)] hidden lg:block" />
           {features.map((feature, i) => (
             <FeatureCard key={i} {...feature} />
           ))}
+          {/* Duplicate for seamless loop */}
+          {features.map((feature, i) => (
+            <FeatureCard key={`dup-${i}`} {...feature} />
+          ))}
           <div className="shrink-0 w-[calc((100vw-300px)/2-32px)] hidden lg:block" />
         </div>
-        {/* Fade edges */}
-        <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-background to-transparent pointer-events-none z-10" />
-        <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-background to-transparent pointer-events-none z-10" />
+        <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-background to-transparent pointer-events-none z-10" />
+        <div className="absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-background to-transparent pointer-events-none z-10" />
       </div>
-
-      {/* Scroll hint */}
-      <p className="text-center text-xs text-muted-foreground/50 mt-2">Scorri per scoprire →</p>
     </section>
   );
 };
