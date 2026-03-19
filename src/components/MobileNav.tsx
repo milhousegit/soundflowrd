@@ -9,11 +9,11 @@ const MobileNav: React.FC = () => {
   const { t } = useSettings();
 
   const navItems = [
-    { icon: Home, label: t('home'), path: '/' },
-    { icon: Search, label: t('search'), path: '/search' },
-    { icon: MessageSquare, label: 'Feed', path: '/feed' },
-    { icon: Library, label: t('library'), path: '/library' },
-    { icon: User, label: t('profile'), path: '/profile' },
+    { icon: Home, label: t('home'), path: '/app' },
+    { icon: Search, label: t('search'), path: '/app/search' },
+    { icon: MessageSquare, label: 'Feed', path: '/app/feed' },
+    { icon: Library, label: t('library'), path: '/app/library' },
+    { icon: User, label: t('profile'), path: '/app/profile' },
   ];
 
   return (
