@@ -74,34 +74,7 @@ import LandingFeatures from '@/components/landing/LandingFeatures';
         </div>
       </header>
 
-      {/* Features Section */}
-      <section className="py-24 px-6 md:px-12">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16 space-y-4">
-            <h2 className="text-3xl md:text-5xl font-bold">
-              Tutto ciò che ti serve
-            </h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Un'app completa per ascoltare, scoprire e organizzare la tua musica preferita.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, i) => (
-              <div
-                key={i}
-                className="group relative p-6 rounded-2xl bg-card border border-border hover:border-primary/30 transition-all duration-300"
-              >
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
-                  <feature.icon className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <LandingFeatures />
 
       {/* Open Source Section */}
       <section className="py-24 px-6 md:px-12 bg-card/50">
