@@ -36,8 +36,8 @@ const AutoDetailView: React.FC<AutoDetailViewProps> = ({ detail, onBack }) => {
           setTracks(albumData.tracks || []);
         } else if (detail.type === 'artist') {
           const [topTracks, artistData] = await Promise.all([
-            getArtistTopTracks(detail.id),
-            getArtist(detail.id)
+            getArtistTopTracks(detail.id, detail.title),
+            getArtist(detail.id, detail.title)
           ]);
           setTracks(topTracks.slice(0, 5));
           setAlbums((artistData.releases || []).slice(0, 10));
