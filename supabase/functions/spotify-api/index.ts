@@ -60,7 +60,7 @@ async function spotifyFetch(path: string, retries = 2): Promise<any> {
     }
 
     if (res.status === 429) {
-      const retryAfter = parseInt(res.headers.get('Retry-After') || '2');
+      const retryAfter = Math.min(parseInt(res.headers.get('Retry-After') || '2'), 10);
       console.log(`Rate limited, waiting ${retryAfter}s`);
       await new Promise(r => setTimeout(r, retryAfter * 1000));
       continue;
