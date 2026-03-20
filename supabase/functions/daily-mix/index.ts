@@ -525,6 +525,9 @@ serve(async (req) => {
         });
       }
 
+      // Filter out empty mixes
+      const validMixes = mixes.filter((m: any) => m.tracks && m.tracks.length > 0);
+
       // ---- NEW RELEASES MIX ----
       console.log('Generating NEW releases mix...');
       const newReleaseTracks: any[] = [];
