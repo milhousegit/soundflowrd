@@ -7,6 +7,18 @@ let cacheTimestamp = 0;
 const CACHE_TTL = 5 * 60 * 1000;
 const SPOTIFY_ID_PATTERN = /^[a-zA-Z0-9]{22}$/;
 
+function getSpotifyMarket(): string {
+  if (typeof navigator !== 'undefined') {
+    const locale = navigator.languages?.[0] || navigator.language;
+    const region = locale?.split('-')?.[1]?.toUpperCase();
+    if (region && /^[A-Z]{2}$/.test(region)) {
+      return region;
+    }
+  }
+
+  return 'IT';
+}
+
 async function getMergedArtists() {
   const now = Date.now();
   if (mergedArtistsCache && (now - cacheTimestamp) < CACHE_TTL) {
@@ -36,7 +48,12 @@ function replaceMergedArtistIds<T extends { artistId?: string }>(items: T[], mer
 
 // Helper: invoke spotify-api edge function
 async function spotifyInvoke(body: Record<string, any>): Promise<any> {
-  const { data, error } = await supabase.functions.invoke('spotify-api', { body });
+  const { data, error } = await supabase.functions.invoke('spotify-api', {
+    body: {
+      market: body.market || body.country || getSpotifyMarket(),
+      ...body,
+    },
+  });
   if (error) throw error;
   return data;
 }

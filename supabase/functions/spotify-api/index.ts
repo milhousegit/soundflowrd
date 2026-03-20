@@ -131,6 +131,93 @@ function mediumImage(images: any[]): string | undefined {
   return sorted[0]?.url;
 }
 
+function normalizeText(value: string | undefined | null): string {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function artistMatches(artists: any[] | undefined, artistId?: string, artistName?: string): boolean {
+  const normalizedArtistName = normalizeText(artistName);
+  return (artists || []).some((artist) => {
+    if (artistId && artist?.id === artistId) return true;
+    if (!normalizedArtistName) return false;
+    return normalizeText(artist?.name) === normalizedArtistName;
+  });
+}
+
+function dedupeById<T extends { id?: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (!item?.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+async function searchArtistTracksFallback(artistId: string, artistName: string, market: string, limit = 10) {
+  const searchQueries = [
+    `artist:"${artistName}"`,
+    artistName,
+  ];
+
+  const foundTracks: any[] = [];
+  const seenIds = new Set<string>();
+
+  for (const searchQuery of searchQueries) {
+    try {
+      const searchData = await spotifyFetch(
+        `/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=${Math.min(limit, 10)}&market=${market}`,
+      );
+
+      for (const track of searchData.tracks?.items || []) {
+        if (!track?.id || seenIds.has(track.id)) continue;
+        if (!artistMatches(track.artists, artistId, artistName)) continue;
+        seenIds.add(track.id);
+        foundTracks.push(track);
+        if (foundTracks.length >= limit) {
+          return foundTracks.map((item) => mapTrack(item));
+        }
+      }
+    } catch (error) {
+      console.warn(`Search fallback for artist tracks failed for ${artistName}:`, error);
+    }
+  }
+
+  return foundTracks.map((item) => mapTrack(item));
+}
+
+async function fetchPlaylistTracks(playlistId: string, market: string, maxTracks = 200) {
+  const collected: any[] = [];
+  let offset = 0;
+  let total = 0;
+
+  while (offset < maxTracks) {
+    const pageLimit = Math.min(100, maxTracks - offset);
+    const data = await spotifyFetch(
+      `/playlists/${playlistId}/tracks?market=${market}&limit=${pageLimit}&offset=${offset}`,
+    );
+
+    const items = data.items || [];
+    total = data.total || total;
+    collected.push(...items.filter((item: any) => item?.track));
+
+    if (!data.next || items.length === 0) {
+      break;
+    }
+
+    offset += items.length;
+  }
+
+  return {
+    total: total || collected.length,
+    items: collected,
+  };
+}
+
 function mapTrack(track: any, albumOverride?: any): any {
   const album = albumOverride || track.album;
   return {
@@ -302,20 +389,10 @@ serve(async (req) => {
 
         if (topTracks.length === 0 && artistName) {
           console.log(`Using search fallback for top tracks of "${artistName}"`);
-          try {
-            const searchTracks = await spotifyFetch(
-              `/search?q=${encodeURIComponent(`artist:"${artistName}"`)}&type=track&limit=10&market=${mkt}`
-            );
-            topTracks = (searchTracks.tracks?.items || [])
-              .filter((t: any) => {
-                const artists = (t.artists || []).map((ar: any) => ar.name?.toLowerCase());
-                return artists.includes(artistName.toLowerCase());
-              })
-              .map((t: any) => mapTrack(t));
-          } catch (e) {
-            console.warn('Search fallback for tracks failed:', e);
-          }
+          topTracks = await searchArtistTracksFallback(id, artistName, mkt, 10);
         }
+
+        topTracks = dedupeById(topTracks).slice(0, 10);
 
         if (relatedArtists.length === 0 && artistData.genres?.length > 0) {
           console.log(`Using search fallback for related artists via genre`);
@@ -360,39 +437,40 @@ serve(async (req) => {
             const artistInfo = await spotifyFetch(`/artists/${id}`);
             const aName = artistInfo.name;
             if (aName) {
-              const searchData = await spotifyFetch(
-                `/search?q=${encodeURIComponent(`artist:"${aName}"`)}&type=track&limit=${limit}&market=${mkt}`
-              );
-              topResultTracks = (searchData.tracks?.items || [])
-                .filter((t: any) => (t.artists || []).some((ar: any) => ar.id === id))
-                .map((t: any) => mapTrack(t));
+              topResultTracks = await searchArtistTracksFallback(id, aName, mkt, limit);
             }
           } catch (e) {
             console.warn('Search fallback for get-artist-top failed:', e);
           }
         }
 
-        return json(topResultTracks);
+        return json(dedupeById(topResultTracks).slice(0, limit));
       }
 
       // ======================== PLAYLISTS ========================
       case 'get-playlist': {
         try {
-          const data = await spotifyFetch(`/playlists/${id}?market=${mkt}`);
+          const [playlistData, playlistTracksData] = await Promise.all([
+            spotifyFetch(`/playlists/${id}?market=${mkt}`),
+            fetchPlaylistTracks(String(id), mkt),
+          ]);
+
+          const mappedTracks = playlistTracksData.items
+            .map((item: any, index: number) => ({
+              ...mapTrack(item.track),
+              trackNumber: index + 1,
+            }))
+            .filter((track: any) => !!track.id);
+
           const playlist = {
-            id: data.id,
-            title: data.name,
-            description: data.description || '',
-            coverUrl: bestImage(data.images),
-            trackCount: data.tracks?.total || 0,
-            creator: data.owner?.display_name || 'Spotify',
+            id: playlistData.id,
+            title: playlistData.name,
+            description: playlistData.description || '',
+            coverUrl: bestImage(playlistData.images),
+            trackCount: playlistTracksData.total || playlistData.tracks?.total || mappedTracks.length,
+            creator: playlistData.owner?.display_name || 'Spotify',
             duration: 0,
-            tracks: (data.tracks?.items || [])
-              .filter((item: any) => item.track)
-              .map((item: any, index: number) => ({
-                ...mapTrack(item.track),
-                trackNumber: index + 1,
-              })),
+            tracks: mappedTracks,
           };
           return json(playlist);
         } catch (error) {
@@ -446,7 +524,7 @@ serve(async (req) => {
                   title: p.name,
                   description: p.description || '',
                   coverUrl: bestImage(p.images),
-                  trackCount: p.tracks?.total || 0,
+                  trackCount: p.tracks?.total ?? 0,
                   creator: p.owner?.display_name || 'Spotify',
                   isSpotifyPlaylist: true,
                 });
@@ -457,7 +535,29 @@ serve(async (req) => {
           }
         }
 
-        return json(allPlaylists.slice(0, 6));
+        const enrichedPlaylists = await Promise.all(
+          allPlaylists.slice(0, 6).map(async (playlist) => {
+            if (playlist.trackCount > 0 && playlist.coverUrl) {
+              return playlist;
+            }
+
+            const details = await spotifyFetchOptional<any | null>(
+              `/playlists/${playlist.id}?fields=images,tracks(total),owner(display_name),description`,
+              null,
+              `artist playlist details ${playlist.id}`,
+            );
+
+            return {
+              ...playlist,
+              coverUrl: playlist.coverUrl || bestImage(details?.images || []),
+              description: playlist.description || details?.description || '',
+              creator: details?.owner?.display_name || playlist.creator,
+              trackCount: details?.tracks?.total ?? playlist.trackCount ?? 0,
+            };
+          })
+        );
+
+        return json(enrichedPlaylists);
       }
 
       // ======================== BROWSE / CHARTS ========================
