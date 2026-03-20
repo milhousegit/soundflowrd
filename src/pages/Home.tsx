@@ -238,7 +238,17 @@ const Home: React.FC = () => {
           // Get full data for favorite artists and their related artists
           for (const fav of favoriteArtistItems) {
             try {
-              const artistData = await getArtist(fav.item_id);
+              const isSpotifyId = /^[a-zA-Z0-9]{22}$/.test(fav.item_id);
+              let artistData;
+              
+              if (isSpotifyId) {
+                artistData = await getArtist(fav.item_id);
+              } else {
+                // Legacy Deezer numeric ID - search by name instead
+                const results = await searchArtists(fav.item_title);
+                if (results.length === 0) continue;
+                artistData = await getArtist(results[0].id);
+              }
               
               // Add favorite artist
               if (!seenArtistIds.has(artistData.id)) {
