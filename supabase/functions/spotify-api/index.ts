@@ -76,6 +76,44 @@ async function spotifyFetch(path: string, retries = 2): Promise<any> {
   throw new Error('Max retries exceeded');
 }
 
+async function spotifyFetchOptional<T>(path: string, fallback: T, label: string): Promise<T> {
+  try {
+    let token = await getAccessToken();
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(`${SPOTIFY_API}${path}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (res.status === 401 && attempt === 0) {
+        cachedToken = null;
+        tokenExpiresAt = 0;
+        token = await getAccessToken();
+        continue;
+      }
+
+      if (res.status === 403 || res.status === 429) {
+        const text = await res.text();
+        console.warn(`Spotify optional endpoint blocked for ${label}: ${res.status} ${text.substring(0, 120)}`);
+        return fallback;
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn(`Spotify optional endpoint failed for ${label}: ${res.status} ${text.substring(0, 120)}`);
+        return fallback;
+      }
+
+      return await res.json();
+    }
+
+    return fallback;
+  } catch (error) {
+    console.warn(`Spotify optional endpoint failed for ${label}:`, error);
+    return fallback;
+  }
+}
+
 // Helpers to get best image
 function bestImage(images: any[]): string | undefined {
   if (!images || images.length === 0) return undefined;
@@ -219,11 +257,23 @@ serve(async (req) => {
           });
         }
 
-        const [artistData, albumsData, topData, relatedData] = await Promise.all([
-          spotifyFetch(`/artists/${id}`),
-          spotifyFetch(`/artists/${id}/albums?include_groups=album,single&limit=50&market=${mkt}`),
-          spotifyFetch(`/artists/${id}/top-tracks?market=${mkt}`).catch(() => ({ tracks: [] })),
-          spotifyFetch(`/artists/${id}/related-artists`).catch(() => ({ artists: [] })),
+        const artistData = await spotifyFetch(`/artists/${id}`);
+        const [albumsData, topData, relatedData] = await Promise.all([
+          spotifyFetchOptional(
+            `/artists/${id}/albums?include_groups=album,single&limit=50&market=${mkt}`,
+            { items: [] },
+            `artist albums ${id}`,
+          ),
+          spotifyFetchOptional(
+            `/artists/${id}/top-tracks?market=${mkt}`,
+            { tracks: [] },
+            `artist top tracks ${id}`,
+          ),
+          spotifyFetchOptional(
+            `/artists/${id}/related-artists`,
+            { artists: [] },
+            `artist related artists ${id}`,
+          ),
         ]);
 
         const artist = {
