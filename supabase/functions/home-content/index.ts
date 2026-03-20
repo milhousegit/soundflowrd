@@ -76,12 +76,12 @@ serve(async (req) => {
 
     if (contentType === 'popular_artists') {
       console.log('Fetching popular artists via spotify-api...');
-      data = await callSpotifyApi('get-popular-artists', { limit: 20, market: country });
+      data = await callSpotifyApi('get-popular-artists', { limit: 10, market: country });
       console.log(`Got ${(data || []).length} artists`);
       data = data || [];
     } else if (contentType === 'new_releases') {
       console.log('Fetching new releases via spotify-api...');
-      data = await callSpotifyApi('get-new-releases', { limit: 20, market: country });
+      data = await callSpotifyApi('get-new-releases', { limit: 10, market: country });
       console.log(`Got ${(data || []).length} releases`);
       data = data || [];
     }
