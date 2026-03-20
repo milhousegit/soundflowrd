@@ -6,95 +6,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const DEEZER_API = 'https://api.deezer.com';
-
-// Cache duration in hours
 const CACHE_DURATION_HOURS = 6;
 
-interface Album {
-  id: string;
-  title: string;
-  artist: string;
-  artistId?: string;
-  coverUrl?: string;
-  releaseDate?: string;
-  trackCount?: number;
-}
-
-interface Artist {
-  id: string;
-  name: string;
-  imageUrl?: string;
-  popularity?: number;
-}
-
-// Fetch with timeout
-async function fetchWithTimeout(url: string, timeout = 10000): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    return response;
-  } finally {
-    clearTimeout(id);
+// Call the spotify-api edge function internally
+async function callSpotifyApi(action: string, params: Record<string, any> = {}): Promise<any> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY')!;
+  
+  const res = await fetch(`${supabaseUrl}/functions/v1/spotify-api`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseKey}`,
+      'apikey': supabaseKey,
+    },
+    body: JSON.stringify({ action, ...params }),
+  });
+  
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`spotify-api ${res.status}: ${text}`);
   }
-}
-
-// Get popular artists from Deezer charts
-async function getPopularArtists(): Promise<Artist[]> {
-  try {
-    const response = await fetchWithTimeout(`${DEEZER_API}/chart/0/artists?limit=20`);
-    
-    if (!response.ok) {
-      console.error('Deezer artists error:', response.status);
-      return [];
-    }
-    
-    const data = await response.json();
-    const artists = data.data || [];
-    
-    return artists.map((artist: any) => ({
-      id: String(artist.id),
-      name: artist.name,
-      imageUrl: artist.picture_xl || artist.picture_big || artist.picture_medium || artist.picture || undefined,
-      popularity: artist.position || 0,
-    }));
-  } catch (error) {
-    console.error('Deezer artists fetch error:', error);
-    return [];
-  }
-}
-
-// Get new releases from Deezer editorial
-async function getNewReleases(): Promise<Album[]> {
-  try {
-    const response = await fetchWithTimeout(`${DEEZER_API}/editorial/0/releases?limit=30`);
-    
-    if (!response.ok) {
-      console.error('Deezer releases error:', response.status);
-      return [];
-    }
-    
-    const data = await response.json();
-    const releases = data.data || [];
-    
-    return releases.map((album: any) => ({
-      id: String(album.id),
-      title: album.title,
-      artist: album.artist?.name || 'Unknown Artist',
-      artistId: String(album.artist?.id || ''),
-      coverUrl: album.cover_xl || album.cover_big || album.cover_medium || album.cover || undefined,
-      releaseDate: album.release_date || undefined,
-      trackCount: album.nb_tracks || undefined,
-    }));
-  } catch (error) {
-    console.error('Deezer releases fetch error:', error);
-    return [];
-  }
+  return JSON.parse(text);
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -108,12 +44,10 @@ serve(async (req) => {
 
     console.log(`Home content request: type=${contentType}, country=${country}, language=${language}`);
 
-    // Create Supabase client with service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Check cache first (unless force refresh)
     if (!forceRefresh) {
       const { data: cached } = await supabase
         .from('home_content_cache')
@@ -125,15 +59,12 @@ serve(async (req) => {
 
       if (cached) {
         const updatedAt = new Date(cached.updated_at);
-        const now = new Date();
-        const hoursDiff = (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60);
+        const hoursDiff = (Date.now() - updatedAt.getTime()) / (1000 * 60 * 60);
 
         if (hoursDiff < CACHE_DURATION_HOURS) {
           console.log(`Returning cached ${contentType} (${hoursDiff.toFixed(1)}h old)`);
           return new Response(JSON.stringify({ 
-            data: cached.data, 
-            cached: true,
-            cached_at: cached.updated_at 
+            data: cached.data, cached: true, cached_at: cached.updated_at 
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -141,22 +72,22 @@ serve(async (req) => {
       }
     }
 
-    // Fetch fresh data from Deezer
     let data: any[] = [];
 
     if (contentType === 'popular_artists') {
-      console.log('Fetching popular artists from Deezer...');
-      data = await getPopularArtists();
-      console.log(`Deezer: ${data.length} artists`);
+      console.log('Fetching popular artists via spotify-api...');
+      data = await callSpotifyApi('get-popular-artists', { limit: 20, market: country });
+      console.log(`Got ${(data || []).length} artists`);
+      data = data || [];
     } else if (contentType === 'new_releases') {
-      console.log('Fetching new releases from Deezer...');
-      data = await getNewReleases();
-      console.log(`Deezer: ${data.length} releases`);
+      console.log('Fetching new releases via spotify-api...');
+      data = await callSpotifyApi('get-new-releases', { limit: 20, market: country });
+      console.log(`Got ${(data || []).length} releases`);
+      data = data || [];
     }
 
-    // Update cache
     if (data.length > 0) {
-      const { error: upsertError } = await supabase
+      await supabase
         .from('home_content_cache')
         .upsert({
           content_type: contentType,
@@ -164,31 +95,20 @@ serve(async (req) => {
           language,
           data,
           updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'content_type,country,language',
-        });
-
-      if (upsertError) {
-        console.error('Cache upsert error:', upsertError);
-      } else {
-        console.log(`Cached ${data.length} ${contentType} items`);
-      }
+        }, { onConflict: 'content_type,country,language' });
     }
 
     return new Response(JSON.stringify({ 
-      data, 
-      cached: false,
-      fetched_at: new Date().toISOString() 
+      data, cached: false, fetched_at: new Date().toISOString() 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error: unknown) {
     console.error('Home content error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ 
       error: 'Failed to fetch content',
-      details: errorMessage 
+      details: error instanceof Error ? error.message : 'Unknown error'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

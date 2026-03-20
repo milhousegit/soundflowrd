@@ -6,25 +6,47 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const DEEZER_API = 'https://api.deezer.com';
-const requestHeaders = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-  'Accept': 'application/json',
-};
+// ---- Spotify Auth ----
+let cachedToken: string | null = null;
+let tokenExpiry = 0;
 
-function albumCover(obj: any, field = 'cover') {
-  return obj?.[`${field}_xl`] || obj?.[`${field}_big`] || obj?.[`${field}_medium`] || obj?.[field] || undefined;
+async function getSpotifyToken(): Promise<string> {
+  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+  const clientId = Deno.env.get('SPOTIFY_CLIENT_ID')!;
+  const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET')!;
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+    },
+    body: 'grant_type=client_credentials',
+  });
+  const data = await res.json();
+  cachedToken = data.access_token;
+  tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+  return cachedToken!;
 }
 
-async function fetchDeezer(url: string, retries = 2): Promise<any> {
+async function spotifyFetch(path: string, retries = 2): Promise<any> {
   for (let i = 0; i <= retries; i++) {
     try {
+      const token = await getSpotifyToken();
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 10000);
-      const response = await fetch(url, { signal: controller.signal, headers: requestHeaders });
+      const res = await fetch(`https://api.spotify.com/v1${path}`, {
+        signal: controller.signal,
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
       clearTimeout(id);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.json();
+      if (res.status === 401) { cachedToken = null; tokenExpiry = 0; continue; }
+      if (res.status === 429) {
+        const wait = parseInt(res.headers.get('Retry-After') || '2') * 1000;
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      if (!res.ok) throw new Error(`Spotify ${res.status}`);
+      return await res.json();
     } catch (e) {
       if (i === retries) throw e;
       await new Promise(r => setTimeout(r, 500 * (i + 1)));
@@ -32,37 +54,37 @@ async function fetchDeezer(url: string, retries = 2): Promise<any> {
   }
 }
 
-// Get genre info for an artist from Deezer (single album check for speed)
+function bestImage(images: any[]): string | undefined {
+  if (!images?.length) return undefined;
+  return images.sort((a: any, b: any) => (b.width || 0) - (a.width || 0))[0]?.url;
+}
+
+// Get genre for an artist from Spotify
 async function getArtistGenre(artistId: string): Promise<string> {
   try {
-    const albums = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/albums?limit=1`);
-    if (albums?.data?.[0]?.id) {
-      const album = await fetchDeezer(`${DEEZER_API}/album/${albums.data[0].id}`);
-      if (album?.genres?.data?.[0]?.name) {
-        return album.genres.data[0].name;
-      }
-    }
-    return 'Unknown';
+    const data = await spotifyFetch(`/artists/${artistId}`);
+    const genres = data?.genres || [];
+    return genres[0] || 'Unknown';
   } catch {
     return 'Unknown';
   }
 }
 
-// Get related artist IDs for affinity clustering
+// Get related artist IDs
 async function getRelatedArtistIds(artistId: string): Promise<string[]> {
   try {
-    const data = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/related?limit=20`);
-    return (data?.data || []).map((a: any) => String(a.id));
+    const data = await spotifyFetch(`/artists/${artistId}/related-artists`);
+    return (data?.artists || []).slice(0, 20).map((a: any) => a.id);
   } catch {
     return [];
   }
 }
 
-// Get discovery tracks from artist radio
-async function getArtistRadioTracks(artistId: string, limit: number): Promise<any[]> {
+// Get top tracks for an artist
+async function getArtistTopTracks(artistId: string): Promise<any[]> {
   try {
-    const data = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/radio?limit=${limit}`);
-    return data?.data || [];
+    const data = await spotifyFetch(`/artists/${artistId}/top-tracks?market=IT`);
+    return data?.tracks || [];
   } catch {
     return [];
   }
@@ -74,7 +96,6 @@ interface ArtistCluster {
   artists: { id: string; name: string; playCount: number; imageUrl?: string }[];
 }
 
-// Affinity-based clustering: group artists that are related to each other on Deezer
 function clusterArtistsByAffinity(
   artists: { id: string; name: string; playCount: number; genre: string; imageUrl?: string; relatedIds: string[] }[]
 ): ArtistCluster[] {
@@ -83,24 +104,19 @@ function clusterArtistsByAffinity(
   const assigned = new Set<string>();
   const clusters: ArtistCluster[] = [];
 
-  // Sort by play count descending - most listened artists seed the clusters
   const sorted = [...artists].sort((a, b) => b.playCount - a.playCount);
 
   for (const seed of sorted) {
     if (assigned.has(seed.id)) continue;
 
-    // Start a new cluster with this seed
     const clusterArtists = [seed];
     assigned.add(seed.id);
 
-    // Find artists related to the seed (mutual or one-way)
     for (const candidate of sorted) {
       if (assigned.has(candidate.id)) continue;
       
-      // Check affinity: seed's related list contains candidate, or vice versa
       const seedRelated = seed.relatedIds.includes(candidate.id);
       const candidateRelated = candidate.relatedIds.includes(seed.id);
-      // Also check genre match as secondary signal
       const sameGenre = normalizeGenre(seed.genre) === normalizeGenre(candidate.genre) && 
                         normalizeGenre(seed.genre) !== 'Mixed';
       
@@ -114,10 +130,7 @@ function clusterArtistsByAffinity(
     clusters.push({
       genre,
       artists: clusterArtists.map(a => ({
-        id: a.id,
-        name: a.name,
-        playCount: a.playCount,
-        imageUrl: a.imageUrl,
+        id: a.id, name: a.name, playCount: a.playCount, imageUrl: a.imageUrl,
       })),
     });
 
@@ -127,7 +140,6 @@ function clusterArtistsByAffinity(
   // Add remaining unassigned artists to the closest cluster
   for (const artist of sorted) {
     if (assigned.has(artist.id)) continue;
-    // Find cluster with most affinity
     let bestCluster = 0;
     let bestScore = -1;
     for (let i = 0; i < clusters.length; i++) {
@@ -145,10 +157,7 @@ function clusterArtistsByAffinity(
     }
     if (clusters[bestCluster]) {
       clusters[bestCluster].artists.push({
-        id: artist.id,
-        name: artist.name,
-        playCount: artist.playCount,
-        imageUrl: artist.imageUrl,
+        id: artist.id, name: artist.name, playCount: artist.playCount, imageUrl: artist.imageUrl,
       });
     }
     assigned.add(artist.id);
@@ -168,7 +177,6 @@ function clusterArtistsByAffinity(
     }
   }
 
-  // Sort clusters by total play count
   clusters.sort((a, b) => {
     const aTotal = a.artists.reduce((s, ar) => s + ar.playCount, 0);
     const bTotal = b.artists.reduce((s, ar) => s + ar.playCount, 0);
@@ -213,7 +221,6 @@ function normalizeGenre(genre: string): string {
   return genre.charAt(0).toUpperCase() + genre.slice(1);
 }
 
-// Mix color palettes by genre
 const GENRE_COLORS: Record<string, string[]> = {
   'Hip-Hop/Rap': ['#7C3AED', '#4F46E5'],
   'Pop': ['#EC4899', '#F43F5E'],
@@ -233,6 +240,19 @@ const GENRE_COLORS: Record<string, string[]> = {
 function getGradientForGenre(genre: string): string {
   const colors = GENRE_COLORS[genre] || GENRE_COLORS['Mixed'];
   return `${colors[0]},${colors[1]}`;
+}
+
+function mapSpotifyTrack(t: any): any {
+  return {
+    id: t.id,
+    title: t.name,
+    artist: t.artists?.[0]?.name || 'Unknown Artist',
+    artistId: t.artists?.[0]?.id || '',
+    album: t.album?.name || 'Unknown Album',
+    albumId: t.album?.id || '',
+    duration: Math.round((t.duration_ms || 0) / 1000),
+    coverUrl: bestImage(t.album?.images || []),
+  };
 }
 
 serve(async (req) => {
@@ -267,7 +287,6 @@ serve(async (req) => {
     const { action } = await req.json();
 
     if (action === 'get') {
-      // Check for existing non-expired mixes
       const { data: existing } = await supabase
         .from('daily_mixes')
         .select('*')
@@ -281,14 +300,11 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-
-      // Fall through to generate
     }
 
     if (action === 'get' || action === 'regenerate') {
       console.log(`Generating daily mixes for user ${user.id}`);
 
-      // Delete old mixes
       await supabase.from('daily_mixes').delete().eq('user_id', user.id);
 
       // 1. Fetch user's top artists from stats
@@ -302,7 +318,6 @@ serve(async (req) => {
       const artistStats: { artist_id: string; artist_name: string; total_plays: number; artist_image_url: string | null }[] = [...(rawArtistStats || [])];
 
       if (!artistStats || artistStats.length === 0) {
-        // Try recently_played as fallback
         const { data: recentArtists } = await supabase
           .from('recently_played')
           .select('artist_id, track_artist')
@@ -316,7 +331,6 @@ serve(async (req) => {
           });
         }
 
-        // Build pseudo artist stats from recently_played
         const artistCountMap = new Map<string, { artist_id: string; artist_name: string; total_plays: number; artist_image_url: string | null }>();
         for (const r of recentArtists) {
           if (!r.artist_id) continue;
@@ -332,14 +346,13 @@ serve(async (req) => {
             });
           }
         }
-        // Use these as artistStats fallback
         const fallbackStats = Array.from(artistCountMap.values())
           .sort((a, b) => b.total_plays - a.total_plays)
           .slice(0, 30);
         artistStats.push(...(fallbackStats as any[]));
       }
 
-      // 2. Get user's known track IDs (to exclude from discovery)
+      // 2. Get user's known track IDs
       const { data: userTracks } = await supabase
         .from('user_track_stats')
         .select('track_id')
@@ -348,7 +361,6 @@ serve(async (req) => {
 
       const knownTrackIds = new Set((userTracks || []).map(t => t.track_id));
 
-      // Also get favorites
       const { data: favTracks } = await supabase
         .from('favorites')
         .select('item_id')
@@ -359,8 +371,7 @@ serve(async (req) => {
         knownTrackIds.add(f.item_id);
       }
 
-      // 3. Get genres AND related artists for top artists (affinity clustering)
-      // Process in batches of 5 to avoid Deezer rate limits
+      // 3. Enrich top artists with genres and related artists (batch of 5)
       const topArtistsForLookup = artistStats.slice(0, 15);
       const enrichedArtists: { id: string; name: string; playCount: number; genre: string; imageUrl?: string; relatedIds: string[] }[] = [];
 
@@ -387,7 +398,6 @@ serve(async (req) => {
 
       console.log(`Enriched ${enrichedArtists.length} artists:`, enrichedArtists.map(a => `${a.name}(${a.genre})`).join(', '));
 
-      // Add remaining artists with Unknown genre and no related data
       for (const a of artistStats.slice(15)) {
         enrichedArtists.push({
           id: a.artist_id,
@@ -399,7 +409,7 @@ serve(async (req) => {
         });
       }
 
-      // 4. Cluster artists by affinity (related artists + genre)
+      // 4. Cluster artists by affinity
       const clusters = clusterArtistsByAffinity(enrichedArtists);
 
       if (clusters.length === 0) {
@@ -408,7 +418,7 @@ serve(async (req) => {
         });
       }
 
-      // 5. Build mixes (up to 50 tracks, no per-artist cap, but ensure multiple artists)
+      // 5. Build mixes (up to 50 tracks)
       const MIX_TARGET = 50;
       const mixes = [];
 
@@ -418,22 +428,20 @@ serve(async (req) => {
         const allTracks: any[] = [];
 
         const tryAdd = (t: any): boolean => {
-          const tid = String(t.id);
-          if (seenIds.has(tid)) return false;
-          seenIds.add(tid);
+          if (seenIds.has(t.id)) return false;
+          seenIds.add(t.id);
           allTracks.push(t);
           return true;
         };
 
-        // --- Phase 1: Top tracks from cluster artists ---
+        // Phase 1: Top tracks from cluster artists
         for (const artist of cluster.artists.slice(0, 10)) {
           try {
-            const data = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/top?limit=15`);
-            const tracks = data?.data || [];
+            const tracks = await getArtistTopTracks(artist.id);
             console.log(`Artist ${artist.name} (${artist.id}): ${tracks.length} top tracks`);
             for (const t of tracks) {
               if (allTracks.length >= MIX_TARGET) break;
-              tryAdd(t);
+              tryAdd(mapSpotifyTrack(t));
             }
           } catch (err) {
             console.error(`Failed top tracks for ${artist.name}:`, err);
@@ -442,16 +450,15 @@ serve(async (req) => {
 
         console.log(`Cluster ${i} after phase 1: ${allTracks.length} tracks`);
 
-        // --- Phase 2: Related artists to broaden the mix ---
+        // Phase 2: Related artists to broaden the mix
         if (allTracks.length < MIX_TARGET) {
           const relatedArtistIds = new Set<string>();
           const clusterArtistIds = new Set(cluster.artists.map(a => a.id));
 
-          // Fetch related in parallel for speed
           const relatedPromises = cluster.artists.slice(0, 3).map(async (artist) => {
             try {
-              const related = await fetchDeezer(`${DEEZER_API}/artist/${artist.id}/related?limit=10`);
-              return (related?.data || []).map((r: any) => String(r.id)).filter((id: string) => !clusterArtistIds.has(id));
+              const data = await spotifyFetch(`/artists/${artist.id}/related-artists`);
+              return (data?.artists || []).slice(0, 10).map((r: any) => r.id).filter((id: string) => !clusterArtistIds.has(id));
             } catch { return []; }
           });
           const relatedResults = await Promise.all(relatedPromises);
@@ -465,26 +472,12 @@ serve(async (req) => {
           for (const relId of relatedArr.slice(0, 15)) {
             if (allTracks.length >= MIX_TARGET) break;
             try {
-              const data = await fetchDeezer(`${DEEZER_API}/artist/${relId}/top?limit=5`);
-              for (const t of (data?.data || [])) {
+              const tracks = await getArtistTopTracks(relId);
+              for (const t of tracks.slice(0, 5)) {
                 if (allTracks.length >= MIX_TARGET) break;
-                tryAdd(t);
+                tryAdd(mapSpotifyTrack(t));
               }
             } catch { /* skip */ }
-          }
-        }
-
-        console.log(`Cluster ${i} after phase 2: ${allTracks.length} tracks`);
-
-        // --- Phase 3: Artist radio for remaining slots ---
-        if (allTracks.length < MIX_TARGET) {
-          for (const artist of cluster.artists.slice(0, 3)) {
-            if (allTracks.length >= MIX_TARGET) break;
-            const radio = await getArtistRadioTracks(artist.id, 30);
-            for (const t of radio) {
-              if (allTracks.length >= MIX_TARGET) break;
-              tryAdd(t);
-            }
           }
         }
 
@@ -496,16 +489,7 @@ serve(async (req) => {
           [allTracks[j], allTracks[k]] = [allTracks[k], allTracks[j]];
         }
 
-        const formattedTracks = allTracks.slice(0, MIX_TARGET).map((t: any) => ({
-          id: String(t.id),
-          title: t.title,
-          artist: t.artist?.name || 'Unknown Artist',
-          artistId: String(t.artist?.id || ''),
-          album: t.album?.title || 'Unknown Album',
-          albumId: String(t.album?.id || ''),
-          duration: t.duration || 0,
-          coverUrl: albumCover(t.album),
-        }));
+        const formattedTracks = allTracks.slice(0, MIX_TARGET);
 
         const topArtistNames = cluster.artists.slice(0, 4).map(a => a.name);
         const gradient = getGradientForGenre(cluster.genre);
@@ -525,7 +509,6 @@ serve(async (req) => {
         });
       }
 
-      // Filter out empty mixes
       const validMixes = mixes.filter((m: any) => m.tracks && m.tracks.length > 0);
 
       // ---- NEW RELEASES MIX ----
@@ -533,13 +516,11 @@ serve(async (req) => {
       const newReleaseTracks: any[] = [];
       const newReleaseSeenIds = new Set<string>();
 
-      // Collect artist IDs from: favorites, top played artists, and liked tracks' artists
       const allArtistIds = new Set<string>();
       for (const a of artistStats) {
         if (a.artist_id) allArtistIds.add(a.artist_id);
       }
 
-      // Add favorite artists
       const { data: favArtists } = await supabase
         .from('favorites')
         .select('item_id')
@@ -549,7 +530,6 @@ serve(async (req) => {
         if (f.item_id) allArtistIds.add(f.item_id);
       }
 
-      // Add artists from favorite tracks
       const { data: favTrackData } = await supabase
         .from('favorites')
         .select('item_data')
@@ -563,28 +543,26 @@ serve(async (req) => {
       const uniqueArtistIds = [...allArtistIds].slice(0, 30);
       console.log(`Checking new releases for ${uniqueArtistIds.length} artists`);
 
-      // Fetch latest albums for each artist (batch of 5)
-      const oneMonthAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000); // 60 days
+      const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
       for (let batch = 0; batch < uniqueArtistIds.length; batch += 5) {
         const slice = uniqueArtistIds.slice(batch, batch + 5);
         const results = await Promise.all(slice.map(async (artistId) => {
           try {
-            const data = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/albums?limit=5&order=date`);
-            const albums = data?.data || [];
+            const data = await spotifyFetch(`/artists/${artistId}/albums?include_groups=album,single&limit=5&market=IT`);
+            const albums = data?.items || [];
             const recentAlbums = albums.filter((a: any) => {
               if (!a.release_date) return false;
-              return new Date(a.release_date) >= oneMonthAgo;
+              return new Date(a.release_date) >= sixtyDaysAgo;
             });
-            // Get tracks from recent albums
             const tracks: any[] = [];
             for (const album of recentAlbums.slice(0, 2)) {
               try {
-                const albumData = await fetchDeezer(`${DEEZER_API}/album/${album.id}`);
-                if (albumData?.tracks?.data) {
-                  for (const t of albumData.tracks.data) {
+                const albumData = await spotifyFetch(`/albums/${album.id}?market=IT`);
+                if (albumData?.tracks?.items) {
+                  for (const t of albumData.tracks.items) {
                     tracks.push({
                       ...t,
-                      album: { id: album.id, title: album.title, cover: album.cover, cover_medium: album.cover_medium, cover_big: album.cover_big, cover_xl: album.cover_xl },
+                      album: { id: album.id, name: album.name, images: album.images },
                     });
                   }
                 }
@@ -595,10 +573,9 @@ serve(async (req) => {
         }));
         for (const tracks of results) {
           for (const t of tracks) {
-            const tid = String(t.id);
-            if (!newReleaseSeenIds.has(tid)) {
-              newReleaseSeenIds.add(tid);
-              newReleaseTracks.push(t);
+            if (!newReleaseSeenIds.has(t.id)) {
+              newReleaseSeenIds.add(t.id);
+              newReleaseTracks.push(mapSpotifyTrack(t));
             }
           }
         }
@@ -607,22 +584,12 @@ serve(async (req) => {
       console.log(`NEW mix: ${newReleaseTracks.length} tracks from new releases`);
 
       if (newReleaseTracks.length > 0) {
-        // Shuffle
         for (let j = newReleaseTracks.length - 1; j > 0; j--) {
           const k = Math.floor(Math.random() * (j + 1));
           [newReleaseTracks[j], newReleaseTracks[k]] = [newReleaseTracks[k], newReleaseTracks[j]];
         }
 
-        const formattedNewTracks = newReleaseTracks.slice(0, 50).map((t: any) => ({
-          id: String(t.id),
-          title: t.title,
-          artist: t.artist?.name || 'Unknown Artist',
-          artistId: String(t.artist?.id || ''),
-          album: t.album?.title || 'Unknown Album',
-          albumId: String(t.album?.id || ''),
-          duration: t.duration || 0,
-          coverUrl: albumCover(t.album),
-        }));
+        const formattedNewTracks = newReleaseTracks.slice(0, 50);
 
         const newMixIndex = validMixes.length;
         validMixes.push({
@@ -639,7 +606,6 @@ serve(async (req) => {
         });
       }
 
-      // Re-index all mixes
       const finalMixes = validMixes.map((m, idx) => ({
         ...m,
         mix_index: idx,
@@ -648,8 +614,6 @@ serve(async (req) => {
 
       console.log(`Final mixes: ${finalMixes.length} (including NEW)`);
 
-
-      // Save to DB
       if (finalMixes.length > 0) {
         const { error: insertError } = await supabase
           .from('daily_mixes')
@@ -660,7 +624,6 @@ serve(async (req) => {
         }
       }
 
-      // Return fresh mixes
       const { data: freshMixes } = await supabase
         .from('daily_mixes')
         .select('*')
