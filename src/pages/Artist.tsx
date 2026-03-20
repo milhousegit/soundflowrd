@@ -13,7 +13,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer, type PlaybackSource } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { getArtist, getArtistPlaylists, DeezerPlaylist } from '@/lib/deezer';
+import { getArtist, getArtistPlaylists, DeezerPlaylist } from '@/lib/spotify';
 import { supabase } from '@/integrations/supabase/client';
 import { Artist as ArtistType, Album, Track } from '@/types/music';
 

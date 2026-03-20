@@ -5,7 +5,7 @@ import { StreamResult, TorrentInfo, AudioFile } from '@/lib/realdebrid';
 import { DebugLogEntry } from '@/contexts/PlayerContext';
 import { Track } from '@/types/music';
 import { supabase } from '@/integrations/supabase/client';
-import { searchTracks as searchDeezerTracks, getTrack as getDeezerTrack } from '@/lib/deezer';
+import { searchTracks as searchDeezerTracks, getTrack as getDeezerTrack } from '@/lib/spotify';
 import { getTidalStream } from '@/lib/tidal';
 import {
   AlertCircle,

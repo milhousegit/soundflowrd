@@ -11,7 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useSocialProfile, SocialProfile } from '@/hooks/useSocialProfile';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { searchAll } from '@/lib/deezer';
+import { searchAll } from '@/lib/spotify';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Track } from '@/types/music';
 import FollowListModal from './FollowListModal';

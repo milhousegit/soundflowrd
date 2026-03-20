@@ -3,7 +3,7 @@ import { Search, Loader2, Link2, Trash2, X, Check, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { searchArtists } from '@/lib/deezer';
+import { searchArtists } from '@/lib/spotify';
 import { Artist } from '@/types/music';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';

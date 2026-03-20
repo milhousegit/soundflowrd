@@ -10,7 +10,7 @@ import CommentSection from '@/components/social/CommentSection';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer, type PlaybackSource } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAlbum } from '@/lib/deezer';
+import { getAlbum } from '@/lib/spotify';
 import { mockAlbums, mockTracks } from '@/data/mockData';
 import { Album as AlbumType, Track } from '@/types/music';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
