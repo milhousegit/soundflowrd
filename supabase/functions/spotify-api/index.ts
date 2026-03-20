@@ -7,6 +7,7 @@ const corsHeaders = {
 
 const SPOTIFY_API = 'https://api.spotify.com/v1';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
+const DEEZER_API = 'https://api.deezer.com';
 
 // In-memory token cache
 let cachedToken: string | null = null;
@@ -74,7 +75,7 @@ function getPlaylistFallback(id: unknown) {
   };
 }
 
-function getRateLimitFallback(action?: string, id?: unknown) {
+function getSafeFallback(action?: string, id?: unknown) {
   switch (action) {
     case 'search-tracks':
     case 'search-albums':
@@ -110,6 +111,159 @@ function getRateLimitFallback(action?: string, id?: unknown) {
         rateLimited: true,
       };
   }
+}
+
+function isNumericId(value: unknown): boolean {
+  return /^\d+$/.test(String(value || ''));
+}
+
+async function deezerFetch(path: string): Promise<any> {
+  const response = await fetch(`${DEEZER_API}${path}`, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Deezer API ${response.status}: ${text.substring(0, 200)}`);
+  }
+
+  return await response.json();
+}
+
+function deezerCover(image: any): string | undefined {
+  return image?.cover_xl || image?.cover_big || image?.cover_medium || image?.cover || image?.picture_xl || image?.picture_big || image?.picture_medium || image?.picture;
+}
+
+function mapDeezerArtist(artist: any): any {
+  return {
+    id: String(artist?.id || ''),
+    name: artist?.name || 'Unknown Artist',
+    imageUrl: deezerCover(artist),
+    popularity: artist?.nb_fan || 0,
+    genres: [],
+  };
+}
+
+function mapDeezerAlbum(album: any): any {
+  return {
+    id: String(album?.id || ''),
+    title: album?.title || 'Unknown Album',
+    artist: album?.artist?.name || 'Unknown Artist',
+    artistId: String(album?.artist?.id || ''),
+    coverUrl: deezerCover(album),
+    releaseDate: album?.release_date || undefined,
+    trackCount: album?.nb_tracks || undefined,
+    recordType: 'album',
+  };
+}
+
+function mapDeezerTrack(track: any, albumOverride?: any): any {
+  const album = albumOverride || track?.album;
+  return {
+    id: String(track?.id || ''),
+    title: track?.title || 'Unknown Track',
+    artist: track?.artist?.name || album?.artist?.name || 'Unknown Artist',
+    artistId: String(track?.artist?.id || album?.artist?.id || ''),
+    album: album?.title || 'Unknown Album',
+    albumId: String(album?.id || ''),
+    duration: Math.round(track?.duration || 0),
+    coverUrl: deezerCover(album) || deezerCover(track?.artist),
+    previewUrl: track?.preview || undefined,
+  };
+}
+
+async function searchDeezerTracks(query: string, limit = 10) {
+  if (!query?.trim()) return [];
+  const data = await deezerFetch(`/search/track?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 10)}`);
+  return (data?.data || []).map((track: any) => mapDeezerTrack(track));
+}
+
+async function searchDeezerAlbums(query: string, limit = 10) {
+  if (!query?.trim()) return [];
+  const data = await deezerFetch(`/search/album?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 10)}`);
+  return (data?.data || []).map((album: any) => mapDeezerAlbum(album));
+}
+
+async function searchDeezerArtists(query: string, limit = 10) {
+  if (!query?.trim()) return [];
+  const data = await deezerFetch(`/search/artist?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 10)}`);
+  return (data?.data || []).map((artist: any) => mapDeezerArtist(artist));
+}
+
+async function getDeezerAlbum(id: string) {
+  const data = await deezerFetch(`/album/${id}`);
+  return {
+    ...mapDeezerAlbum(data),
+    tracks: (data?.tracks?.data || []).map((track: any, index: number) => ({
+      ...mapDeezerTrack(track, data),
+      trackNumber: index + 1,
+    })),
+  };
+}
+
+async function getDeezerArtist(id: string) {
+  const [artistResult, albumsResult, topResult, relatedResult] = await Promise.allSettled([
+    deezerFetch(`/artist/${id}`),
+    deezerFetch(`/artist/${id}/albums?limit=50`),
+    deezerFetch(`/artist/${id}/top?limit=10`),
+    deezerFetch(`/artist/${id}/related?limit=10`),
+  ]);
+
+  const artistData = artistResult.status === 'fulfilled' ? artistResult.value : null;
+  const albumsData = albumsResult.status === 'fulfilled' ? albumsResult.value : { data: [] };
+  const topData = topResult.status === 'fulfilled' ? topResult.value : { data: [] };
+  const relatedData = relatedResult.status === 'fulfilled' ? relatedResult.value : { data: [] };
+
+  if (!artistData) {
+    throw new Error(`Deezer artist ${id} not found`);
+  }
+
+  return {
+    ...mapDeezerArtist(artistData),
+    releases: (albumsData?.data || []).map((album: any) => mapDeezerAlbum(album)),
+    topTracks: (topData?.data || []).map((track: any) => mapDeezerTrack(track)),
+    relatedArtists: (relatedData?.data || []).map((artist: any) => mapDeezerArtist(artist)).slice(0, 10),
+  };
+}
+
+async function getDeezerArtistTopTracks(id: string, limit = 10) {
+  const data = await deezerFetch(`/artist/${id}/top?limit=${Math.min(limit, 50)}`);
+  return (data?.data || []).map((track: any) => mapDeezerTrack(track)).slice(0, limit);
+}
+
+async function getRateLimitFallback(action?: string, params?: { id?: unknown; query?: string; limit?: number }) {
+  try {
+    switch (action) {
+      case 'search-tracks':
+        return await searchDeezerTracks(params?.query || '', params?.limit);
+      case 'search-albums':
+        return await searchDeezerAlbums(params?.query || '', params?.limit);
+      case 'search-artists':
+        return await searchDeezerArtists(params?.query || '', params?.limit);
+      case 'get-album':
+        if (isNumericId(params?.id)) {
+          return await getDeezerAlbum(String(params?.id));
+        }
+        break;
+      case 'get-artist':
+        if (isNumericId(params?.id)) {
+          return await getDeezerArtist(String(params?.id));
+        }
+        break;
+      case 'get-artist-top':
+        if (isNumericId(params?.id)) {
+          return await getDeezerArtistTopTracks(String(params?.id), params?.limit);
+        }
+        break;
+    }
+  } catch (error) {
+    console.warn(`Deezer fallback failed for action=${action}:`, error);
+  }
+
+  return getSafeFallback(action, params?.id);
 }
 
 async function getAccessToken(): Promise<string> {
@@ -427,6 +581,7 @@ serve(async (req) => {
   let action: string | undefined;
   let query: string | undefined;
   let id: string | undefined;
+  let limit = 10;
 
   try {
     const body = await req.json();
@@ -436,7 +591,7 @@ serve(async (req) => {
     const { limit: rawLimit = 10, country, market } = body;
     const mkt = market || country || 'US';
     // Spotify Client Credentials search is capped at 10
-    const limit = Math.min(Number(rawLimit) || 10, 10);
+    limit = Math.min(Number(rawLimit) || 10, 10);
 
     console.log(`Spotify request: action=${action}, query=${query}, id=${id}, market=${mkt}`);
 
@@ -489,6 +644,9 @@ serve(async (req) => {
       }
 
       case 'get-album': {
+        if (isNumericId(id)) {
+          return json(await getDeezerAlbum(String(id)));
+        }
         const data = await spotifyFetch(`/albums/${id}?market=${mkt}`);
         const album = {
           ...mapAlbum(data),
@@ -501,6 +659,10 @@ serve(async (req) => {
       }
 
       case 'get-artist': {
+        if (isNumericId(id)) {
+          return json(await getDeezerArtist(String(id)));
+        }
+
         if (!/^[a-zA-Z0-9]{22}$/.test(String(id || ''))) {
           return json({
             id: String(id || ''),
@@ -591,6 +753,10 @@ serve(async (req) => {
       }
 
       case 'get-artist-top': {
+        if (isNumericId(id)) {
+          return json(await getDeezerArtistTopTracks(String(id), limit));
+        }
+
         if (!/^[a-zA-Z0-9]{22}$/.test(String(id || ''))) {
           return json([]);
         }
@@ -886,7 +1052,7 @@ serve(async (req) => {
   } catch (error) {
     if (isSpotifyRateLimitError(error)) {
       console.warn(`Returning fallback for action=${action} due to Spotify rate limit (${error.retryAfter}s) on ${error.resource}`);
-      return json(getRateLimitFallback(action, id));
+      return json(await getRateLimitFallback(action, { id, query, limit }));
     }
 
     console.error('Spotify API error:', error);
