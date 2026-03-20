@@ -76,6 +76,37 @@ async function spotifyFetch(path: string, retries = 2): Promise<any> {
   throw new Error('Max retries exceeded');
 }
 
+async function spotifyFetchUrl(url: string, retries = 2): Promise<any> {
+  for (let i = 0; i <= retries; i++) {
+    const token = await getAccessToken();
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    if (res.status === 401 && i < retries) {
+      cachedToken = null;
+      tokenExpiresAt = 0;
+      continue;
+    }
+
+    if (res.status === 429) {
+      const retryAfter = Math.min(parseInt(res.headers.get('Retry-After') || '2'), 10);
+      console.log(`Rate limited, waiting ${retryAfter}s`);
+      await new Promise(r => setTimeout(r, retryAfter * 1000));
+      continue;
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Spotify API ${res.status}: ${text.substring(0, 200)}`);
+    }
+
+    return await res.json();
+  }
+
+  throw new Error('Max retries exceeded');
+}
+
 async function spotifyFetchOptional<T>(path: string, fallback: T, label: string): Promise<T> {
   try {
     let token = await getAccessToken();
@@ -215,6 +246,24 @@ async function fetchPlaylistTracks(playlistId: string, market: string, maxTracks
   return {
     total: total || collected.length,
     items: collected,
+  };
+}
+
+async function collectPlaylistTracksFromPlaylistResponse(playlistData: any, maxTracks = 200) {
+  const collected = (playlistData?.tracks?.items || []).filter((item: any) => item?.track);
+  let next = playlistData?.tracks?.next as string | null;
+  const total = playlistData?.tracks?.total || collected.length;
+
+  while (next && collected.length < maxTracks) {
+    const page = await spotifyFetchUrl(next);
+    const items = (page?.items || []).filter((item: any) => item?.track);
+    collected.push(...items);
+    next = page?.next || null;
+  }
+
+  return {
+    total,
+    items: collected.slice(0, maxTracks),
   };
 }
 
@@ -450,10 +499,12 @@ serve(async (req) => {
       // ======================== PLAYLISTS ========================
       case 'get-playlist': {
         try {
-          const [playlistData, playlistTracksData] = await Promise.all([
-            spotifyFetch(`/playlists/${id}?market=${mkt}`),
-            fetchPlaylistTracks(String(id), mkt),
-          ]);
+          const playlistData = await spotifyFetch(`/playlists/${id}?market=${mkt}`);
+          let playlistTracksData = await collectPlaylistTracksFromPlaylistResponse(playlistData);
+
+          if (playlistTracksData.items.length === 0 && (playlistData?.tracks?.total || 0) > 0) {
+            playlistTracksData = await fetchPlaylistTracks(String(id), mkt);
+          }
 
           const mappedTracks = playlistTracksData.items
             .map((item: any, index: number) => ({
@@ -535,27 +586,28 @@ serve(async (req) => {
           }
         }
 
-        const enrichedPlaylists = await Promise.all(
-          allPlaylists.slice(0, 6).map(async (playlist) => {
-            if (playlist.trackCount > 0 && playlist.coverUrl) {
-              return playlist;
-            }
+        const enrichedPlaylists = [];
 
-            const details = await spotifyFetchOptional<any | null>(
-              `/playlists/${playlist.id}?fields=images,tracks(total),owner(display_name),description`,
-              null,
-              `artist playlist details ${playlist.id}`,
-            );
+        for (const playlist of allPlaylists.slice(0, 6)) {
+          if (playlist.trackCount > 0 && playlist.coverUrl) {
+            enrichedPlaylists.push(playlist);
+            continue;
+          }
 
-            return {
-              ...playlist,
-              coverUrl: playlist.coverUrl || bestImage(details?.images || []),
-              description: playlist.description || details?.description || '',
-              creator: details?.owner?.display_name || playlist.creator,
-              trackCount: details?.tracks?.total ?? playlist.trackCount ?? 0,
-            };
-          })
-        );
+          const details = await spotifyFetchOptional<any | null>(
+            `/playlists/${playlist.id}?fields=images,tracks(total),owner(display_name),description`,
+            null,
+            `artist playlist details ${playlist.id}`,
+          );
+
+          enrichedPlaylists.push({
+            ...playlist,
+            coverUrl: playlist.coverUrl || bestImage(details?.images || []),
+            description: playlist.description || details?.description || '',
+            creator: details?.owner?.display_name || playlist.creator,
+            trackCount: details?.tracks?.total ?? playlist.trackCount ?? 0,
+          });
+        }
 
         return json(enrichedPlaylists);
       }
