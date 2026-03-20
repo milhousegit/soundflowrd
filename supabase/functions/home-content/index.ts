@@ -85,7 +85,7 @@ serve(async (req) => {
       data = data || [];
     } else if (contentType === 'new_releases') {
       console.log('Fetching new releases via spotify-api...');
-      data = await callSpotifyApi('get-new-releases', { limit: 30, market: country });
+      data = await callSpotifyApi('get-new-releases', { limit: 20, market: country });
       console.log(`Got ${(data || []).length} releases`);
       data = data || [];
     }
