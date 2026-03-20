@@ -287,7 +287,7 @@ serve(async (req) => {
           console.log(`Using search fallback for albums of "${artistName}"`);
           try {
             const searchAlbums = await spotifyFetch(
-              `/search?q=${encodeURIComponent(`artist:"${artistName}"`)}&type=album&limit=50&market=${mkt}`
+              `/search?q=${encodeURIComponent(`artist:"${artistName}"`)}&type=album&limit=10&market=${mkt}`
             );
             releases = (searchAlbums.albums?.items || [])
               .filter((a: any) => {
