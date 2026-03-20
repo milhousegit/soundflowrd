@@ -59,16 +59,12 @@ interface ProtoField {
 function decodeProtobuf(data: Uint8Array): ProtoField[] {
   const fields: ProtoField[] = [];
   let offset = 0;
-
   while (offset < data.length) {
-    if (offset >= data.length) break;
     const [tag, tagLen] = readVarint(data, offset);
     if (tagLen === 0) break;
     offset += tagLen;
-
     const fieldNumber = tag >> 3;
     const wireType = tag & 0x07;
-
     if (wireType === 0) {
       const [value, len] = readVarint(data, offset);
       offset += len;
@@ -77,16 +73,11 @@ function decodeProtobuf(data: Uint8Array): ProtoField[] {
       const [length, lenLen] = readVarint(data, offset);
       offset += lenLen;
       if (offset + length > data.length) break;
-      const value = data.slice(offset, offset + length);
+      fields.push({ fieldNumber, wireType, value: data.slice(offset, offset + length) });
       offset += length;
-      fields.push({ fieldNumber, wireType, value });
-    } else if (wireType === 5) {
-      offset += 4; // fixed32
-    } else if (wireType === 1) {
-      offset += 8; // fixed64
-    } else {
-      break;
-    }
+    } else if (wireType === 5) { offset += 4; }
+    else if (wireType === 1) { offset += 8; }
+    else break;
   }
   return fields;
 }
@@ -94,13 +85,11 @@ function decodeProtobuf(data: Uint8Array): ProtoField[] {
 function extractCanvasResults(data: Uint8Array): { trackUri: string; canvasUrl: string }[] {
   const results: { trackUri: string; canvasUrl: string }[] = [];
   const topFields = decodeProtobuf(data);
-
   for (const field of topFields) {
     if (field.fieldNumber === 1 && field.wireType === 2) {
       const canvasFields = decodeProtobuf(field.value as Uint8Array);
       let canvasUrl = '';
       let trackUri = '';
-
       for (const cf of canvasFields) {
         if (cf.wireType === 2) {
           try {
@@ -111,132 +100,40 @@ function extractCanvasResults(data: Uint8Array): { trackUri: string; canvasUrl: 
             if (cf.fieldNumber === 5 && strValue.startsWith('spotify:track:')) {
               trackUri = strValue;
             }
-          } catch {
-            // not a valid string
-          }
+          } catch { /* not a valid string */ }
         }
       }
-
-      if (canvasUrl && trackUri) {
-        results.push({ trackUri, canvasUrl });
-      }
+      if (canvasUrl && trackUri) results.push({ trackUri, canvasUrl });
     }
   }
   return results;
 }
 
-// --- Spotify helpers ---
+// --- Spotify token (anonymous) ---
 async function getSpotifyToken(): Promise<string | null> {
   try {
-    console.log('Fetching Spotify token...');
     const res = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.9',
         'Referer': 'https://open.spotify.com/',
-        'Origin': 'https://open.spotify.com',
       },
     });
-    console.log('Token response status:', res.status);
     if (res.ok) {
       const data = await res.json();
-      if (data.accessToken) {
-        console.log('Got token via get_access_token');
-        return data.accessToken;
-      }
-      console.log('No accessToken in response');
+      if (data.accessToken) return data.accessToken;
     }
-
-    // Fallback: extract from embed page
-    console.log('Trying embed fallback...');
+    // Fallback: embed page
     const embedRes = await fetch('https://open.spotify.com/embed/track/4cOdK2wGLETKBW3PvgPWqT', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
     });
     if (embedRes.ok) {
       const html = await embedRes.text();
       const m = html.match(/"accessToken":"([^"]+)"/);
-      if (m) {
-        console.log('Got token via embed page');
-        return m[1];
-      }
-    }
-
-    console.error('All token methods failed');
-    return null;
-  } catch (err) {
-    console.error('Token error:', err);
-    return null;
-  }
-}
-
-function normalizeString(str: string): string {
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, '')
-    .trim();
-}
-
-async function getSpotifyUriFromDeezer(deezerId: string): Promise<string | null> {
-  try {
-    // Use Odesli/Songlink API to map Deezer track to Spotify
-    const url = `https://api.song.link/v1-alpha.1/links?url=https%3A%2F%2Fwww.deezer.com%2Ftrack%2F${deezerId}&userCountry=US`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.log(`Songlink API returned ${res.status} for ${deezerId}`);
-      return null;
-    }
-    const data = await res.json();
-    const spotifyId = data?.linksByPlatform?.spotify?.entityUniqueId;
-    if (spotifyId) {
-      // entityUniqueId is like "SPOTIFY_SONG::3n3Ppam7vgaVa1iaRUc9Lp"
-      const id = spotifyId.replace('SPOTIFY_SONG::', '');
-      return `spotify:track:${id}`;
+      if (m) return m[1];
     }
     return null;
-  } catch (err) {
-    console.error(`Songlink error for ${deezerId}:`, err);
-    return null;
-  }
-}
-
-async function fetchCanvasUrls(trackUris: string[], token: string): Promise<Map<string, string>> {
-  const result = new Map<string, string>();
-
-  try {
-    const body = encodeCanvasRequest(trackUris);
-    const res = await fetch('https://spclient.wg.spotify.com/canvaz-cache/v0/canvases', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/x-protobuf',
-        'Accept': 'application/protobuf',
-      },
-      body: body,
-    });
-
-    if (!res.ok) {
-      console.error(`Canvas API returned ${res.status}`);
-      return result;
-    }
-
-    const responseBytes = new Uint8Array(await res.arrayBuffer());
-    const canvases = extractCanvasResults(responseBytes);
-
-    for (const c of canvases) {
-      result.set(c.trackUri, c.canvasUrl);
-    }
-  } catch (error) {
-    console.error('Error fetching canvases:', error);
-  }
-
-  return result;
+  } catch { return null; }
 }
 
 // --- Main handler ---
@@ -246,10 +143,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { tracks } = await req.json() as {
-      tracks: { deezer_id: string; title: string; artist: string }[];
+    const body = await req.json() as {
+      tracks: { id: string; title: string; artist: string }[];
     };
 
+    const tracks = body.tracks;
     if (!tracks?.length) {
       return new Response(
         JSON.stringify({ error: 'No tracks provided' }),
@@ -257,12 +155,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Limit batch size
     const batch = tracks.slice(0, 10);
-
     console.log(`Processing ${batch.length} tracks for canvas...`);
 
-    // Get Spotify token
     const token = await getSpotifyToken();
     if (!token) {
       return new Response(
@@ -271,51 +166,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Search Spotify for each track
-    const spotifyMatches: { deezerId: string; spotifyUri: string }[] = [];
-    for (const track of batch) {
-      const uri = await getSpotifyUriFromDeezer(track.deezer_id);
-      if (uri) {
-        spotifyMatches.push({ deezerId: track.deezer_id, spotifyUri: uri });
-      }
-      // Songlink has rate limits, wait between requests
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    console.log(`Found ${spotifyMatches.length}/${batch.length} Spotify matches`);
-
-    if (spotifyMatches.length === 0) {
-      return new Response(
-        JSON.stringify({ results: [], found: 0, total: batch.length }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // Build Spotify URIs directly from track IDs (already Spotify IDs)
+    const trackUris = batch.map(t => `spotify:track:${t.id}`);
 
     // Fetch canvases in one protobuf request
-    const uris = spotifyMatches.map(m => m.spotifyUri);
-    const canvasMap = await fetchCanvasUrls(uris, token);
-
+    const canvasMap = await fetchCanvasUrls(trackUris, token);
     console.log(`Found ${canvasMap.size} canvas URLs`);
 
-    // Build results and store in database
+    // Store results in database
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const results: { deezer_id: string; canvas_url: string }[] = [];
+    const results: { track_id: string; canvas_url: string }[] = [];
 
-    for (const match of spotifyMatches) {
-      const canvasUrl = canvasMap.get(match.spotifyUri);
+    for (const track of batch) {
+      const uri = `spotify:track:${track.id}`;
+      const canvasUrl = canvasMap.get(uri);
       if (canvasUrl) {
-        results.push({ deezer_id: match.deezerId, canvas_url: canvasUrl });
-
-        // Upsert into track_canvases
-        await supabase
-          .from('track_canvases')
-          .upsert(
-            { track_id: match.deezerId, canvas_url: canvasUrl, updated_at: new Date().toISOString() },
-            { onConflict: 'track_id' }
-          );
+        results.push({ track_id: track.id, canvas_url: canvasUrl });
+        await supabase.from('track_canvases').upsert(
+          { track_id: track.id, canvas_url: canvasUrl, updated_at: new Date().toISOString() },
+          { onConflict: 'track_id' }
+        );
       }
     }
 
@@ -331,3 +204,25 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+async function fetchCanvasUrls(trackUris: string[], token: string): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  try {
+    const body = encodeCanvasRequest(trackUris);
+    const res = await fetch('https://spclient.wg.spotify.com/canvaz-cache/v0/canvases', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/x-protobuf',
+        'Accept': 'application/protobuf',
+      },
+      body,
+    });
+    if (!res.ok) { console.error(`Canvas API returned ${res.status}`); return result; }
+    const responseBytes = new Uint8Array(await res.arrayBuffer());
+    for (const c of extractCanvasResults(responseBytes)) {
+      result.set(c.trackUri, c.canvasUrl);
+    }
+  } catch (error) { console.error('Error fetching canvases:', error); }
+  return result;
+}
