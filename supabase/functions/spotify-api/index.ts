@@ -178,19 +178,25 @@ function mapDeezerTrack(track: any, albumOverride?: any): any {
 async function searchDeezerTracks(query: string, limit = 10) {
   if (!query?.trim()) return [];
   const data = await deezerFetch(`/search/track?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 10)}`);
-  return (data?.data || []).map((track: any) => mapDeezerTrack(track));
+  const results = (data?.data || []).map((track: any) => mapDeezerTrack(track));
+  console.log(`Deezer track fallback for "${query}" returned ${results.length} results`);
+  return results;
 }
 
 async function searchDeezerAlbums(query: string, limit = 10) {
   if (!query?.trim()) return [];
   const data = await deezerFetch(`/search/album?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 10)}`);
-  return (data?.data || []).map((album: any) => mapDeezerAlbum(album));
+  const results = (data?.data || []).map((album: any) => mapDeezerAlbum(album));
+  console.log(`Deezer album fallback for "${query}" returned ${results.length} results`);
+  return results;
 }
 
 async function searchDeezerArtists(query: string, limit = 10) {
   if (!query?.trim()) return [];
   const data = await deezerFetch(`/search/artist?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 10)}`);
-  return (data?.data || []).map((artist: any) => mapDeezerArtist(artist));
+  const results = (data?.data || []).map((artist: any) => mapDeezerArtist(artist));
+  console.log(`Deezer artist fallback for "${query}" returned ${results.length} results`);
+  return results;
 }
 
 async function getDeezerAlbum(id: string) {
@@ -236,6 +242,7 @@ async function getDeezerArtistTopTracks(id: string, limit = 10) {
 
 async function getRateLimitFallback(action?: string, params?: { id?: unknown; query?: string; limit?: number }) {
   try {
+    console.log(`Attempting Deezer fallback for action=${action}, query=${params?.query || ''}, id=${String(params?.id || '')}`);
     switch (action) {
       case 'search-tracks':
         return await searchDeezerTracks(params?.query || '', params?.limit);
