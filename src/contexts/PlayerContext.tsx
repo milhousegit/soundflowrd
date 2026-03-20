@@ -1460,6 +1460,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     },
     [
       audioSourceMode,
+      hybridFallbackChain,
+      selectedScrapingSource,
       addDebugLog,
       clearDebugLogs,
       credentials,
@@ -1467,6 +1469,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       saveFileMapping,
       tryUnlockAudioFromUserGesture,
       user,
+      settings.audioQuality,
+      autoSkipToNext,
+      reportSuccess,
+      reportFailure,
     ]
   );
 
