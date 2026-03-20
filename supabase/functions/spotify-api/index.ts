@@ -76,6 +76,15 @@ async function spotifyFetch(path: string, retries = 2): Promise<any> {
   throw new Error('Max retries exceeded');
 }
 
+async function spotifyFetchOptional<T>(path: string, fallback: T, label: string): Promise<T> {
+  try {
+    return await spotifyFetch(path);
+  } catch (error) {
+    console.warn(`Spotify optional endpoint failed for ${label}:`, error);
+    return fallback;
+  }
+}
+
 // Helpers to get best image
 function bestImage(images: any[]): string | undefined {
   if (!images || images.length === 0) return undefined;
@@ -219,11 +228,23 @@ serve(async (req) => {
           });
         }
 
-        const [artistData, albumsData, topData, relatedData] = await Promise.all([
-          spotifyFetch(`/artists/${id}`),
-          spotifyFetch(`/artists/${id}/albums?include_groups=album,single&limit=50&market=${mkt}`),
-          spotifyFetch(`/artists/${id}/top-tracks?market=${mkt}`).catch(() => ({ tracks: [] })),
-          spotifyFetch(`/artists/${id}/related-artists`).catch(() => ({ artists: [] })),
+        const artistData = await spotifyFetch(`/artists/${id}`);
+        const [albumsData, topData, relatedData] = await Promise.all([
+          spotifyFetchOptional(
+            `/artists/${id}/albums?include_groups=album,single&limit=50&market=${mkt}`,
+            { items: [] },
+            `artist albums ${id}`,
+          ),
+          spotifyFetchOptional(
+            `/artists/${id}/top-tracks?market=${mkt}`,
+            { tracks: [] },
+            `artist top tracks ${id}`,
+          ),
+          spotifyFetchOptional(
+            `/artists/${id}/related-artists`,
+            { artists: [] },
+            `artist related artists ${id}`,
+          ),
         ]);
 
         const artist = {
