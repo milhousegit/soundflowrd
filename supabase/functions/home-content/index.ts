@@ -51,8 +51,7 @@ function bestImage(images: any[]): string | undefined {
 
 async function getPopularArtists(): Promise<any[]> {
   try {
-    // Search for popular artists by genre
-    const data = await spotifyFetch('/search?q=genre:pop&type=artist&limit=20&market=IT');
+    const data = await spotifyFetch('/search?q=genre%3Apop&type=artist&market=IT&limit=20');
     const artists = (data?.artists?.items || []).map((a: any) => ({
       id: a.id,
       name: a.name,
@@ -68,10 +67,12 @@ async function getPopularArtists(): Promise<any[]> {
 
 async function getNewReleases(): Promise<any[]> {
   try {
-    const data = await spotifyFetch('/search?q=tag%3Anew&type=album&limit=20&market=IT');
-    console.log('Spotify search response keys:', Object.keys(data || {}));
+    // Search for recent albums by year
+    const year = new Date().getFullYear();
+    const data = await spotifyFetch(`/search?q=year%3A${year}&type=album&market=IT&limit=20`);
+    console.log('Search result keys:', Object.keys(data || {}));
     const albums = data?.albums?.items || [];
-    console.log(`Found ${albums.length} albums`);
+    console.log(`Found ${albums.length} albums from search`);
     return albums.map((album: any) => ({
       id: album.id,
       title: album.name,
