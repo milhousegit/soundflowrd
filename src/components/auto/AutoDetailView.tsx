@@ -3,7 +3,7 @@ import { ArrowLeft, Music, Disc, User, Play, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Track, Album, Artist } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
-import { getAlbum, getArtistTopTracks, getArtist, getDeezerPlaylist } from '@/lib/deezer';
+import { getAlbum, getArtistTopTracks, getArtist, getDeezerPlaylist } from '@/lib/spotify';
 import { supabase } from '@/integrations/supabase/client';
 
 export type DetailType = 'album' | 'artist' | 'playlist' | 'soundflow-playlist';
