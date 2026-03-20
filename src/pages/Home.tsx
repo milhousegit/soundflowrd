@@ -313,8 +313,8 @@ const Home: React.FC = () => {
               coverUrl: playlistResult.data?.cover_url || null,
               trackCount: tracksResult.count || 0
             };
-          } else if (playlistId.length > 6) {
-            // Long ID = Deezer playlist - fetch from API using POST with JSON body
+          } else if (/^[a-zA-Z0-9]{22}$/.test(playlistId)) {
+            // Spotify playlist ID (22 char base62) - fetch from Spotify API
             try {
               const response = await fetch(
                 `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/spotify-api`,
@@ -342,7 +342,7 @@ const Home: React.FC = () => {
               displayData[chart.id] = { coverUrl: null, trackCount: 0 };
             }
           } else {
-            // Short ID = Editorial chart ID - can't get cover directly, skip
+            // Unknown/legacy ID format (e.g. old Deezer numeric IDs) - skip
             displayData[chart.id] = { coverUrl: null, trackCount: 0 };
           }
         }

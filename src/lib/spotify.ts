@@ -43,18 +43,18 @@ async function spotifyInvoke(body: Record<string, any>): Promise<any> {
 // ======================== SEARCH ========================
 
 export async function searchArtists(query: string): Promise<Artist[]> {
-  const data = await spotifyInvoke({ action: 'search-artists', query, limit: 20 });
+  const data = await spotifyInvoke({ action: 'search-artists', query, limit: 10 });
   return filterMergedArtists(data || []);
 }
 
 export async function searchAlbums(query: string): Promise<Album[]> {
-  const data = await spotifyInvoke({ action: 'search-albums', query, limit: 20 });
+  const data = await spotifyInvoke({ action: 'search-albums', query, limit: 10 });
   const merges = await getMergedArtists();
   return replaceMergedArtistIds(data || [], merges);
 }
 
 export async function searchTracks(query: string): Promise<Track[]> {
-  const data = await spotifyInvoke({ action: 'search-tracks', query, limit: 30 });
+  const data = await spotifyInvoke({ action: 'search-tracks', query, limit: 10 });
   const merges = await getMergedArtists();
   return replaceMergedArtistIds(data || [], merges);
 }
@@ -155,26 +155,26 @@ export async function getArtistTopTracks(id: string): Promise<Track[]> {
 // ======================== CHARTS & BROWSE ========================
 
 export async function getChart(): Promise<{ tracks: Track[]; albums: Album[]; artists: Artist[] }> {
-  return spotifyInvoke({ action: 'get-chart', limit: 20 });
+  return spotifyInvoke({ action: 'get-chart', limit: 10 });
 }
 
 export async function getNewReleases(): Promise<Album[]> {
-  const data = await spotifyInvoke({ action: 'get-new-releases', limit: 20 });
+  const data = await spotifyInvoke({ action: 'get-new-releases', limit: 10 });
   return data || [];
 }
 
 export async function getTrendingChart(): Promise<{ tracks: Track[]; albums: Album[] }> {
-  const data = await spotifyInvoke({ action: 'get-chart', limit: 20 });
+  const data = await spotifyInvoke({ action: 'get-chart', limit: 10 });
   return { tracks: data?.tracks || [], albums: data?.albums || [] };
 }
 
 export async function getPopularArtists(): Promise<Artist[]> {
-  const data = await spotifyInvoke({ action: 'get-popular-artists', limit: 12 });
+  const data = await spotifyInvoke({ action: 'get-popular-artists', limit: 10 });
   return data || [];
 }
 
 export async function getCountryChart(country: string): Promise<Track[]> {
-  const data = await spotifyInvoke({ action: 'get-country-chart', country, limit: 20 });
+  const data = await spotifyInvoke({ action: 'get-country-chart', country, limit: 10 });
   return data || [];
 }
 
@@ -195,7 +195,7 @@ export interface SpotifyPlaylist {
 export type DeezerPlaylist = SpotifyPlaylist;
 
 export async function searchSpotifyPlaylists(query: string): Promise<SpotifyPlaylist[]> {
-  const data = await spotifyInvoke({ action: 'search-playlists', query, limit: 20 });
+  const data = await spotifyInvoke({ action: 'search-playlists', query, limit: 10 });
   return data || [];
 }
 

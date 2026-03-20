@@ -137,8 +137,10 @@ serve(async (req) => {
   }
 
   try {
-    const { action, query, id, limit = 20, country, market } = await req.json();
+    const { action, query, id, limit: rawLimit = 10, country, market } = await req.json();
     const mkt = market || country || 'US';
+    // Spotify Client Credentials search is capped at 10
+    const limit = Math.min(Number(rawLimit) || 10, 10);
 
     console.log(`Spotify request: action=${action}, query=${query}, id=${id}, market=${mkt}`);
 
