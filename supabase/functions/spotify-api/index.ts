@@ -5,159 +5,76 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SPOTIFY_API = 'https://api.spotify.com/v1';
-const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const DEEZER_API = 'https://api.deezer.com';
 
-// In-memory token cache
-let cachedToken: string | null = null;
-let tokenExpiresAt = 0;
+// Spotify kept ONLY for playlist backward compatibility (existing Spotify playlist IDs)
+const SPOTIFY_API = 'https://api.spotify.com/v1';
+const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
+let cachedSpotifyToken: string | null = null;
+let spotifyTokenExpiresAt = 0;
 
-class SpotifyRateLimitError extends Error {
-  retryAfter: number;
-  resource: string;
+async function getSpotifyToken(): Promise<string> {
+  const now = Date.now();
+  if (cachedSpotifyToken && now < spotifyTokenExpiresAt - 60_000) return cachedSpotifyToken;
+  const clientId = Deno.env.get('SPOTIFY_CLIENT_ID');
+  const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
+  if (!clientId || !clientSecret) throw new Error('Missing Spotify credentials');
+  const res = await fetch(SPOTIFY_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+    },
+    body: 'grant_type=client_credentials',
+  });
+  if (!res.ok) throw new Error(`Spotify token failed ${res.status}`);
+  const data = await res.json();
+  cachedSpotifyToken = data.access_token;
+  spotifyTokenExpiresAt = now + data.expires_in * 1000;
+  return cachedSpotifyToken!;
+}
 
-  constructor(resource: string, retryAfter: number) {
-    super(`Spotify rate limited (${retryAfter}s wait required)`);
-    this.name = 'SpotifyRateLimitError';
-    this.retryAfter = retryAfter;
-    this.resource = resource;
+async function spotifyFetchPlaylist(url: string, retries = 2): Promise<any> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const token = await getSpotifyToken();
+    const fullUrl = url.startsWith('http') ? url : `${SPOTIFY_API}${url}`;
+    const res = await fetch(fullUrl, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (res.status === 401 && attempt < retries) {
+      cachedSpotifyToken = null;
+      spotifyTokenExpiresAt = 0;
+      continue;
+    }
+    if (res.status === 429) {
+      const wait = Math.min(parseInt(res.headers.get('Retry-After') || '2'), 5);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, wait * 1000));
+        continue;
+      }
+      throw new Error('Spotify rate limited');
+    }
+    if (!res.ok) throw new Error(`Spotify ${res.status}`);
+    return await res.json();
   }
+  throw new Error('Max retries exceeded');
 }
 
-function isSpotifyRateLimitError(error: unknown): error is SpotifyRateLimitError {
-  return error instanceof SpotifyRateLimitError || (error instanceof Error && error.name === 'SpotifyRateLimitError');
-}
-
-function getArtistFallback(id: unknown) {
-  return {
-    id: String(id || ''),
-    name: 'Unknown Artist',
-    imageUrl: undefined,
-    popularity: 0,
-    genres: [],
-    releases: [],
-    topTracks: [],
-    relatedArtists: [],
-    error: true,
-    rateLimited: true,
-  };
-}
-
-function getAlbumFallback(id: unknown) {
-  return {
-    id: String(id || ''),
-    title: '',
-    artist: '',
-    artistId: '',
-    coverUrl: undefined,
-    releaseDate: undefined,
-    trackCount: 0,
-    recordType: 'album',
-    tracks: [],
-    error: true,
-    rateLimited: true,
-  };
-}
-
-function getPlaylistFallback(id: unknown) {
-  return {
-    id: String(id || ''),
-    title: '',
-    description: '',
-    coverUrl: null,
-    trackCount: 0,
-    creator: '',
-    duration: 0,
-    tracks: [],
-    error: true,
-    rateLimited: true,
-  };
-}
-
-function getSafeFallback(action?: string, id?: unknown) {
-  switch (action) {
-    case 'search-tracks':
-    case 'search-albums':
-    case 'search-artists':
-    case 'search-playlists':
-    case 'get-artist-top':
-    case 'get-artist-playlists':
-    case 'get-new-releases':
-    case 'get-popular-artists':
-    case 'get-track-radio':
-    case 'get-country-chart':
-    case 'get-artist-albums':
-    case 'get-several-artists':
-      return [];
-    case 'get-track':
-      return null;
-    case 'get-album':
-      return getAlbumFallback(id);
-    case 'get-artist':
-      return getArtistFallback(id);
-    case 'get-playlist':
-      return getPlaylistFallback(id);
-    case 'get-chart':
-      return {
-        tracks: [],
-        albums: [],
-        artists: [],
-        rateLimited: true,
-      };
-    default:
-      return {
-        error: 'Spotify temporarily unavailable',
-        rateLimited: true,
-      };
-  }
-}
-
-function isNumericId(value: unknown): boolean {
-  return /^\d+$/.test(String(value || ''));
-}
+// ======================== DEEZER HELPERS ========================
 
 async function deezerFetch(path: string): Promise<any> {
-  const response = await fetch(`${DEEZER_API}${path}`, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0',
-      'Accept': 'application/json',
-    },
+  const res = await fetch(`${DEEZER_API}${path}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
   });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Deezer API ${response.status}: ${text.substring(0, 200)}`);
-  }
-
-  return await response.json();
+  if (!res.ok) throw new Error(`Deezer ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || 'Deezer error');
+  return data;
 }
 
-function deezerCover(image: any): string | undefined {
-  return image?.cover_xl || image?.cover_big || image?.cover_medium || image?.cover || image?.picture_xl || image?.picture_big || image?.picture_medium || image?.picture;
-}
-
-function mapDeezerArtist(artist: any): any {
-  return {
-    id: String(artist?.id || ''),
-    name: artist?.name || 'Unknown Artist',
-    imageUrl: deezerCover(artist),
-    popularity: artist?.nb_fan || 0,
-    genres: [],
-  };
-}
-
-function mapDeezerAlbum(album: any): any {
-  return {
-    id: String(album?.id || ''),
-    title: album?.title || 'Unknown Album',
-    artist: album?.artist?.name || 'Unknown Artist',
-    artistId: String(album?.artist?.id || ''),
-    coverUrl: deezerCover(album),
-    releaseDate: album?.release_date || undefined,
-    trackCount: album?.nb_tracks || undefined,
-    recordType: 'album',
-  };
+function deezerCover(obj: any): string | undefined {
+  return obj?.cover_xl || obj?.cover_big || obj?.cover_medium || obj?.cover ||
+    obj?.picture_xl || obj?.picture_big || obj?.picture_medium || obj?.picture;
 }
 
 function mapDeezerTrack(track: any, albumOverride?: any): any {
@@ -175,898 +92,327 @@ function mapDeezerTrack(track: any, albumOverride?: any): any {
   };
 }
 
-async function searchDeezerTracks(query: string, limit = 10) {
-  if (!query?.trim()) return [];
-  const data = await deezerFetch(`/search/track?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 10)}`);
-  const results = (data?.data || []).map((track: any) => mapDeezerTrack(track));
-  console.log(`Deezer track fallback for "${query}" returned ${results.length} results`);
-  return results;
-}
-
-async function searchDeezerAlbums(query: string, limit = 10) {
-  if (!query?.trim()) return [];
-  const data = await deezerFetch(`/search/album?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 10)}`);
-  const results = (data?.data || []).map((album: any) => mapDeezerAlbum(album));
-  console.log(`Deezer album fallback for "${query}" returned ${results.length} results`);
-  return results;
-}
-
-async function searchDeezerArtists(query: string, limit = 10) {
-  if (!query?.trim()) return [];
-  const data = await deezerFetch(`/search/artist?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 10)}`);
-  const results = (data?.data || []).map((artist: any) => mapDeezerArtist(artist));
-  console.log(`Deezer artist fallback for "${query}" returned ${results.length} results`);
-  return results;
-}
-
-async function getDeezerAlbum(id: string) {
-  const data = await deezerFetch(`/album/${id}`);
+function mapDeezerAlbum(album: any): any {
   return {
-    ...mapDeezerAlbum(data),
-    tracks: (data?.tracks?.data || []).map((track: any, index: number) => ({
-      ...mapDeezerTrack(track, data),
-      trackNumber: index + 1,
-    })),
+    id: String(album?.id || ''),
+    title: album?.title || 'Unknown Album',
+    artist: album?.artist?.name || 'Unknown Artist',
+    artistId: String(album?.artist?.id || ''),
+    coverUrl: deezerCover(album),
+    releaseDate: album?.release_date || undefined,
+    trackCount: album?.nb_tracks || undefined,
+    recordType: album?.record_type || 'album',
   };
 }
 
-async function getDeezerArtist(id: string) {
-  const [artistResult, albumsResult, topResult, relatedResult] = await Promise.allSettled([
-    deezerFetch(`/artist/${id}`),
-    deezerFetch(`/artist/${id}/albums?limit=50`),
-    deezerFetch(`/artist/${id}/top?limit=10`),
-    deezerFetch(`/artist/${id}/related?limit=10`),
-  ]);
-
-  const artistData = artistResult.status === 'fulfilled' ? artistResult.value : null;
-  const albumsData = albumsResult.status === 'fulfilled' ? albumsResult.value : { data: [] };
-  const topData = topResult.status === 'fulfilled' ? topResult.value : { data: [] };
-  const relatedData = relatedResult.status === 'fulfilled' ? relatedResult.value : { data: [] };
-
-  if (!artistData) {
-    throw new Error(`Deezer artist ${id} not found`);
-  }
-
+function mapDeezerArtist(artist: any): any {
   return {
-    ...mapDeezerArtist(artistData),
-    releases: (albumsData?.data || []).map((album: any) => mapDeezerAlbum(album)),
-    topTracks: (topData?.data || []).map((track: any) => mapDeezerTrack(track)),
-    relatedArtists: (relatedData?.data || []).map((artist: any) => mapDeezerArtist(artist)).slice(0, 10),
+    id: String(artist?.id || ''),
+    name: artist?.name || 'Unknown Artist',
+    imageUrl: deezerCover(artist),
+    popularity: artist?.nb_fan || 0,
+    genres: [],
   };
 }
 
-async function getDeezerArtistTopTracks(id: string, limit = 10) {
-  const data = await deezerFetch(`/artist/${id}/top?limit=${Math.min(limit, 50)}`);
-  return (data?.data || []).map((track: any) => mapDeezerTrack(track)).slice(0, limit);
+// Spotify track/playlist mapping (backward compat)
+function bestSpotifyImage(images: any[]): string | undefined {
+  if (!images?.length) return undefined;
+  return [...images].sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url;
 }
 
-async function getRateLimitFallback(action?: string, params?: { id?: unknown; query?: string; limit?: number }) {
-  try {
-    console.log(`Attempting Deezer fallback for action=${action}, query=${params?.query || ''}, id=${String(params?.id || '')}`);
-    switch (action) {
-      case 'search-tracks':
-        return await searchDeezerTracks(params?.query || '', params?.limit);
-      case 'search-albums':
-        return await searchDeezerAlbums(params?.query || '', params?.limit);
-      case 'search-artists':
-        return await searchDeezerArtists(params?.query || '', params?.limit);
-      case 'get-album':
-        if (isNumericId(params?.id)) {
-          return await getDeezerAlbum(String(params?.id));
-        }
-        break;
-      case 'get-artist':
-        if (isNumericId(params?.id)) {
-          return await getDeezerArtist(String(params?.id));
-        }
-        break;
-      case 'get-artist-top':
-        if (isNumericId(params?.id)) {
-          return await getDeezerArtistTopTracks(String(params?.id), params?.limit);
-        }
-        break;
-    }
-  } catch (error) {
-    console.warn(`Deezer fallback failed for action=${action}:`, error);
-  }
-
-  return getSafeFallback(action, params?.id);
-}
-
-async function getAccessToken(): Promise<string> {
-  const now = Date.now();
-  if (cachedToken && now < tokenExpiresAt - 60_000) {
-    return cachedToken;
-  }
-
-  const clientId = Deno.env.get('SPOTIFY_CLIENT_ID');
-  const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
-  if (!clientId || !clientSecret) {
-    throw new Error('Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET');
-  }
-
-  const res = await fetch(SPOTIFY_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-    },
-    body: 'grant_type=client_credentials',
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Token request failed ${res.status}: ${text}`);
-  }
-
-  const data = await res.json();
-  cachedToken = data.access_token;
-  tokenExpiresAt = now + data.expires_in * 1000;
-  console.log('Spotify token refreshed, expires in', data.expires_in, 's');
-  return cachedToken!;
-}
-
-async function spotifyFetch(path: string, retries = 2): Promise<any> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    const token = await getAccessToken();
-    const res = await fetch(`${SPOTIFY_API}${path}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-
-    if (res.status === 401 && attempt < retries) {
-      cachedToken = null;
-      tokenExpiresAt = 0;
-      continue;
-    }
-
-    if (res.status === 429) {
-      const raw = parseInt(res.headers.get('Retry-After') || '2');
-      // If Retry-After is huge (>30s), the API is severely throttled - fail fast
-      if (raw > 30) {
-        console.warn(`Spotify severely rate limited (Retry-After: ${raw}s) on ${path}`);
-        throw new SpotifyRateLimitError(path, raw);
-      }
-      const wait = Math.min(raw, 5);
-      if (attempt < retries) {
-        console.log(`Rate limited on ${path}, waiting ${wait}s (attempt ${attempt + 1})`);
-        await new Promise(r => setTimeout(r, wait * 1000));
-        continue;
-      }
-      throw new SpotifyRateLimitError(path, raw);
-    }
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Spotify API ${res.status}: ${text.substring(0, 200)}`);
-    }
-
-    return await res.json();
-  }
-  throw new Error('Max retries exceeded');
-}
-
-async function spotifyFetchUrl(url: string, retries = 2): Promise<any> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    const token = await getAccessToken();
-    const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-
-    if (res.status === 401 && attempt < retries) {
-      cachedToken = null;
-      tokenExpiresAt = 0;
-      continue;
-    }
-
-    if (res.status === 429) {
-      const raw = parseInt(res.headers.get('Retry-After') || '2');
-      if (raw > 30) {
-        console.warn(`Spotify severely rate limited (Retry-After: ${raw}s) on URL`);
-        throw new SpotifyRateLimitError(url, raw);
-      }
-      const wait = Math.min(raw, 5);
-      if (attempt < retries) {
-        await new Promise(r => setTimeout(r, wait * 1000));
-        continue;
-      }
-      throw new SpotifyRateLimitError(url, raw);
-    }
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Spotify API ${res.status}: ${text.substring(0, 200)}`);
-    }
-
-    return await res.json();
-  }
-  throw new Error('Max retries exceeded');
-}
-
-async function spotifyFetchOptional<T>(path: string, fallback: T, label: string): Promise<T> {
-  try {
-    let token = await getAccessToken();
-
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await fetch(`${SPOTIFY_API}${path}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      if (res.status === 401 && attempt === 0) {
-        cachedToken = null;
-        tokenExpiresAt = 0;
-        token = await getAccessToken();
-        continue;
-      }
-
-      if (res.status === 403 || res.status === 429) {
-        const text = await res.text();
-        console.warn(`Spotify optional endpoint blocked for ${label}: ${res.status} ${text.substring(0, 120)}`);
-        return fallback;
-      }
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.warn(`Spotify optional endpoint failed for ${label}: ${res.status} ${text.substring(0, 120)}`);
-        return fallback;
-      }
-
-      return await res.json();
-    }
-
-    return fallback;
-  } catch (error) {
-    console.warn(`Spotify optional endpoint failed for ${label}:`, error);
-    return fallback;
-  }
-}
-
-// Helpers to get best image
-function bestImage(images: any[]): string | undefined {
-  if (!images || images.length === 0) return undefined;
-  // Prefer 640px, then largest available
-  const sorted = [...images].sort((a, b) => (b.width || 0) - (a.width || 0));
-  return sorted[0]?.url;
-}
-
-function mediumImage(images: any[]): string | undefined {
-  if (!images || images.length === 0) return undefined;
-  // Prefer ~300px for cards
-  const medium = images.find(i => i.width && i.width >= 250 && i.width <= 400);
-  if (medium) return medium.url;
-  const sorted = [...images].sort((a, b) => (b.width || 0) - (a.width || 0));
-  return sorted[0]?.url;
-}
-
-function normalizeText(value: string | undefined | null): string {
-  return (value || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-function artistMatches(artists: any[] | undefined, artistId?: string, artistName?: string): boolean {
-  const normalizedArtistName = normalizeText(artistName);
-  return (artists || []).some((artist) => {
-    if (artistId && artist?.id === artistId) return true;
-    if (!normalizedArtistName) return false;
-    return normalizeText(artist?.name) === normalizedArtistName;
-  });
-}
-
-function dedupeById<T extends { id?: string }>(items: T[]): T[] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    if (!item?.id || seen.has(item.id)) return false;
-    seen.add(item.id);
-    return true;
-  });
-}
-
-async function searchArtistTracksFallback(artistId: string, artistName: string, market: string, limit = 10) {
-  const searchQueries = [
-    `artist:"${artistName}"`,
-    artistName,
-  ];
-
-  const foundTracks: any[] = [];
-  const seenIds = new Set<string>();
-
-  for (const searchQuery of searchQueries) {
-    try {
-      const searchData = await spotifyFetch(
-        `/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=${Math.min(limit, 10)}&market=${market}`,
-      );
-
-      for (const track of searchData.tracks?.items || []) {
-        if (!track?.id || seenIds.has(track.id)) continue;
-        if (!artistMatches(track.artists, artistId, artistName)) continue;
-        seenIds.add(track.id);
-        foundTracks.push(track);
-        if (foundTracks.length >= limit) {
-          return foundTracks.map((item) => mapTrack(item));
-        }
-      }
-    } catch (error) {
-      console.warn(`Search fallback for artist tracks failed for ${artistName}:`, error);
-    }
-  }
-
-  return foundTracks.map((item) => mapTrack(item));
-}
-
-async function fetchPlaylistTracks(playlistId: string, market: string, maxTracks = 200) {
-  const collected: any[] = [];
-  let offset = 0;
-  let total = 0;
-
-  while (offset < maxTracks) {
-    const pageLimit = Math.min(100, maxTracks - offset);
-    const data = await spotifyFetch(
-      `/playlists/${playlistId}/tracks?market=${market}&limit=${pageLimit}&offset=${offset}`,
-    );
-
-    const items = data.items || [];
-    total = data.total || total;
-    collected.push(...items.filter((item: any) => item?.track));
-
-    if (!data.next || items.length === 0) {
-      break;
-    }
-
-    offset += items.length;
-  }
-
-  return {
-    total: total || collected.length,
-    items: collected,
-  };
-}
-
-async function collectPlaylistTracksFromPlaylistResponse(playlistData: any, maxTracks = 200) {
-  const collected = (playlistData?.tracks?.items || []).filter((item: any) => item?.track);
-  let next = playlistData?.tracks?.next as string | null;
-  const total = playlistData?.tracks?.total || collected.length;
-
-  while (next && collected.length < maxTracks) {
-    const page = await spotifyFetchUrl(next);
-    const items = (page?.items || []).filter((item: any) => item?.track);
-    collected.push(...items);
-    next = page?.next || null;
-  }
-
-  return {
-    total,
-    items: collected.slice(0, maxTracks),
-  };
-}
-
-function mapTrack(track: any, albumOverride?: any): any {
+function mapSpotifyTrack(track: any, albumOverride?: any): any {
   const album = albumOverride || track.album;
   return {
-    id: track.id,
+    id: String(track.id),
     title: track.name,
     artist: track.artists?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
-    artistId: track.artists?.[0]?.id || '',
+    artistId: String(track.artists?.[0]?.id || ''),
     album: album?.name || 'Unknown Album',
-    albumId: album?.id || '',
+    albumId: String(album?.id || ''),
     duration: Math.round((track.duration_ms || 0) / 1000),
-    coverUrl: bestImage(album?.images),
+    coverUrl: bestSpotifyImage(album?.images),
     previewUrl: track.preview_url || undefined,
   };
 }
 
-function mapAlbum(album: any): any {
-  return {
-    id: album.id,
-    title: album.name,
-    artist: album.artists?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
-    artistId: album.artists?.[0]?.id || '',
-    coverUrl: bestImage(album.images),
-    releaseDate: album.release_date || undefined,
-    trackCount: album.total_tracks || undefined,
-    recordType: album.album_type || 'album',
-  };
+function isSpotifyId(value: unknown): boolean {
+  return /^[a-zA-Z0-9]{22}$/.test(String(value || ''));
 }
 
-function mapArtist(artist: any): any {
-  return {
-    id: artist.id,
-    name: artist.name,
-    imageUrl: bestImage(artist.images),
-    popularity: artist.popularity || artist.followers?.total || 0,
-    genres: artist.genres || [],
-  };
-}
+// ======================== HANDLER ========================
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  let action: string | undefined;
-  let query: string | undefined;
-  let id: string | undefined;
-  let limit = 10;
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
     const body = await req.json();
-    action = body.action;
-    query = body.query;
-    id = body.id;
-    const { limit: rawLimit = 10, country, market } = body;
-    const mkt = market || country || 'US';
-    // Spotify Client Credentials search is capped at 10
-    limit = Math.min(Number(rawLimit) || 10, 10);
+    const { action, query, id, limit: rawLimit = 10, country, market } = body;
+    const limit = Math.min(Number(rawLimit) || 10, 50);
+    const mkt = market || country || 'IT';
 
-    console.log(`Spotify request: action=${action}, query=${query}, id=${id}, market=${mkt}`);
+    console.log(`API request: action=${action}, query=${query || ''}, id=${id || ''}, limit=${limit}`);
 
     switch (action) {
-      // ======================== SEARCH ========================
+      // ======================== SEARCH (Deezer) ========================
       case 'search-tracks': {
-        const data = await spotifyFetch(
-          `/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}&market=${mkt}`
-        );
-        const tracks = (data.tracks?.items || []).map((t: any) => mapTrack(t));
-        return json(tracks);
+        if (!query?.trim()) return json([]);
+        const data = await deezerFetch(`/search/track?q=${encodeURIComponent(query)}&limit=${limit}`);
+        return json((data?.data || []).map((t: any) => mapDeezerTrack(t)));
       }
-
       case 'search-albums': {
-        const data = await spotifyFetch(
-          `/search?q=${encodeURIComponent(query)}&type=album&limit=${limit}&market=${mkt}`
-        );
-        const albums = (data.albums?.items || []).map((a: any) => mapAlbum(a));
-        return json(albums);
+        if (!query?.trim()) return json([]);
+        const data = await deezerFetch(`/search/album?q=${encodeURIComponent(query)}&limit=${limit}`);
+        return json((data?.data || []).map((a: any) => mapDeezerAlbum(a)));
       }
-
       case 'search-artists': {
-        const data = await spotifyFetch(
-          `/search?q=${encodeURIComponent(query)}&type=artist&limit=${limit}&market=${mkt}`
-        );
-        const artists = (data.artists?.items || []).map((a: any) => mapArtist(a));
-        return json(artists);
+        if (!query?.trim()) return json([]);
+        const data = await deezerFetch(`/search/artist?q=${encodeURIComponent(query)}&limit=${limit}`);
+        return json((data?.data || []).map((a: any) => mapDeezerArtist(a)));
       }
-
       case 'search-playlists': {
-        const data = await spotifyFetch(
-          `/search?q=${encodeURIComponent(query)}&type=playlist&limit=${limit}&market=${mkt}`
-        );
-        const playlists = (data.playlists?.items || []).filter(Boolean).map((p: any) => ({
-          id: p.id,
-          title: p.name,
-          description: p.description || '',
-          coverUrl: bestImage(p.images),
-          trackCount: p.tracks?.total || 0,
-          creator: p.owner?.display_name || 'Spotify',
-          isSpotifyPlaylist: true,
-        }));
-        return json(playlists);
+        if (!query?.trim()) return json([]);
+        const data = await deezerFetch(`/search/playlist?q=${encodeURIComponent(query)}&limit=${limit}`);
+        return json((data?.data || []).map((p: any) => ({
+          id: String(p.id),
+          title: p.title,
+          description: '',
+          coverUrl: deezerCover(p),
+          trackCount: p.nb_tracks || 0,
+          creator: p.user?.name || 'Deezer',
+          isDeezerPlaylist: true,
+        })));
       }
 
-      // ======================== GET SINGLE ========================
+      // ======================== GET SINGLE (Deezer) ========================
       case 'get-track': {
-        const data = await spotifyFetch(`/tracks/${id}?market=${mkt}`);
-        return json(mapTrack(data));
+        const data = await deezerFetch(`/track/${id}`);
+        return json(mapDeezerTrack(data));
       }
-
       case 'get-album': {
-        if (isNumericId(id)) {
-          return json(await getDeezerAlbum(String(id)));
-        }
-        const data = await spotifyFetch(`/albums/${id}?market=${mkt}`);
-        const album = {
-          ...mapAlbum(data),
-          tracks: (data.tracks?.items || []).map((track: any, index: number) => ({
-            ...mapTrack(track, data),
-            trackNumber: index + 1,
-          })),
-        };
-        return json(album);
-      }
-
-      case 'get-artist': {
-        if (isNumericId(id)) {
-          return json(await getDeezerArtist(String(id)));
-        }
-
-        if (!/^[a-zA-Z0-9]{22}$/.test(String(id || ''))) {
-          return json({
-            id: String(id || ''),
-            name: 'Unknown Artist',
-            imageUrl: undefined,
-            popularity: 0,
-            genres: [],
-            releases: [],
-            topTracks: [],
-            relatedArtists: [],
-            error: true,
-          });
-        }
-
-        const artistData = await spotifyFetch(`/artists/${id}`);
-        const [albumsData, topData, relatedData] = await Promise.all([
-          spotifyFetchOptional(
-            `/artists/${id}/albums?include_groups=album,single&limit=50&market=${mkt}`,
-            { items: [] },
-            `artist albums ${id}`,
-          ),
-          spotifyFetchOptional(
-            `/artists/${id}/top-tracks?market=${mkt}`,
-            { tracks: [] },
-            `artist top tracks ${id}`,
-          ),
-          spotifyFetchOptional(
-            `/artists/${id}/related-artists`,
-            { artists: [] },
-            `artist related artists ${id}`,
-          ),
-        ]);
-
-        const artistName = artistData.name || '';
-
-        // Search-based fallbacks when direct endpoints are blocked (403/429)
-        let releases = (albumsData.items || []).map((a: any) => mapAlbum(a));
-        let topTracks = (topData.tracks || []).map((t: any) => mapTrack(t));
-        let relatedArtists = (relatedData.artists || []).slice(0, 10).map((a: any) => mapArtist(a));
-
-        if (releases.length === 0 && artistName) {
-          console.log(`Using search fallback for albums of "${artistName}"`);
-          try {
-            const searchAlbums = await spotifyFetch(
-              `/search?q=${encodeURIComponent(`artist:"${artistName}"`)}&type=album&limit=10&market=${mkt}`
-            );
-            releases = (searchAlbums.albums?.items || [])
-              .filter((a: any) => {
-                const artists = (a.artists || []).map((ar: any) => ar.name?.toLowerCase());
-                return artists.includes(artistName.toLowerCase());
-              })
-              .map((a: any) => mapAlbum(a));
-          } catch (e) {
-            console.warn('Search fallback for albums failed:', e);
-          }
-        }
-
-        if (topTracks.length === 0 && artistName) {
-          console.log(`Using search fallback for top tracks of "${artistName}"`);
-          topTracks = await searchArtistTracksFallback(id, artistName, mkt, 10);
-        }
-
-        topTracks = dedupeById(topTracks).slice(0, 10);
-
-        if (relatedArtists.length === 0 && artistData.genres?.length > 0) {
-          console.log(`Using search fallback for related artists via genre`);
-          try {
-            const genre = artistData.genres[0];
-            const searchRelated = await spotifyFetch(
-              `/search?q=${encodeURIComponent(`genre:"${genre}"`)}&type=artist&limit=10&market=${mkt}`
-            );
-            relatedArtists = (searchRelated.artists?.items || [])
-              .filter((a: any) => a.id !== id)
-              .slice(0, 10)
-              .map((a: any) => mapArtist(a));
-          } catch (e) {
-            console.warn('Search fallback for related artists failed:', e);
-          }
-        }
-
-        const artist = {
-          ...mapArtist(artistData),
-          releases,
-          topTracks,
-          relatedArtists,
-        };
-        return json(artist);
-      }
-
-      case 'get-artist-top': {
-        if (isNumericId(id)) {
-          return json(await getDeezerArtistTopTracks(String(id), limit));
-        }
-
-        if (!/^[a-zA-Z0-9]{22}$/.test(String(id || ''))) {
-          return json([]);
-        }
-
-        const topResult = await spotifyFetchOptional(
-          `/artists/${id}/top-tracks?market=${mkt}`,
-          { tracks: [] },
-          `get-artist-top ${id}`,
-        );
-        let topResultTracks = (topResult.tracks || []).slice(0, limit).map((t: any) => mapTrack(t));
-
-        // Search fallback if direct endpoint blocked
-        if (topResultTracks.length === 0) {
-          try {
-            const artistInfo = await spotifyFetch(`/artists/${id}`);
-            const aName = artistInfo.name;
-            if (aName) {
-              topResultTracks = await searchArtistTracksFallback(id, aName, mkt, limit);
-            }
-          } catch (e) {
-            console.warn('Search fallback for get-artist-top failed:', e);
-          }
-        }
-
-        return json(dedupeById(topResultTracks).slice(0, limit));
-      }
-
-      // ======================== PLAYLISTS ========================
-      case 'get-playlist': {
-        try {
-          const playlistData = await spotifyFetch(`/playlists/${id}?market=${mkt}`);
-          let playlistTracksData = await collectPlaylistTracksFromPlaylistResponse(playlistData);
-
-          if (playlistTracksData.items.length === 0 && (playlistData?.tracks?.total || 0) > 0) {
-            playlistTracksData = await fetchPlaylistTracks(String(id), mkt);
-          }
-
-          const mappedTracks = playlistTracksData.items
-            .map((item: any, index: number) => ({
-              ...mapTrack(item.track),
-              trackNumber: index + 1,
-            }))
-            .filter((track: any) => !!track.id);
-
-          const playlist = {
-            id: playlistData.id,
-            title: playlistData.name,
-            description: playlistData.description || '',
-            coverUrl: bestImage(playlistData.images),
-            trackCount: playlistTracksData.total || playlistData.tracks?.total || mappedTracks.length,
-            creator: playlistData.owner?.display_name || 'Spotify',
-            duration: 0,
-            tracks: mappedTracks,
-          };
-          return json(playlist);
-        } catch (error) {
-          console.error(`Error fetching playlist ${id}:`, error);
-          return json({
-            id: String(id),
-            title: '',
-            description: '',
-            coverUrl: null,
-            trackCount: 0,
-            creator: '',
-            duration: 0,
-            tracks: [],
-            error: true,
-          });
-        }
-      }
-
-      case 'get-artist-playlists': {
-        // Search for curated playlists related to an artist
-        const artistName = query;
-        const searchQueries = [
-          `This Is ${artistName}`,
-          `${artistName} Radio`,
-          `Best of ${artistName}`,
-          artistName,
-        ];
-
-        const allPlaylists: any[] = [];
-        const seenIds = new Set<string>();
-
-        for (const q of searchQueries) {
-          try {
-            const data = await spotifyFetch(
-              `/search?q=${encodeURIComponent(q)}&type=playlist&limit=5&market=${mkt}`
-            );
-
-            for (const p of (data.playlists?.items || [])) {
-              if (!p || seenIds.has(p.id)) continue;
-              const title = p.name?.toLowerCase() || '';
-              const artistLower = artistName.toLowerCase();
-              if (
-                title.includes(artistLower) ||
-                title.includes('this is') ||
-                title.includes('radio') ||
-                title.includes('best of')
-              ) {
-                seenIds.add(p.id);
-                allPlaylists.push({
-                  id: p.id,
-                  title: p.name,
-                  description: p.description || '',
-                  coverUrl: bestImage(p.images),
-                  trackCount: p.tracks?.total ?? 0,
-                  creator: p.owner?.display_name || 'Spotify',
-                  isSpotifyPlaylist: true,
-                });
-              }
-            }
-          } catch (e) {
-            console.error(`Error searching playlists for "${q}":`, e);
-          }
-        }
-
-        const enrichedPlaylists = [];
-
-        for (const playlist of allPlaylists.slice(0, 6)) {
-          if (playlist.trackCount > 0 && playlist.coverUrl) {
-            enrichedPlaylists.push(playlist);
-            continue;
-          }
-
-          const details = await spotifyFetchOptional<any | null>(
-            `/playlists/${playlist.id}?fields=images,tracks(total),owner(display_name),description`,
-            null,
-            `artist playlist details ${playlist.id}`,
-          );
-
-          enrichedPlaylists.push({
-            ...playlist,
-            coverUrl: playlist.coverUrl || bestImage(details?.images || []),
-            description: playlist.description || details?.description || '',
-            creator: details?.owner?.display_name || playlist.creator,
-            trackCount: details?.tracks?.total ?? playlist.trackCount ?? 0,
-          });
-        }
-
-        return json(enrichedPlaylists);
-      }
-
-      // ======================== BROWSE / CHARTS ========================
-      case 'get-chart': {
-        // Use search-based approaches since browse endpoints are restricted
-        const [newReleasesSearch, topTracksSearch] = await Promise.all([
-          spotifyFetch(`/search?q=tag:new&type=album&limit=${limit}&market=${mkt}`).catch(() => ({ albums: { items: [] } })),
-          spotifyFetch(`/search?q=year:2026&type=track&limit=${limit}&market=${mkt}`).catch(() => ({ tracks: { items: [] } })),
-        ]);
-
-        const chartTracks = (topTracksSearch.tracks?.items || []).map((t: any) => mapTrack(t));
-        const albums = (newReleasesSearch.albums?.items || []).map((a: any) => mapAlbum(a));
-
+        const data = await deezerFetch(`/album/${id}`);
         return json({
-          tracks: chartTracks,
-          albums,
-          artists: [],
+          ...mapDeezerAlbum(data),
+          tracks: (data?.tracks?.data || []).map((t: any, i: number) => ({
+            ...mapDeezerTrack(t, data),
+            trackNumber: i + 1,
+          })),
         });
       }
+      case 'get-artist': {
+        const [artistRes, albumsRes, topRes, relatedRes] = await Promise.allSettled([
+          deezerFetch(`/artist/${id}`),
+          deezerFetch(`/artist/${id}/albums?limit=50`),
+          deezerFetch(`/artist/${id}/top?limit=10`),
+          deezerFetch(`/artist/${id}/related?limit=10`),
+        ]);
 
+        const artist = artistRes.status === 'fulfilled' ? artistRes.value : null;
+        if (!artist) {
+          return json({
+            id: String(id || ''), name: 'Unknown Artist', imageUrl: undefined,
+            popularity: 0, genres: [], releases: [], topTracks: [], relatedArtists: [], error: true,
+          });
+        }
+
+        const albums = albumsRes.status === 'fulfilled' ? albumsRes.value : { data: [] };
+        const top = topRes.status === 'fulfilled' ? topRes.value : { data: [] };
+        const related = relatedRes.status === 'fulfilled' ? relatedRes.value : { data: [] };
+
+        return json({
+          ...mapDeezerArtist(artist),
+          releases: (albums?.data || []).map((a: any) => mapDeezerAlbum(a)),
+          topTracks: (top?.data || []).map((t: any) => mapDeezerTrack(t)),
+          relatedArtists: (related?.data || []).map((a: any) => mapDeezerArtist(a)).slice(0, 10),
+        });
+      }
+      case 'get-artist-top': {
+        const data = await deezerFetch(`/artist/${id}/top?limit=${limit}`);
+        return json((data?.data || []).map((t: any) => mapDeezerTrack(t)));
+      }
+      case 'get-artist-albums': {
+        const data = await deezerFetch(`/artist/${id}/albums?limit=${limit}`);
+        return json((data?.data || []).map((a: any) => mapDeezerAlbum(a)));
+      }
+
+      // ======================== CHARTS (Deezer) ========================
+      case 'get-chart': {
+        const data = await deezerFetch(`/chart?limit=${limit}`);
+        return json({
+          tracks: (data?.tracks?.data || []).map((t: any) => mapDeezerTrack(t)),
+          albums: (data?.albums?.data || []).map((a: any) => mapDeezerAlbum(a)),
+          artists: (data?.artists?.data || []).map((a: any) => mapDeezerArtist(a)),
+        });
+      }
       case 'get-new-releases': {
-        // /browse/new-releases is restricted with client credentials, use search with tag:new
         try {
-          const data = await spotifyFetch(`/search?q=tag:new&type=album&limit=${limit}&market=${mkt}`);
-          const albums = (data.albums?.items || []).map((a: any) => mapAlbum(a));
-          return json(albums);
+          const data = await deezerFetch(`/editorial/0/releases?limit=${limit}`);
+          return json((data?.data || []).map((a: any) => mapDeezerAlbum(a)));
         } catch {
-          return json([]);
+          const data = await deezerFetch(`/chart/0/albums?limit=${limit}`);
+          return json((data?.data || []).map((a: any) => mapDeezerAlbum(a)));
         }
       }
-
       case 'get-popular-artists': {
-        // Spotify doesn't have a direct "popular artists" endpoint
-        // Use search with popular genres or use a known playlist
-        try {
-          const data = await spotifyFetch(
-            `/search?q=genre:pop&type=artist&limit=${limit}&market=${mkt}`
-          );
-          const artists = (data.artists?.items || []).map((a: any) => mapArtist(a));
-          return json(artists);
-        } catch {
-          return json([]);
-        }
+        const data = await deezerFetch(`/chart/0/artists?limit=${limit}`);
+        return json((data?.data || []).map((a: any) => mapDeezerArtist(a)));
       }
 
-      // ======================== TRACK RADIO (recommendations) ========================
+      // ======================== TRACK RADIO (Deezer artist radio) ========================
       case 'get-track-radio': {
         try {
-          const data = await spotifyFetch(
-            `/recommendations?seed_tracks=${id}&limit=${limit}&market=${mkt}`
+          const track = await deezerFetch(`/track/${id}`);
+          const artistId = track?.artist?.id;
+          if (!artistId) return json([]);
+          const radio = await deezerFetch(`/artist/${artistId}/radio?limit=${limit}`);
+          return json(
+            (radio?.data || [])
+              .filter((t: any) => String(t.id) !== String(id))
+              .map((t: any) => mapDeezerTrack(t))
           );
-          const tracks = (data.tracks || []).map((t: any) => mapTrack(t));
-          return json(tracks);
-        } catch (error) {
-          console.error('Recommendations error:', error);
+        } catch {
           return json([]);
         }
       }
 
       // ======================== COUNTRY CHART ========================
       case 'get-country-chart': {
-        // Check for configured playlist in DB
+        // Check DB for configured playlist
         const supabaseUrl = Deno.env.get('SUPABASE_URL');
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-        let playlistId: string | null = null;
 
         if (supabaseUrl && supabaseKey) {
           try {
             const configRes = await fetch(
-              `${supabaseUrl}/rest/v1/chart_configurations?country_code=eq.${(country || mkt).toUpperCase()}&select=playlist_id`,
-              {
-                headers: {
-                  'apikey': supabaseKey,
-                  'Authorization': `Bearer ${supabaseKey}`,
-                },
-              }
+              `${supabaseUrl}/rest/v1/chart_configurations?country_code=eq.${mkt.toUpperCase()}&select=playlist_id`,
+              { headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` } }
             );
             if (configRes.ok) {
               const configData = await configRes.json();
-              if (configData?.[0]?.playlist_id) {
-                let pid = configData[0].playlist_id;
+              let pid = configData?.[0]?.playlist_id;
+              if (pid) {
                 if (pid.startsWith('sf:')) pid = pid.replace('sf:', '');
-                // Check if it's a Spotify playlist ID (22 char alphanumeric)
-                if (/^[a-zA-Z0-9]{22}$/.test(pid)) {
-                  playlistId = pid;
+                // Numeric = Deezer playlist
+                if (/^\d+$/.test(pid)) {
+                  const data = await deezerFetch(`/playlist/${pid}`);
+                  return json((data?.tracks?.data || []).slice(0, limit).map((t: any) => mapDeezerTrack(t)));
+                }
+                // Spotify playlist ID - backward compat
+                if (isSpotifyId(pid)) {
+                  try {
+                    const plData = await spotifyFetchPlaylist(`/playlists/${pid}/tracks?limit=${limit}&market=${mkt}`);
+                    return json((plData.items || []).filter((i: any) => i?.track).map((i: any) => mapSpotifyTrack(i.track)));
+                  } catch (e) {
+                    console.warn(`Spotify playlist fetch failed for chart ${pid}:`, e);
+                  }
                 }
               }
             }
           } catch (e) {
-            console.error('Error fetching chart config:', e);
+            console.warn('Chart config lookup failed:', e);
           }
         }
 
-        if (playlistId) {
-          try {
-            const plData = await spotifyFetch(`/playlists/${playlistId}?market=${mkt}`);
-            const tracks = (plData.tracks?.items || [])
-              .filter((item: any) => item.track)
-              .slice(0, limit)
-              .map((item: any) => mapTrack(item.track));
-            return json(tracks);
-          } catch { /* fall through */ }
+        // Fallback: Deezer global chart
+        const data = await deezerFetch(`/chart/0/tracks?limit=${limit}`);
+        return json((data?.data || []).map((t: any) => mapDeezerTrack(t)));
+      }
+
+      // ======================== PLAYLISTS ========================
+      case 'get-playlist': {
+        // Numeric ID = Deezer playlist
+        if (/^\d+$/.test(String(id))) {
+          const data = await deezerFetch(`/playlist/${id}`);
+          return json({
+            id: String(data.id),
+            title: data.title,
+            description: data.description || '',
+            coverUrl: deezerCover(data),
+            trackCount: data.nb_tracks || 0,
+            creator: data.creator?.name || 'Deezer',
+            duration: data.duration || 0,
+            tracks: (data?.tracks?.data || []).map((t: any, i: number) => ({
+              ...mapDeezerTrack(t),
+              trackNumber: i + 1,
+            })),
+          });
         }
 
-        // Fallback: search for "Top 50 <country>"
-        const countryNames: Record<string, string> = {
-          IT: 'Italy', US: 'USA', ES: 'Spain', FR: 'France',
-          DE: 'Germany', PT: 'Portugal', GB: 'UK', BR: 'Brazil',
-        };
-        const countryName = countryNames[(country || mkt).toUpperCase()] || country || mkt;
+        // Spotify playlist ID (backward compat)
         try {
-          const searchData = await spotifyFetch(
-            `/search?q=${encodeURIComponent(`Top 50 ${countryName}`)}&type=playlist&limit=1&market=${mkt}`
-          );
-          const firstPlaylist = searchData.playlists?.items?.[0];
-          if (firstPlaylist) {
-            const plData = await spotifyFetch(`/playlists/${firstPlaylist.id}?market=${mkt}`);
-            const tracks = (plData.tracks?.items || [])
-              .filter((item: any) => item.track)
-              .slice(0, limit)
-              .map((item: any) => mapTrack(item.track));
-            return json(tracks);
+          const plData = await spotifyFetchPlaylist(`/playlists/${id}?market=${mkt}`);
+          let allItems = (plData?.tracks?.items || []).filter((i: any) => i?.track);
+          let next = plData?.tracks?.next;
+          while (next && allItems.length < 200) {
+            try {
+              const page = await spotifyFetchPlaylist(next);
+              allItems.push(...(page?.items || []).filter((i: any) => i?.track));
+              next = page?.next;
+            } catch { break; }
           }
-        } catch { /* fall through */ }
-
-        return json([]);
+          return json({
+            id: plData.id,
+            title: plData.name,
+            description: plData.description || '',
+            coverUrl: bestSpotifyImage(plData.images),
+            trackCount: plData.tracks?.total || allItems.length,
+            creator: plData.owner?.display_name || 'Spotify',
+            duration: 0,
+            tracks: allItems.map((i: any, idx: number) => ({
+              ...mapSpotifyTrack(i.track),
+              trackNumber: idx + 1,
+            })),
+          });
+        } catch (error) {
+          console.error(`Playlist fetch failed for ${id}:`, error);
+          return json({ id: String(id), title: '', description: '', coverUrl: null, trackCount: 0, creator: '', duration: 0, tracks: [], error: true });
+        }
       }
 
-      // ======================== ARTIST ALBUMS (for new releases check) ========================
-      case 'get-artist-albums': {
-        const data = await spotifyFetch(
-          `/artists/${id}/albums?include_groups=album,single&limit=${limit}&market=${mkt}`
-        );
-        const albums = (data.items || []).map((a: any) => mapAlbum(a));
-        return json(albums);
+      case 'get-artist-playlists': {
+        const artistName = query;
+        if (!artistName?.trim()) return json([]);
+        const data = await deezerFetch(`/search/playlist?q=${encodeURIComponent(artistName)}&limit=10`);
+        const playlists = (data?.data || [])
+          .filter((p: any) => {
+            const title = (p.title || '').toLowerCase();
+            const name = artistName.toLowerCase();
+            return title.includes(name);
+          })
+          .map((p: any) => ({
+            id: String(p.id),
+            title: p.title,
+            description: '',
+            coverUrl: deezerCover(p),
+            trackCount: p.nb_tracks || 0,
+            creator: p.user?.name || 'Deezer',
+            isDeezerPlaylist: true,
+          }));
+        return json(playlists);
       }
 
-      // ======================== MULTIPLE ARTISTS ========================
       case 'get-several-artists': {
-        // id should be comma-separated artist IDs (max 50)
-        const data = await spotifyFetch(`/artists?ids=${id}`);
-        const artists = (data.artists || []).filter(Boolean).map((a: any) => mapArtist(a));
-        return json(artists);
+        const ids = body.ids || [];
+        if (!ids.length) return json([]);
+        const results = await Promise.allSettled(
+          ids.slice(0, 10).map((aid: string) => deezerFetch(`/artist/${aid}`))
+        );
+        return json(
+          results
+            .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+            .map(r => mapDeezerArtist(r.value))
+        );
       }
 
       default:
-        return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return json({ error: `Unknown action: ${action}` });
     }
   } catch (error) {
-    if (isSpotifyRateLimitError(error)) {
-      console.warn(`Returning fallback for action=${action} due to Spotify rate limit (${error.retryAfter}s) on ${error.resource}`);
-      return json(await getRateLimitFallback(action, { id, query, limit }));
-    }
-
-    console.error('Spotify API error:', error);
-    return new Response(JSON.stringify({ error: String(error) }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('API error:', error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });
 
