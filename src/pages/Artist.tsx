@@ -13,7 +13,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer, type PlaybackSource } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { getArtist, getArtistPlaylists, DeezerPlaylist } from '@/lib/spotify';
+import { getArtist, getArtistPlaylists, getArtistTopTracks, DeezerPlaylist } from '@/lib/spotify';
 import { supabase } from '@/integrations/supabase/client';
 import { Artist as ArtistType, Album, Track } from '@/types/music';
 
@@ -103,8 +103,12 @@ const Artist: React.FC = () => {
         });
         setReleases(sortedReleases);
         
-        // Use top tracks from artist data
-        setTopTracks((artistData.topTracks || []).slice(0, 20));
+        // Use top tracks from artist data, with an extra fallback request if needed
+        let resolvedTopTracks = (artistData.topTracks || []).slice(0, 20);
+        if (resolvedTopTracks.length === 0 && artistData.name) {
+          resolvedTopTracks = await getArtistTopTracks(id, artistData.name).catch(() => []);
+        }
+        setTopTracks(resolvedTopTracks.slice(0, 20));
         
         // Related artists
         setRelatedArtists((artistData.relatedArtists || []).slice(0, 10));
