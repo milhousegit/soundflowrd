@@ -13,20 +13,25 @@ async function callSpotifyApi(action: string, params: Record<string, any> = {}):
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY')!;
   
+  const body = JSON.stringify({ action, ...params });
+  console.log(`Calling spotify-api: ${action}`, body);
+  
   const res = await fetch(`${supabaseUrl}/functions/v1/spotify-api`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${supabaseKey}`,
     },
-    body: JSON.stringify({ action, ...params }),
+    body,
   });
   
+  const text = await res.text();
+  console.log(`spotify-api response status: ${res.status}, body length: ${text.length}, preview: ${text.slice(0, 200)}`);
+  
   if (!res.ok) {
-    const text = await res.text();
     throw new Error(`spotify-api ${res.status}: ${text}`);
   }
-  return res.json();
+  return JSON.parse(text);
 }
 
 serve(async (req) => {
