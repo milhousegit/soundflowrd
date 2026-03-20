@@ -195,7 +195,7 @@ export interface SpotifyPlaylist {
 export type DeezerPlaylist = SpotifyPlaylist;
 
 export async function searchSpotifyPlaylists(query: string): Promise<SpotifyPlaylist[]> {
-  const data = await spotifyInvoke({ action: 'search-playlists', query, limit: 20 });
+  const data = await spotifyInvoke({ action: 'search-playlists', query, limit: 10 });
   return data || [];
 }
 
