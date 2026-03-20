@@ -666,7 +666,7 @@ serve(async (req) => {
 
       console.log(`Generated ${freshMixes?.length || 0} mixes for user ${user.id}`);
 
-      return new Response(JSON.stringify(freshMixes || mixes), {
+      return new Response(JSON.stringify(freshMixes || finalMixes), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
