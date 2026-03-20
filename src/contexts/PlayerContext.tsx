@@ -1003,192 +1003,129 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         return;
       }
 
-      // =============== HYBRID MODE: Follow user-defined fallback chain order ===============
+      // =============== HYBRID MODE: Strictly follow user-defined fallback chain order ===============
       if (isHybridMode) {
-        const chainOrder = hybridFallbackChain.length > 0 ? hybridFallbackChain : ['real-debrid', 'squidwtf', 'hifi', 'monochrome'];
+        const chainOrder: FallbackSourceId[] = hybridFallbackChain.length > 0 
+          ? hybridFallbackChain 
+          : ['real-debrid', 'squidwtf', 'hifi', 'monochrome'];
         addDebugLog('👑 Modalità Ibrida', `Ordine: ${chainOrder.join(' → ')}`, 'info');
         
         const triedSources = new Set<string>();
-        let rdPendingDownload = false;
+        let rdScheduledBackground = false;
 
+        // Helper: try RD instant playback only (cached direct_link or immediate streams)
+        const tryRdInstant = async (): Promise<boolean> => {
+          if (!hasRdKey) {
+            addDebugLog('⏭️ RD saltato', 'Nessuna API key configurata', 'info');
+            return false;
+          }
+
+          // 1. Check saved mapping with direct_link
+          if (enrichedTrack.albumId) {
+            try {
+              const { data: trackMapping } = await supabase
+                .from('track_file_mappings')
+                .select('*, album_torrent_mappings!inner(*)')
+                .eq('track_id', enrichedTrack.id)
+                .maybeSingle();
+
+              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
+
+              if (trackMapping?.direct_link && audioRef.current) {
+                addDebugLog('🔗 RD: link salvato trovato', 'Provo riproduzione istantanea...', 'info');
+                setLoadingPhase('loading');
+                audioRef.current.src = trackMapping.direct_link;
+                const cachedPlayOk = await safePlay(audioRef.current);
+                if (cachedPlayOk) {
+                  setState((prev) => ({ ...prev, isPlaying: true }));
+                  setLoadingPhase('idle');
+                  setCurrentAudioSource('real-debrid');
+                  setCurrentMappedFileId(trackMapping.file_id);
+                  addDebugLog('✅ Riproduzione RD (cache)', 'Stream da mappatura salvata', 'success');
+                  startTrackingPlayback();
+                  return true;
+                }
+                // Cached link failed — try to refresh it quickly
+                addDebugLog('⚠️ Link RD scaduto', 'Rigenero link...', 'warning');
+                const torrentId = trackMapping.album_torrent_mappings?.torrent_id;
+                const fileId = trackMapping.file_id;
+                if (torrentId && Number.isFinite(fileId) && fileId > 0 && credentials?.realDebridApiKey) {
+                  try {
+                    const freshResult = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
+                    if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
+                    if (freshResult.streams?.length > 0 && freshResult.streams[0].streamUrl && audioRef.current) {
+                      audioRef.current.src = freshResult.streams[0].streamUrl;
+                      if (await safePlay(audioRef.current)) {
+                        setState((prev) => ({ ...prev, isPlaying: true }));
+                      }
+                      setLoadingPhase('idle');
+                      setCurrentAudioSource('real-debrid');
+                      setCurrentMappedFileId(fileId);
+                      setAlternativeStreams(freshResult.streams);
+                      setCurrentStreamId(freshResult.streams[0].id);
+                      await saveFileMapping({
+                        track: enrichedTrack,
+                        torrentId,
+                        torrentTitle: trackMapping.album_torrent_mappings?.torrent_title || '',
+                        fileId,
+                        fileName: trackMapping.file_name,
+                        filePath: trackMapping.file_path,
+                        directLink: freshResult.streams[0].streamUrl,
+                      });
+                      addDebugLog('✅ Riproduzione RD (rigenerato)', freshResult.streams[0].title || 'Link fresco', 'success');
+                      startTrackingPlayback();
+                      return true;
+                    } else if (['downloading', 'queued', 'magnet_conversion'].includes(freshResult.status)) {
+                      // Not instant — schedule background, don't block
+                      addDebugLog('⏳ RD: torrent in download', `${freshResult.progress}% — non istantaneo, passo avanti`, 'warning');
+                      rdScheduledBackground = true;
+                      return false;
+                    } else if (['error', 'dead', 'magnet_error', 'not_found'].includes(freshResult.status)) {
+                      addDebugLog('⚠️ Torrent RD scaduto', 'Rimuovo mappatura', 'warning');
+                      await supabase.from('track_file_mappings').delete().eq('track_id', enrichedTrack.id);
+                    }
+                  } catch (e) {
+                    console.error('Failed to refresh RD link in hybrid:', e);
+                  }
+                }
+                setLoadingPhase('idle');
+              } else if (trackMapping && !trackMapping.direct_link) {
+                // Mapping exists but no direct_link — downloading/pending
+                addDebugLog('⏳ RD: mappatura senza link', 'File non ancora pronto — passo avanti', 'info');
+                rdScheduledBackground = true;
+                return false;
+              }
+            } catch (error) {
+              console.error('Failed to check RD mapping in hybrid mode:', error);
+            }
+          }
+
+          // No cached mapping — RD requires search = not instant
+          addDebugLog('⏭️ RD: nessun link pronto', 'Programmato in background — passo alla sorgente successiva', 'info');
+          rdScheduledBackground = true;
+          return false;
+        };
+
+        // Iterate through the chain strictly in order
         for (const sourceId of chainOrder) {
           triedSources.add(sourceId);
 
           if (sourceId === 'real-debrid') {
-            if (!hasRdKey) {
-              addDebugLog('⏭️ RD saltato', 'Nessuna API key configurata', 'info');
-              continue;
-            }
-
-            // Check for saved RD mapping first
-            if (enrichedTrack.albumId) {
-              try {
-                const { data: trackMapping } = await supabase
-                  .from('track_file_mappings')
-                  .select('*, album_torrent_mappings!inner(*)')
-                  .eq('track_id', enrichedTrack.id)
-                  .maybeSingle();
-
-                if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
-
-                if (trackMapping?.direct_link && audioRef.current) {
-                  setLoadingPhase('loading');
-                  audioRef.current.src = trackMapping.direct_link;
-                  const cachedPlayOk = await safePlay(audioRef.current);
-                  if (cachedPlayOk) {
-                    setState((prev) => ({ ...prev, isPlaying: true }));
-                    setLoadingPhase('idle');
-                    setCurrentAudioSource('real-debrid');
-                    setCurrentMappedFileId(trackMapping.file_id);
-                    addDebugLog('✅ Riproduzione RD (cache)', 'Stream da mappatura salvata', 'success');
-                    startTrackingPlayback();
-                    return;
-                  }
-                  // Cached link expired — try to get a fresh one
-                  addDebugLog('⚠️ Link RD scaduto', 'Rigenero link...', 'warning');
-                  const torrentId = trackMapping.album_torrent_mappings?.torrent_id;
-                  const fileId = trackMapping.file_id;
-                  if (torrentId && Number.isFinite(fileId) && fileId > 0 && credentials?.realDebridApiKey) {
-                    try {
-                      const freshResult = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
-                      if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
-                      if (freshResult.streams?.length > 0 && freshResult.streams[0].streamUrl && audioRef.current) {
-                        audioRef.current.src = freshResult.streams[0].streamUrl;
-                        if (await safePlay(audioRef.current)) {
-                          setState((prev) => ({ ...prev, isPlaying: true }));
-                        }
-                        setLoadingPhase('idle');
-                        setCurrentAudioSource('real-debrid');
-                        setCurrentMappedFileId(fileId);
-                        setAlternativeStreams(freshResult.streams);
-                        setCurrentStreamId(freshResult.streams[0].id);
-                        await saveFileMapping({
-                          track: enrichedTrack,
-                          torrentId,
-                          torrentTitle: trackMapping.album_torrent_mappings?.torrent_title || '',
-                          fileId,
-                          fileName: trackMapping.file_name,
-                          filePath: trackMapping.file_path,
-                          directLink: freshResult.streams[0].streamUrl,
-                        });
-                        addDebugLog('✅ Riproduzione RD (rigenerato)', freshResult.streams[0].title || 'Link fresco', 'success');
-                        startTrackingPlayback();
-                        return;
-                      } else if (['error', 'dead', 'magnet_error', 'not_found'].includes(freshResult.status)) {
-                        addDebugLog('⚠️ Torrent RD scaduto', 'Rimuovo mappatura', 'warning');
-                        await supabase.from('track_file_mappings').delete().eq('track_id', enrichedTrack.id);
-                      }
-                    } catch (e) {
-                      console.error('Failed to refresh RD link in hybrid:', e);
-                    }
-                  }
-                  setLoadingPhase('idle');
-                }
-              } catch (error) {
-                console.error('Failed to check RD mapping in hybrid mode:', error);
-              }
-            }
-
-            // Try quick RD search
-            setLoadingPhase('searching');
-            addDebugLog('🔎 Ricerca RD', `Query: "${enrichedTrack.album || enrichedTrack.title} ${enrichedTrack.artist}"`, 'info');
-            
-            try {
-              const query = enrichedTrack.album?.trim() 
-                ? `${enrichedTrack.album} ${enrichedTrack.artist}` 
-                : `${enrichedTrack.title} ${enrichedTrack.artist}`;
-              
-              const result = await searchStreams(credentials!.realDebridApiKey, query);
-              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
-
-              // Check if we have immediate streams
-              if (result.streams?.length) {
-                setAlternativeStreams(result.streams);
-                const selected = result.streams[0];
-                setCurrentStreamId(selected.id);
-                if (audioRef.current && selected.streamUrl) {
-                  setLoadingPhase('loading');
-                  audioRef.current.src = selected.streamUrl;
-                  if (await safePlay(audioRef.current)) {
-                    setState((prev) => ({ ...prev, isPlaying: true }));
-                  }
-                  setLoadingPhase('idle');
-                  setCurrentAudioSource('real-debrid');
-                  addDebugLog('✅ Riproduzione RD', selected.title, 'success');
-                  startTrackingPlayback();
-                  return;
-                }
-              }
-
-              // Try to find matching file in torrents
-              for (const torrent of result.torrents) {
-                if (!torrent.files?.length) continue;
-                const matchingFile = torrent.files.find((file) =>
-                  flexibleMatch(file.filename || '', enrichedTrack.title) || flexibleMatch(file.path || '', enrichedTrack.title)
-                );
-                if (!matchingFile) continue;
-
-                addDebugLog('🎯 Match RD trovato', matchingFile.filename || '', 'success');
-                setLoadingPhase('loading');
-
-                const selectResult = await selectFilesAndPlay(credentials!.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
-                if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
-
-                if (!selectResult.error && selectResult.streams.length > 0) {
-                  const streamUrl = selectResult.streams[0].streamUrl;
-                  setAlternativeStreams(selectResult.streams);
-                  setCurrentStreamId(selectResult.streams[0].id);
-
-                  await saveFileMapping({
-                    track: enrichedTrack,
-                    torrentId: torrent.torrentId,
-                    torrentTitle: torrent.title,
-                    fileId: matchingFile.id,
-                    fileName: matchingFile.filename,
-                    filePath: matchingFile.path,
-                    directLink: streamUrl,
-                  });
-
-                  if (audioRef.current && streamUrl) {
-                    audioRef.current.src = streamUrl;
-                    if (await safePlay(audioRef.current)) {
-                      setState((prev) => ({ ...prev, isPlaying: true }));
-                    }
-                  }
-
-                  setLoadingPhase('idle');
-                  setCurrentAudioSource('real-debrid');
-                  startTrackingPlayback();
-                  return;
-                }
-
-                // If downloading, save info and continue to next source in chain
-                if (['downloading', 'queued', 'magnet_conversion'].includes(selectResult.status)) {
-                  addDebugLog('⏳ RD in download', `${selectResult.progress}% — provo prossima sorgente`, 'warning');
-                  pendingRdDownloadRef.current = {
-                    torrent,
-                    matchingFile,
-                    track: enrichedTrack,
-                    selectResult,
-                  };
-                  rdPendingDownload = true;
-                  break;
-                }
-              }
-            } catch (error) {
-              addDebugLog('⚠️ Errore RD', error instanceof Error ? error.message : 'Errore', 'warning');
-            }
-            setLoadingPhase('idle');
+            const rdOk = await tryRdInstant();
+            if (rdOk) return; // RD played instantly
+            // Otherwise continue to next source
             continue;
           }
 
           // Scraping source (squidwtf, monochrome, hifi)
-          addDebugLog(`🔄 Provo ${sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF'}`, '', 'info');
+          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF';
+          addDebugLog(`🔄 Provo ${sourceName}`, `Posizione ${Array.from(triedSources).indexOf(sourceId) + 1} nella catena`, 'info');
           setLoadingPhase('searching');
           const success = await playWithScrapingSource(sourceId);
           if (success) {
-            // Start background RD download while playing via scraping
-            if (hasRdKey) {
+            // Playback started — now fire background RD if it was scheduled
+            if (rdScheduledBackground && hasRdKey) {
+              addDebugLog('📥 RD: avvio download in background', `Audio da ${sourceName}, RD preparerà per ascolti futuri`, 'info');
               startBackgroundRdDownload(enrichedTrack);
             }
             return;
@@ -1198,48 +1135,126 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // Try remaining scraping sources not in fallback chain
         const remainingSources = SCRAPING_SOURCES.map(s => s.id).filter(id => !triedSources.has(id));
         for (const sourceId of remainingSources) {
-          addDebugLog(`🔄 Fallback extra a ${sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF'}`, '', 'info');
+          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF';
+          addDebugLog(`🔄 Fallback extra a ${sourceName}`, '', 'info');
           setLoadingPhase('searching');
           const success = await playWithScrapingSource(sourceId);
           if (success) {
-            if (hasRdKey) {
+            if (rdScheduledBackground && hasRdKey) {
+              addDebugLog('📥 RD: avvio download in background', 'Preparazione per ascolti futuri', 'info');
               startBackgroundRdDownload(enrichedTrack);
             }
             return;
           }
         }
         
-        // All sources failed — check if we have a pending RD download to wait for
-        if (rdPendingDownload && pendingRdDownloadRef.current && pendingRdDownloadRef.current.track.id === enrichedTrack.id) {
-          const pending = pendingRdDownloadRef.current;
-          addDebugLog('📥 In attesa download RD', `${pending.selectResult.progress ?? 0}% — nessun fallback disponibile`, 'warning');
-          
-          const updatedTorrent = { ...pending.torrent, status: pending.selectResult.status };
-          setAvailableTorrents([updatedTorrent]);
-          setLoadingPhase('downloading');
-          setDownloadProgress(pending.selectResult.progress ?? 0);
-          setDownloadStatus(pending.selectResult.status);
-          setCurrentAudioSource('real-debrid');
-          
-          await saveFileMapping({
-            track: enrichedTrack,
-            torrentId: pending.torrent.torrentId,
-            torrentTitle: pending.torrent.title,
-            fileId: pending.matchingFile.id,
-            fileName: pending.matchingFile.filename,
-            filePath: pending.matchingFile.path,
-            directLink: null,
-          });
-          
-          toast.info('Brano in download da RealDebrid', {
-            description: 'Partirà automaticamente appena pronto',
-          });
-          pendingRdDownloadRef.current = null;
-          startTrackingPlayback();
-          return;
+        // ALL scraping sources failed — if RD was scheduled, do a full search as last resort
+        if (rdScheduledBackground && hasRdKey) {
+          addDebugLog('🔎 RD: ultimo tentativo (ricerca completa)', 'Nessuna sorgente scraping disponibile', 'warning');
+          setLoadingPhase('searching');
+          try {
+            const query = enrichedTrack.album?.trim() 
+              ? `${enrichedTrack.album} ${enrichedTrack.artist}` 
+              : `${enrichedTrack.title} ${enrichedTrack.artist}`;
+            
+            const result = await searchStreams(credentials!.realDebridApiKey, query);
+            if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
+
+            // Check immediate streams
+            if (result.streams?.length) {
+              setAlternativeStreams(result.streams);
+              const selected = result.streams[0];
+              setCurrentStreamId(selected.id);
+              if (audioRef.current && selected.streamUrl) {
+                setLoadingPhase('loading');
+                audioRef.current.src = selected.streamUrl;
+                if (await safePlay(audioRef.current)) {
+                  setState((prev) => ({ ...prev, isPlaying: true }));
+                }
+                setLoadingPhase('idle');
+                setCurrentAudioSource('real-debrid');
+                addDebugLog('✅ Riproduzione RD (ricerca)', selected.title, 'success');
+                startTrackingPlayback();
+                return;
+              }
+            }
+
+            // Try file matching
+            for (const torrent of result.torrents) {
+              if (!torrent.files?.length) continue;
+              const matchingFile = torrent.files.find((file) =>
+                flexibleMatch(file.filename || '', enrichedTrack.title) || flexibleMatch(file.path || '', enrichedTrack.title)
+              );
+              if (!matchingFile) continue;
+
+              addDebugLog('🎯 Match RD trovato', matchingFile.filename || '', 'success');
+              setLoadingPhase('loading');
+
+              const selectResult = await selectFilesAndPlay(credentials!.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
+              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
+
+              if (!selectResult.error && selectResult.streams.length > 0) {
+                const streamUrl = selectResult.streams[0].streamUrl;
+                setAlternativeStreams(selectResult.streams);
+                setCurrentStreamId(selectResult.streams[0].id);
+
+                await saveFileMapping({
+                  track: enrichedTrack,
+                  torrentId: torrent.torrentId,
+                  torrentTitle: torrent.title,
+                  fileId: matchingFile.id,
+                  fileName: matchingFile.filename,
+                  filePath: matchingFile.path,
+                  directLink: streamUrl,
+                });
+
+                if (audioRef.current && streamUrl) {
+                  audioRef.current.src = streamUrl;
+                  if (await safePlay(audioRef.current)) {
+                    setState((prev) => ({ ...prev, isPlaying: true }));
+                  }
+                }
+
+                setLoadingPhase('idle');
+                setCurrentAudioSource('real-debrid');
+                startTrackingPlayback();
+                return;
+              }
+
+              // Downloading — save mapping but DON'T mark as playing (rule 11)
+              if (['downloading', 'queued', 'magnet_conversion'].includes(selectResult.status)) {
+                addDebugLog('📥 RD in download', `${selectResult.progress}% — nessun fallback, attendo`, 'warning');
+                
+                const updatedTorrent = { ...torrent, status: selectResult.status };
+                setAvailableTorrents([updatedTorrent]);
+                setLoadingPhase('downloading');
+                setDownloadProgress(selectResult.progress ?? 0);
+                setDownloadStatus(selectResult.status);
+                // DON'T set currentAudioSource or call startTrackingPlayback 
+                // because audio hasn't actually started
+                
+                await saveFileMapping({
+                  track: enrichedTrack,
+                  torrentId: torrent.torrentId,
+                  torrentTitle: torrent.title,
+                  fileId: matchingFile.id,
+                  fileName: matchingFile.filename,
+                  filePath: matchingFile.path,
+                  directLink: null,
+                });
+                
+                toast.info('Brano in download da RealDebrid', {
+                  description: 'Partirà automaticamente appena pronto',
+                });
+                return;
+              }
+              break;
+            }
+          } catch (error) {
+            addDebugLog('⚠️ Errore RD', error instanceof Error ? error.message : 'Errore', 'warning');
+          }
         }
         
-        pendingRdDownloadRef.current = null;
         setLoadingPhase('unavailable');
         toast.error('Nessuna sorgente disponibile', {
           description: 'Passo alla prossima...',
