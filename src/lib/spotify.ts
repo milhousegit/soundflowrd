@@ -6,6 +6,7 @@ let mergedArtistsCache: { merged_artist_id: string; master_artist_id: string }[]
 let cacheTimestamp = 0;
 const CACHE_TTL = 5 * 60 * 1000;
 const SPOTIFY_ID_PATTERN = /^[a-zA-Z0-9]{22}$/;
+const DEEZER_ID_PATTERN = /^\d+$/;
 const SPOTIFY_RETRY_DELAY_MS = 1200;
 
 function getSpotifyFallback(action?: string, id?: string): any {
@@ -147,6 +148,10 @@ async function resolveArtistId(id: string, artistName?: string): Promise<string 
   const candidateId = mergeInfo?.master_artist_id || id;
 
   if (SPOTIFY_ID_PATTERN.test(candidateId)) {
+    return candidateId;
+  }
+
+  if (DEEZER_ID_PATTERN.test(candidateId)) {
     return candidateId;
   }
 
