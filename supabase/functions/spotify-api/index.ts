@@ -312,32 +312,19 @@ serve(async (req) => {
 
       // ======================== BROWSE / CHARTS ========================
       case 'get-chart': {
-        // Use featured playlists + new releases as "chart"
-        const [newReleasesData, featuredData] = await Promise.all([
-          spotifyFetch(`/browse/new-releases?limit=${limit}&market=${mkt}`),
-          spotifyFetch(`/browse/featured-playlists?limit=1&market=${mkt}`).catch(() => null),
+        // Use search-based approaches since browse endpoints are restricted
+        const [newReleasesSearch, topTracksSearch] = await Promise.all([
+          spotifyFetch(`/search?q=tag:new&type=album&limit=${limit}&market=${mkt}`).catch(() => ({ albums: { items: [] } })),
+          spotifyFetch(`/search?q=year:2026&type=track&limit=${limit}&market=${mkt}`).catch(() => ({ tracks: { items: [] } })),
         ]);
 
-        // Try to get tracks from the first featured playlist (often "Top 50")
-        let chartTracks: any[] = [];
-        if (featuredData?.playlists?.items?.[0]?.id) {
-          try {
-            const playlistData = await spotifyFetch(
-              `/playlists/${featuredData.playlists.items[0].id}?market=${mkt}`
-            );
-            chartTracks = (playlistData.tracks?.items || [])
-              .filter((item: any) => item.track)
-              .slice(0, limit)
-              .map((item: any) => mapTrack(item.track));
-          } catch { /* fallback to empty */ }
-        }
-
-        const albums = (newReleasesData.albums?.items || []).map((a: any) => mapAlbum(a));
+        const chartTracks = (topTracksSearch.tracks?.items || []).map((t: any) => mapTrack(t));
+        const albums = (newReleasesSearch.albums?.items || []).map((a: any) => mapAlbum(a));
 
         return json({
           tracks: chartTracks,
           albums,
-          artists: [], // Spotify browse doesn't have a direct "chart artists" endpoint
+          artists: [],
         });
       }
 
