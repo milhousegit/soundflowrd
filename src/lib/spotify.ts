@@ -43,18 +43,18 @@ async function spotifyInvoke(body: Record<string, any>): Promise<any> {
 // ======================== SEARCH ========================
 
 export async function searchArtists(query: string): Promise<Artist[]> {
-  const data = await spotifyInvoke({ action: 'search-artists', query, limit: 20 });
+  const data = await spotifyInvoke({ action: 'search-artists', query, limit: 10 });
   return filterMergedArtists(data || []);
 }
 
 export async function searchAlbums(query: string): Promise<Album[]> {
-  const data = await spotifyInvoke({ action: 'search-albums', query, limit: 20 });
+  const data = await spotifyInvoke({ action: 'search-albums', query, limit: 10 });
   const merges = await getMergedArtists();
   return replaceMergedArtistIds(data || [], merges);
 }
 
 export async function searchTracks(query: string): Promise<Track[]> {
-  const data = await spotifyInvoke({ action: 'search-tracks', query, limit: 30 });
+  const data = await spotifyInvoke({ action: 'search-tracks', query, limit: 10 });
   const merges = await getMergedArtists();
   return replaceMergedArtistIds(data || [], merges);
 }
