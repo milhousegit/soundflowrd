@@ -8,6 +8,72 @@ const CACHE_TTL = 5 * 60 * 1000;
 const SPOTIFY_ID_PATTERN = /^[a-zA-Z0-9]{22}$/;
 const SPOTIFY_RETRY_DELAY_MS = 1200;
 
+function getSpotifyFallback(action?: string, id?: string): any {
+  switch (action) {
+    case 'search-tracks':
+    case 'search-albums':
+    case 'search-artists':
+    case 'search-playlists':
+    case 'get-artist-top':
+    case 'get-artist-playlists':
+    case 'get-new-releases':
+    case 'get-popular-artists':
+    case 'get-track-radio':
+    case 'get-country-chart':
+    case 'get-artist-albums':
+    case 'get-several-artists':
+      return [];
+    case 'get-track':
+      return null;
+    case 'get-album':
+      return {
+        id: id || '',
+        title: '',
+        artist: '',
+        artistId: '',
+        coverUrl: undefined,
+        releaseDate: undefined,
+        trackCount: 0,
+        recordType: 'album',
+        tracks: [],
+        error: true,
+      };
+    case 'get-artist':
+      return {
+        id: id || '',
+        name: 'Unknown Artist',
+        imageUrl: undefined,
+        popularity: 0,
+        genres: [],
+        releases: [],
+        topTracks: [],
+        relatedArtists: [],
+        error: true,
+      };
+    case 'get-playlist':
+      return {
+        id: id || '',
+        title: '',
+        description: '',
+        coverUrl: null,
+        trackCount: 0,
+        creator: '',
+        duration: 0,
+        tracks: [],
+        error: true,
+      };
+    case 'get-chart':
+      return { tracks: [], albums: [], artists: [] };
+    default:
+      return null;
+  }
+}
+
+function isSpotifyRateLimitMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('max retries exceeded') || normalized.includes('rate limited');
+}
+
 function getSpotifyMarket(): string {
   if (typeof navigator !== 'undefined') {
     const locale = navigator.languages?.[0] || navigator.language;
@@ -49,14 +115,26 @@ function replaceMergedArtistIds<T extends { artistId?: string }>(items: T[], mer
 
 // Helper: invoke spotify-api edge function
 async function spotifyInvoke(body: Record<string, any>): Promise<any> {
-  const { data, error } = await supabase.functions.invoke('spotify-api', {
-    body: {
-      market: body.market || body.country || getSpotifyMarket(),
-      ...body,
-    },
-  });
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.functions.invoke('spotify-api', {
+      body: {
+        market: body.market || body.country || getSpotifyMarket(),
+        ...body,
+      },
+    });
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (isSpotifyRateLimitMessage(message)) {
+      console.warn(`spotify-api rate limited for action=${body.action}, using safe fallback`);
+      return getSpotifyFallback(body.action, body.id);
+    }
+
+    throw error;
+  }
 }
 
 async function wait(ms: number) {

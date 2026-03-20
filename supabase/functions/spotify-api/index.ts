@@ -12,6 +12,106 @@ const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
 
+class SpotifyRateLimitError extends Error {
+  retryAfter: number;
+  resource: string;
+
+  constructor(resource: string, retryAfter: number) {
+    super(`Spotify rate limited (${retryAfter}s wait required)`);
+    this.name = 'SpotifyRateLimitError';
+    this.retryAfter = retryAfter;
+    this.resource = resource;
+  }
+}
+
+function isSpotifyRateLimitError(error: unknown): error is SpotifyRateLimitError {
+  return error instanceof SpotifyRateLimitError || (error instanceof Error && error.name === 'SpotifyRateLimitError');
+}
+
+function getArtistFallback(id: unknown) {
+  return {
+    id: String(id || ''),
+    name: 'Unknown Artist',
+    imageUrl: undefined,
+    popularity: 0,
+    genres: [],
+    releases: [],
+    topTracks: [],
+    relatedArtists: [],
+    error: true,
+    rateLimited: true,
+  };
+}
+
+function getAlbumFallback(id: unknown) {
+  return {
+    id: String(id || ''),
+    title: '',
+    artist: '',
+    artistId: '',
+    coverUrl: undefined,
+    releaseDate: undefined,
+    trackCount: 0,
+    recordType: 'album',
+    tracks: [],
+    error: true,
+    rateLimited: true,
+  };
+}
+
+function getPlaylistFallback(id: unknown) {
+  return {
+    id: String(id || ''),
+    title: '',
+    description: '',
+    coverUrl: null,
+    trackCount: 0,
+    creator: '',
+    duration: 0,
+    tracks: [],
+    error: true,
+    rateLimited: true,
+  };
+}
+
+function getRateLimitFallback(action?: string, id?: unknown) {
+  switch (action) {
+    case 'search-tracks':
+    case 'search-albums':
+    case 'search-artists':
+    case 'search-playlists':
+    case 'get-artist-top':
+    case 'get-artist-playlists':
+    case 'get-new-releases':
+    case 'get-popular-artists':
+    case 'get-track-radio':
+    case 'get-country-chart':
+    case 'get-artist-albums':
+    case 'get-several-artists':
+      return [];
+    case 'get-track':
+      return null;
+    case 'get-album':
+      return getAlbumFallback(id);
+    case 'get-artist':
+      return getArtistFallback(id);
+    case 'get-playlist':
+      return getPlaylistFallback(id);
+    case 'get-chart':
+      return {
+        tracks: [],
+        albums: [],
+        artists: [],
+        rateLimited: true,
+      };
+    default:
+      return {
+        error: 'Spotify temporarily unavailable',
+        rateLimited: true,
+      };
+  }
+}
+
 async function getAccessToken(): Promise<string> {
   const now = Date.now();
   if (cachedToken && now < tokenExpiresAt - 60_000) {
@@ -63,7 +163,7 @@ async function spotifyFetch(path: string, retries = 2): Promise<any> {
       // If Retry-After is huge (>30s), the API is severely throttled - fail fast
       if (raw > 30) {
         console.warn(`Spotify severely rate limited (Retry-After: ${raw}s) on ${path}`);
-        throw new Error(`Rate limited (${raw}s wait required)`);
+        throw new SpotifyRateLimitError(path, raw);
       }
       const wait = Math.min(raw, 5);
       if (attempt < retries) {
@@ -71,7 +171,7 @@ async function spotifyFetch(path: string, retries = 2): Promise<any> {
         await new Promise(r => setTimeout(r, wait * 1000));
         continue;
       }
-      throw new Error(`Rate limited after ${retries + 1} attempts on ${path}`);
+      throw new SpotifyRateLimitError(path, raw);
     }
 
     if (!res.ok) {
@@ -101,14 +201,14 @@ async function spotifyFetchUrl(url: string, retries = 2): Promise<any> {
       const raw = parseInt(res.headers.get('Retry-After') || '2');
       if (raw > 30) {
         console.warn(`Spotify severely rate limited (Retry-After: ${raw}s) on URL`);
-        throw new Error(`Rate limited (${raw}s wait required)`);
+        throw new SpotifyRateLimitError(url, raw);
       }
       const wait = Math.min(raw, 5);
       if (attempt < retries) {
         await new Promise(r => setTimeout(r, wait * 1000));
         continue;
       }
-      throw new Error(`Rate limited after ${retries + 1} attempts`);
+      throw new SpotifyRateLimitError(url, raw);
     }
 
     if (!res.ok) {
@@ -324,8 +424,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let action: string | undefined;
+  let query: string | undefined;
+  let id: string | undefined;
+
   try {
-    const { action, query, id, limit: rawLimit = 10, country, market } = await req.json();
+    const body = await req.json();
+    action = body.action;
+    query = body.query;
+    id = body.id;
+    const { limit: rawLimit = 10, country, market } = body;
     const mkt = market || country || 'US';
     // Spotify Client Credentials search is capped at 10
     const limit = Math.min(Number(rawLimit) || 10, 10);
@@ -776,6 +884,11 @@ serve(async (req) => {
         });
     }
   } catch (error) {
+    if (isSpotifyRateLimitError(error)) {
+      console.warn(`Returning fallback for action=${action} due to Spotify rate limit (${error.retryAfter}s) on ${error.resource}`);
+      return json(getRateLimitFallback(action, id));
+    }
+
     console.error('Spotify API error:', error);
     return new Response(JSON.stringify({ error: String(error) }), {
       status: 500,
