@@ -188,7 +188,11 @@ export interface SpotifyPlaylist {
   trackCount: number;
   creator?: string;
   isSpotifyPlaylist?: boolean;
+  isDeezerPlaylist?: boolean; // backward compat alias
 }
+
+// Backward-compat type alias for DeezerPlaylist
+export type DeezerPlaylist = SpotifyPlaylist;
 
 export async function searchSpotifyPlaylists(query: string): Promise<SpotifyPlaylist[]> {
   const data = await spotifyInvoke({ action: 'search-playlists', query, limit: 20 });
