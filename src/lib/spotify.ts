@@ -6,6 +6,7 @@ let mergedArtistsCache: { merged_artist_id: string; master_artist_id: string }[]
 let cacheTimestamp = 0;
 const CACHE_TTL = 5 * 60 * 1000;
 const SPOTIFY_ID_PATTERN = /^[a-zA-Z0-9]{22}$/;
+const SPOTIFY_RETRY_DELAY_MS = 1200;
 
 function getSpotifyMarket(): string {
   if (typeof navigator !== 'undefined') {
@@ -56,6 +57,10 @@ async function spotifyInvoke(body: Record<string, any>): Promise<any> {
   });
   if (error) throw error;
   return data;
+}
+
+async function wait(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function resolveArtistId(id: string, artistName?: string): Promise<string | null> {
@@ -145,7 +150,21 @@ export async function getArtist(id: string, artistName?: string): Promise<Artist
     return getArtist(mergeInfo.master_artist_id, artistName);
   }
 
-  const data = await spotifyInvoke({ action: 'get-artist', id: resolvedId });
+  let data = await spotifyInvoke({ action: 'get-artist', id: resolvedId });
+
+  if ((!data?.topTracks || data.topTracks.length === 0) && (data?.name || artistName)) {
+    try {
+      const fallbackTopTracks = await getArtistTopTracks(resolvedId, data?.name || artistName);
+      if (fallbackTopTracks.length > 0) {
+        data = {
+          ...data,
+          topTracks: fallbackTopTracks,
+        };
+      }
+    } catch {
+      // noop: keep artist payload even if fallback fails
+    }
+  }
 
   // Check for merged artists and combine content
   const mergedArtistIds = merges
@@ -210,7 +229,14 @@ export async function getArtistTopTracks(id: string, artistName?: string): Promi
   }
 
   try {
-    return await spotifyInvoke({ action: 'get-artist-top', id: resolvedId, limit: 10 });
+    let tracks = await spotifyInvoke({ action: 'get-artist-top', id: resolvedId, limit: 10 });
+
+    if ((!tracks || tracks.length === 0) && artistName) {
+      await wait(SPOTIFY_RETRY_DELAY_MS);
+      tracks = await spotifyInvoke({ action: 'get-artist-top', id: resolvedId, limit: 10 });
+    }
+
+    return tracks || [];
   } catch {
     return [];
   }
@@ -299,7 +325,14 @@ export async function searchPlaylists(query: string): Promise<SpotifyPlaylist[]>
 }
 
 export async function getSpotifyPlaylist(id: string): Promise<SpotifyPlaylist & { tracks: Track[] }> {
-  return spotifyInvoke({ action: 'get-playlist', id });
+  let playlist = await spotifyInvoke({ action: 'get-playlist', id });
+
+  if (!playlist?.tracks?.length) {
+    await wait(SPOTIFY_RETRY_DELAY_MS);
+    playlist = await spotifyInvoke({ action: 'get-playlist', id });
+  }
+
+  return playlist;
 }
 
 export async function getArtistPlaylists(artistName: string, artistId?: string): Promise<SpotifyPlaylist[]> {
