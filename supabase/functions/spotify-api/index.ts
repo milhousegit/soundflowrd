@@ -342,9 +342,14 @@ serve(async (req) => {
       }
 
       case 'get-new-releases': {
-        const data = await spotifyFetch(`/browse/new-releases?limit=${limit}&market=${mkt}`);
-        const albums = (data.albums?.items || []).map((a: any) => mapAlbum(a));
-        return json(albums);
+        // /browse/new-releases is restricted with client credentials, use search with tag:new
+        try {
+          const data = await spotifyFetch(`/search?q=tag:new&type=album&limit=${limit}&market=${mkt}`);
+          const albums = (data.albums?.items || []).map((a: any) => mapAlbum(a));
+          return json(albums);
+        } catch {
+          return json([]);
+        }
       }
 
       case 'get-popular-artists': {

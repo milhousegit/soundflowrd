@@ -49,37 +49,15 @@ function bestImage(images: any[]): string | undefined {
 
 async function getPopularArtists(): Promise<any[]> {
   try {
-    // Use a popular playlist to extract artists (Spotify has no direct "chart artists" endpoint)
-    const data = await spotifyFetch('/browse/new-releases?limit=20&country=IT');
-    const albums = data?.albums?.items || [];
-    const seen = new Set<string>();
-    const artists: any[] = [];
-    for (const album of albums) {
-      for (const a of (album.artists || [])) {
-        if (!seen.has(a.id)) {
-          seen.add(a.id);
-          artists.push({
-            id: a.id,
-            name: a.name,
-            imageUrl: bestImage(album.images),
-            popularity: 0,
-          });
-        }
-      }
-    }
-    // Enrich with actual artist images (batch of 50)
-    if (artists.length > 0) {
-      const ids = artists.map(a => a.id).slice(0, 50).join(',');
-      const enriched = await spotifyFetch(`/artists?ids=${ids}`);
-      for (const sa of (enriched?.artists || [])) {
-        const match = artists.find(a => a.id === sa.id);
-        if (match) {
-          match.imageUrl = bestImage(sa.images) || match.imageUrl;
-          match.popularity = sa.popularity || 0;
-        }
-      }
-    }
-    return artists.slice(0, 20);
+    // Search for popular artists by genre
+    const data = await spotifyFetch('/search?q=genre:pop&type=artist&limit=20&market=IT');
+    const artists = (data?.artists?.items || []).map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      imageUrl: bestImage(a.images),
+      popularity: a.popularity || 0,
+    }));
+    return artists;
   } catch (error) {
     console.error('Spotify artists fetch error:', error);
     return [];
@@ -88,7 +66,8 @@ async function getPopularArtists(): Promise<any[]> {
 
 async function getNewReleases(): Promise<any[]> {
   try {
-    const data = await spotifyFetch('/browse/new-releases?limit=30&country=IT');
+    // Use tag:new search since /browse/new-releases is restricted with client credentials
+    const data = await spotifyFetch('/search?q=tag:new&type=album&limit=30&market=IT');
     const albums = data?.albums?.items || [];
     return albums.map((album: any) => ({
       id: album.id,
