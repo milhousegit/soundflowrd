@@ -287,3 +287,8 @@ export async function getArtistAlbums(artistId: string, limit = 50): Promise<Alb
   const data = await spotifyInvoke({ action: 'get-artist-albums', id: artistId, limit });
   return data || [];
 }
+
+// ======================== BACKWARD-COMPAT ALIASES ========================
+
+export const getDeezerPlaylist = getSpotifyPlaylist;
+export const searchDeezerPlaylists = searchSpotifyPlaylists;
