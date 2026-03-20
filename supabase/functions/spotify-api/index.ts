@@ -84,30 +84,31 @@ async function spotifyFetch(path: string, retries = 2): Promise<any> {
   throw new Error('Max retries exceeded');
 }
 
-async function spotifyFetchUrl(url: string, retries = 3): Promise<any> {
-  let rateLimitRetries = 0;
-  const maxRateLimitRetries = 5;
-  let authRetries = 0;
-
-  while (true) {
+async function spotifyFetchUrl(url: string, retries = 2): Promise<any> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     const token = await getAccessToken();
     const res = await fetch(url, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
 
-    if (res.status === 401 && authRetries < retries) {
+    if (res.status === 401 && attempt < retries) {
       cachedToken = null;
       tokenExpiresAt = 0;
-      authRetries++;
       continue;
     }
 
-    if (res.status === 429 && rateLimitRetries < maxRateLimitRetries) {
-      const retryAfter = Math.min(parseInt(res.headers.get('Retry-After') || '2'), 5);
-      console.log(`Rate limited on URL, waiting ${retryAfter}s (attempt ${rateLimitRetries + 1})`);
-      await new Promise(r => setTimeout(r, retryAfter * 1000));
-      rateLimitRetries++;
-      continue;
+    if (res.status === 429) {
+      const raw = parseInt(res.headers.get('Retry-After') || '2');
+      if (raw > 30) {
+        console.warn(`Spotify severely rate limited (Retry-After: ${raw}s) on URL`);
+        throw new Error(`Rate limited (${raw}s wait required)`);
+      }
+      const wait = Math.min(raw, 5);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, wait * 1000));
+        continue;
+      }
+      throw new Error(`Rate limited after ${retries + 1} attempts`);
     }
 
     if (!res.ok) {
@@ -117,6 +118,7 @@ async function spotifyFetchUrl(url: string, retries = 3): Promise<any> {
 
     return await res.json();
   }
+  throw new Error('Max retries exceeded');
 }
 
 async function spotifyFetchOptional<T>(path: string, fallback: T, label: string): Promise<T> {
