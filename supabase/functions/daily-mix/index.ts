@@ -647,10 +647,10 @@ serve(async (req) => {
 
 
       // Save to DB
-      if (validMixes.length > 0) {
+      if (finalMixes.length > 0) {
         const { error: insertError } = await supabase
           .from('daily_mixes')
-          .insert(validMixes);
+          .insert(finalMixes);
 
         if (insertError) {
           console.error('Error saving mixes:', insertError);
