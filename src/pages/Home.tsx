@@ -7,7 +7,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getPopularArtists, getArtist, getCountryChart, getTrendingChart } from '@/lib/spotify';
+import { getPopularArtists, getArtist, searchArtists, getCountryChart, getTrendingChart } from '@/lib/spotify';
 import { supabase } from '@/integrations/supabase/client';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
