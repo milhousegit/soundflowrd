@@ -276,11 +276,68 @@ serve(async (req) => {
           ),
         ]);
 
+        const artistName = artistData.name || '';
+
+        // Search-based fallbacks when direct endpoints are blocked (403/429)
+        let releases = (albumsData.items || []).map((a: any) => mapAlbum(a));
+        let topTracks = (topData.tracks || []).map((t: any) => mapTrack(t));
+        let relatedArtists = (relatedData.artists || []).slice(0, 10).map((a: any) => mapArtist(a));
+
+        if (releases.length === 0 && artistName) {
+          console.log(`Using search fallback for albums of "${artistName}"`);
+          try {
+            const searchAlbums = await spotifyFetch(
+              `/search?q=${encodeURIComponent(`artist:"${artistName}"`)}&type=album&limit=10&market=${mkt}`
+            );
+            releases = (searchAlbums.albums?.items || [])
+              .filter((a: any) => {
+                const artists = (a.artists || []).map((ar: any) => ar.name?.toLowerCase());
+                return artists.includes(artistName.toLowerCase());
+              })
+              .map((a: any) => mapAlbum(a));
+          } catch (e) {
+            console.warn('Search fallback for albums failed:', e);
+          }
+        }
+
+        if (topTracks.length === 0 && artistName) {
+          console.log(`Using search fallback for top tracks of "${artistName}"`);
+          try {
+            const searchTracks = await spotifyFetch(
+              `/search?q=${encodeURIComponent(`artist:"${artistName}"`)}&type=track&limit=10&market=${mkt}`
+            );
+            topTracks = (searchTracks.tracks?.items || [])
+              .filter((t: any) => {
+                const artists = (t.artists || []).map((ar: any) => ar.name?.toLowerCase());
+                return artists.includes(artistName.toLowerCase());
+              })
+              .map((t: any) => mapTrack(t));
+          } catch (e) {
+            console.warn('Search fallback for tracks failed:', e);
+          }
+        }
+
+        if (relatedArtists.length === 0 && artistData.genres?.length > 0) {
+          console.log(`Using search fallback for related artists via genre`);
+          try {
+            const genre = artistData.genres[0];
+            const searchRelated = await spotifyFetch(
+              `/search?q=${encodeURIComponent(`genre:"${genre}"`)}&type=artist&limit=10&market=${mkt}`
+            );
+            relatedArtists = (searchRelated.artists?.items || [])
+              .filter((a: any) => a.id !== id)
+              .slice(0, 10)
+              .map((a: any) => mapArtist(a));
+          } catch (e) {
+            console.warn('Search fallback for related artists failed:', e);
+          }
+        }
+
         const artist = {
           ...mapArtist(artistData),
-          releases: (albumsData.items || []).map((a: any) => mapAlbum(a)),
-          topTracks: (topData.tracks || []).map((t: any) => mapTrack(t)),
-          relatedArtists: (relatedData.artists || []).slice(0, 10).map((a: any) => mapArtist(a)),
+          releases,
+          topTracks,
+          relatedArtists,
         };
         return json(artist);
       }
@@ -290,9 +347,32 @@ serve(async (req) => {
           return json([]);
         }
 
-        const data = await spotifyFetch(`/artists/${id}/top-tracks?market=${mkt}`).catch(() => ({ tracks: [] }));
-        const tracks = (data.tracks || []).slice(0, limit).map((t: any) => mapTrack(t));
-        return json(tracks);
+        const topResult = await spotifyFetchOptional(
+          `/artists/${id}/top-tracks?market=${mkt}`,
+          { tracks: [] },
+          `get-artist-top ${id}`,
+        );
+        let topResultTracks = (topResult.tracks || []).slice(0, limit).map((t: any) => mapTrack(t));
+
+        // Search fallback if direct endpoint blocked
+        if (topResultTracks.length === 0) {
+          try {
+            const artistInfo = await spotifyFetch(`/artists/${id}`);
+            const aName = artistInfo.name;
+            if (aName) {
+              const searchData = await spotifyFetch(
+                `/search?q=${encodeURIComponent(`artist:"${aName}"`)}&type=track&limit=${limit}&market=${mkt}`
+              );
+              topResultTracks = (searchData.tracks?.items || [])
+                .filter((t: any) => (t.artists || []).some((ar: any) => ar.id === id))
+                .map((t: any) => mapTrack(t));
+            }
+          } catch (e) {
+            console.warn('Search fallback for get-artist-top failed:', e);
+          }
+        }
+
+        return json(topResultTracks);
       }
 
       // ======================== PLAYLISTS ========================
