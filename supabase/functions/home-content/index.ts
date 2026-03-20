@@ -32,7 +32,9 @@ async function getSpotifyToken(): Promise<string> {
 
 async function spotifyFetch(path: string): Promise<any> {
   const token = await getSpotifyToken();
-  const res = await fetch(`https://api.spotify.com/v1${path}`, {
+  const url = `https://api.spotify.com/v1${path}`;
+  console.log('Fetching:', url);
+  const res = await fetch(url, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!res.ok) {
