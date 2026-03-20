@@ -525,18 +525,132 @@ serve(async (req) => {
         });
       }
 
-      // Filter out empty mixes and re-index
-      const validMixes = mixes
-        .filter(m => Array.isArray(m.tracks) && m.tracks.length > 0)
-        .map((m, idx) => ({ ...m, mix_index: idx, mix_label: `Daily Mix ${idx + 1}` }));
+      // ---- NEW RELEASES MIX ----
+      console.log('Generating NEW releases mix...');
+      const newReleaseTracks: any[] = [];
+      const newReleaseSeenIds = new Set<string>();
 
-      console.log(`Valid mixes: ${validMixes.length} out of ${mixes.length} generated`);
+      // Collect artist IDs from: favorites, top played artists, and liked tracks' artists
+      const allArtistIds = new Set<string>();
+      for (const a of artistStats) {
+        if (a.artist_id) allArtistIds.add(a.artist_id);
+      }
+
+      // Add favorite artists
+      const { data: favArtists } = await supabase
+        .from('favorites')
+        .select('item_id')
+        .eq('user_id', user.id)
+        .eq('item_type', 'artist');
+      for (const f of (favArtists || [])) {
+        if (f.item_id) allArtistIds.add(f.item_id);
+      }
+
+      // Add artists from favorite tracks
+      const { data: favTrackData } = await supabase
+        .from('favorites')
+        .select('item_data')
+        .eq('user_id', user.id)
+        .eq('item_type', 'track');
+      for (const f of (favTrackData || [])) {
+        const d = f.item_data as any;
+        if (d?.artistId) allArtistIds.add(String(d.artistId));
+      }
+
+      const uniqueArtistIds = [...allArtistIds].slice(0, 30);
+      console.log(`Checking new releases for ${uniqueArtistIds.length} artists`);
+
+      // Fetch latest albums for each artist (batch of 5)
+      const oneMonthAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000); // 60 days
+      for (let batch = 0; batch < uniqueArtistIds.length; batch += 5) {
+        const slice = uniqueArtistIds.slice(batch, batch + 5);
+        const results = await Promise.all(slice.map(async (artistId) => {
+          try {
+            const data = await fetchDeezer(`${DEEZER_API}/artist/${artistId}/albums?limit=5&order=date`);
+            const albums = data?.data || [];
+            const recentAlbums = albums.filter((a: any) => {
+              if (!a.release_date) return false;
+              return new Date(a.release_date) >= oneMonthAgo;
+            });
+            // Get tracks from recent albums
+            const tracks: any[] = [];
+            for (const album of recentAlbums.slice(0, 2)) {
+              try {
+                const albumData = await fetchDeezer(`${DEEZER_API}/album/${album.id}`);
+                if (albumData?.tracks?.data) {
+                  for (const t of albumData.tracks.data) {
+                    tracks.push({
+                      ...t,
+                      album: { id: album.id, title: album.title, cover: album.cover, cover_medium: album.cover_medium, cover_big: album.cover_big, cover_xl: album.cover_xl },
+                    });
+                  }
+                }
+              } catch { /* skip */ }
+            }
+            return tracks;
+          } catch { return []; }
+        }));
+        for (const tracks of results) {
+          for (const t of tracks) {
+            const tid = String(t.id);
+            if (!newReleaseSeenIds.has(tid)) {
+              newReleaseSeenIds.add(tid);
+              newReleaseTracks.push(t);
+            }
+          }
+        }
+      }
+
+      console.log(`NEW mix: ${newReleaseTracks.length} tracks from new releases`);
+
+      if (newReleaseTracks.length > 0) {
+        // Shuffle
+        for (let j = newReleaseTracks.length - 1; j > 0; j--) {
+          const k = Math.floor(Math.random() * (j + 1));
+          [newReleaseTracks[j], newReleaseTracks[k]] = [newReleaseTracks[k], newReleaseTracks[j]];
+        }
+
+        const formattedNewTracks = newReleaseTracks.slice(0, 50).map((t: any) => ({
+          id: String(t.id),
+          title: t.title,
+          artist: t.artist?.name || 'Unknown Artist',
+          artistId: String(t.artist?.id || ''),
+          album: t.album?.title || 'Unknown Album',
+          albumId: String(t.album?.id || ''),
+          duration: t.duration || 0,
+          coverUrl: albumCover(t.album),
+        }));
+
+        const newMixIndex = validMixes.length;
+        validMixes.push({
+          user_id: user.id,
+          mix_index: newMixIndex,
+          mix_label: 'NEW',
+          top_artists: [...new Set(formattedNewTracks.map(t => t.artist))].slice(0, 4),
+          genre_tags: ['New Releases'],
+          tracks: formattedNewTracks,
+          dominant_color: '#10B981,#3B82F6',
+          cover_url: formattedNewTracks[0]?.coverUrl || null,
+          generated_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        });
+      }
+
+      // Re-index all mixes
+      const finalMixes = validMixes.map((m, idx) => ({
+        ...m,
+        mix_index: idx,
+        mix_label: m.mix_label === 'NEW' ? 'NEW' : `Daily Mix ${idx + 1}`,
+      }));
+
+      console.log(`Final mixes: ${finalMixes.length} (including NEW)`);
+
 
       // Save to DB
-      if (validMixes.length > 0) {
+      if (finalMixes.length > 0) {
         const { error: insertError } = await supabase
           .from('daily_mixes')
-          .insert(validMixes);
+          .insert(finalMixes);
 
         if (insertError) {
           console.error('Error saving mixes:', insertError);
@@ -552,7 +666,7 @@ serve(async (req) => {
 
       console.log(`Generated ${freshMixes?.length || 0} mixes for user ${user.id}`);
 
-      return new Response(JSON.stringify(freshMixes || mixes), {
+      return new Response(JSON.stringify(freshMixes || finalMixes), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

@@ -402,13 +402,25 @@ const Player: React.FC = () => {
           <div className="px-8 pt-6 text-center">
             <h2 className="text-xl font-bold text-foreground truncate">{currentTrack.title}</h2>
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
-              <button onClick={handleNavigateToArtist} className="hover:text-primary hover:underline transition-colors truncate">
+              <button
+                onClick={handleNavigateToArtist}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+                className="hover:text-primary hover:underline transition-colors truncate"
+              >
                 {currentTrack.artist}
               </button>
               {currentTrack.album &&
             <>
                   <span>•</span>
-                  <button onClick={handleNavigateToAlbum} className="hover:text-primary hover:underline transition-colors truncate">
+                  <button
+                    onClick={handleNavigateToAlbum}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    className="hover:text-primary hover:underline transition-colors truncate"
+                  >
                     {currentTrack.album}
                   </button>
                 </>
