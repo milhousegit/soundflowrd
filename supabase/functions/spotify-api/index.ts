@@ -205,10 +205,24 @@ serve(async (req) => {
       }
 
       case 'get-artist': {
+        if (!/^[a-zA-Z0-9]{22}$/.test(String(id || ''))) {
+          return json({
+            id: String(id || ''),
+            name: 'Unknown Artist',
+            imageUrl: undefined,
+            popularity: 0,
+            genres: [],
+            releases: [],
+            topTracks: [],
+            relatedArtists: [],
+            error: true,
+          });
+        }
+
         const [artistData, albumsData, topData, relatedData] = await Promise.all([
           spotifyFetch(`/artists/${id}`),
           spotifyFetch(`/artists/${id}/albums?include_groups=album,single&limit=50&market=${mkt}`),
-          spotifyFetch(`/artists/${id}/top-tracks?market=${mkt}`),
+          spotifyFetch(`/artists/${id}/top-tracks?market=${mkt}`).catch(() => ({ tracks: [] })),
           spotifyFetch(`/artists/${id}/related-artists`).catch(() => ({ artists: [] })),
         ]);
 
@@ -222,7 +236,11 @@ serve(async (req) => {
       }
 
       case 'get-artist-top': {
-        const data = await spotifyFetch(`/artists/${id}/top-tracks?market=${mkt}`);
+        if (!/^[a-zA-Z0-9]{22}$/.test(String(id || ''))) {
+          return json([]);
+        }
+
+        const data = await spotifyFetch(`/artists/${id}/top-tracks?market=${mkt}`).catch(() => ({ tracks: [] }));
         const tracks = (data.tracks || []).slice(0, limit).map((t: any) => mapTrack(t));
         return json(tracks);
       }

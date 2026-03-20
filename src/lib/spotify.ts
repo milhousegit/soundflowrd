@@ -5,6 +5,7 @@ import { Track, Album, Artist } from '@/types/music';
 let mergedArtistsCache: { merged_artist_id: string; master_artist_id: string }[] | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 5 * 60 * 1000;
+const SPOTIFY_ID_PATTERN = /^[a-zA-Z0-9]{22}$/;
 
 async function getMergedArtists() {
   const now = Date.now();
@@ -38,6 +39,28 @@ async function spotifyInvoke(body: Record<string, any>): Promise<any> {
   const { data, error } = await supabase.functions.invoke('spotify-api', { body });
   if (error) throw error;
   return data;
+}
+
+async function resolveArtistId(id: string, artistName?: string): Promise<string | null> {
+  const merges = await getMergedArtists();
+  const mergeInfo = merges.find(m => m.merged_artist_id === id);
+  const candidateId = mergeInfo?.master_artist_id || id;
+
+  if (SPOTIFY_ID_PATTERN.test(candidateId)) {
+    return candidateId;
+  }
+
+  if (!artistName?.trim()) {
+    return null;
+  }
+
+  const results = await searchArtists(artistName);
+  if (results.length === 0) {
+    return null;
+  }
+
+  const normalizedArtistName = artistName.trim().toLowerCase();
+  return results.find(artist => artist.name.trim().toLowerCase() === normalizedArtistName)?.id || results[0]?.id || null;
 }
 
 // ======================== SEARCH ========================
@@ -82,19 +105,34 @@ export async function getAlbum(id: string): Promise<Album & { tracks: Track[] }>
   return spotifyInvoke({ action: 'get-album', id });
 }
 
-export async function getArtist(id: string): Promise<Artist & { releases: Album[]; topTracks: Track[]; relatedArtists: Artist[]; mergedFrom?: string[] }> {
-  const merges = await getMergedArtists();
-  const mergeInfo = merges.find(m => m.merged_artist_id === id);
+export async function getArtist(id: string, artistName?: string): Promise<Artist & { releases: Album[]; topTracks: Track[]; relatedArtists: Artist[]; mergedFrom?: string[] }> {
+  const resolvedId = await resolveArtistId(id, artistName);
 
-  if (mergeInfo) {
-    return getArtist(mergeInfo.master_artist_id);
+  if (!resolvedId) {
+    return {
+      id,
+      name: artistName || 'Unknown Artist',
+      imageUrl: undefined,
+      popularity: 0,
+      genres: [],
+      releases: [],
+      topTracks: [],
+      relatedArtists: [],
+    };
   }
 
-  const data = await spotifyInvoke({ action: 'get-artist', id });
+  const merges = await getMergedArtists();
+  const mergeInfo = merges.find(m => m.merged_artist_id === resolvedId);
+
+  if (mergeInfo) {
+    return getArtist(mergeInfo.master_artist_id, artistName);
+  }
+
+  const data = await spotifyInvoke({ action: 'get-artist', id: resolvedId });
 
   // Check for merged artists and combine content
   const mergedArtistIds = merges
-    .filter(m => m.master_artist_id === id)
+    .filter(m => m.master_artist_id === resolvedId)
     .map(m => m.merged_artist_id);
 
   if (mergedArtistIds.length > 0) {
@@ -148,8 +186,17 @@ export async function getArtist(id: string): Promise<Artist & { releases: Album[
   return data;
 }
 
-export async function getArtistTopTracks(id: string): Promise<Track[]> {
-  return spotifyInvoke({ action: 'get-artist-top', id, limit: 10 });
+export async function getArtistTopTracks(id: string, artistName?: string): Promise<Track[]> {
+  const resolvedId = await resolveArtistId(id, artistName);
+  if (!resolvedId) {
+    return [];
+  }
+
+  try {
+    return await spotifyInvoke({ action: 'get-artist-top', id: resolvedId, limit: 10 });
+  } catch {
+    return [];
+  }
 }
 
 // ======================== CHARTS & BROWSE ========================

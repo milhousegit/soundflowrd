@@ -1814,7 +1814,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // 1. Get tracks from artists in the queue (variety)
       for (const artist of shuffledArtists) {
         try {
-          const artistTracks = await getArtistTopTracks(artist.id);
+          const artistTracks = await getArtistTopTracks(artist.id, artist.name);
           for (const track of artistTracks) {
             if (!avoidIds.has(track.id) && !seenTrackIds.has(track.id)) {
               allTracks.push(track);
@@ -1829,7 +1829,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // 2. Add more from current artist if we don't have enough
       if (allTracks.length < 15 && currentTrack.artistId) {
         try {
-          const currentArtistTracks = await getArtistTopTracks(currentTrack.artistId);
+          const currentArtistTracks = await getArtistTopTracks(currentTrack.artistId, currentTrack.artist);
           for (const track of currentArtistTracks) {
             if (!avoidIds.has(track.id) && !seenTrackIds.has(track.id)) {
               allTracks.push(track);
