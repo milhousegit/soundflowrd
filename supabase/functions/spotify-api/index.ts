@@ -78,7 +78,36 @@ async function spotifyFetch(path: string, retries = 2): Promise<any> {
 
 async function spotifyFetchOptional<T>(path: string, fallback: T, label: string): Promise<T> {
   try {
-    return await spotifyFetch(path);
+    let token = await getAccessToken();
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(`${SPOTIFY_API}${path}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (res.status === 401 && attempt === 0) {
+        cachedToken = null;
+        tokenExpiresAt = 0;
+        token = await getAccessToken();
+        continue;
+      }
+
+      if (res.status === 403 || res.status === 429) {
+        const text = await res.text();
+        console.warn(`Spotify optional endpoint blocked for ${label}: ${res.status} ${text.substring(0, 120)}`);
+        return fallback;
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn(`Spotify optional endpoint failed for ${label}: ${res.status} ${text.substring(0, 120)}`);
+        return fallback;
+      }
+
+      return await res.json();
+    }
+
+    return fallback;
   } catch (error) {
     console.warn(`Spotify optional endpoint failed for ${label}:`, error);
     return fallback;
