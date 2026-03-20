@@ -66,7 +66,7 @@ async function getPopularArtists(): Promise<any[]> {
 
 async function getNewReleases(): Promise<any[]> {
   try {
-    const data = await spotifyFetch('/search?q=tag:new&type=album&limit=30&market=IT');
+    const data = await spotifyFetch('/search?q=tag%3Anew&type=album&limit=20&market=IT');
     console.log('Spotify search response keys:', Object.keys(data || {}));
     const albums = data?.albums?.items || [];
     console.log(`Found ${albums.length} albums`);
