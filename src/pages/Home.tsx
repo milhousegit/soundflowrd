@@ -7,7 +7,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getPopularArtists, getArtist, getCountryChart, getTrendingChart } from '@/lib/deezer';
+import { getPopularArtists, getArtist, getCountryChart, getTrendingChart } from '@/lib/spotify';
 import { supabase } from '@/integrations/supabase/client';
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
@@ -317,7 +317,7 @@ const Home: React.FC = () => {
             // Long ID = Deezer playlist - fetch from API using POST with JSON body
             try {
               const response = await fetch(
-                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deezer`,
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/spotify-api`,
                 {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -338,7 +338,7 @@ const Home: React.FC = () => {
                 displayData[chart.id] = { coverUrl: null, trackCount: 0 };
               }
             } catch (e) {
-              console.error('Error fetching Deezer playlist:', e);
+              console.error('Error fetching playlist:', e);
               displayData[chart.id] = { coverUrl: null, trackCount: 0 };
             }
           } else {

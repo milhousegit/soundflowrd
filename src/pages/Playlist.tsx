@@ -19,7 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePlaylists, PlaylistTrack, Playlist as PlaylistType } from '@/hooks/usePlaylists';
 import { useSyncedTracks } from '@/hooks/useSyncedTracks';
 import { useDownloadAll } from '@/hooks/useDownloadAll';
-import { getDeezerPlaylist } from '@/lib/deezer';
+import { getDeezerPlaylist } from '@/lib/spotify';
 import { Track, Album } from '@/types/music';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';

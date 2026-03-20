@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Loader2, Sparkles, RefreshCw, Music, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Track } from '@/types/music';
-import { searchTracks } from '@/lib/deezer';
+import { searchTracks } from '@/lib/spotify';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';

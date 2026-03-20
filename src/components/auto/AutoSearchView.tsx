@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Music, Disc, User, ListMusic, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { searchTracks, searchAlbums, searchArtists, searchPlaylists, DeezerPlaylist } from '@/lib/deezer';
+import { searchTracks, searchAlbums, searchArtists, searchPlaylists, DeezerPlaylist } from '@/lib/spotify';
 import { Track, Album, Artist } from '@/types/music';
 import { usePlayer } from '@/contexts/PlayerContext';
 import AutoDetailView, { DetailType } from './AutoDetailView';

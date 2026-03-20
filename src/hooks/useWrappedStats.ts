@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { searchArtists } from '@/lib/deezer';
+import { searchArtists } from '@/lib/spotify';
 
 interface ArtistStats {
   id: string;

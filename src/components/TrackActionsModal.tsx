@@ -21,7 +21,7 @@ import { usePlaylists } from '@/hooks/usePlaylists';
 import { usePlayer, type PlaybackSource } from '@/contexts/PlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useToast } from '@/hooks/use-toast';
-import { getTrackRadio } from '@/lib/deezer';
+import { getTrackRadio } from '@/lib/spotify';
 import { cn } from '@/lib/utils';
 import CreatePlaylistModal from './CreatePlaylistModal';
 

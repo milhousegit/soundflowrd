@@ -14,7 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Track, Album } from '@/types/music';
-import { DeezerPlaylist, searchDeezerPlaylists } from '@/lib/deezer';
+import { DeezerPlaylist, searchDeezerPlaylists } from '@/lib/spotify';
 
 // Custom hook for debounced value
 function useDebouncedValue<T>(value: T, delay: number): T {

@@ -12,7 +12,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDownloadAll } from '@/hooks/useDownloadAll';
-import { getDeezerPlaylist, DeezerPlaylist } from '@/lib/deezer';
+import { getDeezerPlaylist, DeezerPlaylist } from '@/lib/spotify';
 import { Track, Album } from '@/types/music';
 import { isPast } from 'date-fns';
 import { toast } from 'sonner';

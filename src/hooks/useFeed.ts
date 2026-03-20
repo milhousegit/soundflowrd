@@ -165,7 +165,7 @@ export function useFeed() {
           // Limit to 10 artists for performance and use Promise.allSettled for resilience
           const artistPromises = artistIds.slice(0, 10).map(async (artistId) => {
             try {
-              const { data: artistData } = await supabase.functions.invoke('deezer', {
+              const { data: artistData } = await supabase.functions.invoke('spotify-api', {
                 body: { action: 'get-artist', id: artistId }
               });
 

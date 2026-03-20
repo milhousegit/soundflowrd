@@ -5,7 +5,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useWrappedStats } from '@/hooks/useWrappedStats';
 import { cn } from '@/lib/utils';
-import { searchAll } from '@/lib/deezer';
+import { searchAll } from '@/lib/spotify';
 import { Track } from '@/types/music';
 import { Skeleton } from '@/components/ui/skeleton';
 

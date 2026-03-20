@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { searchAll } from '@/lib/deezer';
+import { searchAll } from '@/lib/spotify';
 import { Track } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
 
