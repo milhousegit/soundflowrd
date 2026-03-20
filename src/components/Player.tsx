@@ -414,7 +414,13 @@ const Player: React.FC = () => {
               {currentTrack.album &&
             <>
                   <span>•</span>
-                  <button onClick={handleNavigateToAlbum} className="hover:text-primary hover:underline transition-colors truncate">
+                  <button
+                    onClick={handleNavigateToAlbum}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    className="hover:text-primary hover:underline transition-colors truncate"
+                  >
                     {currentTrack.album}
                   </button>
                 </>
