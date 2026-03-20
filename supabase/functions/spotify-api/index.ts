@@ -46,24 +46,32 @@ async function getAccessToken(): Promise<string> {
 }
 
 async function spotifyFetch(path: string, retries = 2): Promise<any> {
-  for (let i = 0; i <= retries; i++) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     const token = await getAccessToken();
     const res = await fetch(`${SPOTIFY_API}${path}`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
 
-    if (res.status === 401 && i < retries) {
-      // Token expired, force refresh
+    if (res.status === 401 && attempt < retries) {
       cachedToken = null;
       tokenExpiresAt = 0;
       continue;
     }
 
     if (res.status === 429) {
-      const retryAfter = Math.min(parseInt(res.headers.get('Retry-After') || '2'), 10);
-      console.log(`Rate limited, waiting ${retryAfter}s`);
-      await new Promise(r => setTimeout(r, retryAfter * 1000));
-      continue;
+      const raw = parseInt(res.headers.get('Retry-After') || '2');
+      // If Retry-After is huge (>30s), the API is severely throttled - fail fast
+      if (raw > 30) {
+        console.warn(`Spotify severely rate limited (Retry-After: ${raw}s) on ${path}`);
+        throw new Error(`Rate limited (${raw}s wait required)`);
+      }
+      const wait = Math.min(raw, 5);
+      if (attempt < retries) {
+        console.log(`Rate limited on ${path}, waiting ${wait}s (attempt ${attempt + 1})`);
+        await new Promise(r => setTimeout(r, wait * 1000));
+        continue;
+      }
+      throw new Error(`Rate limited after ${retries + 1} attempts on ${path}`);
     }
 
     if (!res.ok) {
@@ -77,23 +85,30 @@ async function spotifyFetch(path: string, retries = 2): Promise<any> {
 }
 
 async function spotifyFetchUrl(url: string, retries = 2): Promise<any> {
-  for (let i = 0; i <= retries; i++) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     const token = await getAccessToken();
     const res = await fetch(url, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
 
-    if (res.status === 401 && i < retries) {
+    if (res.status === 401 && attempt < retries) {
       cachedToken = null;
       tokenExpiresAt = 0;
       continue;
     }
 
     if (res.status === 429) {
-      const retryAfter = Math.min(parseInt(res.headers.get('Retry-After') || '2'), 10);
-      console.log(`Rate limited, waiting ${retryAfter}s`);
-      await new Promise(r => setTimeout(r, retryAfter * 1000));
-      continue;
+      const raw = parseInt(res.headers.get('Retry-After') || '2');
+      if (raw > 30) {
+        console.warn(`Spotify severely rate limited (Retry-After: ${raw}s) on URL`);
+        throw new Error(`Rate limited (${raw}s wait required)`);
+      }
+      const wait = Math.min(raw, 5);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, wait * 1000));
+        continue;
+      }
+      throw new Error(`Rate limited after ${retries + 1} attempts`);
     }
 
     if (!res.ok) {
@@ -103,7 +118,6 @@ async function spotifyFetchUrl(url: string, retries = 2): Promise<any> {
 
     return await res.json();
   }
-
   throw new Error('Max retries exceeded');
 }
 
