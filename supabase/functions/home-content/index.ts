@@ -14,8 +14,9 @@ let tokenExpiry = 0;
 
 async function getSpotifyToken(): Promise<string> {
   if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
-  const clientId = Deno.env.get('SPOTIFY_CLIENT_ID')!;
-  const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET')!;
+  const clientId = Deno.env.get('SPOTIFY_CLIENT_ID');
+  const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
+  console.log('Getting Spotify token, clientId exists:', !!clientId, 'clientSecret exists:', !!clientSecret);
   const res = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
     headers: {
@@ -25,6 +26,10 @@ async function getSpotifyToken(): Promise<string> {
     body: 'grant_type=client_credentials',
   });
   const data = await res.json();
+  console.log('Token response status:', res.status, 'has token:', !!data.access_token);
+  if (!data.access_token) {
+    throw new Error(`Token error: ${JSON.stringify(data)}`);
+  }
   cachedToken = data.access_token;
   tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
   return cachedToken!;
