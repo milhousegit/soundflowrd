@@ -8,89 +8,25 @@ const corsHeaders = {
 
 const CACHE_DURATION_HOURS = 6;
 
-// ---- Spotify Auth ----
-let cachedToken: string | null = null;
-let tokenExpiry = 0;
-
-async function getSpotifyToken(): Promise<string> {
-  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
-  const clientId = Deno.env.get('SPOTIFY_CLIENT_ID');
-  const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
-  console.log('Getting Spotify token, clientId exists:', !!clientId, 'clientSecret exists:', !!clientSecret);
-  const res = await fetch('https://accounts.spotify.com/api/token', {
+// Call the spotify-api edge function internally
+async function callSpotifyApi(action: string, params: Record<string, any> = {}): Promise<any> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY')!;
+  
+  const res = await fetch(`${supabaseUrl}/functions/v1/spotify-api`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseKey}`,
     },
-    body: 'grant_type=client_credentials',
+    body: JSON.stringify({ action, ...params }),
   });
-  const data = await res.json();
-  console.log('Token response status:', res.status, 'has token:', !!data.access_token);
-  if (!data.access_token) {
-    throw new Error(`Token error: ${JSON.stringify(data)}`);
-  }
-  cachedToken = data.access_token;
-  tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
-  return cachedToken!;
-}
-
-async function spotifyFetch(path: string): Promise<any> {
-  const token = await getSpotifyToken();
-  const url = `https://api.spotify.com/v1${path}`;
-  console.log('Fetching:', url);
-  const res = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
+  
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Spotify ${res.status}: ${text}`);
+    throw new Error(`spotify-api ${res.status}: ${text}`);
   }
   return res.json();
-}
-
-function bestImage(images: any[]): string | undefined {
-  if (!images?.length) return undefined;
-  return images.sort((a: any, b: any) => (b.width || 0) - (a.width || 0))[0]?.url;
-}
-
-async function getPopularArtists(): Promise<any[]> {
-  try {
-    const data = await spotifyFetch('/search?q=genre%3Apop&type=artist&market=IT&limit=20');
-    const artists = (data?.artists?.items || []).map((a: any) => ({
-      id: a.id,
-      name: a.name,
-      imageUrl: bestImage(a.images),
-      popularity: a.popularity || 0,
-    }));
-    return artists;
-  } catch (error) {
-    console.error('Spotify artists fetch error:', error);
-    return [];
-  }
-}
-
-async function getNewReleases(): Promise<any[]> {
-  try {
-    // Search for recent albums by year
-    const year = new Date().getFullYear();
-    const data = await spotifyFetch(`/search?q=year%3A${year}&type=album&market=IT&limit=20`);
-    console.log('Search result keys:', Object.keys(data || {}));
-    const albums = data?.albums?.items || [];
-    console.log(`Found ${albums.length} albums from search`);
-    return albums.map((album: any) => ({
-      id: album.id,
-      title: album.name,
-      artist: album.artists?.[0]?.name || 'Unknown Artist',
-      artistId: album.artists?.[0]?.id || '',
-      coverUrl: bestImage(album.images),
-      releaseDate: album.release_date || undefined,
-      trackCount: album.total_tracks || undefined,
-    }));
-  } catch (error) {
-    console.error('Spotify releases fetch error:', error);
-    return [];
-  }
 }
 
 serve(async (req) => {
@@ -122,15 +58,12 @@ serve(async (req) => {
 
       if (cached) {
         const updatedAt = new Date(cached.updated_at);
-        const now = new Date();
-        const hoursDiff = (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60);
+        const hoursDiff = (Date.now() - updatedAt.getTime()) / (1000 * 60 * 60);
 
         if (hoursDiff < CACHE_DURATION_HOURS) {
           console.log(`Returning cached ${contentType} (${hoursDiff.toFixed(1)}h old)`);
           return new Response(JSON.stringify({ 
-            data: cached.data, 
-            cached: true,
-            cached_at: cached.updated_at 
+            data: cached.data, cached: true, cached_at: cached.updated_at 
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -141,17 +74,19 @@ serve(async (req) => {
     let data: any[] = [];
 
     if (contentType === 'popular_artists') {
-      console.log('Fetching popular artists from Spotify...');
-      data = await getPopularArtists();
-      console.log(`Spotify: ${data.length} artists`);
+      console.log('Fetching popular artists via spotify-api...');
+      data = await callSpotifyApi('get-popular-artists', { limit: 20, market: country });
+      console.log(`Got ${(data || []).length} artists`);
+      data = data || [];
     } else if (contentType === 'new_releases') {
-      console.log('Fetching new releases from Spotify...');
-      data = await getNewReleases();
-      console.log(`Spotify: ${data.length} releases`);
+      console.log('Fetching new releases via spotify-api...');
+      data = await callSpotifyApi('get-new-releases', { limit: 30, market: country });
+      console.log(`Got ${(data || []).length} releases`);
+      data = data || [];
     }
 
     if (data.length > 0) {
-      const { error: upsertError } = await supabase
+      await supabase
         .from('home_content_cache')
         .upsert({
           content_type: contentType,
@@ -159,29 +94,20 @@ serve(async (req) => {
           language,
           data,
           updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'content_type,country,language',
-        });
-
-      if (upsertError) {
-        console.error('Cache upsert error:', upsertError);
-      }
+        }, { onConflict: 'content_type,country,language' });
     }
 
     return new Response(JSON.stringify({ 
-      data, 
-      cached: false,
-      fetched_at: new Date().toISOString() 
+      data, cached: false, fetched_at: new Date().toISOString() 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error: unknown) {
     console.error('Home content error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ 
       error: 'Failed to fetch content',
-      details: errorMessage 
+      details: error instanceof Error ? error.message : 'Unknown error'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
