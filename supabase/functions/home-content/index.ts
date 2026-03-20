@@ -6,95 +6,106 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const DEEZER_API = 'https://api.deezer.com';
-
-// Cache duration in hours
 const CACHE_DURATION_HOURS = 6;
 
-interface Album {
-  id: string;
-  title: string;
-  artist: string;
-  artistId?: string;
-  coverUrl?: string;
-  releaseDate?: string;
-  trackCount?: number;
+// ---- Spotify Auth ----
+let cachedToken: string | null = null;
+let tokenExpiry = 0;
+
+async function getSpotifyToken(): Promise<string> {
+  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+  const clientId = Deno.env.get('SPOTIFY_CLIENT_ID')!;
+  const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET')!;
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+    },
+    body: 'grant_type=client_credentials',
+  });
+  const data = await res.json();
+  cachedToken = data.access_token;
+  tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+  return cachedToken!;
 }
 
-interface Artist {
-  id: string;
-  name: string;
-  imageUrl?: string;
-  popularity?: number;
-}
-
-// Fetch with timeout
-async function fetchWithTimeout(url: string, timeout = 10000): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    return response;
-  } finally {
-    clearTimeout(id);
+async function spotifyFetch(path: string): Promise<any> {
+  const token = await getSpotifyToken();
+  const res = await fetch(`https://api.spotify.com/v1${path}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Spotify ${res.status}: ${text}`);
   }
+  return res.json();
 }
 
-// Get popular artists from Deezer charts
-async function getPopularArtists(): Promise<Artist[]> {
+function bestImage(images: any[]): string | undefined {
+  if (!images?.length) return undefined;
+  return images.sort((a: any, b: any) => (b.width || 0) - (a.width || 0))[0]?.url;
+}
+
+async function getPopularArtists(): Promise<any[]> {
   try {
-    const response = await fetchWithTimeout(`${DEEZER_API}/chart/0/artists?limit=20`);
-    
-    if (!response.ok) {
-      console.error('Deezer artists error:', response.status);
-      return [];
+    // Use a popular playlist to extract artists (Spotify has no direct "chart artists" endpoint)
+    const data = await spotifyFetch('/browse/new-releases?limit=20&country=IT');
+    const albums = data?.albums?.items || [];
+    const seen = new Set<string>();
+    const artists: any[] = [];
+    for (const album of albums) {
+      for (const a of (album.artists || [])) {
+        if (!seen.has(a.id)) {
+          seen.add(a.id);
+          artists.push({
+            id: a.id,
+            name: a.name,
+            imageUrl: bestImage(album.images),
+            popularity: 0,
+          });
+        }
+      }
     }
-    
-    const data = await response.json();
-    const artists = data.data || [];
-    
-    return artists.map((artist: any) => ({
-      id: String(artist.id),
-      name: artist.name,
-      imageUrl: artist.picture_xl || artist.picture_big || artist.picture_medium || artist.picture || undefined,
-      popularity: artist.position || 0,
-    }));
+    // Enrich with actual artist images (batch of 50)
+    if (artists.length > 0) {
+      const ids = artists.map(a => a.id).slice(0, 50).join(',');
+      const enriched = await spotifyFetch(`/artists?ids=${ids}`);
+      for (const sa of (enriched?.artists || [])) {
+        const match = artists.find(a => a.id === sa.id);
+        if (match) {
+          match.imageUrl = bestImage(sa.images) || match.imageUrl;
+          match.popularity = sa.popularity || 0;
+        }
+      }
+    }
+    return artists.slice(0, 20);
   } catch (error) {
-    console.error('Deezer artists fetch error:', error);
+    console.error('Spotify artists fetch error:', error);
     return [];
   }
 }
 
-// Get new releases from Deezer editorial
-async function getNewReleases(): Promise<Album[]> {
+async function getNewReleases(): Promise<any[]> {
   try {
-    const response = await fetchWithTimeout(`${DEEZER_API}/editorial/0/releases?limit=30`);
-    
-    if (!response.ok) {
-      console.error('Deezer releases error:', response.status);
-      return [];
-    }
-    
-    const data = await response.json();
-    const releases = data.data || [];
-    
-    return releases.map((album: any) => ({
-      id: String(album.id),
-      title: album.title,
-      artist: album.artist?.name || 'Unknown Artist',
-      artistId: String(album.artist?.id || ''),
-      coverUrl: album.cover_xl || album.cover_big || album.cover_medium || album.cover || undefined,
+    const data = await spotifyFetch('/browse/new-releases?limit=30&country=IT');
+    const albums = data?.albums?.items || [];
+    return albums.map((album: any) => ({
+      id: album.id,
+      title: album.name,
+      artist: album.artists?.[0]?.name || 'Unknown Artist',
+      artistId: album.artists?.[0]?.id || '',
+      coverUrl: bestImage(album.images),
       releaseDate: album.release_date || undefined,
-      trackCount: album.nb_tracks || undefined,
+      trackCount: album.total_tracks || undefined,
     }));
   } catch (error) {
-    console.error('Deezer releases fetch error:', error);
+    console.error('Spotify releases fetch error:', error);
     return [];
   }
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -108,12 +119,10 @@ serve(async (req) => {
 
     console.log(`Home content request: type=${contentType}, country=${country}, language=${language}`);
 
-    // Create Supabase client with service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Check cache first (unless force refresh)
     if (!forceRefresh) {
       const { data: cached } = await supabase
         .from('home_content_cache')
@@ -141,20 +150,18 @@ serve(async (req) => {
       }
     }
 
-    // Fetch fresh data from Deezer
     let data: any[] = [];
 
     if (contentType === 'popular_artists') {
-      console.log('Fetching popular artists from Deezer...');
+      console.log('Fetching popular artists from Spotify...');
       data = await getPopularArtists();
-      console.log(`Deezer: ${data.length} artists`);
+      console.log(`Spotify: ${data.length} artists`);
     } else if (contentType === 'new_releases') {
-      console.log('Fetching new releases from Deezer...');
+      console.log('Fetching new releases from Spotify...');
       data = await getNewReleases();
-      console.log(`Deezer: ${data.length} releases`);
+      console.log(`Spotify: ${data.length} releases`);
     }
 
-    // Update cache
     if (data.length > 0) {
       const { error: upsertError } = await supabase
         .from('home_content_cache')
@@ -170,8 +177,6 @@ serve(async (req) => {
 
       if (upsertError) {
         console.error('Cache upsert error:', upsertError);
-      } else {
-        console.log(`Cached ${data.length} ${contentType} items`);
       }
     }
 

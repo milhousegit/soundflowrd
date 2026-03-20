@@ -6,18 +6,38 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DEEZER_API = "https://api.deezer.com";
+// ---- Spotify Auth ----
+let cachedToken: string | null = null;
+let tokenExpiry = 0;
 
-interface Artist {
-  id: string;
-  name: string;
+async function getSpotifyToken(): Promise<string> {
+  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+  const clientId = Deno.env.get('SPOTIFY_CLIENT_ID')!;
+  const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET')!;
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+    },
+    body: 'grant_type=client_credentials',
+  });
+  const data = await res.json();
+  cachedToken = data.access_token;
+  tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+  return cachedToken!;
 }
 
-interface Album {
-  id: number;
-  title: string;
-  cover_medium: string;
-  release_date: string;
+async function spotifyFetch(path: string): Promise<any> {
+  const token = await getSpotifyToken();
+  const res = await fetch(`https://api.spotify.com/v1${path}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Spotify ${res.status}: ${text}`);
+  }
+  return res.json();
 }
 
 serve(async (req) => {
@@ -30,7 +50,6 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get all users with notification subscriptions
     const { data: subscriptions, error: subError } = await supabase
       .from("notification_subscriptions")
       .select("*")
@@ -44,10 +63,9 @@ serve(async (req) => {
     }
 
     const userIds = [...new Set(subscriptions.map((s) => s.user_id))];
-    const notificationsToSend: { subscription: any; artist: string; album: string; albumId: number }[] = [];
+    const notificationsToSend: { subscription: any; artist: string; album: string; albumId: string }[] = [];
 
     for (const userId of userIds) {
-      // Get favorite artists for this user
       const { data: favorites, error: favError } = await supabase
         .from("favorites")
         .select("*")
@@ -60,7 +78,6 @@ serve(async (req) => {
         const artistId = fav.item_id;
         const artistName = fav.item_title;
 
-        // Get tracking info for this artist
         const { data: tracking } = await supabase
           .from("artist_release_tracking")
           .select("*")
@@ -68,73 +85,56 @@ serve(async (req) => {
           .eq("artist_id", artistId)
           .maybeSingle();
 
-        // Fetch latest albums from Deezer
-        const response = await fetch(`${DEEZER_API}/artist/${artistId}/albums?limit=5`);
-        if (!response.ok) continue;
-
-        const data = await response.json();
-        const albums: Album[] = data.data || [];
-        
-        if (albums.length === 0) continue;
-
-        const latestAlbum = albums[0];
-
-        if (!tracking) {
-          // First time checking this artist, just save the current latest album
-          await supabase.from("artist_release_tracking").insert({
-            user_id: userId,
-            artist_id: artistId,
-            artist_name: artistName,
-            last_album_id: String(latestAlbum.id),
-            last_check_at: new Date().toISOString(),
-          });
-        } else if (tracking.last_album_id !== String(latestAlbum.id)) {
-          // New album detected!
-          console.log(`New album detected for ${artistName}: ${latestAlbum.title}`);
+        // Fetch latest albums from Spotify
+        try {
+          const data = await spotifyFetch(`/artists/${artistId}/albums?include_groups=album,single&limit=5&market=IT`);
+          const albums = data?.items || [];
           
-          // Update tracking
-          await supabase
-            .from("artist_release_tracking")
-            .update({
-              last_album_id: String(latestAlbum.id),
-              last_check_at: new Date().toISOString(),
-            })
-            .eq("id", tracking.id);
+          if (albums.length === 0) continue;
 
-          // Queue notification for this user
-          const userSubs = subscriptions.filter((s) => s.user_id === userId);
-          for (const sub of userSubs) {
-            notificationsToSend.push({
-              subscription: sub,
-              artist: artistName,
-              album: latestAlbum.title,
-              albumId: latestAlbum.id,
+          const latestAlbum = albums[0];
+
+          if (!tracking) {
+            await supabase.from("artist_release_tracking").insert({
+              user_id: userId,
+              artist_id: artistId,
+              artist_name: artistName,
+              last_album_id: latestAlbum.id,
+              last_check_at: new Date().toISOString(),
             });
+          } else if (tracking.last_album_id !== latestAlbum.id) {
+            console.log(`New album detected for ${artistName}: ${latestAlbum.name}`);
+            
+            await supabase
+              .from("artist_release_tracking")
+              .update({
+                last_album_id: latestAlbum.id,
+                last_check_at: new Date().toISOString(),
+              })
+              .eq("id", tracking.id);
+
+            const userSubs = subscriptions.filter((s) => s.user_id === userId);
+            for (const sub of userSubs) {
+              notificationsToSend.push({
+                subscription: sub,
+                artist: artistName,
+                album: latestAlbum.name,
+                albumId: latestAlbum.id,
+              });
+            }
+          } else {
+            await supabase
+              .from("artist_release_tracking")
+              .update({ last_check_at: new Date().toISOString() })
+              .eq("id", tracking.id);
           }
-        } else {
-          // No new album, update check time
-          await supabase
-            .from("artist_release_tracking")
-            .update({ last_check_at: new Date().toISOString() })
-            .eq("id", tracking.id);
+        } catch (e) {
+          console.error(`Failed to check releases for ${artistName}:`, e);
         }
       }
     }
 
-    // Send push notifications
-    // Note: In production, you'd need web-push library or a push service
-    // For now, we'll just log the notifications that would be sent
     console.log(`Would send ${notificationsToSend.length} notifications`);
-    
-    for (const notif of notificationsToSend) {
-      console.log(`Notification: ${notif.artist} released "${notif.album}"`);
-      // In production, use web-push to send the notification
-      // await sendPushNotification(notif.subscription, {
-      //   title: `Nuova uscita di ${notif.artist}`,
-      //   body: notif.album,
-      //   url: `/album/${notif.albumId}`,
-      // });
-    }
 
     return new Response(
       JSON.stringify({
