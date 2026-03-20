@@ -2024,7 +2024,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     previousRef.current = previous;
   }, [next, previous]);
 
-  // Pre-fetch next track URL (simplified - no event system, just pre-resolve URL)
+  // Pre-fetch next track URL — respects hybridFallbackChain order
   useEffect(() => {
     if (!state.currentTrack || !state.isPlaying) return;
     
@@ -2043,34 +2043,56 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       isPrefetchingRef.current = true;
       
       try {
-        // Check saved RD mapping
-        if (nextTrack.albumId) {
-          const { data: trackMapping } = await supabase
-            .from('track_file_mappings')
-            .select('direct_link')
-            .eq('track_id', nextTrack.id)
-            .maybeSingle();
-          
-          if (trackMapping?.direct_link) {
-            prefetchedNextUrlRef.current = { trackId: nextTrack.id, url: trackMapping.direct_link, source: 'real-debrid' };
-            prefetchedTrackIdRef.current = nextTrack.id;
-            console.log('[Prefetch] Cached RD link for:', nextTrack.title);
-            isPrefetchingRef.current = false;
-            return;
+        const isHybrid = audioSourceMode === 'hybrid_priority';
+        const chainOrder: FallbackSourceId[] = isHybrid && hybridFallbackChain.length > 0
+          ? hybridFallbackChain
+          : ['real-debrid', 'squidwtf', 'hifi', 'monochrome'];
+
+        for (const sourceId of chainOrder) {
+          if (sourceId === 'real-debrid') {
+            // Only use RD if we have an instant cached link
+            if (nextTrack.albumId) {
+              const { data: trackMapping } = await supabase
+                .from('track_file_mappings')
+                .select('direct_link')
+                .eq('track_id', nextTrack.id)
+                .maybeSingle();
+              
+              if (trackMapping?.direct_link) {
+                prefetchedNextUrlRef.current = { trackId: nextTrack.id, url: trackMapping.direct_link, source: 'real-debrid' };
+                prefetchedTrackIdRef.current = nextTrack.id;
+                console.log('[Prefetch] Cached RD link for:', nextTrack.title);
+                isPrefetchingRef.current = false;
+                return;
+              }
+            }
+            // No instant RD — continue to next source in chain
+            console.log('[Prefetch] RD: no cached link for', nextTrack.title, '— trying next source');
+            continue;
+          }
+
+          // Scraping source
+          try {
+            const tidalQuality = mapQualityToTidal(settings.audioQuality);
+            const streamFn = sourceId === 'monochrome' ? getMonochromeStream 
+              : sourceId === 'hifi' ? getHifiStream 
+              : getTidalStream;
+            const sourceLabel: AudioSource = sourceId === 'monochrome' ? 'monochrome' : 'squidwtf';
+            const result = await streamFn(nextTrack.title, nextTrack.artist, tidalQuality);
+            
+            if ('streamUrl' in result && result.streamUrl) {
+              prefetchedNextUrlRef.current = { trackId: nextTrack.id, url: result.streamUrl, source: sourceLabel };
+              prefetchedTrackIdRef.current = nextTrack.id;
+              console.log(`[Prefetch] ${sourceId} URL ready for:`, nextTrack.title);
+              isPrefetchingRef.current = false;
+              return;
+            }
+          } catch (error) {
+            console.log(`[Prefetch] ${sourceId} failed for:`, nextTrack.title, error);
           }
         }
         
-        // Try selected scraping source
-        const tidalQuality = mapQualityToTidal(settings.audioQuality);
-        const streamFn = selectedScrapingSource === 'monochrome' ? getMonochromeStream : getTidalStream;
-        const sourceLabel: AudioSource = selectedScrapingSource === 'monochrome' ? 'monochrome' : 'squidwtf';
-        const result = await streamFn(nextTrack.title, nextTrack.artist, tidalQuality);
-        
-        if ('streamUrl' in result && result.streamUrl) {
-          prefetchedNextUrlRef.current = { trackId: nextTrack.id, url: result.streamUrl, source: sourceLabel };
-          prefetchedTrackIdRef.current = nextTrack.id;
-          console.log(`[Prefetch] ${sourceLabel} URL ready for:`, nextTrack.title);
-        }
+        console.log('[Prefetch] No source found for:', nextTrack.title);
       } catch (error) {
         console.log('[Prefetch] Error:', error);
       } finally {
@@ -2079,7 +2101,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }, 3000);
     
     return () => clearTimeout(prefetchTimeout);
-  }, [state.currentTrack?.id, state.isPlaying, settings.audioQuality]);
+  }, [state.currentTrack?.id, state.isPlaying, settings.audioQuality, audioSourceMode, hybridFallbackChain]);
 
   // Note: Media Session next/previous handlers are set up in the audio initialization useEffect
 
