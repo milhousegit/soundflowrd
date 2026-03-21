@@ -323,23 +323,23 @@ const Home: React.FC = () => {
               coverUrl: playlistResult.data?.cover_url || null,
               trackCount: tracksResult.count || 0
             };
-          } else {
-            // Spotify or Deezer playlist ID - fetch via get-country-chart which has fallback
+          } else if (/^\d+$/.test(playlistId)) {
+            // Deezer playlist ID - fetch track count via Deezer
             try {
               const response = await fetch(
                 `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/spotify-api`,
                 {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'get-country-chart', market: chart.country_code, limit: 50 })
+                  body: JSON.stringify({ action: 'get-playlist', id: playlistId })
                 }
               );
               if (response.ok) {
-                const tracks = await response.json();
-                if (Array.isArray(tracks) && tracks.length > 0) {
+                const playlist = await response.json();
+                if (playlist && !playlist.error) {
                   displayData[chart.id] = {
-                    coverUrl: tracks[0]?.coverUrl || null,
-                    trackCount: tracks.length
+                    coverUrl: playlist.coverUrl || null,
+                    trackCount: playlist.trackCount || 0
                   };
                 } else {
                   displayData[chart.id] = { coverUrl: null, trackCount: 0 };
@@ -351,6 +351,8 @@ const Home: React.FC = () => {
               console.error('Error fetching chart:', e);
               displayData[chart.id] = { coverUrl: null, trackCount: 0 };
             }
+          } else {
+            displayData[chart.id] = { coverUrl: null, trackCount: 0 };
           }
         }
         
