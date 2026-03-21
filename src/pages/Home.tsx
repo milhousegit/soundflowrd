@@ -372,12 +372,10 @@ const Home: React.FC = () => {
     const playlistId = chart.playlist_id;
     
     if (playlistId.startsWith('sf:')) {
-      // SoundFlow playlist - navigate to local playlist page
       const sfId = playlistId.replace('sf:', '');
       navigate(`/app/playlist/${sfId}`);
     } else {
-      // Spotify or other external playlist - navigate with country code for chart resolution
-      navigate(`/app/soundflow-playlist/${playlistId}?country=${chart.country_code}`);
+      navigate(`/app/soundflow-playlist/${playlistId}`);
     }
   };
 
