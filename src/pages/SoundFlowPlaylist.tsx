@@ -20,13 +20,11 @@ import { toast } from 'sonner';
 const SoundFlowPlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { t } = useSettings();
   const { profile, isAdmin } = useAuth();
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
   
-  // Check if user can download (premium or admin)
   const isPremiumActive = profile?.is_premium && profile?.premium_expires_at && !isPast(new Date(profile.premium_expires_at));
   const canDownload = isPremiumActive || isAdmin;
   
@@ -65,41 +63,6 @@ const SoundFlowPlaylistPage: React.FC = () => {
       setIsLoading(true);
       
       try {
-        // If it's a Spotify ID (22 chars) and we have a country, use get-country-chart
-        const isSpotifyId = /^[a-zA-Z0-9]{22}$/.test(id);
-        if (isSpotifyId && country) {
-          const response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/spotify-api`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'get-country-chart', market: country, limit: 50 })
-            }
-          );
-          if (response.ok) {
-            const tracks = await response.json();
-            if (Array.isArray(tracks) && tracks.length > 0) {
-              const countryLabels: Record<string, string> = {
-                IT: 'Top 50 Italia', US: 'Top 50 USA', GB: 'Top 50 UK',
-                ES: 'Top 50 España', FR: 'Top 50 France', DE: 'Top 50 Germany',
-                BR: 'Top 50 Brasil', PT: 'Top 50 Portugal'
-              };
-              setPlaylist({
-                id: id,
-                title: countryLabels[country] || `Top 50 ${country}`,
-                description: '',
-                coverUrl: tracks[0]?.coverUrl || '',
-                trackCount: tracks.length,
-                creator: 'Spotify',
-                tracks: tracks.map((t: any, i: number) => ({ ...t, trackNumber: i + 1 })),
-              });
-              setIsLoading(false);
-              return;
-            }
-          }
-        }
-        
-        // Fallback: Deezer playlist fetch
         const data = await getDeezerPlaylist(id);
         setPlaylist(data);
       } catch (error) {
@@ -110,7 +73,7 @@ const SoundFlowPlaylistPage: React.FC = () => {
     };
 
     fetchPlaylist();
-  }, [id, country]);
+  }, [id]);
 
   if (isLoading) {
     return <AlbumPageSkeleton />;
