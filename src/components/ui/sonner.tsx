@@ -2,12 +2,14 @@ import { useTheme } from "next-themes";
 import { Toaster as Sonner, toast } from "sonner";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useServiceStatus } from "@/contexts/ServiceStatusContext";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
   const isMobile = useIsMobile();
+  const { isServiceDown } = useServiceStatus();
 
   let hasTrack = false;
   try {
@@ -17,13 +19,15 @@ const Toaster = ({ ...props }: ToasterProps) => {
     // PlayerContext not available
   }
 
+  const bannerOffset = isServiceDown ? 36 : 0;
+
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
       position={isMobile ? "bottom-center" : "top-center"}
       style={isMobile ? {
-        bottom: hasTrack ? 'calc(3.5rem + 56px + env(safe-area-inset-bottom, 0px))' : 'calc(56px + env(safe-area-inset-bottom, 0px))',
+        bottom: `calc(${hasTrack ? '3.5rem + ' : ''}56px + ${bannerOffset}px + env(safe-area-inset-bottom, 0px))`,
         zIndex: 49,
       } : {
         top: 'max(env(safe-area-inset-top, 0px), 16px)',
