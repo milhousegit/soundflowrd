@@ -2,10 +2,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useServiceStatus } from "@/contexts/ServiceStatusContext";
 
 export function Toaster() {
   const { toasts } = useToast();
   const isMobile = useIsMobile();
+  const { isServiceDown } = useServiceStatus();
 
   let hasTrack = false;
   try {
@@ -14,6 +16,8 @@ export function Toaster() {
   } catch {
     // PlayerContext not available
   }
+
+  const bannerOffset = isServiceDown ? 36 : 0; // ~py-2.5 + text height
 
   return (
     <ToastProvider>
@@ -36,7 +40,7 @@ export function Toaster() {
             : undefined
         }
         style={isMobile ? {
-          bottom: hasTrack ? 'calc(3.5rem + 56px + env(safe-area-inset-bottom, 0px))' : 'calc(56px + env(safe-area-inset-bottom, 0px))',
+          bottom: `calc(${hasTrack ? '3.5rem + ' : ''}56px + ${bannerOffset}px + env(safe-area-inset-bottom, 0px))`,
           zIndex: 49,
         } : undefined}
       />
