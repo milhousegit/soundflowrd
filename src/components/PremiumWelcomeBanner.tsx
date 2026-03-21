@@ -28,7 +28,8 @@ const PremiumWelcomeBanner: React.FC = () => {
       
       // Show if expiry date changed (new subscription or renewal) or never shown
       if (lastStoredExpiry !== currentExpiry) {
-        // Show banner with a small delay for better UX
+        // Mark as shown immediately so it won't reappear on next login
+        localStorage.setItem(`${STORAGE_KEY}_${profile.id}`, currentExpiry);
         const timer = setTimeout(() => {
           setIsVisible(true);
         }, 1000);
