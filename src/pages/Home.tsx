@@ -323,23 +323,23 @@ const Home: React.FC = () => {
               coverUrl: playlistResult.data?.cover_url || null,
               trackCount: tracksResult.count || 0
             };
-          } else if (/^[a-zA-Z0-9]{22}$/.test(playlistId)) {
-            // Spotify playlist ID (22 char base62) - fetch from Spotify API
+          } else {
+            // Spotify or Deezer playlist ID - fetch via get-country-chart which has fallback
             try {
               const response = await fetch(
                 `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/spotify-api`,
                 {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'get-playlist', id: playlistId })
+                  body: JSON.stringify({ action: 'get-country-chart', market: chart.country_code, limit: 50 })
                 }
               );
               if (response.ok) {
-                const playlist = await response.json();
-                if (playlist && !playlist.error) {
+                const tracks = await response.json();
+                if (Array.isArray(tracks) && tracks.length > 0) {
                   displayData[chart.id] = {
-                    coverUrl: playlist.coverUrl || null,
-                    trackCount: playlist.trackCount || 0
+                    coverUrl: tracks[0]?.coverUrl || null,
+                    trackCount: tracks.length
                   };
                 } else {
                   displayData[chart.id] = { coverUrl: null, trackCount: 0 };
@@ -348,12 +348,9 @@ const Home: React.FC = () => {
                 displayData[chart.id] = { coverUrl: null, trackCount: 0 };
               }
             } catch (e) {
-              console.error('Error fetching playlist:', e);
+              console.error('Error fetching chart:', e);
               displayData[chart.id] = { coverUrl: null, trackCount: 0 };
             }
-          } else {
-            // Unknown/legacy ID format (e.g. old Deezer numeric IDs) - skip
-            displayData[chart.id] = { coverUrl: null, trackCount: 0 };
           }
         }
         
@@ -377,8 +374,8 @@ const Home: React.FC = () => {
       const sfId = playlistId.replace('sf:', '');
       navigate(`/app/playlist/${sfId}`);
     } else {
-      // SoundFlow playlist - navigate to soundflow playlist page
-      navigate(`/app/soundflow-playlist/${playlistId}`);
+      // Spotify or other external playlist - navigate with country code for chart resolution
+      navigate(`/app/soundflow-playlist/${playlistId}?country=${chart.country_code}`);
     }
   };
 
