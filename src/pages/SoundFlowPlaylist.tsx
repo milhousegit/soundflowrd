@@ -19,8 +19,7 @@ import { toast } from 'sonner';
 
 const SoundFlowPlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
-  const country = searchParams.get('country');
+  const navigate = useNavigate();
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
   const { t } = useSettings();
