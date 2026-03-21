@@ -92,7 +92,6 @@ const SoundFlowPlaylistPage: React.FC = () => {
                 coverUrl: tracks[0]?.coverUrl || '',
                 trackCount: tracks.length,
                 creator: 'Spotify',
-                duration: 0,
                 tracks: tracks.map((t: any, i: number) => ({ ...t, trackNumber: i + 1 })),
               });
               setIsLoading(false);
