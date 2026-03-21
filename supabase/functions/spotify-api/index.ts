@@ -297,31 +297,6 @@ serve(async (req) => {
                   const data = await deezerFetch(`/playlist/${pid}`);
                   return json((data?.tracks?.data || []).slice(0, limit).map((t: any) => mapDeezerTrack(t)));
                 }
-                // Spotify playlist ID → fetch from Spotify, resolve to Deezer IDs
-                if (isSpotifyId(pid)) {
-                  try {
-                    const plData = await spotifyFetchPlaylist(`/playlists/${pid}/tracks?limit=${limit}&market=${mkt}`);
-                    const spotifyTracks = (plData.items || []).filter((i: any) => i?.track).map((i: any) => i.track);
-                    
-                    // Resolve each track to Deezer for consistent IDs
-                    const resolved = await Promise.all(
-                      spotifyTracks.map(async (st: any) => {
-                        const title = st.name || '';
-                        const artist = st.artists?.[0]?.name || '';
-                        try {
-                          const dz = await deezerFetch(`/search/track?q=${encodeURIComponent(`${artist} ${title}`)}&limit=1`);
-                          const match = dz?.data?.[0];
-                          if (match) return mapDeezerTrack(match);
-                        } catch { /* ignore */ }
-                        // Fallback: return Spotify-mapped track if Deezer resolution fails
-                        return mapSpotifyTrack(st);
-                      })
-                    );
-                    return json(resolved);
-                  } catch (e) {
-                    console.warn(`Spotify playlist fetch failed for chart ${pid}:`, e);
-                  }
-                }
               }
             }
           } catch (e) {
