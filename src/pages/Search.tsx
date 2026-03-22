@@ -12,9 +12,10 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { searchAll, searchPlaylists, DeezerPlaylist } from '@/lib/spotify';
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserSearch } from '@/hooks/useUserSearch';
 import { SocialProfile } from '@/hooks/useSocialProfile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const genres = [
   { name: 'Pop', color: 'from-pink-500 to-rose-500' },

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Search, Settings, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,9 +13,18 @@ import { cn } from '@/lib/utils';
 const DesktopTopBar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { t } = useSettings();
   const { profile } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Sync search input with URL query param when on search page
+  useEffect(() => {
+    if (location.pathname === '/app/search') {
+      const q = searchParams.get('q') || '';
+      setSearchQuery(q);
+    }
+  }, [location.pathname, searchParams]);
 
   const navItems = [
     { label: t('home'), path: '/app' },
@@ -23,13 +32,15 @@ const DesktopTopBar: React.FC = () => {
     { label: t('library'), path: '/app/library' },
   ];
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/app/search?q=${encodeURIComponent(searchQuery.trim())}`);
-    } else {
+  const handleSearchFocus = () => {
+    if (location.pathname !== '/app/search') {
       navigate('/app/search');
     }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    navigate(`/app/search${value ? `?q=${encodeURIComponent(value)}` : ''}`, { replace: true });
   };
 
   return (
