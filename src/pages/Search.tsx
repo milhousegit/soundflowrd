@@ -9,7 +9,7 @@ import UserCard from '@/components/social/UserCard';
 import TapArea from '@/components/TapArea';
 import SearchResultsSkeleton from '@/components/skeletons/SearchResultsSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
-import { searchAll, searchPlaylists, DeezerPlaylist, getArtist, getArtistTopTracks } from '@/lib/spotify';
+import { searchAll, searchPlaylists, searchArtists, searchTracks, DeezerPlaylist, getArtist, getArtistTopTracks } from '@/lib/spotify';
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -258,7 +258,6 @@ const Search: React.FC = () => {
   // Personalized genre search
   const performGenreSearch = useCallback(async (genreName: string) => {
     if (!user) {
-      // Fallback to normal search if not logged in
       handleQueryChange(genreName);
       return;
     }
@@ -272,8 +271,8 @@ const Search: React.FC = () => {
     const targetGenre = normalizeGenreForMatch(genreName);
 
     try {
-      // Fetch user's artist stats + genre cache + playlists in parallel
-      const [artistStatsRes, genreCacheRes, playlistsRes, favArtistsRes] = await Promise.all([
+      // Fetch all data sources in parallel
+      const [artistStatsRes, genreCacheRes, playlistsRes, favArtistsRes, intlArtistsRes, intlTracksRes] = await Promise.all([
         supabase
           .from('user_artist_stats')
           .select('artist_id, artist_name, total_plays, artist_image_url')
@@ -289,110 +288,94 @@ const Search: React.FC = () => {
           .select('item_id, item_title, item_cover_url')
           .eq('user_id', user.id)
           .eq('item_type', 'artist'),
+        searchArtists(genreName).catch(() => []),
+        searchTracks(genreName).catch(() => []),
       ]);
 
       const artistStats = artistStatsRes.data || [];
       const genreCache = genreCacheRes.data || [];
       const favArtists = favArtistsRes.data || [];
 
-      // Build genre lookup: artist_id -> genres
+      // Build genre lookup
       const genreMap = new Map<string, string[]>();
       for (const g of genreCache) {
         genreMap.set(g.artist_id, g.genres || []);
       }
 
-      // Find user's artists that match the genre
+      // Find user's artists matching the genre
       const matchingArtists: { id: string; name: string; plays: number; imageUrl?: string }[] = [];
       const matchedIds = new Set<string>();
 
       for (const stat of artistStats) {
         const genres = genreMap.get(stat.artist_id) || [];
-        const matches = genres.some(g => normalizeGenreForMatch(g) === targetGenre);
-        if (matches && !matchedIds.has(stat.artist_id)) {
+        if (genres.some(g => normalizeGenreForMatch(g) === targetGenre) && !matchedIds.has(stat.artist_id)) {
           matchedIds.add(stat.artist_id);
-          matchingArtists.push({
-            id: stat.artist_id,
-            name: stat.artist_name,
-            plays: stat.total_plays,
-            imageUrl: stat.artist_image_url || undefined,
-          });
+          matchingArtists.push({ id: stat.artist_id, name: stat.artist_name, plays: stat.total_plays, imageUrl: stat.artist_image_url || undefined });
         }
       }
-
-      // Also check favorited artists
       for (const fav of favArtists) {
         if (matchedIds.has(fav.item_id)) continue;
         const genres = genreMap.get(fav.item_id) || [];
-        const matches = genres.some(g => normalizeGenreForMatch(g) === targetGenre);
-        if (matches) {
+        if (genres.some(g => normalizeGenreForMatch(g) === targetGenre)) {
           matchedIds.add(fav.item_id);
-          matchingArtists.push({
-            id: fav.item_id,
-            name: fav.item_title,
-            plays: 0,
-            imageUrl: fav.item_cover_url || undefined,
-          });
+          matchingArtists.push({ id: fav.item_id, name: fav.item_title, plays: 0, imageUrl: fav.item_cover_url || undefined });
         }
       }
 
-      // Sort by play count
       matchingArtists.sort((a, b) => b.plays - a.plays);
-      const topMatches = matchingArtists.slice(0, 12);
 
-      // Convert to Artist objects and fetch top tracks in parallel
-      const artistObjects: Artist[] = [];
-      const allTracks: Track[] = [];
+      // === ARTISTS: max 3 personal + international ===
+      const personalArtistSlice = matchingArtists.slice(0, 3);
+      const personalArtistObjects: Artist[] = [];
+      const personalTracks: Track[] = [];
       const seenTrackIds = new Set<string>();
 
-      // Fetch artist details + top tracks for top matches
-      const fetchPromises = topMatches.slice(0, 8).map(async (ma) => {
-        try {
-          const [artistData, tracks] = await Promise.all([
-            getArtist(ma.id, ma.name).catch(() => null),
-            getArtistTopTracks(ma.id, ma.name).catch(() => []),
-          ]);
-          return { artistData, tracks, ma };
-        } catch {
-          return { artistData: null, tracks: [], ma };
-        }
-      });
+      // Fetch personal artist details + their top tracks
+      const personalFetches = await Promise.all(
+        personalArtistSlice.map(async (ma) => {
+          try {
+            const [artistData, tracks] = await Promise.all([
+              getArtist(ma.id, ma.name).catch(() => null),
+              getArtistTopTracks(ma.id, ma.name).catch(() => []),
+            ]);
+            return { artistData, tracks, ma };
+          } catch {
+            return { artistData: null, tracks: [], ma };
+          }
+        })
+      );
 
-      const fetchResults = await Promise.all(fetchPromises);
-
-      for (const { artistData, tracks, ma } of fetchResults) {
-        if (artistData) {
-          artistObjects.push({
-            id: artistData.id,
-            name: artistData.name,
-            imageUrl: artistData.imageUrl || ma.imageUrl || '',
-          });
-        } else {
-          artistObjects.push({
-            id: ma.id,
-            name: ma.name,
-            imageUrl: ma.imageUrl || '',
-          });
-        }
-
+      for (const { artistData, tracks, ma } of personalFetches) {
+        personalArtistObjects.push({
+          id: artistData?.id || ma.id,
+          name: artistData?.name || ma.name,
+          imageUrl: artistData?.imageUrl || ma.imageUrl || '',
+        });
         for (const track of tracks.slice(0, 5)) {
           if (!seenTrackIds.has(track.id)) {
             seenTrackIds.add(track.id);
-            allTracks.push(track);
+            personalTracks.push(track);
           }
         }
       }
 
-      // Shuffle tracks slightly to mix artists
-      for (let j = allTracks.length - 1; j > 0; j--) {
-        if (Math.random() < 0.3) {
-          const k = Math.floor(Math.random() * (j + 1));
-          [allTracks[j], allTracks[k]] = [allTracks[k], allTracks[j]];
-        }
-      }
+      // International artists (exclude personal ones)
+      const personalIds = new Set(personalArtistObjects.map(a => a.id));
+      const intlArtists = (intlArtistsRes || []).filter(a => !personalIds.has(a.id));
+
+      // Combined artists: personal first, then international
+      const combinedArtists = [...personalArtistObjects, ...intlArtists.slice(0, 12 - personalArtistObjects.length)];
+
+      // === TRACKS: first 5 personal, rest international ===
+      const personalTrackSlice = personalTracks.slice(0, 5);
+      for (const t of personalTrackSlice) seenTrackIds.add(t.id);
+
+      const intlTracks = (intlTracksRes || []).filter(t => !seenTrackIds.has(t.id));
+      const combinedTracks = [...personalTrackSlice, ...intlTracks.slice(0, 20 - personalTrackSlice.length)];
 
       setGenreResults({
-        artists: artistObjects,
-        tracks: allTracks.slice(0, 20),
+        artists: combinedArtists,
+        tracks: combinedTracks,
         playlists: playlistsRes,
       });
     } catch (error) {
@@ -762,7 +745,7 @@ const Search: React.FC = () => {
           {genreResults.artists.length > 0 && (
             <section>
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">
-                {settings.language === 'it' ? 'I tuoi artisti' : 'Your artists'}
+                {settings.language === 'it' ? 'Artisti' : 'Artists'}
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
                 {genreResults.artists.slice(0, 12).map((artist) => (
@@ -778,7 +761,7 @@ const Search: React.FC = () => {
           {genreResults.tracks.length > 0 && (
             <section>
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">
-                {settings.language === 'it' ? 'Brani per te' : 'Tracks for you'}
+                {settings.language === 'it' ? 'Brani' : 'Tracks'}
               </h2>
               <div className="space-y-1">
                 {genreResults.tracks.map((track, index) => (
