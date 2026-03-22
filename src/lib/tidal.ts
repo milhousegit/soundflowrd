@@ -30,7 +30,7 @@ export function mapQualityToTidal(appQuality: 'high' | 'medium' | 'low'): string
 }
 
 /**
- * Get audio stream URL for a track by searching on Tidal via SquidWTF
+ * Get audio stream URL for a track by searching on Tidal via Monochrome
  * @param title - Track title
  * @param artist - Artist name
  * @param quality - Audio quality (HI_RES_LOSSLESS, LOSSLESS, HIGH, LOW)
@@ -42,7 +42,7 @@ export async function getTidalStream(
   quality = 'LOSSLESS'
 ): Promise<TidalStreamResult | TidalStreamError> {
   try {
-    const { data, error } = await supabase.functions.invoke('squidwtf', {
+    const { data, error } = await supabase.functions.invoke('monochrome', {
       body: { 
         action: 'search-and-stream', 
         title,
@@ -92,7 +92,7 @@ export async function getTidalStreamById(
   quality = 'LOSSLESS'
 ): Promise<TidalStreamResult | TidalStreamError> {
   try {
-    const { data, error } = await supabase.functions.invoke('squidwtf', {
+    const { data, error } = await supabase.functions.invoke('monochrome', {
       body: { 
         action: 'get-stream', 
         tidalId,
@@ -137,7 +137,7 @@ export async function searchTidal(
   query: string
 ): Promise<any[]> {
   try {
-    const { data, error } = await supabase.functions.invoke('squidwtf', {
+    const { data, error } = await supabase.functions.invoke('monochrome', {
       body: { 
         action: 'search', 
         title: query,

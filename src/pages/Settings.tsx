@@ -537,7 +537,7 @@ const Settings: React.FC = () => {
                       setBridgeUrl(val);
                       // Validate on blur or when it looks like a full URL
                       if (val && val.startsWith('http') && val.includes('.')) {
-                        const isCompatible = val.startsWith('https://tidal.squid.wtf') || val.startsWith('https://monochrome.tf');
+                        const isCompatible = val.startsWith('https://monochrome.tf');
                         if (!isCompatible) {
                           toast({
                             title: settings.language === 'it' ? 'Ponte non compatibile' : 'Incompatible bridge',
@@ -546,7 +546,7 @@ const Settings: React.FC = () => {
                         }
                       }
                     }}
-                    placeholder="https://tidal.squid.wtf o https://monochrome.tf/"
+                    placeholder="https://monochrome.tf/"
                     className="h-9 text-sm"
                   />
                 </div>

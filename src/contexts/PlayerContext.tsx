@@ -77,7 +77,7 @@ export interface DebugLogEntry {
 }
 
 export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading' | 'unavailable';
-export type AudioSource = 'squidwtf' | 'monochrome' | 'real-debrid' | 'offline' | null;
+export type AudioSource = 'monochrome' | 'real-debrid' | 'offline' | null;
 
 export interface PlaybackSource {
   type: 'playlist' | 'album' | 'artist' | 'radio' | 'search' | 'queue' | null;
@@ -887,10 +887,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Helper function for scraping source fallback
       const playWithScrapingSource = async (sourceId: string): Promise<boolean> => {
         const tidalQuality = mapQualityToTidal(settings.audioQuality);
-        const sourceName = sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF';
+        const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'HiFi';
         addDebugLog(`🎵 ${sourceName}`, `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} (${tidalQuality})`, 'info');
         try {
-          const streamFn = sourceId === 'monochrome' ? getMonochromeStream : sourceId === 'hifi' ? getHifiStream : getTidalStream;
+          const streamFn = sourceId === 'monochrome' ? getMonochromeStream : sourceId === 'hifi' ? getHifiStream : getMonochromeStream;
           const result = await streamFn(enrichedTrack.title, enrichedTrack.artist, tidalQuality);
           if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
 
@@ -909,7 +909,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               
               setState((prev) => ({ ...prev, isPlaying: true }));
               setLoadingPhase('idle');
-              setCurrentAudioSource(sourceId === 'monochrome' ? 'monochrome' : sourceId === 'hifi' ? 'squidwtf' : 'squidwtf');
+              setCurrentAudioSource('monochrome');
               startTrackingPlayback();
               
               const qualityInfo = result.bitDepth && result.sampleRate 
@@ -992,7 +992,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // Try ALL other scraping sources before giving up
         const allSourceIds = SCRAPING_SOURCES.map(s => s.id).filter(id => id !== selectedScrapingSource);
         for (const fallbackId of allSourceIds) {
-          addDebugLog(`🔄 Fallback a ${fallbackId === 'monochrome' ? 'Monochrome' : fallbackId === 'hifi' ? 'HiFi' : 'SquidWTF'}`, '', 'info');
+          addDebugLog(`🔄 Fallback a ${fallbackId === 'monochrome' ? 'Monochrome' : 'HiFi'}`, '', 'info');
           const fallbackSuccess = await playWithScrapingSource(fallbackId);
           if (fallbackSuccess) return;
         }
@@ -1007,7 +1007,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (isHybridMode) {
         const chainOrder: FallbackSourceId[] = hybridFallbackChain.length > 0 
           ? hybridFallbackChain 
-          : ['real-debrid', 'squidwtf', 'hifi', 'monochrome'];
+          : ['real-debrid', 'monochrome', 'hifi'];
         addDebugLog('👑 Modalità Ibrida', `Ordine: ${chainOrder.join(' → ')}`, 'info');
         
         const triedSources = new Set<string>();
@@ -1117,8 +1117,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             continue;
           }
 
-          // Scraping source (squidwtf, monochrome, hifi)
-          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF';
+          // Scraping source (monochrome, hifi)
+          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'HiFi';
           addDebugLog(`🔄 Provo ${sourceName}`, `Posizione ${Array.from(triedSources).indexOf(sourceId) + 1} nella catena`, 'info');
           setLoadingPhase('searching');
           const success = await playWithScrapingSource(sourceId);
@@ -1135,7 +1135,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // Try remaining scraping sources not in fallback chain
         const remainingSources = SCRAPING_SOURCES.map(s => s.id).filter(id => !triedSources.has(id));
         for (const sourceId of remainingSources) {
-          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF';
+          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'HiFi';
           addDebugLog(`🔄 Fallback extra a ${sourceName}`, '', 'info');
           setLoadingPhase('searching');
           const success = await playWithScrapingSource(sourceId);
@@ -2052,7 +2052,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const isHybrid = audioSourceMode === 'hybrid_priority';
         const chainOrder: FallbackSourceId[] = isHybrid && hybridFallbackChain.length > 0
           ? hybridFallbackChain
-          : ['real-debrid', 'squidwtf', 'hifi', 'monochrome'];
+          : ['real-debrid', 'monochrome', 'hifi'];
 
         for (const sourceId of chainOrder) {
           if (sourceId === 'real-debrid') {
@@ -2082,8 +2082,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             const tidalQuality = mapQualityToTidal(settings.audioQuality);
             const streamFn = sourceId === 'monochrome' ? getMonochromeStream 
               : sourceId === 'hifi' ? getHifiStream 
-              : getTidalStream;
-            const sourceLabel: AudioSource = sourceId === 'monochrome' ? 'monochrome' : 'squidwtf';
+              : getMonochromeStream;
+            const sourceLabel: AudioSource = 'monochrome';
             const result = await streamFn(nextTrack.title, nextTrack.artist, tidalQuality);
             
             if ('streamUrl' in result && result.streamUrl) {

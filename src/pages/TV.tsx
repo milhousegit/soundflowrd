@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getTidalStream, mapQualityToTidal } from '@/lib/tidal';
 import { getMonochromeStream } from '@/lib/monochrome';
+import { getHifiStream } from '@/lib/hifi';
 
 // Generate a short room code
 const generateRoomCode = () => {
@@ -81,7 +82,7 @@ const TVDisplay: React.FC = () => {
     audio.src = '';
 
     const tidalQuality = mapQualityToTidal(settings.audioQuality);
-    const streamFn = selectedScrapingSource === 'monochrome' ? getMonochromeStream : getTidalStream;
+    const streamFn = selectedScrapingSource === 'hifi' ? getHifiStream : selectedScrapingSource === 'monochrome' ? getMonochromeStream : getTidalStream;
 
     console.log(`[TV-Audio] Fetching stream for "${track.title}" by ${track.artist} via ${selectedScrapingSource}`);
 

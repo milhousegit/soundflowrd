@@ -8,16 +8,14 @@ export interface ScrapingSource {
 
 export const SCRAPING_SOURCES: ScrapingSource[] = [
   { id: 'hifi', name: 'HiFi', edgeFunctionName: 'hifi' },
-  { id: 'squidwtf', name: 'SquidWTF', edgeFunctionName: 'squidwtf' },
   { id: 'monochrome', name: 'Monochrome', edgeFunctionName: 'monochrome' },
 ];
 
-export type FallbackSourceId = 'real-debrid' | 'hifi' | 'squidwtf' | 'monochrome';
+export type FallbackSourceId = 'real-debrid' | 'hifi' | 'monochrome';
 
 export const ALL_FALLBACK_SOURCES: { id: FallbackSourceId; name: string }[] = [
   { id: 'real-debrid', name: 'Real-Debrid' },
   { id: 'hifi', name: 'HiFi' },
-  { id: 'squidwtf', name: 'SquidWTF' },
   { id: 'monochrome', name: 'Monochrome' },
 ];
 
@@ -64,9 +62,9 @@ export const defaultSettings: AppSettings = {
   crossfade: 0,
   realDebridApiKey: undefined,
   audioSourceMode: 'deezer_priority',
-  selectedScrapingSource: 'squidwtf',
-  bridgeUrl: 'https://tidal.squid.wtf',
-  hybridFallbackChain: ['squidwtf', 'hifi', 'monochrome'],
+  selectedScrapingSource: 'monochrome',
+  bridgeUrl: '',
+  hybridFallbackChain: ['monochrome', 'hifi'],
 };
 
 export const translations = {

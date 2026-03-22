@@ -111,7 +111,7 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
     const [selectingFiles, setSelectingFiles] = useState<Set<string>>(new Set());
     const [showDebugLogs, setShowDebugLogs] = useState(false);
     
-    // Scraping (Tidal/SquidWTF) state
+    // Scraping (Tidal/Monochrome) state
     const [scrapingResults, setScrapingResults] = useState<TidalResult[]>([]);
     const [scrapingLoading, setScrapingLoading] = useState(false);
     const [scrapingQuery, setScrapingQuery] = useState('');
@@ -247,9 +247,9 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       setScrapingResults([]);
       
       try {
-        // Use SquidWTF to search Tidal
-        const { data, error } = await supabase.functions.invoke('squidwtf', {
-          body: { action: 'search', query: scrapingQuery.trim() },
+        // Use Monochrome to search Tidal
+        const { data, error } = await supabase.functions.invoke('monochrome', {
+          body: { action: 'search', title: scrapingQuery.trim() },
         });
         
         if (error) throw error;

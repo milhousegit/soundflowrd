@@ -207,7 +207,7 @@ const Info: React.FC = () => {
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
-                SquidWTF/Tidal - {isItalian ? 'Streaming audio' : 'Audio streaming'}
+                Monochrome/Tidal - {isItalian ? 'Streaming audio' : 'Audio streaming'}
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />

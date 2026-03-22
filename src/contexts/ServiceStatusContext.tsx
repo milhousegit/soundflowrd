@@ -18,7 +18,7 @@ export const ServiceStatusProvider: React.FC<{ children: ReactNode }> = ({ child
     setFailureCounts(prev => {
       const updated = { ...prev, [source]: (prev[source] || 0) + 1 };
       // Check if ALL scraping sources have hit threshold
-      const scrapingSources = ['squidwtf', 'monochrome', 'hifi'];
+      const scrapingSources = ['monochrome', 'hifi'];
       const allDown = scrapingSources.every(s => (updated[s] || 0) >= FAILURE_THRESHOLD);
       if (allDown) setIsServiceDown(true);
       return updated;

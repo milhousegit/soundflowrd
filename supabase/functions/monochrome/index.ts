@@ -5,8 +5,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Monochrome.tf Tidal API mirrors
+// Tidal API mirrors (combined from multiple providers for maximum availability)
 const API_TARGETS = [
+  'https://hifitui.401658.xyz',
+  'https://triton.squid.wtf',
+  'https://tidal-api.binimum.org',
+  'https://tidal.kinoplus.online',
+  'https://hund.qqdl.site',
+  'https://katze.qqdl.site',
+  'https://maus.qqdl.site',
   'https://ohio.monochrome.tf',
   'https://virginia.monochrome.tf',
   'https://oregon.monochrome.tf',

@@ -78,7 +78,7 @@ const HiFiPhone: React.FC = () => (
         <SkipForward className="w-4 h-4 text-muted-foreground" />
       </div>
       {/* Source label */}
-      <p className="text-[7px] text-center text-muted-foreground/60 mt-2">Real-Debrid • HiFi • SquidWTF • Monochrome</p>
+      <p className="text-[7px] text-center text-muted-foreground/60 mt-2">Real-Debrid • HiFi • Monochrome</p>
     </div>
   </PhoneFrame>
 );
@@ -264,7 +264,7 @@ const LandingFeatures: React.FC = () => {
     {
       icon: <Headphones className="w-5 h-5 text-primary" />,
       title: 'Musica Hi-Fi',
-      description: 'Niente YouTube. FLAC e 320kbps da Real-Debrid, HiFi, SquidWTF e Monochrome.',
+      description: 'Niente YouTube. FLAC e 320kbps da Real-Debrid, HiFi e Monochrome.',
       phone: <HiFiPhone />,
     },
     {
