@@ -151,11 +151,11 @@ const DesktopPlayerSidebar: React.FC = () => {
 
   return (
     <>
-      <aside className="hidden md:flex w-[350px] shrink-0 flex-col border-r border-border bg-card/50 overflow-hidden">
+      <aside className="hidden md:flex w-[380px] shrink-0 flex-col border-l border-border bg-card/50 overflow-hidden">
         <ScrollArea className="flex-1">
           <div className="flex flex-col">
             {/* Cover / Canvas */}
-            <div className="relative w-full aspect-square bg-secondary overflow-hidden">
+            <div className="relative w-full aspect-[4/3] bg-secondary overflow-hidden">
               {canvasUrl ? (
                 <video
                   src={canvasUrl}
@@ -177,6 +177,10 @@ const DesktopPlayerSidebar: React.FC = () => {
                   <Music className="w-16 h-16 text-muted-foreground" />
                 </div>
               )}
+
+              {/* Gradient overlays like mobile */}
+              <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 h-[60%] bg-gradient-to-t from-card/95 to-transparent" />
 
               {/* Loading overlays */}
               {loadingPhase === 'searching' && (
