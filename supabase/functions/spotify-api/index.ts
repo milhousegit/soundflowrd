@@ -283,7 +283,6 @@ serve(async (req) => {
 
       // ======================== COUNTRY CHART ========================
       case 'get-country-chart': {
-        // Check DB for configured playlist
         const supabaseUrl = Deno.env.get('SUPABASE_URL');
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -303,13 +302,28 @@ serve(async (req) => {
                   const data = await deezerFetch(`/playlist/${pid}`);
                   return json((data?.tracks?.data || []).slice(0, limit).map((t: any) => mapDeezerTrack(t)));
                 }
-                // Alphanumeric = Spotify playlist
+                // Alphanumeric = Spotify playlist → use spotify-import (anonymous token)
                 try {
-                  const plData = await spotifyFetchPlaylist(`/playlists/${pid}?market=${mkt}`);
-                  const items = (plData?.tracks?.items || []).filter((i: any) => i?.track).slice(0, limit);
-                  return json(items.map((i: any) => mapSpotifyTrack(i.track)));
+                  const spotifyUrl = `https://open.spotify.com/playlist/${pid}`;
+                  console.log(`[Chart] Fetching Spotify playlist via import: ${pid}`);
+                  const importRes = await fetch(`${supabaseUrl}/functions/v1/spotify-import`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${supabaseKey}`,
+                    },
+                    body: JSON.stringify({ url: spotifyUrl }),
+                  });
+                  if (importRes.ok) {
+                    const importData = await importRes.json();
+                    if (importData.tracks?.length > 0) {
+                      console.log(`[Chart] Got ${importData.tracks.length} tracks from Spotify import`);
+                      return json(importData.tracks.slice(0, limit));
+                    }
+                  }
+                  console.warn('[Chart] Spotify import returned no tracks, falling back');
                 } catch (spotifyErr) {
-                  console.warn('Spotify chart fetch failed, falling back to Deezer:', spotifyErr);
+                  console.warn('[Chart] Spotify import failed, falling back to Deezer:', spotifyErr);
                 }
               }
             }
