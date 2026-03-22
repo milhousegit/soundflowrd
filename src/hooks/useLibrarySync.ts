@@ -114,12 +114,12 @@ export const startLibrarySync = async (userId: string, apiKey: string) => {
     }
 
     // Split tracks into unsynced and already synced
-    const trackIds = tracks.map(t => t.id);
+    const allTrackIds = tracks.map(t => t.id);
     const syncedTrackIds = new Set<string>();
 
     // Query existing mappings in batches of 500
-    for (let i = 0; i < trackIds.length; i += 500) {
-      const batch = trackIds.slice(i, i + 500);
+    for (let i = 0; i < allTrackIds.length; i += 500) {
+      const batch = allTrackIds.slice(i, i + 500);
       const { data: mappings } = await supabase
         .from('track_file_mappings')
         .select('track_id')
