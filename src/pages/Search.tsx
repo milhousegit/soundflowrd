@@ -17,15 +17,24 @@ import { useUserSearch } from '@/hooks/useUserSearch';
 import { SocialProfile } from '@/hooks/useSocialProfile';
 import { useIsMobile } from '@/hooks/use-mobile';
 
+import genrePop from '@/assets/genres/pop.jpg';
+import genreHiphop from '@/assets/genres/hiphop.jpg';
+import genreRock from '@/assets/genres/rock.jpg';
+import genreElectronic from '@/assets/genres/electronic.jpg';
+import genreRnb from '@/assets/genres/rnb.jpg';
+import genreJazz from '@/assets/genres/jazz.jpg';
+import genreClassical from '@/assets/genres/classical.jpg';
+import genreCountry from '@/assets/genres/country.jpg';
+
 const genres = [
-  { name: 'Pop', color: 'from-pink-500 to-rose-500' },
-  { name: 'Hip-Hop', color: 'from-orange-500 to-amber-500' },
-  { name: 'Rock', color: 'from-red-500 to-rose-600' },
-  { name: 'Electronic', color: 'from-blue-500 to-cyan-500' },
-  { name: 'R&B', color: 'from-purple-500 to-violet-500' },
-  { name: 'Jazz', color: 'from-amber-500 to-yellow-500' },
-  { name: 'Classical', color: 'from-emerald-500 to-teal-500' },
-  { name: 'Country', color: 'from-lime-500 to-green-500' },
+  { name: 'Pop', color: 'from-pink-500 to-rose-500', image: genrePop },
+  { name: 'Hip-Hop', color: 'from-orange-500 to-amber-500', image: genreHiphop },
+  { name: 'Rock', color: 'from-red-500 to-rose-600', image: genreRock },
+  { name: 'Electronic', color: 'from-blue-500 to-cyan-500', image: genreElectronic },
+  { name: 'R&B', color: 'from-purple-500 to-violet-500', image: genreRnb },
+  { name: 'Jazz', color: 'from-amber-500 to-yellow-500', image: genreJazz },
+  { name: 'Classical', color: 'from-emerald-500 to-teal-500', image: genreClassical },
+  { name: 'Country', color: 'from-lime-500 to-green-500', image: genreCountry },
 ];
 
 const RECENT_SEARCHES_KEY = 'recentSearches';
@@ -562,9 +571,15 @@ const Search: React.FC = () => {
               <TapArea
                 key={genre.name}
                 onTap={() => handleQueryChange(genre.name)}
-                className={`aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} p-3 md:p-4 flex items-end cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
+                className={`relative aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
               >
-                <h3 className="text-lg md:text-xl font-bold text-white">{genre.name}</h3>
+                <h3 className="absolute top-3 left-3 text-lg md:text-xl font-bold text-white z-10 drop-shadow-lg">{genre.name}</h3>
+                <img
+                  src={genre.image}
+                  alt={genre.name}
+                  className="absolute bottom-[-4px] right-[-12px] w-[55%] aspect-square rounded-md rotate-[25deg] shadow-xl object-cover"
+                  loading="lazy"
+                />
               </TapArea>
             ))}
           </div>
