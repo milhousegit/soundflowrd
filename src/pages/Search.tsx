@@ -745,7 +745,7 @@ const Search: React.FC = () => {
           {genreResults.artists.length > 0 && (
             <section>
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">
-                {settings.language === 'it' ? 'I tuoi artisti' : 'Your artists'}
+                {settings.language === 'it' ? 'Artisti' : 'Artists'}
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
                 {genreResults.artists.slice(0, 12).map((artist) => (
@@ -761,7 +761,7 @@ const Search: React.FC = () => {
           {genreResults.tracks.length > 0 && (
             <section>
               <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">
-                {settings.language === 'it' ? 'Brani per te' : 'Tracks for you'}
+                {settings.language === 'it' ? 'Brani' : 'Tracks'}
               </h2>
               <div className="space-y-1">
                 {genreResults.tracks.map((track, index) => (
