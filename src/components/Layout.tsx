@@ -23,6 +23,7 @@ const Layout: React.FC = () => {
             <Outlet />
           </main>
         </div>
+        <DesktopPlayerSidebar />
       </div>
       <Player />
       <MobileNav />
