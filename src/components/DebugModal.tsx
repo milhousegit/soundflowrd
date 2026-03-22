@@ -183,6 +183,24 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       }
     }, [isOpen, currentTrackInfo]);
 
+    // Fetch artist info when Info tab is active
+    useEffect(() => {
+      if (!isOpen || activeTab !== 'info' || !currentTrack?.artistId) {
+        return;
+      }
+      let cancelled = false;
+      setArtistInfoLoading(true);
+      getArtist(currentTrack.artistId, currentTrack.artist).then((artist) => {
+        if (!cancelled) {
+          setArtistInfo({ name: artist.name, imageUrl: artist.imageUrl, genres: artist.genres, popularity: artist.popularity });
+          setArtistInfoLoading(false);
+        }
+      }).catch(() => {
+        if (!cancelled) setArtistInfoLoading(false);
+      });
+      return () => { cancelled = true; };
+    }, [isOpen, activeTab, currentTrack?.artistId, currentTrack?.artist]);
+
     // Check if user has RD API key - define tabs before early return for hook consistency
     const tabs: { id: DebugTab; label: string; icon: React.ReactNode; show: boolean }[] = [
       { id: 'realdebrid', label: 'RealDebrid', icon: <Database className="w-4 h-4" />, show: hasRdKey },
