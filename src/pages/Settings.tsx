@@ -29,6 +29,7 @@ import { isPast } from 'date-fns';
 import BackButton from '@/components/BackButton';
 import { syncTrackInBackground } from '@/hooks/useSyncTrack';
 import { Track } from '@/types/music';
+import { getAlbum } from '@/lib/spotify';
 
 interface CloudFile {
   id: string;
@@ -93,15 +94,26 @@ const Settings: React.FC = () => {
     setIsSyncingLibrary(true);
     setSyncProgress({ current: 0, total: 0 });
     try {
+      // Fetch favorite tracks
       const { data: favTracks, error } = await supabase
         .from('favorites')
         .select('item_id, item_title, item_artist, item_cover_url, item_data')
         .eq('user_id', user.id)
         .eq('item_type', 'track');
 
-      if (error || !favTracks) throw error;
+      if (error) throw error;
 
-      const tracks: Track[] = favTracks.map(f => {
+      // Fetch favorite albums
+      const { data: favAlbums, error: albumError } = await supabase
+        .from('favorites')
+        .select('item_id')
+        .eq('user_id', user.id)
+        .eq('item_type', 'album');
+
+      if (albumError) throw albumError;
+
+      // Build track list from direct favorites
+      const tracks: Track[] = (favTracks || []).map(f => {
         const data = f.item_data as Record<string, any> | null;
         return {
           id: f.item_id,
@@ -114,6 +126,30 @@ const Settings: React.FC = () => {
         };
       });
 
+      // Fetch tracks from favorite albums
+      const albumTrackIds = new Set(tracks.map(t => t.id));
+      for (const fav of (favAlbums || [])) {
+        try {
+          const albumData = await getAlbum(fav.item_id);
+          if (albumData?.tracks) {
+            for (const tr of albumData.tracks) {
+              if (!albumTrackIds.has(tr.id)) {
+                albumTrackIds.add(tr.id);
+                tracks.push({
+                  ...tr,
+                  artist: (tr as any).artist || albumData.artist,
+                  album: albumData.title,
+                  albumId: albumData.id,
+                  coverUrl: (tr as any).coverUrl || albumData.coverUrl,
+                } as Track);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Failed to fetch album tracks:', fav.item_id, e);
+        }
+      }
+
       setSyncProgress({ current: 0, total: tracks.length });
       toast({
         title: settings.language === 'it' ? 'Sincronizzazione libreria...' : 'Syncing library...',
@@ -123,7 +159,6 @@ const Settings: React.FC = () => {
       for (let i = 0; i < tracks.length; i++) {
         setSyncProgress({ current: i + 1, total: tracks.length });
         await syncTrackInBackground(tracks[i], credentials.realDebridApiKey);
-        // Small delay to avoid rate limiting
         await new Promise(r => setTimeout(r, 500));
       }
 

@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Track, Album, Artist } from '@/types/music';
 import { toast } from 'sonner';
 import { syncTrackInBackground } from '@/hooks/useSyncTrack';
+import { getAlbum } from '@/lib/spotify';
 
 interface Favorite {
   id: string;
@@ -88,6 +89,33 @@ export function useFavorites() {
       // Auto-sync track to Real-Debrid in background when favoriting
       if (itemType === 'track' && credentials?.realDebridApiKey) {
         syncTrackInBackground(item as Track, credentials.realDebridApiKey);
+      }
+
+      // Auto-sync album tracks to Real-Debrid in background when favoriting an album
+      if (itemType === 'album' && credentials?.realDebridApiKey) {
+        const albumId = item.id;
+        const rdKey = credentials.realDebridApiKey;
+        (async () => {
+          try {
+            const albumData = await getAlbum(albumId);
+            if (albumData?.tracks) {
+              const tracks: Track[] = albumData.tracks.map((tr: any) => ({
+                ...tr,
+                artist: tr.artist || albumData.artist,
+                album: albumData.title,
+                albumId: albumData.id,
+                coverUrl: tr.coverUrl || albumData.coverUrl,
+              }));
+              for (const track of tracks) {
+                syncTrackInBackground(track, rdKey);
+                await new Promise(r => setTimeout(r, 500));
+              }
+              console.log(`[Favorites] Auto-synced ${tracks.length} tracks from album ${albumData.title}`);
+            }
+          } catch (e) {
+            console.error('[Favorites] Failed to auto-sync album:', e);
+          }
+        })();
       }
 
       // Track artist for new release notifications (in background, don't block)
