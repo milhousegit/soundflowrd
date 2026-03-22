@@ -27,7 +27,7 @@ import {
   Database,
   Headphones,
   Tag,
-  Video,
+  } from 'lucide-react';
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TapArea from '@/components/TapArea';
