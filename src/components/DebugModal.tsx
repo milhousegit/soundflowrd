@@ -202,6 +202,27 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       return () => { cancelled = true; };
     }, [isOpen, activeTab, currentTrack?.artistId, currentTrack?.artist]);
 
+    // Fetch track tags from Last.fm when Info tab is active
+    useEffect(() => {
+      if (!isOpen || activeTab !== 'info' || !currentTrack?.title || !currentTrack?.artist) {
+        return;
+      }
+      let cancelled = false;
+      setTrackTagsLoading(true);
+      setTrackTags([]);
+      supabase.functions.invoke('spotify-api', {
+        body: { action: 'track-tags', title: currentTrack.title, artist: currentTrack.artist },
+      }).then(({ data }) => {
+        if (!cancelled && data?.tags) {
+          setTrackTags(data.tags);
+        }
+        if (!cancelled) setTrackTagsLoading(false);
+      }).catch(() => {
+        if (!cancelled) setTrackTagsLoading(false);
+      });
+      return () => { cancelled = true; };
+    }, [isOpen, activeTab, currentTrack?.title, currentTrack?.artist]);
+
     // Check if user has RD API key - define tabs before early return for hook consistency
     const tabs: { id: DebugTab; label: string; icon: React.ReactNode; show: boolean }[] = [
       { id: 'realdebrid', label: 'RealDebrid', icon: <Database className="w-4 h-4" />, show: hasRdKey },
