@@ -674,7 +674,7 @@ serve(async (req) => {
           });
 
           // Resolve tracks to Deezer
-          const trackPromises = lastfmTracks.slice(0, 20).map(async (t: any) => {
+          const trackPromises = genreWeeklyTracks.slice(0, 20).map(async (t: any) => {
             try {
               const q = `${t.artist?.name || ''} ${t.name}`;
               const searchRes = await fetch(`${DEEZER_API}/search/track?q=${encodeURIComponent(q)}&limit=1`, {
@@ -683,6 +683,8 @@ serve(async (req) => {
               const searchData = searchRes.ok ? await searchRes.json() : { data: [] };
               const dt = searchData?.data?.[0];
               if (!dt) return null;
+              const trackKey = `${(t.artist?.name || '').toLowerCase()}::${t.name.toLowerCase()}`;
+              const rank = weeklyTrackRank.get(trackKey) || 9999;
               return {
                 id: String(dt.id),
                 title: dt.title,
@@ -692,6 +694,7 @@ serve(async (req) => {
                 albumId: String(dt.album?.id || ''),
                 duration: Math.round(dt.duration || 0),
                 coverUrl: dt.album?.cover_xl || dt.album?.cover_big || dt.album?.cover_medium || '',
+                weeklyRank: rank,
               };
             } catch {
               return null;
@@ -707,6 +710,7 @@ serve(async (req) => {
 
           // Sort by weekly rank (lower = more popular this week)
           artists.sort((a: any, b: any) => (a.popularity || 9999) - (b.popularity || 9999));
+          tracks.sort((a: any, b: any) => (a.weeklyRank || 9999) - (b.weeklyRank || 9999));
 
           return json({ artists, tracks });
         } catch (err) {
