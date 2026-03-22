@@ -38,9 +38,11 @@ async function spotifyFetchPlaylist(url: string, retries = 2): Promise<any> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     const token = await getSpotifyToken();
     const fullUrl = url.startsWith('http') ? url : `${SPOTIFY_API}${url}`;
+    console.log(`[Spotify] Fetching: ${fullUrl} (attempt ${attempt + 1})`);
     const res = await fetch(fullUrl, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
+    console.log(`[Spotify] Response: ${res.status} ${res.statusText}`);
     if (res.status === 401 && attempt < retries) {
       cachedSpotifyToken = null;
       spotifyTokenExpiresAt = 0;
@@ -54,7 +56,11 @@ async function spotifyFetchPlaylist(url: string, retries = 2): Promise<any> {
       }
       throw new Error('Spotify rate limited');
     }
-    if (!res.ok) throw new Error(`Spotify ${res.status}`);
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => '');
+      console.error(`[Spotify] Error body: ${errorBody.slice(0, 200)}`);
+      throw new Error(`Spotify ${res.status}`);
+    }
     return await res.json();
   }
   throw new Error('Max retries exceeded');
