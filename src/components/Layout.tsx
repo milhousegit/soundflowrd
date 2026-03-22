@@ -16,7 +16,6 @@ const Layout: React.FC = () => {
     <div className="flex flex-col h-screen bg-background overflow-hidden pt-[env(safe-area-inset-top)]">
       <DesktopTopBar />
       <div className="flex flex-1 overflow-hidden">
-        <DesktopPlayerSidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <ServiceBanner />
           <TVBanner />
