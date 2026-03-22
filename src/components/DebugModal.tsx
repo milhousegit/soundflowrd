@@ -76,6 +76,13 @@ interface TidalResult {
   streamUrl?: string;
 }
 
+const InfoRow = ({ label, value, truncate }: { label: string; value: string; truncate?: boolean }) => (
+  <div className="flex items-start gap-2">
+    <span className="text-muted-foreground flex-shrink-0 min-w-[100px]">{label}</span>
+    <span className={cn("text-foreground font-mono text-xs break-all", truncate && "truncate max-w-[200px]")} title={value}>{value}</span>
+  </div>
+);
+
 const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
   (
     {
