@@ -95,30 +95,47 @@ function extractCanvasResults(data: Uint8Array): { trackUri: string; canvasUrl: 
   return results;
 }
 
-// --- Spotify anonymous token (for canvas API) ---
-async function getSpotifyAnonToken(): Promise<string | null> {
-  try {
-    const res = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Referer': 'https://open.spotify.com/',
-      },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.accessToken) return data.accessToken;
-    }
-    const embedRes = await fetch('https://open.spotify.com/embed/track/4cOdK2wGLETKBW3PvgPWqT', {
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
-    });
-    if (embedRes.ok) {
-      const html = await embedRes.text();
-      const m = html.match(/"accessToken":"([^"]+)"/);
-      if (m) return m[1];
-    }
+// --- Spotify OAuth token via refresh_token (for canvas API) ---
+let cachedOAuthToken: string | null = null;
+let oauthTokenExpiry = 0;
+
+async function getSpotifyOAuthToken(): Promise<string | null> {
+  const now = Date.now();
+  if (cachedOAuthToken && now < oauthTokenExpiry - 60_000) return cachedOAuthToken;
+
+  const refreshToken = Deno.env.get('SPOTIFY_REFRESH_TOKEN');
+  const clientId = Deno.env.get('SPOTIFY_CLIENT_ID');
+  const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
+  if (!refreshToken || !clientId || !clientSecret) {
+    console.log('[Canvas] Missing SPOTIFY_REFRESH_TOKEN or client credentials');
     return null;
-  } catch { return null; }
+  }
+
+  try {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
+    });
+    if (!res.ok) {
+      console.error('[Canvas] OAuth token refresh failed:', res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    cachedOAuthToken = data.access_token;
+    oauthTokenExpiry = now + (data.expires_in || 3600) * 1000;
+    console.log('[Canvas] OAuth token refreshed successfully');
+    return cachedOAuthToken;
+  } catch (e) {
+    console.error('[Canvas] OAuth token error:', e);
+    return null;
+  }
 }
 
 // --- Spotify Client Credentials token (for search API) ---
