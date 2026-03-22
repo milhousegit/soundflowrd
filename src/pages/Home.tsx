@@ -323,8 +323,8 @@ const Home: React.FC = () => {
               coverUrl: playlistResult.data?.cover_url || null,
               trackCount: tracksResult.count || 0
             };
-          } else if (/^\d+$/.test(playlistId)) {
-            // Deezer playlist ID - fetch track count via Deezer
+          } else {
+            // Deezer numeric or Spotify alphanumeric - fetch via API
             try {
               const response = await fetch(
                 `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/spotify-api`,
@@ -351,8 +351,6 @@ const Home: React.FC = () => {
               console.error('Error fetching chart:', e);
               displayData[chart.id] = { coverUrl: null, trackCount: 0 };
             }
-          } else {
-            displayData[chart.id] = { coverUrl: null, trackCount: 0 };
           }
         }
         

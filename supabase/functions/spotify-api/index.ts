@@ -38,9 +38,11 @@ async function spotifyFetchPlaylist(url: string, retries = 2): Promise<any> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     const token = await getSpotifyToken();
     const fullUrl = url.startsWith('http') ? url : `${SPOTIFY_API}${url}`;
+    console.log(`[Spotify] Fetching: ${fullUrl} (attempt ${attempt + 1})`);
     const res = await fetch(fullUrl, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
+    console.log(`[Spotify] Response: ${res.status} ${res.statusText}`);
     if (res.status === 401 && attempt < retries) {
       cachedSpotifyToken = null;
       spotifyTokenExpiresAt = 0;
@@ -54,7 +56,11 @@ async function spotifyFetchPlaylist(url: string, retries = 2): Promise<any> {
       }
       throw new Error('Spotify rate limited');
     }
-    if (!res.ok) throw new Error(`Spotify ${res.status}`);
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => '');
+      console.error(`[Spotify] Error body: ${errorBody.slice(0, 200)}`);
+      throw new Error(`Spotify ${res.status}`);
+    }
     return await res.json();
   }
   throw new Error('Max retries exceeded');
@@ -277,7 +283,6 @@ serve(async (req) => {
 
       // ======================== COUNTRY CHART ========================
       case 'get-country-chart': {
-        // Check DB for configured playlist
         const supabaseUrl = Deno.env.get('SUPABASE_URL');
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -296,6 +301,29 @@ serve(async (req) => {
                 if (/^\d+$/.test(pid)) {
                   const data = await deezerFetch(`/playlist/${pid}`);
                   return json((data?.tracks?.data || []).slice(0, limit).map((t: any) => mapDeezerTrack(t)));
+                }
+                // Alphanumeric = Spotify playlist → use spotify-import (anonymous token)
+                try {
+                  const spotifyUrl = `https://open.spotify.com/playlist/${pid}`;
+                  console.log(`[Chart] Fetching Spotify playlist via import: ${pid}`);
+                  const importRes = await fetch(`${supabaseUrl}/functions/v1/spotify-import`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${supabaseKey}`,
+                    },
+                    body: JSON.stringify({ url: spotifyUrl }),
+                  });
+                  if (importRes.ok) {
+                    const importData = await importRes.json();
+                    if (importData.tracks?.length > 0) {
+                      console.log(`[Chart] Got ${importData.tracks.length} tracks from Spotify import`);
+                      return json(importData.tracks.slice(0, limit));
+                    }
+                  }
+                  console.warn('[Chart] Spotify import returned no tracks, falling back');
+                } catch (spotifyErr) {
+                  console.warn('[Chart] Spotify import failed, falling back to Deezer:', spotifyErr);
                 }
               }
             }
@@ -329,7 +357,7 @@ serve(async (req) => {
           });
         }
 
-        // Spotify playlist ID (backward compat)
+        // Spotify playlist ID — try client credentials first, then spotify-import
         try {
           const plData = await spotifyFetchPlaylist(`/playlists/${id}?market=${mkt}`);
           let allItems = (plData?.tracks?.items || []).filter((i: any) => i?.track);
@@ -355,7 +383,39 @@ serve(async (req) => {
             })),
           });
         } catch (error) {
-          console.error(`Playlist fetch failed for ${id}:`, error);
+          console.warn(`[Playlist] Client credentials failed for ${id}, trying spotify-import...`);
+          // Fallback: use spotify-import (anonymous token)
+          const supabaseUrlPl = Deno.env.get('SUPABASE_URL');
+          const supabaseKeyPl = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+          if (supabaseUrlPl && supabaseKeyPl) {
+            try {
+              const importRes = await fetch(`${supabaseUrlPl}/functions/v1/spotify-import`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseKeyPl}`,
+                },
+                body: JSON.stringify({ url: `https://open.spotify.com/playlist/${id}` }),
+              });
+              if (importRes.ok) {
+                const importData = await importRes.json();
+                if (importData.tracks?.length > 0) {
+                  return json({
+                    id: String(id),
+                    title: importData.playlistName || 'Spotify Playlist',
+                    description: '',
+                    coverUrl: importData.coverUrl || null,
+                    trackCount: importData.tracks.length,
+                    creator: 'Spotify',
+                    duration: 0,
+                    tracks: importData.tracks.map((t: any, idx: number) => ({ ...t, trackNumber: idx + 1 })),
+                  });
+                }
+              }
+            } catch (importErr) {
+              console.error(`[Playlist] spotify-import also failed for ${id}:`, importErr);
+            }
+          }
           return json({ id: String(id), title: '', description: '', coverUrl: null, trackCount: 0, creator: '', duration: 0, tracks: [], error: true });
         }
       }
