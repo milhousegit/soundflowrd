@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getTidalStream, mapQualityToTidal } from '@/lib/tidal';
 import { getMonochromeStream } from '@/lib/monochrome';
+import { getHifiStream } from '@/lib/hifi';
 
 // Generate a short room code
 const generateRoomCode = () => {
