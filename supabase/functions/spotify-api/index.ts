@@ -107,6 +107,7 @@ async function fetchSpotifyArtistGenres(artistName: string, deezerId: string): P
     
     // Find best match (exact name match preferred)
     const match = artists.find((a: any) => a.name.toLowerCase() === artistName.toLowerCase()) || artists[0];
+    console.log(`[Genres] Spotify match for ${artistName}:`, JSON.stringify({ id: match?.id, name: match?.name, genres: match?.genres, popularity: match?.popularity }));
     if (!match) {
       console.log(`[Genres] No Spotify match for ${artistName}`);
       // Cache empty result to avoid repeated lookups
