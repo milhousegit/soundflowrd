@@ -890,7 +890,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'HiFi';
         addDebugLog(`🎵 ${sourceName}`, `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} (${tidalQuality})`, 'info');
         try {
-          const streamFn = sourceId === 'monochrome' ? getMonochromeStream : sourceId === 'hifi' ? getHifiStream : getTidalStream;
+          const streamFn = sourceId === 'monochrome' ? getMonochromeStream : sourceId === 'hifi' ? getHifiStream : getMonochromeStream;
           const result = await streamFn(enrichedTrack.title, enrichedTrack.artist, tidalQuality);
           if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
 
