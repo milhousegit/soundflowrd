@@ -9,7 +9,7 @@ import UserCard from '@/components/social/UserCard';
 import TapArea from '@/components/TapArea';
 import SearchResultsSkeleton from '@/components/skeletons/SearchResultsSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
-import { searchAll, searchPlaylists, searchArtists, searchTracks, DeezerPlaylist, getArtist, getArtistTopTracks } from '@/lib/spotify';
+import { searchAll, searchPlaylists, DeezerPlaylist, getArtist, getArtistTopTracks } from '@/lib/spotify';
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate, useSearchParams } from 'react-router-dom';
