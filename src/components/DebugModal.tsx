@@ -129,9 +129,13 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
     const [savingMetadata, setSavingMetadata] = useState<string | null>(null);
     const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
-    // Canvas state
+    // Canvas state (admin only, kept in info tab)
     const [canvasUrl, setCanvasUrl] = useState('');
     const [savingCanvas, setSavingCanvas] = useState(false);
+
+    // Artist info state
+    const [artistInfo, setArtistInfo] = useState<{ name: string; imageUrl?: string; genres?: string[]; popularity?: number } | null>(null);
+    const [artistInfoLoading, setArtistInfoLoading] = useState(false);
 
     // Check if user has RD API key
     const hasRdKey = !!credentials?.realDebridApiKey;
