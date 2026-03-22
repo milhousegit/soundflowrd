@@ -238,8 +238,179 @@ const Search: React.FC = () => {
 
   const debouncedSearch = useDebounce(performSearch, 500);
 
+  // Genre normalization helper (mirrors edge function logic)
+  const normalizeGenreForMatch = (genre: string): string => {
+    const g = genre.toLowerCase().trim();
+    if (g.includes('rap') || g.includes('hip hop') || g.includes('hip-hop') || g.includes('trap')) return 'hip-hop/rap';
+    if (g.includes('pop') && !g.includes('k-pop')) return 'pop';
+    if (g.includes('k-pop') || g.includes('kpop')) return 'k-pop';
+    if (g.includes('rock') || g.includes('punk') || g.includes('metal')) return 'rock';
+    if (g.includes('electro') || g.includes('dance') || g.includes('edm') || g.includes('house') || g.includes('techno')) return 'electronic';
+    if (g.includes('r&b') || g.includes('rnb') || g.includes('soul')) return 'r&b';
+    if (g.includes('jazz')) return 'jazz';
+    if (g.includes('classical') || g.includes('classica')) return 'classical';
+    if (g.includes('reggaeton') || g.includes('latin') || g.includes('latino')) return 'latin';
+    if (g.includes('indie') || g.includes('alternative')) return 'indie/alternative';
+    if (g.includes('country')) return 'country';
+    return g;
+  };
+
+  // Personalized genre search
+  const performGenreSearch = useCallback(async (genreName: string) => {
+    if (!user) {
+      // Fallback to normal search if not logged in
+      handleQueryChange(genreName);
+      return;
+    }
+
+    setSelectedGenre(genreName);
+    setResults(null);
+    setGenreResults(null);
+    setIsLoading(true);
+    setQuery('');
+
+    const targetGenre = normalizeGenreForMatch(genreName);
+
+    try {
+      // Fetch user's artist stats + genre cache + playlists in parallel
+      const [artistStatsRes, genreCacheRes, playlistsRes, favArtistsRes] = await Promise.all([
+        supabase
+          .from('user_artist_stats')
+          .select('artist_id, artist_name, total_plays, artist_image_url')
+          .eq('user_id', user.id)
+          .order('total_plays', { ascending: false })
+          .limit(100),
+        supabase
+          .from('artist_genres_cache')
+          .select('artist_id, artist_name, genres, image_url'),
+        searchPlaylists(genreName).catch(() => []),
+        supabase
+          .from('favorites')
+          .select('item_id, item_title, item_cover_url')
+          .eq('user_id', user.id)
+          .eq('item_type', 'artist'),
+      ]);
+
+      const artistStats = artistStatsRes.data || [];
+      const genreCache = genreCacheRes.data || [];
+      const favArtists = favArtistsRes.data || [];
+
+      // Build genre lookup: artist_id -> genres
+      const genreMap = new Map<string, string[]>();
+      for (const g of genreCache) {
+        genreMap.set(g.artist_id, g.genres || []);
+      }
+
+      // Find user's artists that match the genre
+      const matchingArtists: { id: string; name: string; plays: number; imageUrl?: string }[] = [];
+      const matchedIds = new Set<string>();
+
+      for (const stat of artistStats) {
+        const genres = genreMap.get(stat.artist_id) || [];
+        const matches = genres.some(g => normalizeGenreForMatch(g) === targetGenre);
+        if (matches && !matchedIds.has(stat.artist_id)) {
+          matchedIds.add(stat.artist_id);
+          matchingArtists.push({
+            id: stat.artist_id,
+            name: stat.artist_name,
+            plays: stat.total_plays,
+            imageUrl: stat.artist_image_url || undefined,
+          });
+        }
+      }
+
+      // Also check favorited artists
+      for (const fav of favArtists) {
+        if (matchedIds.has(fav.item_id)) continue;
+        const genres = genreMap.get(fav.item_id) || [];
+        const matches = genres.some(g => normalizeGenreForMatch(g) === targetGenre);
+        if (matches) {
+          matchedIds.add(fav.item_id);
+          matchingArtists.push({
+            id: fav.item_id,
+            name: fav.item_title,
+            plays: 0,
+            imageUrl: fav.item_cover_url || undefined,
+          });
+        }
+      }
+
+      // Sort by play count
+      matchingArtists.sort((a, b) => b.plays - a.plays);
+      const topMatches = matchingArtists.slice(0, 12);
+
+      // Convert to Artist objects and fetch top tracks in parallel
+      const artistObjects: Artist[] = [];
+      const allTracks: Track[] = [];
+      const seenTrackIds = new Set<string>();
+
+      // Fetch artist details + top tracks for top matches
+      const fetchPromises = topMatches.slice(0, 8).map(async (ma) => {
+        try {
+          const [artistData, tracks] = await Promise.all([
+            getArtist(ma.id, ma.name).catch(() => null),
+            getArtistTopTracks(ma.id, ma.name).catch(() => []),
+          ]);
+          return { artistData, tracks, ma };
+        } catch {
+          return { artistData: null, tracks: [], ma };
+        }
+      });
+
+      const fetchResults = await Promise.all(fetchPromises);
+
+      for (const { artistData, tracks, ma } of fetchResults) {
+        if (artistData) {
+          artistObjects.push({
+            id: artistData.id,
+            name: artistData.name,
+            imageUrl: artistData.imageUrl || ma.imageUrl || '',
+          });
+        } else {
+          artistObjects.push({
+            id: ma.id,
+            name: ma.name,
+            imageUrl: ma.imageUrl || '',
+          });
+        }
+
+        for (const track of tracks.slice(0, 5)) {
+          if (!seenTrackIds.has(track.id)) {
+            seenTrackIds.add(track.id);
+            allTracks.push(track);
+          }
+        }
+      }
+
+      // Shuffle tracks slightly to mix artists
+      for (let j = allTracks.length - 1; j > 0; j--) {
+        if (Math.random() < 0.3) {
+          const k = Math.floor(Math.random() * (j + 1));
+          [allTracks[j], allTracks[k]] = [allTracks[k], allTracks[j]];
+        }
+      }
+
+      setGenreResults({
+        artists: artistObjects,
+        tracks: allTracks.slice(0, 20),
+        playlists: playlistsRes,
+      });
+    } catch (error) {
+      console.error('Genre search error:', error);
+      setGenreResults({ artists: [], tracks: [], playlists: [] });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  const clearGenreMode = useCallback(() => {
+    setSelectedGenre(null);
+    setGenreResults(null);
+  }, []);
+
   const handleQueryChange = (value: string) => {
     setQuery(value);
+    if (selectedGenre) clearGenreMode();
     // Trim trailing spaces before searching
     const trimmedValue = value.trimEnd();
     if (trimmedValue) {
