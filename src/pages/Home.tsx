@@ -339,7 +339,7 @@ const Home: React.FC = () => {
                 if (playlist && !playlist.error) {
                   displayData[chart.id] = {
                     coverUrl: playlist.coverUrl || null,
-                    trackCount: playlist.trackCount || 0
+                    trackCount: playlist.trackCount || playlist.tracks?.length || 0
                   };
                 } else {
                   displayData[chart.id] = { coverUrl: null, trackCount: 0 };
