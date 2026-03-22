@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Track, Album, Artist } from '@/types/music';
 import { toast } from 'sonner';
 import { syncTrackInBackground } from '@/hooks/useSyncTrack';
+import { getAlbum } from '@/lib/spotify';
 
 interface Favorite {
   id: string;
