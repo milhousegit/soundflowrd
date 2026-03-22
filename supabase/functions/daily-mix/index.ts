@@ -262,24 +262,21 @@ serve(async (req) => {
 
     const { action } = await req.json();
 
-    if (action === 'get') {
-      const { data: existing } = await supabase
-        .from('daily_mixes').select('*')
-        .eq('user_id', user.id)
-        .gt('expires_at', new Date().toISOString())
-        .order('mix_index');
+    const { data: existing } = await supabase
+      .from('daily_mixes').select('*')
+      .eq('user_id', user.id)
+      .gt('expires_at', new Date().toISOString())
+      .order('mix_index');
 
-      if (existing && existing.length > 0) {
-        console.log(`Returning ${existing.length} cached mixes for user ${user.id}`);
-        return new Response(JSON.stringify(existing), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+    if (action === 'get' && existing && existing.length > 0) {
+      console.log(`Returning ${existing.length} cached mixes for user ${user.id}`);
+      return new Response(JSON.stringify(existing), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     if (action === 'get' || action === 'regenerate') {
       console.log(`Generating daily mixes for user ${user.id}`);
-      await supabase.from('daily_mixes').delete().eq('user_id', user.id);
 
       // 1. Fetch user's top artists
       const { data: rawArtistStats } = await supabase
@@ -553,9 +550,22 @@ serve(async (req) => {
 
       console.log(`Final mixes: ${finalMixes.length}`);
 
-      if (finalMixes.length > 0) {
-        const { error: insertError } = await supabase.from('daily_mixes').insert(finalMixes);
-        if (insertError) console.error('Error saving mixes:', insertError);
+      if (finalMixes.length === 0) {
+        console.warn(`Daily mix generation produced 0 mixes for user ${user.id}; preserving existing mixes`);
+        return new Response(JSON.stringify(existing || []), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { error: deleteError } = await supabase.from('daily_mixes').delete().eq('user_id', user.id);
+      if (deleteError) console.error('Error deleting previous mixes:', deleteError);
+
+      const { error: insertError } = await supabase.from('daily_mixes').insert(finalMixes);
+      if (insertError) {
+        console.error('Error saving mixes:', insertError);
+        return new Response(JSON.stringify(existing || finalMixes), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
       const { data: freshMixes } = await supabase
