@@ -301,8 +301,18 @@ serve(async (req) => {
         const top = topRes.status === 'fulfilled' ? topRes.value : { data: [] };
         const related = relatedRes.status === 'fulfilled' ? relatedRes.value : { data: [] };
 
+        // Fetch genres from Spotify (cached)
+        const artistName = artist?.name || '';
+        const genreData = await fetchSpotifyArtistGenres(artistName, String(id));
+
+        const mappedArtist = mapDeezerArtist(artist);
+        if (genreData) {
+          mappedArtist.genres = genreData.genres;
+          if (genreData.popularity > 0) mappedArtist.popularity = genreData.popularity;
+        }
+
         return json({
-          ...mapDeezerArtist(artist),
+          ...mappedArtist,
           releases: (albums?.data || []).map((a: any) => mapDeezerAlbum(a)),
           topTracks: (top?.data || []).map((t: any) => mapDeezerTrack(t)),
           relatedArtists: (related?.data || []).map((a: any) => mapDeezerArtist(a)).slice(0, 10),
