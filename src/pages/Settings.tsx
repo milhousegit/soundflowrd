@@ -85,6 +85,60 @@ const Settings: React.FC = () => {
   const [showRdSettings, setShowRdSettings] = useState(false);
   const [showHybridSettings, setShowHybridSettings] = useState(false);
   const [showKofiModal, setShowKofiModal] = useState(false);
+  const [isSyncingLibrary, setIsSyncingLibrary] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
+
+  const syncLibrary = useCallback(async () => {
+    if (!credentials?.realDebridApiKey || !user?.id) return;
+    setIsSyncingLibrary(true);
+    setSyncProgress({ current: 0, total: 0 });
+    try {
+      const { data: favTracks, error } = await supabase
+        .from('favorites')
+        .select('item_id, item_title, item_artist, item_cover_url, item_data')
+        .eq('user_id', user.id)
+        .eq('item_type', 'track');
+
+      if (error || !favTracks) throw error;
+
+      const tracks: Track[] = favTracks.map(f => ({
+        id: f.item_id,
+        title: f.item_title,
+        artist: f.item_artist || '',
+        coverUrl: f.item_cover_url || '',
+        album: f.item_data?.album || '',
+        albumId: f.item_data?.albumId || '',
+        duration: f.item_data?.duration || 0,
+      }));
+
+      setSyncProgress({ current: 0, total: tracks.length });
+      toast({
+        title: settings.language === 'it' ? 'Sincronizzazione libreria...' : 'Syncing library...',
+        description: `0/${tracks.length}`,
+      });
+
+      for (let i = 0; i < tracks.length; i++) {
+        setSyncProgress({ current: i + 1, total: tracks.length });
+        await syncTrackInBackground(tracks[i], credentials.realDebridApiKey);
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      toast({
+        title: settings.language === 'it' ? 'Libreria sincronizzata!' : 'Library synced!',
+        description: settings.language === 'it' ? `${tracks.length} brani elaborati` : `${tracks.length} tracks processed`,
+      });
+    } catch (err) {
+      console.error('Library sync error:', err);
+      toast({
+        title: settings.language === 'it' ? 'Errore sincronizzazione' : 'Sync error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSyncingLibrary(false);
+      setSyncProgress({ current: 0, total: 0 });
+    }
+  }, [credentials, user, toast, settings.language]);
 
   // Check if user has active premium (respect simulation mode)
   const isPremiumActive = !simulateFreeUser && profile?.is_premium && (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at)));
