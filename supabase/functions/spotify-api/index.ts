@@ -578,44 +578,76 @@ serve(async (req) => {
         const tag = TAG_MAP[genre.toLowerCase().trim()] || genre.toLowerCase().trim();
 
         try {
-          // Use Last.fm tag endpoints for accurate genre-based results
-          const [artistsRes, tracksRes] = await Promise.all([
+          // Fetch genre-accurate artists from Last.fm tag + weekly chart for recency
+          const [tagArtistsRes, tagTracksRes, weeklyArtistsRes] = await Promise.all([
             lastfmKey 
-              ? fetch(`https://ws.audioscrobbler.com/2.0/?method=tag.gettopartists&tag=${encodeURIComponent(tag)}&api_key=${lastfmKey}&format=json&limit=20`)
+              ? fetch(`https://ws.audioscrobbler.com/2.0/?method=tag.gettopartists&tag=${encodeURIComponent(tag)}&api_key=${lastfmKey}&format=json&limit=30`)
               : Promise.resolve(null),
             lastfmKey
               ? fetch(`https://ws.audioscrobbler.com/2.0/?method=tag.gettoptracks&tag=${encodeURIComponent(tag)}&api_key=${lastfmKey}&format=json&limit=25`)
               : Promise.resolve(null),
+            // Weekly chart: most popular artists THIS week globally
+            lastfmKey
+              ? fetch(`https://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&api_key=${lastfmKey}&format=json&limit=200`)
+              : Promise.resolve(null),
           ]);
 
-          const artistsData = artistsRes?.ok ? await artistsRes.json() : {};
-          const tracksData = tracksRes?.ok ? await tracksRes.json() : {};
+          const tagArtistsData = tagArtistsRes?.ok ? await tagArtistsRes.json() : {};
+          const tagTracksData = tagTracksRes?.ok ? await tagTracksRes.json() : {};
+          const weeklyData = weeklyArtistsRes?.ok ? await weeklyArtistsRes.json() : {};
 
-          const lastfmArtists = (artistsData?.topartists?.artist || []).slice(0, 15);
-          const lastfmTracks = (tracksData?.tracks?.track || []).slice(0, 25);
+          const tagArtistNames = new Set(
+            (tagArtistsData?.topartists?.artist || []).map((a: any) => a.name.toLowerCase())
+          );
+          const weeklyArtists = (weeklyData?.artists?.artist || []) as any[];
+          
+          // Build weekly rank map (lower = more popular this week)
+          const weeklyRank = new Map<string, number>();
+          weeklyArtists.forEach((a: any, i: number) => {
+            weeklyRank.set(a.name.toLowerCase(), i + 1);
+          });
 
-          console.log(`[genre-browse] Last.fm tag "${tag}": ${lastfmArtists.length} artists, ${lastfmTracks.length} tracks`);
+          // Filter weekly chart artists that match the genre tag
+          const genreWeeklyArtists = weeklyArtists
+            .filter((a: any) => tagArtistNames.has(a.name.toLowerCase()))
+            .slice(0, 15);
 
-          // Resolve Last.fm artists to Deezer for images
-          const artistPromises = lastfmArtists.slice(0, 12).map(async (a: any, idx: number) => {
+          // If not enough from weekly chart, fill from tag artists
+          const tagArtists = (tagArtistsData?.topartists?.artist || []) as any[];
+          const usedNames = new Set(genreWeeklyArtists.map((a: any) => a.name.toLowerCase()));
+          for (const a of tagArtists) {
+            if (genreWeeklyArtists.length >= 15) break;
+            if (!usedNames.has(a.name.toLowerCase())) {
+              genreWeeklyArtists.push(a);
+              usedNames.add(a.name.toLowerCase());
+            }
+          }
+
+          const lastfmTracks = (tagTracksData?.tracks?.track || []).slice(0, 25);
+
+          console.log(`[genre-browse] Tag "${tag}": ${tagArtistNames.size} tag artists, ${genreWeeklyArtists.length} weekly+tag merged, ${lastfmTracks.length} tracks`);
+
+          // Resolve to Deezer for images
+          const artistPromises = genreWeeklyArtists.slice(0, 12).map(async (a: any) => {
             try {
               const searchRes = await fetch(`${DEEZER_API}/search/artist?q=${encodeURIComponent(a.name)}&limit=1`, {
                 headers: { 'User-Agent': 'Mozilla/5.0' },
               });
               const searchData = searchRes.ok ? await searchRes.json() : { data: [] };
               const deezerArtist = searchData?.data?.[0];
+              const rank = weeklyRank.get(a.name.toLowerCase()) || 9999;
               return {
                 id: deezerArtist ? String(deezerArtist.id) : a.mbid || a.name,
                 name: a.name,
                 imageUrl: deezerArtist?.picture_xl || deezerArtist?.picture_big || deezerArtist?.picture_medium || a.image?.[3]?.['#text'] || '',
-                popularity: deezerArtist?.nb_fan || parseInt(a.listeners || '0', 10) || 0,
+                popularity: rank,
               };
             } catch {
-              return { id: a.mbid || a.name, name: a.name, imageUrl: a.image?.[3]?.['#text'] || '', popularity: 0 };
+              return { id: a.mbid || a.name, name: a.name, imageUrl: a.image?.[3]?.['#text'] || '', popularity: 9999 };
             }
           });
 
-          // Resolve Last.fm tracks to Deezer for full metadata
+          // Resolve tracks to Deezer
           const trackPromises = lastfmTracks.slice(0, 20).map(async (t: any) => {
             try {
               const q = `${t.artist?.name || ''} ${t.name}`;
@@ -647,8 +679,8 @@ serve(async (req) => {
 
           const tracks = trackResults.filter(Boolean);
 
-          // Sort artists by popularity (nb_fan) descending
-          artists.sort((a: any, b: any) => (b.popularity || 0) - (a.popularity || 0));
+          // Sort by weekly rank (lower = more popular this week)
+          artists.sort((a: any, b: any) => (a.popularity || 9999) - (b.popularity || 9999));
 
           return json({ artists, tracks });
         } catch (err) {
