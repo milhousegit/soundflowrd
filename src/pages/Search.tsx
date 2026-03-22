@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Search as SearchIcon, X, Music, Clock, History, Trash2, User } from 'lucide-react';
+import { Search as SearchIcon, X, Music, Clock, History, Trash2, User, ArrowLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
@@ -9,13 +9,15 @@ import UserCard from '@/components/social/UserCard';
 import TapArea from '@/components/TapArea';
 import SearchResultsSkeleton from '@/components/skeletons/SearchResultsSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
-import { searchAll, searchPlaylists, DeezerPlaylist } from '@/lib/spotify';
+import { searchAll, searchPlaylists, DeezerPlaylist, getArtist, getArtistTopTracks } from '@/lib/spotify';
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserSearch } from '@/hooks/useUserSearch';
 import { SocialProfile } from '@/hooks/useSocialProfile';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 import genrePop from '@/assets/genres/pop.jpg';
 import genreHiphop from '@/assets/genres/hiphop.jpg';
