@@ -34,7 +34,7 @@ const Info: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">SoundFlow</p>
-                <p className="text-sm text-muted-foreground">v1.8.5</p>
+                <p className="text-sm text-muted-foreground">v1.9</p>
               </div>
               <Button variant="outline" className="gap-2" onClick={async () => {
               try {
@@ -80,15 +80,15 @@ const Info: React.FC = () => {
               <ul className="text-sm text-muted-foreground space-y-1.5">
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "Wrapped 2026: disponibile per tutti dal 25 dicembre" : "Wrapped 2026: available for everyone from December 25"}
+                  {isItalian ? "Ricerca desktop integrata nella barra superiore con risultati live" : "Desktop search integrated in top bar with live results"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "File IPA per iOS disponibile per il download dalla schermata di login" : "iOS IPA file available for download from login screen"}
+                  {isItalian ? "Monochrome: discovery dinamico dei server per maggiore affidabilità" : "Monochrome: dynamic server discovery for better reliability"}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {isItalian ? "Collegamento con la TV" : "TV connection"}
+                  {isItalian ? "Miglioramenti alla stabilità dello streaming audio" : "Audio streaming stability improvements"}
                 </li>
               </ul>
             </div>
