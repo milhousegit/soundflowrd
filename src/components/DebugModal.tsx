@@ -131,10 +131,12 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
 
 
     // Artist info state
-
-    // Artist info state
     const [artistInfo, setArtistInfo] = useState<{ name: string; imageUrl?: string; genres?: string[]; popularity?: number } | null>(null);
     const [artistInfoLoading, setArtistInfoLoading] = useState(false);
+
+    // Track tags state
+    const [trackTags, setTrackTags] = useState<{ name: string; count: number }[]>([]);
+    const [trackTagsLoading, setTrackTagsLoading] = useState(false);
 
     // Check if user has RD API key
     const hasRdKey = !!credentials?.realDebridApiKey;
@@ -199,6 +201,27 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       });
       return () => { cancelled = true; };
     }, [isOpen, activeTab, currentTrack?.artistId, currentTrack?.artist]);
+
+    // Fetch track tags from Last.fm when Info tab is active
+    useEffect(() => {
+      if (!isOpen || activeTab !== 'info' || !currentTrack?.title || !currentTrack?.artist) {
+        return;
+      }
+      let cancelled = false;
+      setTrackTagsLoading(true);
+      setTrackTags([]);
+      supabase.functions.invoke('spotify-api', {
+        body: { action: 'track-tags', title: currentTrack.title, artist: currentTrack.artist },
+      }).then(({ data }) => {
+        if (!cancelled && data?.tags) {
+          setTrackTags(data.tags);
+        }
+        if (!cancelled) setTrackTagsLoading(false);
+      }).catch(() => {
+        if (!cancelled) setTrackTagsLoading(false);
+      });
+      return () => { cancelled = true; };
+    }, [isOpen, activeTab, currentTrack?.title, currentTrack?.artist]);
 
     // Check if user has RD API key - define tabs before early return for hook consistency
     const tabs: { id: DebugTab; label: string; icon: React.ReactNode; show: boolean }[] = [
@@ -1070,6 +1093,28 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground italic">{isItalian ? 'Nessuna info artista' : 'No artist info'}</p>
+                )}
+
+                <div className="h-px bg-border" />
+
+                {/* Track tags from Last.fm */}
+                <p className="text-xs font-medium text-muted-foreground uppercase">{isItalian ? 'Generi brano (Last.fm)' : 'Track genres (Last.fm)'}</p>
+                {trackTagsLoading ? (
+                  <div className="flex items-center gap-2 py-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">{isItalian ? 'Caricamento…' : 'Loading…'}</span>
+                  </div>
+                ) : trackTags.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {trackTags.map((tag) => (
+                      <span key={tag.name} className="px-2 py-0.5 rounded-full bg-primary/10 text-xs text-foreground flex items-center gap-1">
+                        {tag.name}
+                        <span className="text-muted-foreground text-[10px]">{tag.count}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">{isItalian ? 'Nessun tag disponibile' : 'No tags available'}</p>
                 )}
               </div>
             )}
