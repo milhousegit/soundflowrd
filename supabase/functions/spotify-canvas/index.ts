@@ -208,16 +208,12 @@ Deno.serve(async (req) => {
     const batch = tracks.slice(0, 10);
     console.log(`Processing ${batch.length} tracks for canvas...`);
 
-    // Try anon token first, fall back to client credentials
-    let token = await getSpotifyAnonToken();
-    console.log(`[Canvas] Anon token: ${token ? 'yes' : 'NO'}`);
-    if (!token) {
-      token = await getSpotifyClientToken();
-      console.log(`[Canvas] Client token fallback: ${token ? 'yes' : 'NO'}`);
-    }
+    // Use OAuth refresh token for canvas API (requires premium-level access)
+    const token = await getSpotifyOAuthToken();
+    console.log(`[Canvas] OAuth token: ${token ? 'yes' : 'NO'}`);
     if (!token) {
       return new Response(
-        JSON.stringify({ error: 'Failed to get Spotify token' }),
+        JSON.stringify({ error: 'Failed to get Spotify OAuth token. Check SPOTIFY_REFRESH_TOKEN secret.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
