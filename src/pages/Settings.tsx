@@ -29,6 +29,7 @@ import { isPast } from 'date-fns';
 import BackButton from '@/components/BackButton';
 import { syncTrackInBackground } from '@/hooks/useSyncTrack';
 import { Track } from '@/types/music';
+import { getAlbum } from '@/lib/spotify';
 
 interface CloudFile {
   id: string;
