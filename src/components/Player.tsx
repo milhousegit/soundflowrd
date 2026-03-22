@@ -438,10 +438,10 @@ const Player: React.FC = () => {
               "bg-emerald-500/20 text-emerald-400" :
               "bg-orange-500/20 text-orange-400"
             )}>
-                  {currentAudioSource === 'squidwtf' ? '🎵 SquidWTF' :
-              currentAudioSource === 'monochrome' ? '🎵 Monochrome' :
-              currentAudioSource === 'offline' ? '📱 Offline' :
-              '📦 Real-Debrid'}
+                  {currentAudioSource === 'squidwtf' ? 'SquidWTF' :
+              currentAudioSource === 'monochrome' ? 'Monochrome' :
+              currentAudioSource === 'offline' ? 'Offline' :
+              'Real-Debrid'}
                 </span>
               </div>
           }
