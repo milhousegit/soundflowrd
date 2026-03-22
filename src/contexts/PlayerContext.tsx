@@ -1117,8 +1117,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             continue;
           }
 
-          // Scraping source (squidwtf, monochrome, hifi)
-          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF';
+          // Scraping source (monochrome, hifi)
+          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'HiFi';
           addDebugLog(`🔄 Provo ${sourceName}`, `Posizione ${Array.from(triedSources).indexOf(sourceId) + 1} nella catena`, 'info');
           setLoadingPhase('searching');
           const success = await playWithScrapingSource(sourceId);
