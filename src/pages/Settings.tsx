@@ -853,13 +853,19 @@ const Settings: React.FC = () => {
                   {/* Cloud Files in Hybrid */}
                   {hasRdApiKey && (
                     <div className="space-y-2">
-                      <Button variant="outline" size="sm" className="w-full h-9" onClick={() => {
-                        setShowCloudSection(!showCloudSection);
-                        if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
-                      }}>
-                        <Cloud className="w-3.5 h-3.5 mr-1.5" />
-                        {t('cloudFiles')}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => {
+                          setShowCloudSection(!showCloudSection);
+                          if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
+                        }}>
+                          <Cloud className="w-3.5 h-3.5 mr-1.5" />
+                          {t('cloudFiles')}
+                        </Button>
+                        <Button variant="outline" size="sm" className="flex-1 h-9" onClick={syncLibrary} disabled={isSyncingLibrary}>
+                          {isSyncingLibrary ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                          {isSyncingLibrary ? `${syncProgress.current}/${syncProgress.total}` : (settings.language === 'it' ? 'Aggiorna Libreria' : 'Sync Library')}
+                        </Button>
+                      </div>
                       {showCloudSection && (
                         <div className="rounded-lg bg-secondary/50 p-3 space-y-2">
                           <div className="flex items-center justify-between">
