@@ -78,7 +78,7 @@ const HiFiPhone: React.FC = () => (
         <SkipForward className="w-4 h-4 text-muted-foreground" />
       </div>
       {/* Source label */}
-      <p className="text-[7px] text-center text-muted-foreground/60 mt-2">Real-Debrid • HiFi • SquidWTF • Monochrome</p>
+      <p className="text-[7px] text-center text-muted-foreground/60 mt-2">Real-Debrid • HiFi • Monochrome</p>
     </div>
   </PhoneFrame>
 );
