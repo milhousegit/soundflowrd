@@ -203,7 +203,7 @@ const DesktopPlayerSidebar: React.FC = () => {
               )}
 
               {/* Overlaid info + controls at bottom */}
-              <div className="relative z-[5] flex flex-col justify-end h-full pt-[280px]">
+              <div className="relative z-[5] flex flex-col justify-end h-full pt-[430px]">
                 {/* Track info */}
                 <div className="px-4">
                   <h3 className="font-semibold text-foreground truncate text-base">{currentTrack.title}</h3>
