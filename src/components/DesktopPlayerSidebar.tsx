@@ -151,157 +151,160 @@ const DesktopPlayerSidebar: React.FC = () => {
 
   return (
     <>
-      <aside className="hidden md:flex w-[380px] shrink-0 flex-col border-l border-border bg-card/50 overflow-hidden">
+      <aside className="hidden md:flex w-[380px] shrink-0 flex-col border-l border-border bg-card overflow-hidden">
         <ScrollArea className="flex-1">
           <div className="flex flex-col">
-            {/* Cover / Canvas area - full width, tall */}
-            <div className="relative w-full bg-secondary overflow-hidden" style={{ height: '55%', minHeight: 280 }}>
-              {canvasUrl ? (
-                <video
-                  src={canvasUrl}
-                  className="w-full h-full object-cover"
-                  loop
-                  muted
-                  playsInline
-                  autoPlay={isPlaying}
-                  crossOrigin="anonymous"
-                />
-              ) : currentTrack.coverUrl ? (
-                <div className="w-full h-full flex items-center justify-center bg-background/40">
-                  <img
-                    src={currentTrack.coverUrl}
-                    alt={currentTrack.album}
-                    className="h-[70%] aspect-square object-cover rounded-xl shadow-2xl"
+            {/* Canvas/Cover + overlaid controls — seamless */}
+            <div className="relative w-full" style={{ minHeight: 520 }}>
+              {/* Media background */}
+              <div className="absolute inset-0">
+                {canvasUrl ? (
+                  <video
+                    src={canvasUrl}
+                    className="w-full h-full object-cover"
+                    loop
+                    muted
+                    playsInline
+                    autoPlay={isPlaying}
+                    crossOrigin="anonymous"
                   />
-                </div>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Music className="w-16 h-16 text-muted-foreground" />
-                </div>
-              )}
+                ) : currentTrack.coverUrl ? (
+                  <div className="w-full h-full flex items-center justify-center bg-secondary">
+                    <img
+                      src={currentTrack.coverUrl}
+                      alt={currentTrack.album}
+                      className="w-[65%] aspect-square object-cover rounded-xl shadow-2xl"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-secondary">
+                    <Music className="w-16 h-16 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
 
-              {/* Gradient overlays like mobile */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 h-[60%] bg-gradient-to-t from-card/95 to-transparent" />
+              {/* Gradient overlay — fades into card bg */}
+              <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-card via-card/80 to-transparent pointer-events-none" style={{ top: '40%' }} />
 
               {/* Loading overlays */}
               {loadingPhase === 'searching' && (
-                <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                <div className="absolute inset-0 bg-background/60 flex items-center justify-center z-10">
                   <Loader2 className="w-8 h-8 text-primary animate-spin" />
                 </div>
               )}
               {loadingPhase === 'downloading' && (
-                <div className="absolute inset-0 bg-background/60 flex items-center justify-center flex-col">
+                <div className="absolute inset-0 bg-background/60 flex items-center justify-center flex-col z-10">
                   <Cloud className="w-8 h-8 text-primary animate-pulse" />
                   {downloadProgress !== null && (
                     <span className="text-xs text-foreground mt-1">{Math.round(downloadProgress)}%</span>
                   )}
                 </div>
               )}
-            </div>
 
-            {/* Track info */}
-            <div className="px-4 pt-4">
-              <h3 className="font-semibold text-foreground truncate text-base">{currentTrack.title}</h3>
-              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                <button onClick={handleNavigateToArtist} className="hover:text-primary hover:underline transition-colors truncate">
-                  {currentTrack.artist}
-                </button>
-                {currentTrack.album && (
-                  <>
-                    <span>•</span>
-                    <button onClick={handleNavigateToAlbum} className="hover:text-primary hover:underline transition-colors truncate">
-                      {currentTrack.album}
+              {/* Overlaid info + controls at bottom */}
+              <div className="relative z-[5] flex flex-col justify-end h-full pt-[280px]">
+                {/* Track info */}
+                <div className="px-4">
+                  <h3 className="font-semibold text-foreground truncate text-base">{currentTrack.title}</h3>
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <button onClick={handleNavigateToArtist} className="hover:text-primary hover:underline transition-colors truncate">
+                      {currentTrack.artist}
                     </button>
-                  </>
-                )}
-              </div>
+                    {currentTrack.album && (
+                      <>
+                        <span>•</span>
+                        <button onClick={handleNavigateToAlbum} className="hover:text-primary hover:underline transition-colors truncate">
+                          {currentTrack.album}
+                        </button>
+                      </>
+                    )}
+                  </div>
 
-              {/* Source badge */}
-              {currentAudioSource && (
-                <div className="mt-1.5">
-                  <span className={cn(
-                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-                    currentAudioSource === 'squidwtf' ? 'bg-purple-500/20 text-purple-400' :
-                    currentAudioSource === 'monochrome' ? 'bg-sky-500/20 text-sky-400' :
-                    currentAudioSource === 'offline' ? 'bg-emerald-500/20 text-emerald-400' :
-                    'bg-orange-500/20 text-orange-400'
-                  )}>
-                    {currentAudioSource === 'squidwtf' ? '🎵 SquidWTF' :
-                     currentAudioSource === 'monochrome' ? '🎵 Monochrome' :
-                     currentAudioSource === 'offline' ? '📱 Offline' :
-                     '📦 Real-Debrid'}
-                  </span>
+                  {currentAudioSource && (
+                    <div className="mt-1.5">
+                      <span className={cn(
+                        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+                        currentAudioSource === 'squidwtf' ? 'bg-purple-500/20 text-purple-400' :
+                        currentAudioSource === 'monochrome' ? 'bg-sky-500/20 text-sky-400' :
+                        currentAudioSource === 'offline' ? 'bg-emerald-500/20 text-emerald-400' :
+                        'bg-orange-500/20 text-orange-400'
+                      )}>
+                        {currentAudioSource === 'squidwtf' ? '🎵 SquidWTF' :
+                         currentAudioSource === 'monochrome' ? '🎵 Monochrome' :
+                         currentAudioSource === 'offline' ? '📱 Offline' :
+                         '📦 Real-Debrid'}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Progress */}
-            <div className="px-4 pt-3">
-              <Slider value={[progress]} max={duration || 100} step={1} onValueChange={([v]) => handleSeek(v)} />
-              <div className="flex justify-between mt-1">
-                <span className="text-xs text-muted-foreground">{formatTime(progress)}</span>
-                <span className="text-xs text-muted-foreground">{formatTime(duration)}</span>
+                {/* Progress */}
+                <div className="px-4 pt-3">
+                  <Slider value={[progress]} max={duration || 100} step={1} onValueChange={([v]) => handleSeek(v)} />
+                  <div className="flex justify-between mt-1">
+                    <span className="text-xs text-muted-foreground">{formatTime(progress)}</span>
+                    <span className="text-xs text-muted-foreground">{formatTime(duration)}</span>
+                  </div>
+                </div>
+
+                {/* Main controls */}
+                <div className="flex items-center justify-between px-4 pt-2">
+                  <Button
+                    variant="ghost" size="icon"
+                    className={cn('h-9 w-9', isShuffled ? 'text-primary' : 'text-muted-foreground')}
+                    onClick={toggleShuffle}
+                  >
+                    <Shuffle className="w-4 h-4" />
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="playerSecondary" size="icon" className="h-9 w-9" onClick={previous}>
+                      <SkipBack className="w-5 h-5" />
+                    </Button>
+                    <Button variant="player" className="h-12 w-12" onClick={toggle}>
+                      {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+                    </Button>
+                    <Button variant="playerSecondary" size="icon" className="h-9 w-9" onClick={next}>
+                      <SkipForward className="w-5 h-5" />
+                    </Button>
+                  </div>
+                  <FavoriteButton itemType="track" item={currentTrack} size="sm" variant="ghost" className="h-9 w-9" />
+                </div>
+
+                {/* Secondary actions */}
+                <div className="flex items-center justify-center gap-1 px-4 pt-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setShowQueueModal(true)}>
+                    <ListMusic className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setShowLyricsModal(true)}>
+                    <Mic2 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost" size="icon"
+                    className={cn('h-8 w-8 text-muted-foreground hover:text-destructive', isSearchingStreams && 'text-primary')}
+                    onClick={handleOpenDebugModal}
+                  >
+                    {isSearchingStreams ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings2 className="w-4 h-4" />}
+                  </Button>
+                  {canDownload && currentStreamUrl && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={handleDownload} disabled={isDownloading}>
+                      {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Volume */}
+                <div className="flex items-center gap-2 px-4 pt-2 pb-2">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setVolume(volume === 0 ? 0.7 : 0)}>
+                    {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                  </Button>
+                  <Slider value={[volume * 100]} max={100} step={1} onValueChange={([v]) => setVolume(v / 100)} className="flex-1" />
+                </div>
               </div>
             </div>
 
-            {/* Main controls */}
-            <div className="flex items-center justify-between px-4 pt-2">
-              <Button
-                variant="ghost" size="icon"
-                className={cn('h-9 w-9', isShuffled ? 'text-primary' : 'text-muted-foreground')}
-                onClick={toggleShuffle}
-              >
-                <Shuffle className="w-4 h-4" />
-              </Button>
-
-              <div className="flex items-center gap-2">
-                <Button variant="playerSecondary" size="icon" className="h-9 w-9" onClick={previous}>
-                  <SkipBack className="w-5 h-5" />
-                </Button>
-                <Button variant="player" className="h-12 w-12" onClick={toggle}>
-                  {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
-                </Button>
-                <Button variant="playerSecondary" size="icon" className="h-9 w-9" onClick={next}>
-                  <SkipForward className="w-5 h-5" />
-                </Button>
-              </div>
-
-              <FavoriteButton itemType="track" item={currentTrack} size="sm" variant="ghost" className="h-9 w-9" />
-            </div>
-
-            {/* Secondary actions */}
-            <div className="flex items-center justify-center gap-1 px-4 pt-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setShowQueueModal(true)}>
-                <ListMusic className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setShowLyricsModal(true)}>
-                <Mic2 className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost" size="icon"
-                className={cn('h-8 w-8 text-muted-foreground hover:text-destructive', isSearchingStreams && 'text-primary')}
-                onClick={handleOpenDebugModal}
-              >
-                {isSearchingStreams ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings2 className="w-4 h-4" />}
-              </Button>
-              {canDownload && currentStreamUrl && (
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={handleDownload} disabled={isDownloading}>
-                  {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                </Button>
-              )}
-            </div>
-
-            {/* Volume */}
-            <div className="flex items-center gap-2 px-4 pt-2">
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setVolume(volume === 0 ? 0.7 : 0)}>
-                {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              </Button>
-              <Slider value={[volume * 100]} max={100} step={1} onValueChange={([v]) => setVolume(v / 100)} className="flex-1" />
-            </div>
-
-            {/* Inline Lyrics */}
-            <div className="px-4 pt-4 pb-4">
+            {/* Inline Lyrics — below the canvas/controls area */}
+            <div className="px-4 pt-2 pb-4">
               <InlineLyricsCard track={currentTrack} onTap={() => setShowLyricsModal(true)} />
             </div>
           </div>
