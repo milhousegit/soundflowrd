@@ -100,7 +100,7 @@ const Player: React.FC = () => {
   const canDownload = contextIsAdmin || isPremiumActive;
 
   const { saveTrackOffline } = useOfflineStorage();
-  const { canvasUrl } = useTrackCanvas(currentTrack?.id);
+  const { canvasUrl } = useTrackCanvas(currentTrack?.id, currentTrack?.title, currentTrack?.artist);
   const [isDownloading, setIsDownloading] = useState(false);
 
   // Get current stream URL from alternatives
