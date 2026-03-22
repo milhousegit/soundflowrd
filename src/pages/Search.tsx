@@ -571,9 +571,15 @@ const Search: React.FC = () => {
               <TapArea
                 key={genre.name}
                 onTap={() => handleQueryChange(genre.name)}
-                className={`aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} p-3 md:p-4 flex items-end cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
+                className={`relative aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
               >
-                <h3 className="text-lg md:text-xl font-bold text-white">{genre.name}</h3>
+                <h3 className="absolute top-3 left-3 text-lg md:text-xl font-bold text-white z-10 drop-shadow-lg">{genre.name}</h3>
+                <img
+                  src={genre.image}
+                  alt={genre.name}
+                  className="absolute bottom-[-4px] right-[-12px] w-[55%] aspect-square rounded-md rotate-[25deg] shadow-xl object-cover"
+                  loading="lazy"
+                />
               </TapArea>
             ))}
           </div>
