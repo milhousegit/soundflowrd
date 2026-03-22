@@ -155,7 +155,7 @@ const DesktopPlayerSidebar: React.FC = () => {
         <ScrollArea className="flex-1">
           <div className="flex flex-col">
             {/* Canvas/Cover + overlaid controls — seamless */}
-            <div className="relative w-full" style={{ minHeight: 520 }}>
+            <div className="relative w-full h-[72vh] min-h-[680px] max-h-[920px]">
               {/* Media background */}
               <div className="absolute inset-0">
                 {canvasUrl ? (
@@ -173,7 +173,7 @@ const DesktopPlayerSidebar: React.FC = () => {
                     <img
                       src={currentTrack.coverUrl}
                       alt={currentTrack.album}
-                      className="w-[65%] aspect-square object-cover rounded-xl shadow-2xl"
+                      className="w-[58%] aspect-square object-cover rounded-xl shadow-2xl"
                     />
                   </div>
                 ) : (
@@ -185,7 +185,7 @@ const DesktopPlayerSidebar: React.FC = () => {
 
               {/* Gradient overlay — fades into card bg */}
               <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent pointer-events-none" />
-              <div className="absolute inset-0 bg-gradient-to-t from-card via-card/90 to-transparent pointer-events-none" style={{ top: '60%' }} />
+              <div className="absolute inset-0 bg-gradient-to-t from-card via-card/85 to-transparent pointer-events-none" style={{ top: '68%' }} />
 
               {/* Loading overlays */}
               {loadingPhase === 'searching' && (
@@ -203,7 +203,7 @@ const DesktopPlayerSidebar: React.FC = () => {
               )}
 
               {/* Overlaid info + controls at bottom */}
-              <div className="relative z-[5] flex flex-col justify-end h-full pt-[280px]">
+              <div className="relative z-[5] flex flex-col justify-end h-full pt-[430px]">
                 {/* Track info */}
                 <div className="px-4">
                   <h3 className="font-semibold text-foreground truncate text-base">{currentTrack.title}</h3>
