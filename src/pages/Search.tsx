@@ -55,11 +55,18 @@ interface RecentItem {
 const Search: React.FC = () => {
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
+  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [genreResults, setGenreResults] = useState<{
+    artists: Artist[];
+    tracks: Track[];
+    playlists: DeezerPlaylist[];
+  } | null>(null);
   const [results, setResults] = useState<{
     artists: Artist[];
     albums: Album[];
