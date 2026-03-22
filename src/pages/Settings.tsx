@@ -671,33 +671,39 @@ const Settings: React.FC = () => {
                     </div>
                   )}
                   {hasRdApiKey && (
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => {
-                        setShowCloudSection(!showCloudSection);
-                        if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
-                      }}>
-                        <Cloud className="w-3.5 h-3.5 mr-1.5" />
-                        {t('cloudFiles')}
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>{settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}</AlertDialogTitle>
-                            <AlertDialogDescription>{settings.language === 'it' ? 'La tua API Key verrà eliminata.' : 'Your API Key will be deleted.'}</AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>{settings.language === 'it' ? 'Annulla' : 'Cancel'}</AlertDialogCancel>
-                            <AlertDialogAction onClick={async () => { await updateApiKey(''); toast({ title: settings.language === 'it' ? 'Rimosso' : 'Removed' }); }}>
-                              {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => {
+                          setShowCloudSection(!showCloudSection);
+                          if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
+                        }}>
+                          <Cloud className="w-3.5 h-3.5 mr-1.5" />
+                          {t('cloudFiles')}
+                        </Button>
+                        <Button variant="outline" size="sm" className="flex-1 h-9" onClick={syncLibrary} disabled={isSyncingLibrary}>
+                          {isSyncingLibrary ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                          {isSyncingLibrary ? `${syncProgress.current}/${syncProgress.total}` : (settings.language === 'it' ? 'Aggiorna Libreria' : 'Sync Library')}
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>{settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}</AlertDialogTitle>
+                              <AlertDialogDescription>{settings.language === 'it' ? 'La tua API Key verrà eliminata.' : 'Your API Key will be deleted.'}</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>{settings.language === 'it' ? 'Annulla' : 'Cancel'}</AlertDialogCancel>
+                              <AlertDialogAction onClick={async () => { await updateApiKey(''); toast({ title: settings.language === 'it' ? 'Rimosso' : 'Removed' }); }}>
+                                {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </div>
                   )}
                   {showCloudSection && hasRdApiKey && (
