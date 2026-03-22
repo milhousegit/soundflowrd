@@ -92,7 +92,7 @@ export async function getTidalStreamById(
   quality = 'LOSSLESS'
 ): Promise<TidalStreamResult | TidalStreamError> {
   try {
-    const { data, error } = await supabase.functions.invoke('squidwtf', {
+    const { data, error } = await supabase.functions.invoke('monochrome', {
       body: { 
         action: 'get-stream', 
         tidalId,
