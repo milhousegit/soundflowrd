@@ -299,7 +299,7 @@ serve(async (req) => {
 
         // Fetch genres from Spotify (cached)
         const artistName = artist?.name || '';
-        const genreData = await fetchSpotifyArtistGenres(artistName, String(id));
+        const genreData = await fetchArtistGenresFromLastFm(artistName, String(id));
 
         const mappedArtist = mapDeezerArtist(artist);
         if (genreData) {
