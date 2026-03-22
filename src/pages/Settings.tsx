@@ -101,15 +101,18 @@ const Settings: React.FC = () => {
 
       if (error || !favTracks) throw error;
 
-      const tracks: Track[] = favTracks.map(f => ({
-        id: f.item_id,
-        title: f.item_title,
-        artist: f.item_artist || '',
-        coverUrl: f.item_cover_url || '',
-        album: f.item_data?.album || '',
-        albumId: f.item_data?.albumId || '',
-        duration: f.item_data?.duration || 0,
-      }));
+      const tracks: Track[] = favTracks.map(f => {
+        const data = f.item_data as Record<string, any> | null;
+        return {
+          id: f.item_id,
+          title: f.item_title,
+          artist: f.item_artist || '',
+          coverUrl: f.item_cover_url || '',
+          album: data?.album || '',
+          albumId: data?.albumId || '',
+          duration: data?.duration || 0,
+        };
+      });
 
       setSyncProgress({ current: 0, total: tracks.length });
       toast({
