@@ -67,7 +67,7 @@ const Search: React.FC = () => {
     if (q !== query) {
       setQuery(q);
       if (q.trim()) {
-        performSearchDirect(q.trim());
+        debouncedSearch(q.trim());
       } else {
         setResults(null);
         clearUserResults();
