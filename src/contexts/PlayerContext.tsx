@@ -2082,7 +2082,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             const tidalQuality = mapQualityToTidal(settings.audioQuality);
             const streamFn = sourceId === 'monochrome' ? getMonochromeStream 
               : sourceId === 'hifi' ? getHifiStream 
-              : getTidalStream;
+              : getMonochromeStream;
             const sourceLabel: AudioSource = 'monochrome';
             const result = await streamFn(nextTrack.title, nextTrack.artist, tidalQuality);
             

@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// HiFi public REST API (same format as squidwtf mirrors)
+// HiFi public REST API
 const API_TARGETS = [
   'https://hifitui.401658.xyz',
   'https://hifitui.pages.dev',
