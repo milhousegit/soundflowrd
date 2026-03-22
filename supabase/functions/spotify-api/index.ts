@@ -560,53 +560,91 @@ serve(async (req) => {
         }
       }
 
-      // ======================== GENRE BROWSE (Deezer) ========================
+      // ======================== GENRE BROWSE (Last.fm + Deezer) ========================
       case 'genre-browse': {
         const { genre } = body;
         if (!genre) return json({ error: 'genre required' });
 
-        // Map genre names to Deezer genre IDs
-        const GENRE_IDS: Record<string, number> = {
-          'pop': 132, 'hip-hop': 116, 'rap': 116, 'hip-hop/rap': 116,
-          'rock': 152, 'electronic': 106, 'r&b': 165, 'rnb': 165,
-          'jazz': 129, 'classical': 98, 'country': 84, 'latin': 197,
-          'reggae': 144, 'metal': 464, 'indie': 85, 'alternative': 85,
-          'k-pop': 173, 'soul': 169,
+        const lastfmKey = Deno.env.get('LASTFM_API_KEY');
+        
+        // Genre tag mapping for Last.fm (more accurate than Deezer genre IDs)
+        const TAG_MAP: Record<string, string> = {
+          'pop': 'pop', 'hip-hop': 'hip-hop', 'rap': 'hip-hop', 
+          'rock': 'rock', 'electronic': 'electronic', 'r&b': 'rnb',
+          'jazz': 'jazz', 'classical': 'classical', 'country': 'country',
+          'latin': 'latin', 'k-pop': 'k-pop', 'indie': 'indie',
+          'alternative': 'alternative', 'metal': 'metal', 'soul': 'soul',
         };
-
-        const genreLower = genre.toLowerCase().trim();
-        const genreId = GENRE_IDS[genreLower] || GENRE_IDS['pop'];
+        const tag = TAG_MAP[genre.toLowerCase().trim()] || genre.toLowerCase().trim();
 
         try {
-          // Fetch genre artists and chart from Deezer
-          const [artistsRes, chartRes] = await Promise.all([
-            fetch(`${DEEZER_API}/genre/${genreId}/artists`, {
-              headers: { 'User-Agent': 'Mozilla/5.0' },
-            }),
-            fetch(`${DEEZER_API}/chart/${genreId}/tracks?limit=25`, {
-              headers: { 'User-Agent': 'Mozilla/5.0' },
-            }),
+          // Use Last.fm tag endpoints for accurate genre-based results
+          const [artistsRes, tracksRes] = await Promise.all([
+            lastfmKey 
+              ? fetch(`https://ws.audioscrobbler.com/2.0/?method=tag.gettopartists&tag=${encodeURIComponent(tag)}&api_key=${lastfmKey}&format=json&limit=20`)
+              : Promise.resolve(null),
+            lastfmKey
+              ? fetch(`https://ws.audioscrobbler.com/2.0/?method=tag.gettoptracks&tag=${encodeURIComponent(tag)}&api_key=${lastfmKey}&format=json&limit=25`)
+              : Promise.resolve(null),
           ]);
 
-          const artistsData = artistsRes.ok ? await artistsRes.json() : { data: [] };
-          const chartData = chartRes.ok ? await chartRes.json() : { data: [] };
+          const artistsData = artistsRes?.ok ? await artistsRes.json() : {};
+          const tracksData = tracksRes?.ok ? await tracksRes.json() : {};
 
-          const artists = (artistsData?.data || []).slice(0, 20).map((a: any) => ({
-            id: String(a.id),
-            name: a.name,
-            imageUrl: a.picture_xl || a.picture_big || a.picture_medium || a.picture || '',
-          }));
+          const lastfmArtists = (artistsData?.topartists?.artist || []).slice(0, 15);
+          const lastfmTracks = (tracksData?.tracks?.track || []).slice(0, 25);
 
-          const tracks = (chartData?.data || []).map((t: any) => ({
-            id: String(t.id),
-            title: t.title,
-            artist: t.artist?.name || 'Unknown',
-            artistId: String(t.artist?.id || ''),
-            album: t.album?.title || '',
-            albumId: String(t.album?.id || ''),
-            duration: Math.round(t.duration || 0),
-            coverUrl: t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || t.album?.cover || '',
-          }));
+          console.log(`[genre-browse] Last.fm tag "${tag}": ${lastfmArtists.length} artists, ${lastfmTracks.length} tracks`);
+
+          // Resolve Last.fm artists to Deezer for images
+          const artistPromises = lastfmArtists.slice(0, 12).map(async (a: any) => {
+            try {
+              const searchRes = await fetch(`${DEEZER_API}/search/artist?q=${encodeURIComponent(a.name)}&limit=1`, {
+                headers: { 'User-Agent': 'Mozilla/5.0' },
+              });
+              const searchData = searchRes.ok ? await searchRes.json() : { data: [] };
+              const deezerArtist = searchData?.data?.[0];
+              return {
+                id: deezerArtist ? String(deezerArtist.id) : a.mbid || a.name,
+                name: a.name,
+                imageUrl: deezerArtist?.picture_xl || deezerArtist?.picture_big || deezerArtist?.picture_medium || a.image?.[3]?.['#text'] || '',
+              };
+            } catch {
+              return { id: a.mbid || a.name, name: a.name, imageUrl: a.image?.[3]?.['#text'] || '' };
+            }
+          });
+
+          // Resolve Last.fm tracks to Deezer for full metadata
+          const trackPromises = lastfmTracks.slice(0, 20).map(async (t: any) => {
+            try {
+              const q = `${t.artist?.name || ''} ${t.name}`;
+              const searchRes = await fetch(`${DEEZER_API}/search/track?q=${encodeURIComponent(q)}&limit=1`, {
+                headers: { 'User-Agent': 'Mozilla/5.0' },
+              });
+              const searchData = searchRes.ok ? await searchRes.json() : { data: [] };
+              const dt = searchData?.data?.[0];
+              if (!dt) return null;
+              return {
+                id: String(dt.id),
+                title: dt.title,
+                artist: dt.artist?.name || t.artist?.name || 'Unknown',
+                artistId: String(dt.artist?.id || ''),
+                album: dt.album?.title || '',
+                albumId: String(dt.album?.id || ''),
+                duration: Math.round(dt.duration || 0),
+                coverUrl: dt.album?.cover_xl || dt.album?.cover_big || dt.album?.cover_medium || '',
+              };
+            } catch {
+              return null;
+            }
+          });
+
+          const [artists, trackResults] = await Promise.all([
+            Promise.all(artistPromises),
+            Promise.all(trackPromises),
+          ]);
+
+          const tracks = trackResults.filter(Boolean);
 
           return json({ artists, tracks });
         } catch (err) {
