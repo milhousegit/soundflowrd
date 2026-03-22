@@ -42,6 +42,8 @@ interface RecentItem {
 }
 
 const Search: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const isMobile = useIsMobile();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -58,6 +60,20 @@ const Search: React.FC = () => {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const { users: searchedUsers, searchUsers, clearResults: clearUserResults } = useUserSearch();
+
+  // Sync query from URL params (desktop top bar drives this)
+  useEffect(() => {
+    const q = searchParams.get('q') || '';
+    if (q !== query) {
+      setQuery(q);
+      if (q.trim()) {
+        performSearchDirect(q.trim());
+      } else {
+        setResults(null);
+        clearUserResults();
+      }
+    }
+  }, [searchParams]);
 
   // Load recent searches and items from localStorage
   useEffect(() => {

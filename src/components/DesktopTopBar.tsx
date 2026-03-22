@@ -75,17 +75,18 @@ const DesktopTopBar: React.FC = () => {
       </nav>
 
       {/* Center - Search */}
-      <form onSubmit={handleSearch} className="flex-1 max-w-md mx-auto">
+      <div className="flex-1 max-w-md mx-auto">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onFocus={handleSearchFocus}
             placeholder={t('search') + '...'}
             className="h-9 pl-9 rounded-full bg-secondary/60 border-transparent focus-visible:border-primary text-sm"
           />
         </div>
-      </form>
+      </div>
 
       {/* Right - Actions */}
       <div className="flex items-center gap-1">
