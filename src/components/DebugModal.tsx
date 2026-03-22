@@ -973,51 +973,93 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
               </>
             )}
 
-            {/* Canvas Tab */}
-            {activeTab === 'canvas' && isAdmin && (
-              <div className="space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  {isItalian
-                    ? 'Incolla l\'URL del canvas video (da canvasdownloader.com) per questa traccia.'
-                    : 'Paste the canvas video URL (from canvasdownloader.com) for this track.'}
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="https://canvaz.scdn.co/.../video.mp4"
-                    value={canvasUrl}
-                    onChange={(e) => setCanvasUrl(e.target.value)}
-                    className="flex-1 text-sm"
-                  />
-                  <Button
-                    onClick={async () => {
-                      if (!canvasUrl.trim() || !currentTrack?.id) return;
-                      setSavingCanvas(true);
-                      try {
-                        const { error } = await supabase
-                          .from('track_canvases')
-                          .upsert(
-                            { track_id: currentTrack.id, canvas_url: canvasUrl.trim(), updated_at: new Date().toISOString() },
-                            { onConflict: 'track_id' }
-                          );
-                        if (error) throw error;
-                        toast.success(isItalian ? 'Canvas salvato!' : 'Canvas saved!');
-                        setCanvasUrl('');
-                      } catch (err) {
-                        toast.error(String(err));
-                      } finally {
-                        setSavingCanvas(false);
-                      }
-                    }}
-                    disabled={savingCanvas || !canvasUrl.trim() || !currentTrack?.id}
-                    size="icon"
-                  >
-                    {savingCanvas ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  </Button>
+            {/* Info Tab */}
+            {activeTab === 'info' && currentTrack && (
+              <div className="space-y-3">
+                {/* Cover + basic info */}
+                <div className="flex gap-4">
+                  <div className="w-20 h-20 rounded-lg bg-secondary overflow-hidden flex-shrink-0">
+                    {currentTrack.coverUrl ? (
+                      <img src={currentTrack.coverUrl} alt={currentTrack.album} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Music className="w-8 h-8 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-foreground truncate">{currentTrack.title}</p>
+                    <p className="text-sm text-muted-foreground truncate">{currentTrack.artist}</p>
+                    {currentTrack.album && <p className="text-xs text-muted-foreground truncate">{currentTrack.album}</p>}
+                  </div>
                 </div>
-                {currentTrack && (
-                  <p className="text-xs text-muted-foreground">
-                    Track ID: {currentTrack.id}
-                  </p>
+
+                <div className="h-px bg-border" />
+
+                {/* Metadata fields */}
+                <div className="space-y-2 text-sm">
+                  <InfoRow label="Track ID" value={currentTrack.id} />
+                  {currentTrack.artistId && <InfoRow label="Artist ID" value={currentTrack.artistId} />}
+                  {currentTrack.albumId && <InfoRow label="Album ID" value={currentTrack.albumId} />}
+                  <InfoRow label={isItalian ? 'Durata' : 'Duration'} value={currentTrack.duration ? `${Math.floor(currentTrack.duration / 60)}:${String(Math.floor(currentTrack.duration % 60)).padStart(2, '0')}` : '—'} />
+                  {currentTrack.coverUrl && <InfoRow label="Cover URL" value={currentTrack.coverUrl} truncate />}
+                  {currentTrack.streamUrl && <InfoRow label="Stream URL" value={currentTrack.streamUrl} truncate />}
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* Playback info */}
+                <p className="text-xs font-medium text-muted-foreground uppercase">{isItalian ? 'Riproduzione' : 'Playback'}</p>
+                <div className="space-y-2 text-sm">
+                  <InfoRow label={isItalian ? 'Sorgente audio' : 'Audio source'} value={
+                    currentStreamId ? `RealDebrid (${currentStreamId.substring(0, 8)}…)` :
+                    '—'
+                  } />
+                  {lastSearchQuery && <InfoRow label={isItalian ? 'Ultima ricerca' : 'Last search'} value={lastSearchQuery} />}
+                  {currentMappedFileId !== undefined && <InfoRow label="Mapped File ID" value={String(currentMappedFileId)} />}
+                  <InfoRow label={isItalian ? 'Sorgenti trovate' : 'Sources found'} value={String(alternatives.length)} />
+                  <InfoRow label="Torrent" value={String(torrents.length)} />
+                </div>
+
+                {/* Admin: Canvas URL editor */}
+                {isAdmin && (
+                  <>
+                    <div className="h-px bg-border" />
+                    <p className="text-xs font-medium text-muted-foreground uppercase">Canvas Video</p>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="https://canvaz.scdn.co/.../video.mp4"
+                        value={canvasUrl}
+                        onChange={(e) => setCanvasUrl(e.target.value)}
+                        className="flex-1 text-sm"
+                      />
+                      <Button
+                        onClick={async () => {
+                          if (!canvasUrl.trim() || !currentTrack?.id) return;
+                          setSavingCanvas(true);
+                          try {
+                            const { error } = await supabase
+                              .from('track_canvases')
+                              .upsert(
+                                { track_id: currentTrack.id, canvas_url: canvasUrl.trim(), updated_at: new Date().toISOString() },
+                                { onConflict: 'track_id' }
+                              );
+                            if (error) throw error;
+                            toast.success(isItalian ? 'Canvas salvato!' : 'Canvas saved!');
+                            setCanvasUrl('');
+                          } catch (err) {
+                            toast.error(String(err));
+                          } finally {
+                            setSavingCanvas(false);
+                          }
+                        }}
+                        disabled={savingCanvas || !canvasUrl.trim() || !currentTrack?.id}
+                        size="icon"
+                      >
+                        {savingCanvas ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                  </>
                 )}
               </div>
             )}
