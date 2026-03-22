@@ -272,7 +272,7 @@ const Search: React.FC = () => {
 
     try {
       // Fetch all data sources in parallel
-      const [artistStatsRes, genreCacheRes, playlistsRes, favArtistsRes, intlArtistsRes, intlTracksRes] = await Promise.all([
+      const [artistStatsRes, genreCacheRes, playlistsRes, favArtistsRes, genreBrowseRes] = await Promise.all([
         supabase
           .from('user_artist_stats')
           .select('artist_id, artist_name, total_plays, artist_image_url')
@@ -288,8 +288,9 @@ const Search: React.FC = () => {
           .select('item_id, item_title, item_cover_url')
           .eq('user_id', user.id)
           .eq('item_type', 'artist'),
-        searchArtists(genreName).catch(() => []),
-        searchTracks(genreName).catch(() => []),
+        supabase.functions.invoke('spotify-api', {
+          body: { action: 'genre-browse', genre: genreName },
+        }).then(r => r.data || { artists: [], tracks: [] }).catch(() => ({ artists: [], tracks: [] })),
       ]);
 
       const artistStats = artistStatsRes.data || [];
