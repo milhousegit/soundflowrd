@@ -537,6 +537,29 @@ serve(async (req) => {
         );
       }
 
+      // ======================== TRACK TAGS (Last.fm) ========================
+      case 'track-tags': {
+        const { title: trackTitle, artist: trackArtist } = body;
+        if (!trackTitle || !trackArtist) return json({ error: 'title and artist required' });
+
+        const lastfmKey = Deno.env.get('LASTFM_API_KEY');
+        if (!lastfmKey) return json({ tags: [] });
+
+        try {
+          const lfmUrl = `https://ws.audioscrobbler.com/2.0/?method=track.getTopTags&track=${encodeURIComponent(trackTitle)}&artist=${encodeURIComponent(trackArtist)}&api_key=${lastfmKey}&format=json`;
+          const lfmRes = await fetch(lfmUrl);
+          if (!lfmRes.ok) return json({ tags: [] });
+          const lfmData = await lfmRes.json();
+          const tags = (lfmData?.toptags?.tag || [])
+            .filter((t: any) => (t.count || 0) > 10)
+            .map((t: any) => ({ name: t.name, count: Number(t.count) }))
+            .slice(0, 10);
+          return json({ tags });
+        } catch {
+          return json({ tags: [] });
+        }
+      }
+
       default:
         return json({ error: `Unknown action: ${action}` });
     }
