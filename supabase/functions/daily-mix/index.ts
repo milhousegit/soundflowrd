@@ -54,7 +54,6 @@ function mapDeezerAlbum(album: any): any {
 // Resolve any artist ID (Spotify or Deezer) to a Deezer ID
 async function resolveToDeezer(artistId: string, artistName: string): Promise<string | null> {
   if (/^\d+$/.test(artistId)) return artistId;
-  // Spotify ID: search by name on Deezer
   try {
     const data = await deezerFetch(`/search/artist?q=${encodeURIComponent(artistName)}&limit=5`);
     const normalized = artistName.toLowerCase().trim();
@@ -65,8 +64,79 @@ async function resolveToDeezer(artistId: string, artistName: string): Promise<st
   }
 }
 
-// Get genre from first album
-async function getArtistGenre(deezerId: string): Promise<string> {
+// ---- Last.fm helpers ----
+function getSupabaseServiceClient() {
+  return createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+}
+
+// Get artist genres from artist_genres_cache (Last.fm) or fetch fresh
+async function getArtistGenresFromCache(deezerId: string, artistName: string): Promise<string[]> {
+  try {
+    const sb = getSupabaseServiceClient();
+    const { data: cached } = await sb
+      .from('artist_genres_cache')
+      .select('genres')
+      .eq('artist_id', deezerId)
+      .maybeSingle();
+
+    if (cached && cached.genres && cached.genres.length > 0) {
+      return cached.genres;
+    }
+
+    // Try Last.fm live
+    const lastfmKey = Deno.env.get('LASTFM_API_KEY');
+    if (!lastfmKey) return [];
+
+    const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getinfo&artist=${encodeURIComponent(artistName)}&api_key=${lastfmKey}&format=json`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const tags = (data?.artist?.tags?.tag || []).map((t: any) => t.name).filter(Boolean).slice(0, 5);
+    const listeners = parseInt(data?.artist?.stats?.listeners || '0', 10);
+    const popularity = Math.min(100, Math.round(listeners / 100000));
+
+    // Cache for future use
+    await sb.from('artist_genres_cache').upsert({
+      artist_id: deezerId,
+      artist_name: artistName,
+      genres: tags,
+      popularity,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'artist_id' });
+
+    return tags;
+  } catch {
+    return [];
+  }
+}
+
+// Get genre tags from Last.fm for individual tracks
+async function getTrackGenresFromLastFm(trackTitle: string, artistName: string): Promise<string[]> {
+  try {
+    const lastfmKey = Deno.env.get('LASTFM_API_KEY');
+    if (!lastfmKey) return [];
+
+    const url = `https://ws.audioscrobbler.com/2.0/?method=track.getTopTags&track=${encodeURIComponent(trackTitle)}&artist=${encodeURIComponent(artistName)}&api_key=${lastfmKey}&format=json`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const tags = (data?.toptags?.tag || [])
+      .filter((t: any) => t.count > 30)
+      .map((t: any) => t.name)
+      .slice(0, 3);
+    return tags;
+  } catch {
+    return [];
+  }
+}
+
+// Fallback: Get genre from Deezer album
+async function getArtistGenreDeezer(deezerId: string): Promise<string> {
   try {
     const albumsData = await deezerFetch(`/artist/${deezerId}/albums?limit=1`);
     const firstAlbumId = albumsData?.data?.[0]?.id;
@@ -147,8 +217,19 @@ function getMostCommonGenre(genres: string[]): string {
   return best;
 }
 
+// Combine artist-level and track-level genres into a single best genre per artist
+function pickBestGenre(artistGenres: string[], trackGenres: string[]): string {
+  // Merge all tags, artist genres weighted 2x
+  const allNormalized: string[] = [];
+  for (const g of artistGenres) allNormalized.push(normalizeGenre(g), normalizeGenre(g));
+  for (const g of trackGenres) allNormalized.push(normalizeGenre(g));
+
+  if (allNormalized.length === 0) return 'Unknown';
+  return getMostCommonGenre(allNormalized.map(g => g)); // already normalized
+}
+
 function clusterArtistsByAffinity(
-  artists: { id: string; deezerId: string; name: string; playCount: number; genre: string; imageUrl?: string; relatedIds: string[] }[]
+  artists: { id: string; deezerId: string; name: string; playCount: number; genre: string; allGenres: string[]; imageUrl?: string; relatedIds: string[] }[]
 ): ArtistCluster[] {
   if (artists.length === 0) return [];
   const assigned = new Set<string>();
@@ -165,14 +246,18 @@ function clusterArtistsByAffinity(
       const seedRelated = seed.relatedIds.includes(candidate.deezerId);
       const candidateRelated = candidate.relatedIds.includes(seed.deezerId);
       const sameGenre = normalizeGenre(seed.genre) === normalizeGenre(candidate.genre) && normalizeGenre(seed.genre) !== 'Mixed';
-      if (seedRelated || candidateRelated || sameGenre) {
+      // Also check overlapping sub-genres from allGenres
+      const sharedSubGenres = seed.allGenres.filter(g => 
+        candidate.allGenres.some(cg => normalizeGenre(cg) === normalizeGenre(g) && normalizeGenre(g) !== 'Mixed')
+      );
+      if (seedRelated || candidateRelated || sameGenre || sharedSubGenres.length >= 2) {
         clusterArtists.push(candidate);
         assigned.add(candidate.deezerId);
       }
     }
 
     clusters.push({
-      genre: getMostCommonGenre(clusterArtists.map(a => a.genre)),
+      genre: getMostCommonGenre(clusterArtists.flatMap(a => a.allGenres)),
       artists: clusterArtists.map(a => ({ id: a.id, deezerId: a.deezerId, name: a.name, playCount: a.playCount, imageUrl: a.imageUrl })),
     });
     if (clusters.length >= 3) break;
@@ -187,6 +272,11 @@ function clusterArtistsByAffinity(
       for (const ca of clusters[i].artists) {
         const orig = sorted.find(a => a.deezerId === ca.deezerId);
         if (orig?.relatedIds.includes(artist.deezerId)) score += 2;
+        // Check shared sub-genres
+        const shared = (orig?.allGenres || []).filter(g =>
+          artist.allGenres.some(ag => normalizeGenre(ag) === normalizeGenre(g) && normalizeGenre(g) !== 'Mixed')
+        );
+        score += shared.length;
         if (normalizeGenre(orig?.genre || '') === normalizeGenre(artist.genre) && normalizeGenre(artist.genre) !== 'Mixed') score += 1;
       }
       if (score > bestScore) { bestScore = score; bestCluster = i; }
@@ -281,12 +371,12 @@ serve(async (req) => {
       // 1. Fetch user's top artists
       const { data: rawArtistStats } = await supabase
         .from('user_artist_stats')
-        .select('artist_id, artist_name, total_plays, artist_image_url')
+        .select('artist_id, artist_name, total_plays, artist_image_url, genre')
         .eq('user_id', user.id)
         .order('total_plays', { ascending: false })
         .limit(30);
 
-      const artistStats: { artist_id: string; artist_name: string; total_plays: number; artist_image_url: string | null }[] = [...(rawArtistStats || [])];
+      const artistStats: { artist_id: string; artist_name: string; total_plays: number; artist_image_url: string | null; genre: string | null }[] = [...(rawArtistStats || [])];
 
       if (artistStats.length === 0) {
         const { data: recentArtists } = await supabase
@@ -307,16 +397,46 @@ serve(async (req) => {
           if (!r.artist_id) continue;
           const existing = artistCountMap.get(r.artist_id);
           if (existing) existing.total_plays++;
-          else artistCountMap.set(r.artist_id, { artist_id: r.artist_id, artist_name: r.track_artist, total_plays: 1, artist_image_url: null });
+          else artistCountMap.set(r.artist_id, { artist_id: r.artist_id, artist_name: r.track_artist, total_plays: 1, artist_image_url: null, genre: null });
         }
         artistStats.push(...Array.from(artistCountMap.values()).sort((a, b) => b.total_plays - a.total_plays).slice(0, 30));
       }
 
-      // 2. Resolve all artist IDs to Deezer and enrich
+      // 1b. Fetch track-level genres from Last.fm for user's top tracks
+      const { data: topTracks } = await supabase
+        .from('user_track_stats')
+        .select('track_title, track_artist, artist_id')
+        .eq('user_id', user.id)
+        .order('play_count', { ascending: false })
+        .limit(20);
+
+      // Map artist_id -> accumulated track genres
+      const artistTrackGenres = new Map<string, string[]>();
+
+      if (topTracks && topTracks.length > 0) {
+        // Fetch track tags in batches of 5
+        for (let batch = 0; batch < Math.min(topTracks.length, 15); batch += 5) {
+          const slice = topTracks.slice(batch, batch + 5);
+          const results = await Promise.all(slice.map(async (t) => {
+            const tags = await getTrackGenresFromLastFm(t.track_title, t.track_artist);
+            return { artistId: t.artist_id, tags };
+          }));
+          for (const r of results) {
+            if (r.artistId && r.tags.length > 0) {
+              const prev = artistTrackGenres.get(r.artistId) || [];
+              prev.push(...r.tags);
+              artistTrackGenres.set(r.artistId, prev);
+            }
+          }
+        }
+        console.log(`Fetched track-level genres for ${artistTrackGenres.size} artists`);
+      }
+
+      // 2. Resolve all artist IDs to Deezer and enrich with genres
       const topArtists = artistStats.slice(0, 15);
       const enrichedArtists: {
         id: string; deezerId: string; name: string; playCount: number;
-        genre: string; imageUrl?: string; relatedIds: string[];
+        genre: string; allGenres: string[]; imageUrl?: string; relatedIds: string[];
       }[] = [];
 
       for (let batch = 0; batch < topArtists.length; batch += 5) {
@@ -324,16 +444,31 @@ serve(async (req) => {
         const results = await Promise.all(slice.map(async (a) => {
           const deezerId = await resolveToDeezer(a.artist_id, a.artist_name);
           if (!deezerId) return null;
-          const [genre, relatedIds] = await Promise.all([
-            getArtistGenre(deezerId),
+
+          // Get genres from Last.fm cache first, then Deezer fallback
+          const [lastfmGenres, relatedIds] = await Promise.all([
+            getArtistGenresFromCache(deezerId, a.artist_name),
             getRelatedArtistIds(deezerId),
           ]);
+
+          let artistGenres = lastfmGenres;
+          if (artistGenres.length === 0) {
+            const deezerGenre = await getArtistGenreDeezer(deezerId);
+            if (deezerGenre !== 'Unknown') artistGenres = [deezerGenre];
+          }
+
+          // Combine with track-level genres
+          const trackGenres = artistTrackGenres.get(a.artist_id) || [];
+          const bestGenre = pickBestGenre(artistGenres, trackGenres);
+          const allGenres = [...new Set([...artistGenres, ...trackGenres])];
+
           return {
             id: a.artist_id,
             deezerId,
             name: a.artist_name,
             playCount: a.total_plays,
-            genre,
+            genre: bestGenre,
+            allGenres,
             imageUrl: a.artist_image_url || undefined,
             relatedIds,
           };
@@ -343,22 +478,24 @@ serve(async (req) => {
         }
       }
 
-      console.log(`Enriched ${enrichedArtists.length} artists:`, enrichedArtists.map(a => `${a.name}(${a.genre})`).join(', '));
+      console.log(`Enriched ${enrichedArtists.length} artists:`, enrichedArtists.map(a => `${a.name}(${a.genre}|${a.allGenres.join('+')})`).join(', '));
 
       for (const a of artistStats.slice(15)) {
         const deezerId = await resolveToDeezer(a.artist_id, a.artist_name);
+        const trackGenres = artistTrackGenres.get(a.artist_id) || [];
         enrichedArtists.push({
           id: a.artist_id,
           deezerId: deezerId || a.artist_id,
           name: a.artist_name,
           playCount: a.total_plays,
-          genre: 'Unknown',
+          genre: trackGenres.length > 0 ? normalizeGenre(trackGenres[0]) : 'Unknown',
+          allGenres: trackGenres,
           imageUrl: a.artist_image_url || undefined,
           relatedIds: [],
         });
       }
 
-      // 3. Cluster by affinity
+      // 3. Cluster by affinity (uses both artist + track genres)
       const clusters = clusterArtistsByAffinity(enrichedArtists);
       if (clusters.length === 0) {
         return new Response(JSON.stringify([]), {
