@@ -91,6 +91,33 @@ export function useFavorites() {
         syncTrackInBackground(item as Track, credentials.realDebridApiKey);
       }
 
+      // Auto-sync album tracks to Real-Debrid in background when favoriting an album
+      if (itemType === 'album' && credentials?.realDebridApiKey) {
+        const albumId = item.id;
+        const rdKey = credentials.realDebridApiKey;
+        (async () => {
+          try {
+            const albumData = await getAlbum(albumId);
+            if (albumData?.tracks) {
+              const tracks: Track[] = albumData.tracks.map((tr: any) => ({
+                ...tr,
+                artist: tr.artist || albumData.artist,
+                album: albumData.title,
+                albumId: albumData.id,
+                coverUrl: tr.coverUrl || albumData.coverUrl,
+              }));
+              for (const track of tracks) {
+                syncTrackInBackground(track, rdKey);
+                await new Promise(r => setTimeout(r, 500));
+              }
+              console.log(`[Favorites] Auto-synced ${tracks.length} tracks from album ${albumData.title}`);
+            }
+          } catch (e) {
+            console.error('[Favorites] Failed to auto-sync album:', e);
+          }
+        })();
+      }
+
       // Track artist for new release notifications (in background, don't block)
       if (itemType === 'artist') {
         const artistName = 'name' in item ? item.name : (item as any).title || 'Unknown';
