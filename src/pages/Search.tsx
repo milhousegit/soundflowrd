@@ -742,6 +742,106 @@ const Search: React.FC = () => {
         </div>
       )}
 
+      {/* Genre personalized results */}
+      {selectedGenre && !isLoading && genreResults && (
+        <div className="space-y-8 md:space-y-10">
+          {/* Genre header */}
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={clearGenreMode} className="shrink-0">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold text-foreground">{selectedGenre}</h1>
+              <p className="text-sm text-muted-foreground">
+                {settings.language === 'it' ? 'Personalizzato per te' : 'Personalized for you'}
+              </p>
+            </div>
+          </div>
+
+          {/* Genre Artists */}
+          {genreResults.artists.length > 0 && (
+            <section>
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">
+                {settings.language === 'it' ? 'I tuoi artisti' : 'Your artists'}
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+                {genreResults.artists.slice(0, 12).map((artist) => (
+                  <div key={artist.id} onClick={() => saveRecentItem({ type: 'artist', id: artist.id, title: artist.name, coverUrl: artist.imageUrl })}>
+                    <ArtistCard artist={artist} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Genre Tracks */}
+          {genreResults.tracks.length > 0 && (
+            <section>
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">
+                {settings.language === 'it' ? 'Brani per te' : 'Tracks for you'}
+              </h2>
+              <div className="space-y-1">
+                {genreResults.tracks.map((track, index) => (
+                  <TrackCard key={track.id} track={track} queue={genreResults.tracks} index={index} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Genre Playlists (normal search) */}
+          {genreResults.playlists.length > 0 && (
+            <section>
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">Playlist</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+                {genreResults.playlists.slice(0, 6).map((playlist) => (
+                  <TapArea
+                    key={playlist.id}
+                    onTap={() => {
+                      saveRecentItem({
+                        type: 'playlist',
+                        id: String(playlist.id),
+                        title: playlist.title,
+                        subtitle: `${playlist.trackCount} brani • ${playlist.creator}`,
+                        coverUrl: playlist.coverUrl,
+                      });
+                      if (playlist.isDeezerPlaylist === false) {
+                        navigate(`/app/playlist/${playlist.id}`);
+                      } else {
+                        navigate(`/app/soundflow-playlist/${playlist.id}`);
+                      }
+                    }}
+                    className="group cursor-pointer"
+                  >
+                    <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-2 relative">
+                      {playlist.coverUrl ? (
+                        <img src={playlist.coverUrl} alt={playlist.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Music className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-foreground truncate">{playlist.title}</p>
+                    <p className="text-xs text-muted-foreground">{playlist.trackCount} brani • {playlist.creator}</p>
+                  </TapArea>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Empty state */}
+          {genreResults.artists.length === 0 && genreResults.tracks.length === 0 && genreResults.playlists.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                {settings.language === 'it'
+                  ? 'Ascolta più musica di questo genere per ottenere suggerimenti personalizzati!'
+                  : 'Listen to more music in this genre to get personalized suggestions!'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Browse Genres (only when not focused) */}
       {showGenres && (
         <div>
@@ -750,7 +850,7 @@ const Search: React.FC = () => {
             {genres.map((genre) => (
               <TapArea
                 key={genre.name}
-                onTap={() => handleQueryChange(genre.name)}
+                onTap={() => performGenreSearch(genre.name)}
                 className={`relative aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
               >
                 <h3 className="absolute top-3 left-3 text-lg md:text-xl font-bold text-white z-10 drop-shadow-lg">{genre.name}</h3>
