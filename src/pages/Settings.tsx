@@ -27,9 +27,7 @@ import ReferralShare from '@/components/ReferralShare';
 import ReferralShareMinimal from '@/components/ReferralShareMinimal';
 import { isPast } from 'date-fns';
 import BackButton from '@/components/BackButton';
-import { syncTrackInBackground } from '@/hooks/useSyncTrack';
-import { Track } from '@/types/music';
-import { getAlbum } from '@/lib/spotify';
+import { useLibrarySync } from '@/hooks/useLibrarySync';
 
 interface CloudFile {
   id: string;
