@@ -357,7 +357,7 @@ serve(async (req) => {
           });
         }
 
-        // Spotify playlist ID (backward compat)
+        // Spotify playlist ID — try client credentials first, then spotify-import
         try {
           const plData = await spotifyFetchPlaylist(`/playlists/${id}?market=${mkt}`);
           let allItems = (plData?.tracks?.items || []).filter((i: any) => i?.track);
@@ -383,7 +383,39 @@ serve(async (req) => {
             })),
           });
         } catch (error) {
-          console.error(`Playlist fetch failed for ${id}:`, error);
+          console.warn(`[Playlist] Client credentials failed for ${id}, trying spotify-import...`);
+          // Fallback: use spotify-import (anonymous token)
+          const supabaseUrlPl = Deno.env.get('SUPABASE_URL');
+          const supabaseKeyPl = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+          if (supabaseUrlPl && supabaseKeyPl) {
+            try {
+              const importRes = await fetch(`${supabaseUrlPl}/functions/v1/spotify-import`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseKeyPl}`,
+                },
+                body: JSON.stringify({ url: `https://open.spotify.com/playlist/${id}` }),
+              });
+              if (importRes.ok) {
+                const importData = await importRes.json();
+                if (importData.tracks?.length > 0) {
+                  return json({
+                    id: String(id),
+                    title: importData.playlistName || 'Spotify Playlist',
+                    description: '',
+                    coverUrl: importData.coverUrl || null,
+                    trackCount: importData.tracks.length,
+                    creator: 'Spotify',
+                    duration: 0,
+                    tracks: importData.tracks.map((t: any, idx: number) => ({ ...t, trackNumber: idx + 1 })),
+                  });
+                }
+              }
+            } catch (importErr) {
+              console.error(`[Playlist] spotify-import also failed for ${id}:`, importErr);
+            }
+          }
           return json({ id: String(id), title: '', description: '', coverUrl: null, trackCount: 0, creator: '', duration: 0, tracks: [], error: true });
         }
       }
