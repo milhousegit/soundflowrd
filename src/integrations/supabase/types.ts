@@ -101,6 +101,42 @@ export type Database = {
         }
         Relationships: []
       }
+      artist_genres_cache: {
+        Row: {
+          artist_id: string
+          artist_name: string
+          created_at: string
+          genres: string[]
+          id: string
+          image_url: string | null
+          popularity: number | null
+          spotify_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          artist_id: string
+          artist_name: string
+          created_at?: string
+          genres?: string[]
+          id?: string
+          image_url?: string | null
+          popularity?: number | null
+          spotify_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          artist_id?: string
+          artist_name?: string
+          created_at?: string
+          genres?: string[]
+          id?: string
+          image_url?: string | null
+          popularity?: number | null
+          spotify_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       artist_hidden_items: {
         Row: {
           artist_id: string
