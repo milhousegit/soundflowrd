@@ -155,7 +155,7 @@ const DesktopPlayerSidebar: React.FC = () => {
         <ScrollArea className="flex-1">
           <div className="flex flex-col">
             {/* Canvas/Cover + overlaid controls — seamless */}
-            <div className="relative w-full" style={{ minHeight: 520 }}>
+            <div className="relative w-full h-[72vh] min-h-[680px] max-h-[920px]">
               {/* Media background */}
               <div className="absolute inset-0">
                 {canvasUrl ? (
@@ -173,7 +173,7 @@ const DesktopPlayerSidebar: React.FC = () => {
                     <img
                       src={currentTrack.coverUrl}
                       alt={currentTrack.album}
-                      className="w-[65%] aspect-square object-cover rounded-xl shadow-2xl"
+                      className="w-[58%] aspect-square object-cover rounded-xl shadow-2xl"
                     />
                   </div>
                 ) : (
