@@ -1,38 +1,22 @@
 
 
-# Fix: Audio torna indietro nei primi secondi
+## Piano: Scambio automatico del code OAuth
 
-## Problema
-Quando la TV inizia a riprodurre un nuovo brano, il telefono e gia avanti di qualche secondo (perche stava riproducendo mentre la TV fetchava lo stream). La logica di sincronizzazione (soglia di 3 secondi) continua a correggere la posizione della TV ad ogni heartbeat (ogni 2 secondi), causando piccoli salti indietro durante i primi secondi di riproduzione.
+Quando mi invierai il `code` dalla barra indirizzi, io:
 
-## Soluzione
-Ignorare la sincronizzazione del tempo per i primi secondi dopo che la TV inizia a riprodurre un nuovo brano.
+1. **Eseguo lo scambio** — Lancio il comando `curl` / script nel sandbox per scambiare il code con Spotify (`POST https://accounts.spotify.com/api/token` con `grant_type=authorization_code`)
+2. **Ti scrivo il refresh token in chat** — Ti mostro il valore completo del `refresh_token` così puoi copiarlo
+3. **Aggiorno il secret** — Ti chiedo di approvare l'aggiornamento del secret con il valore corretto
 
-### Modifiche in `src/pages/TV.tsx`
+### Cosa devi fare tu
 
-1. **Aggiungere un ref `playbackStartedAtRef`** che registra il timestamp (`Date.now()`) di quando la TV inizia effettivamente la riproduzione di un nuovo brano (dentro `fetchStreamForTrack`, dopo `audio.play()`)
-
-2. **Nella logica di sync del broadcast handler** (linee 141-145), aggiungere una guardia:
-   - Se sono passati meno di 5 secondi da `playbackStartedAtRef`, NON sincronizzare il `currentTime`
-   - Questo da alla TV il tempo di stabilizzarsi senza essere interrotta dai heartbeat del telefono
-   - Dopo 5 secondi, la sincronizzazione riprende normalmente con la soglia di 3 secondi
-
-3. **Rimuovere la sync iniziale** alle linee 101-104 (`if (remoteCurrentTimeRef.current > 0) audio.currentTime = ...`). Non serve piu perche la TV riproduce autonomamente dall'inizio e la sync partira dopo 5 secondi.
-
-### Dettagli tecnici
-
-```text
-Prima (problematico):
-  TV fetch stream -> audio.currentTime = phone.progress (5s)
-  -> heartbeat arriva -> diff < 3s ma posizione cambia -> piccolo salto
-  -> altro heartbeat -> altro salto
-
-Dopo (fix):
-  TV fetch stream -> audio.play() da 0
-  -> playbackStartedAt = Date.now()
-  -> heartbeat arriva (entro 5s) -> IGNORATO
-  -> heartbeat arriva (dopo 5s) -> sync normale con soglia 3s
+1. Apri questo link nel browser:
 ```
+https://accounts.spotify.com/authorize?client_id=TUO_CLIENT_ID&response_type=code&redirect_uri=https://soundflowrd.lovable.app/callback&scope=user-read-private%20user-read-email%20streaming
+```
+2. Autorizza l'app
+3. Copia il valore dopo `?code=` dalla barra indirizzi
+4. **Incollalo qui in chat**
 
-### File modificato
-- `src/pages/TV.tsx` - Aggiungere `playbackStartedAtRef`, guardia temporale nel sync handler, rimuovere sync iniziale
+Io faccio tutto il resto e ti mostro il refresh token in chiaro.
+
