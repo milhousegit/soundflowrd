@@ -57,7 +57,7 @@ interface DebugModalProps {
   onMetadataSaved?: (oldTrackId: string, newTrack: { id: string; title: string; artist: string; album?: string; coverUrl?: string; duration?: number }) => void;
 }
 
-type DebugTab = 'realdebrid' | 'scraping' | 'metadati' | 'canvas';
+type DebugTab = 'realdebrid' | 'scraping' | 'metadati' | 'info';
 
 interface DeezerResult {
   id: string;
