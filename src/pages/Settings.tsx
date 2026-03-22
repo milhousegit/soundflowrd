@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -27,6 +27,8 @@ import ReferralShare from '@/components/ReferralShare';
 import ReferralShareMinimal from '@/components/ReferralShareMinimal';
 import { isPast } from 'date-fns';
 import BackButton from '@/components/BackButton';
+import { syncTrackInBackground } from '@/hooks/useSyncTrack';
+import { Track } from '@/types/music';
 
 interface CloudFile {
   id: string;
@@ -83,6 +85,63 @@ const Settings: React.FC = () => {
   const [showRdSettings, setShowRdSettings] = useState(false);
   const [showHybridSettings, setShowHybridSettings] = useState(false);
   const [showKofiModal, setShowKofiModal] = useState(false);
+  const [isSyncingLibrary, setIsSyncingLibrary] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
+
+  const syncLibrary = useCallback(async () => {
+    if (!credentials?.realDebridApiKey || !user?.id) return;
+    setIsSyncingLibrary(true);
+    setSyncProgress({ current: 0, total: 0 });
+    try {
+      const { data: favTracks, error } = await supabase
+        .from('favorites')
+        .select('item_id, item_title, item_artist, item_cover_url, item_data')
+        .eq('user_id', user.id)
+        .eq('item_type', 'track');
+
+      if (error || !favTracks) throw error;
+
+      const tracks: Track[] = favTracks.map(f => {
+        const data = f.item_data as Record<string, any> | null;
+        return {
+          id: f.item_id,
+          title: f.item_title,
+          artist: f.item_artist || '',
+          coverUrl: f.item_cover_url || '',
+          album: data?.album || '',
+          albumId: data?.albumId || '',
+          duration: data?.duration || 0,
+        };
+      });
+
+      setSyncProgress({ current: 0, total: tracks.length });
+      toast({
+        title: settings.language === 'it' ? 'Sincronizzazione libreria...' : 'Syncing library...',
+        description: `0/${tracks.length}`,
+      });
+
+      for (let i = 0; i < tracks.length; i++) {
+        setSyncProgress({ current: i + 1, total: tracks.length });
+        await syncTrackInBackground(tracks[i], credentials.realDebridApiKey);
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      toast({
+        title: settings.language === 'it' ? 'Libreria sincronizzata!' : 'Library synced!',
+        description: settings.language === 'it' ? `${tracks.length} brani elaborati` : `${tracks.length} tracks processed`,
+      });
+    } catch (err) {
+      console.error('Library sync error:', err);
+      toast({
+        title: settings.language === 'it' ? 'Errore sincronizzazione' : 'Sync error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSyncingLibrary(false);
+      setSyncProgress({ current: 0, total: 0 });
+    }
+  }, [credentials, user, toast, settings.language]);
 
   // Check if user has active premium (respect simulation mode)
   const isPremiumActive = !simulateFreeUser && profile?.is_premium && (!profile?.premium_expires_at || !isPast(new Date(profile.premium_expires_at)));
@@ -612,33 +671,39 @@ const Settings: React.FC = () => {
                     </div>
                   )}
                   {hasRdApiKey && (
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => {
-                        setShowCloudSection(!showCloudSection);
-                        if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
-                      }}>
-                        <Cloud className="w-3.5 h-3.5 mr-1.5" />
-                        {t('cloudFiles')}
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>{settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}</AlertDialogTitle>
-                            <AlertDialogDescription>{settings.language === 'it' ? 'La tua API Key verrà eliminata.' : 'Your API Key will be deleted.'}</AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>{settings.language === 'it' ? 'Annulla' : 'Cancel'}</AlertDialogCancel>
-                            <AlertDialogAction onClick={async () => { await updateApiKey(''); toast({ title: settings.language === 'it' ? 'Rimosso' : 'Removed' }); }}>
-                              {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => {
+                          setShowCloudSection(!showCloudSection);
+                          if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
+                        }}>
+                          <Cloud className="w-3.5 h-3.5 mr-1.5" />
+                          {t('cloudFiles')}
+                        </Button>
+                        <Button variant="outline" size="sm" className="flex-1 h-9" onClick={syncLibrary} disabled={isSyncingLibrary}>
+                          {isSyncingLibrary ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                          {isSyncingLibrary ? `${syncProgress.current}/${syncProgress.total}` : (settings.language === 'it' ? 'Aggiorna Libreria' : 'Sync Library')}
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>{settings.language === 'it' ? 'Rimuovere Real-Debrid?' : 'Remove Real-Debrid?'}</AlertDialogTitle>
+                              <AlertDialogDescription>{settings.language === 'it' ? 'La tua API Key verrà eliminata.' : 'Your API Key will be deleted.'}</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>{settings.language === 'it' ? 'Annulla' : 'Cancel'}</AlertDialogCancel>
+                              <AlertDialogAction onClick={async () => { await updateApiKey(''); toast({ title: settings.language === 'it' ? 'Rimosso' : 'Removed' }); }}>
+                                {settings.language === 'it' ? 'Rimuovi' : 'Remove'}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </div>
                   )}
                   {showCloudSection && hasRdApiKey && (
@@ -788,13 +853,19 @@ const Settings: React.FC = () => {
                   {/* Cloud Files in Hybrid */}
                   {hasRdApiKey && (
                     <div className="space-y-2">
-                      <Button variant="outline" size="sm" className="w-full h-9" onClick={() => {
-                        setShowCloudSection(!showCloudSection);
-                        if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
-                      }}>
-                        <Cloud className="w-3.5 h-3.5 mr-1.5" />
-                        {t('cloudFiles')}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="flex-1 h-9" onClick={() => {
+                          setShowCloudSection(!showCloudSection);
+                          if (!showCloudSection && cloudFiles.length === 0) loadCloudFiles();
+                        }}>
+                          <Cloud className="w-3.5 h-3.5 mr-1.5" />
+                          {t('cloudFiles')}
+                        </Button>
+                        <Button variant="outline" size="sm" className="flex-1 h-9" onClick={syncLibrary} disabled={isSyncingLibrary}>
+                          {isSyncingLibrary ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                          {isSyncingLibrary ? `${syncProgress.current}/${syncProgress.total}` : (settings.language === 'it' ? 'Aggiorna Libreria' : 'Sync Library')}
+                        </Button>
+                      </div>
                       {showCloudSection && (
                         <div className="rounded-lg bg-secondary/50 p-3 space-y-2">
                           <div className="flex items-center justify-between">
