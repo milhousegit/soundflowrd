@@ -598,17 +598,29 @@ serve(async (req) => {
 
       const validMixes = mixes.filter((m: any) => m.tracks && m.tracks.length > 0);
 
-      // ---- NEW RELEASES MIX (Deezer) ----
+      // ---- NEW RELEASES MIX ----
+      // Sources: 1) listened artists, 2) followed artists, 3) artists from saved tracks, 4) genre-similar artists
       console.log('Generating NEW releases mix...');
       const newReleaseTracks: any[] = [];
       const newReleaseSeenIds = new Set<string>();
 
       const allArtistDeezerIds = new Set<string>();
+      // Source 1: Artists from listening stats (already enriched)
       for (const e of enrichedArtists) {
         if (e.deezerId && /^\d+$/.test(e.deezerId)) allArtistDeezerIds.add(e.deezerId);
       }
 
-      // Also resolve favorite artists
+      // Source 2: Followed/tracked artists (artist_release_tracking)
+      const { data: trackedArtists } = await supabase
+        .from('artist_release_tracking')
+        .select('artist_id, artist_name')
+        .eq('user_id', user.id);
+      for (const t of (trackedArtists || [])) {
+        const did = await resolveToDeezer(t.artist_id, t.artist_name || '');
+        if (did) allArtistDeezerIds.add(did);
+      }
+
+      // Source 3: Favorited artists
       const { data: favArtists } = await supabase
         .from('favorites')
         .select('item_id, item_title')
@@ -619,8 +631,49 @@ serve(async (req) => {
         if (did) allArtistDeezerIds.add(did);
       }
 
-      const uniqueArtistDeezerIds = [...allArtistDeezerIds].slice(0, 30);
-      console.log(`Checking new releases for ${uniqueArtistDeezerIds.length} Deezer artists`);
+      // Source 4: Artists from saved/favorited tracks
+      const { data: favTracks } = await supabase
+        .from('favorites')
+        .select('item_artist, item_data')
+        .eq('user_id', user.id)
+        .eq('item_type', 'track');
+      const favTrackArtistNames = new Set<string>();
+      for (const f of (favTracks || [])) {
+        const artistName = f.item_artist || (f.item_data as any)?.artist;
+        const artistId = (f.item_data as any)?.artistId;
+        if (artistName && !favTrackArtistNames.has(artistName)) {
+          favTrackArtistNames.add(artistName);
+          const did = await resolveToDeezer(artistId || '', artistName);
+          if (did) allArtistDeezerIds.add(did);
+        }
+      }
+
+      // Source 5: Genre-based discovery — related artists sharing top genres
+      const topGenres = new Map<string, number>();
+      for (const a of enrichedArtists) {
+        for (const g of a.allGenres) {
+          const n = normalizeGenre(g);
+          if (n !== 'Mixed' && n !== 'Unknown') {
+            topGenres.set(n, (topGenres.get(n) || 0) + a.playCount);
+          }
+        }
+      }
+      const sortedGenres = [...topGenres.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0]);
+      console.log(`Top genres for NEW discovery: ${sortedGenres.join(', ')}`);
+
+      // Add related artists from top listened for genre discovery
+      const relatedForNew = new Set<string>();
+      for (const a of enrichedArtists.slice(0, 5)) {
+        for (const rid of a.relatedIds) {
+          if (!allArtistDeezerIds.has(rid)) relatedForNew.add(rid);
+        }
+      }
+      for (const rid of [...relatedForNew].slice(0, 10)) {
+        allArtistDeezerIds.add(rid);
+      }
+
+      const uniqueArtistDeezerIds = [...allArtistDeezerIds].slice(0, 50);
+      console.log(`Checking new releases for ${uniqueArtistDeezerIds.length} artists (tracked: ${(trackedArtists||[]).length}, fav artists: ${(favArtists||[]).length}, fav track artists: ${favTrackArtistNames.size}, related: ${Math.min(relatedForNew.size, 10)})`);
 
       const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
       for (let batch = 0; batch < uniqueArtistDeezerIds.length; batch += 5) {
