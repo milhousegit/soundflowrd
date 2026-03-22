@@ -192,6 +192,7 @@ Deno.serve(async (req) => {
     console.log(`Processing ${batch.length} tracks for canvas...`);
 
     const token = await getSpotifyAnonToken();
+    console.log(`[Canvas] Anon token obtained: ${token ? 'yes (' + token.substring(0, 20) + '...)' : 'NO'}`);
     if (!token) {
       return new Response(
         JSON.stringify({ error: 'Failed to get Spotify token' }),
@@ -202,13 +203,16 @@ Deno.serve(async (req) => {
     // Resolve all track IDs to Spotify IDs (handles both Deezer numeric and Spotify alphanumeric)
     const resolvedTracks: { originalId: string; spotifyId: string }[] = [];
     for (const track of batch) {
+      console.log(`[Canvas] Resolving: "${track.title}" by ${track.artist} (id: ${track.id})`);
       const spotifyId = await resolveSpotifyTrackId(track);
+      console.log(`[Canvas] Resolved to Spotify ID: ${spotifyId || 'NOT FOUND'}`);
       if (spotifyId) {
         resolvedTracks.push({ originalId: track.id, spotifyId });
       }
     }
 
     if (resolvedTracks.length === 0) {
+      console.log(`[Canvas] No tracks could be resolved to Spotify IDs`);
       return new Response(
         JSON.stringify({ results: [], found: 0, total: batch.length }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
