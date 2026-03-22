@@ -76,70 +76,61 @@ function getSupabaseServiceClient() {
   );
 }
 
-async function fetchSpotifyArtistGenres(artistName: string, deezerId: string): Promise<{ genres: string[]; popularity: number; spotifyId?: string; imageUrl?: string } | null> {
+async function fetchArtistGenresFromLastFm(artistName: string, deezerId: string): Promise<{ genres: string[]; popularity: number; spotifyId?: string; imageUrl?: string } | null> {
   try {
-    // Check cache first
     const sb = getSupabaseServiceClient();
     const { data: cached } = await sb
       .from('artist_genres_cache')
       .select('genres, popularity, spotify_id, image_url')
       .eq('artist_id', deezerId)
       .maybeSingle();
-    
+
     if (cached) {
       console.log(`[Genres] Cache hit for ${artistName} (${deezerId})`);
       return { genres: cached.genres || [], popularity: cached.popularity || 0, spotifyId: cached.spotify_id, imageUrl: cached.image_url };
     }
 
-    // Search Spotify for artist by name
-    const token = await getSpotifyToken();
-    const searchRes = await fetch(`${SPOTIFY_API}/search?q=${encodeURIComponent(artistName)}&type=artist&limit=3`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    
-    if (!searchRes.ok) {
-      console.warn(`[Genres] Spotify search failed: ${searchRes.status}`);
+    const lastfmKey = Deno.env.get('LASTFM_API_KEY');
+    if (!lastfmKey) {
+      console.warn('[Genres] LASTFM_API_KEY not set');
       return null;
     }
 
-    const searchData = await searchRes.json();
-    const artists = searchData?.artists?.items || [];
-    
-    // Find best match (exact name match preferred)
-    const searchMatch = artists.find((a: any) => a.name.toLowerCase() === artistName.toLowerCase()) || artists[0];
-    if (!searchMatch) {
-      console.log(`[Genres] No Spotify match for ${artistName}`);
+    const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getinfo&artist=${encodeURIComponent(artistName)}&api_key=${lastfmKey}&format=json`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[Genres] Last.fm failed: ${res.status}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const artist = data?.artist;
+    if (!artist) {
+      console.log(`[Genres] No Last.fm match for ${artistName}`);
       await sb.from('artist_genres_cache').upsert({
         artist_id: deezerId, artist_name: artistName, genres: [], popularity: 0, updated_at: new Date().toISOString(),
       }, { onConflict: 'artist_id' });
       return null;
     }
 
-    // Fetch full artist profile for popularity + images
-    const artistRes = await fetch(`${SPOTIFY_API}/artists/${searchMatch.id}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    const match = artistRes.ok ? await artistRes.json() : searchMatch;
+    const tags = (artist.tags?.tag || []).map((t: any) => t.name).filter(Boolean).slice(0, 5);
+    const listeners = parseInt(artist.stats?.listeners || '0', 10);
+    // Normalize listeners to 0-100 scale (rough: 10M+ = 100)
+    const popularity = Math.min(100, Math.round((listeners / 100000) * 1));
+    const imageUrl = artist.image?.find((i: any) => i.size === 'extralarge')?.['#text'] || undefined;
 
-    const result = {
-      genres: match.genres || [],
-      popularity: match.popularity || 0,
-      spotifyId: match.id,
-      imageUrl: match.images?.[0]?.url,
-    };
+    const result = { genres: tags, popularity, imageUrl: imageUrl || undefined };
 
-    // Cache result
     await sb.from('artist_genres_cache').upsert({
       artist_id: deezerId,
       artist_name: artistName,
       genres: result.genres,
       popularity: result.popularity,
-      spotify_id: result.spotifyId,
-      image_url: result.imageUrl,
+      image_url: result.imageUrl || null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'artist_id' });
 
-    console.log(`[Genres] Cached ${result.genres.length} genres for ${artistName}`);
+    console.log(`[Genres] Cached ${result.genres.length} genres from Last.fm for ${artistName}: ${result.genres.join(', ')}`);
     return result;
   } catch (err) {
     console.warn(`[Genres] Error fetching genres for ${artistName}:`, err);
@@ -308,7 +299,7 @@ serve(async (req) => {
 
         // Fetch genres from Spotify (cached)
         const artistName = artist?.name || '';
-        const genreData = await fetchSpotifyArtistGenres(artistName, String(id));
+        const genreData = await fetchArtistGenresFromLastFm(artistName, String(id));
 
         const mappedArtist = mapDeezerArtist(artist);
         if (genreData) {
