@@ -992,7 +992,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // Try ALL other scraping sources before giving up
         const allSourceIds = SCRAPING_SOURCES.map(s => s.id).filter(id => id !== selectedScrapingSource);
         for (const fallbackId of allSourceIds) {
-          addDebugLog(`🔄 Fallback a ${fallbackId === 'monochrome' ? 'Monochrome' : fallbackId === 'hifi' ? 'HiFi' : 'SquidWTF'}`, '', 'info');
+          addDebugLog(`🔄 Fallback a ${fallbackId === 'monochrome' ? 'Monochrome' : 'HiFi'}`, '', 'info');
           const fallbackSuccess = await playWithScrapingSource(fallbackId);
           if (fallbackSuccess) return;
         }
