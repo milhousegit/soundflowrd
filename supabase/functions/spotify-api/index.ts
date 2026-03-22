@@ -560,6 +560,61 @@ serve(async (req) => {
         }
       }
 
+      // ======================== GENRE BROWSE (Deezer) ========================
+      case 'genre-browse': {
+        const { genre } = body;
+        if (!genre) return json({ error: 'genre required' });
+
+        // Map genre names to Deezer genre IDs
+        const GENRE_IDS: Record<string, number> = {
+          'pop': 132, 'hip-hop': 116, 'rap': 116, 'hip-hop/rap': 116,
+          'rock': 152, 'electronic': 106, 'r&b': 165, 'rnb': 165,
+          'jazz': 129, 'classical': 98, 'country': 84, 'latin': 197,
+          'reggae': 144, 'metal': 464, 'indie': 85, 'alternative': 85,
+          'k-pop': 173, 'soul': 169,
+        };
+
+        const genreLower = genre.toLowerCase().trim();
+        const genreId = GENRE_IDS[genreLower] || GENRE_IDS['pop'];
+
+        try {
+          // Fetch genre artists and chart from Deezer
+          const [artistsRes, chartRes] = await Promise.all([
+            fetch(`${DEEZER_API}/genre/${genreId}/artists`, {
+              headers: { 'User-Agent': 'Mozilla/5.0' },
+            }),
+            fetch(`${DEEZER_API}/chart/${genreId}/tracks?limit=25`, {
+              headers: { 'User-Agent': 'Mozilla/5.0' },
+            }),
+          ]);
+
+          const artistsData = artistsRes.ok ? await artistsRes.json() : { data: [] };
+          const chartData = chartRes.ok ? await chartRes.json() : { data: [] };
+
+          const artists = (artistsData?.data || []).slice(0, 20).map((a: any) => ({
+            id: String(a.id),
+            name: a.name,
+            imageUrl: a.picture_xl || a.picture_big || a.picture_medium || a.picture || '',
+          }));
+
+          const tracks = (chartData?.data || []).map((t: any) => ({
+            id: String(t.id),
+            title: t.title,
+            artist: t.artist?.name || 'Unknown',
+            artistId: String(t.artist?.id || ''),
+            album: t.album?.title || '',
+            albumId: String(t.album?.id || ''),
+            duration: Math.round(t.duration || 0),
+            coverUrl: t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || t.album?.cover || '',
+          }));
+
+          return json({ artists, tracks });
+        } catch (err) {
+          console.error('Genre browse error:', err);
+          return json({ artists: [], tracks: [] });
+        }
+      }
+
       default:
         return json({ error: `Unknown action: ${action}` });
     }

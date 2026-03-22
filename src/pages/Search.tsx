@@ -9,7 +9,7 @@ import UserCard from '@/components/social/UserCard';
 import TapArea from '@/components/TapArea';
 import SearchResultsSkeleton from '@/components/skeletons/SearchResultsSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
-import { searchAll, searchPlaylists, searchArtists, searchTracks, DeezerPlaylist, getArtist, getArtistTopTracks } from '@/lib/spotify';
+import { searchAll, searchPlaylists, DeezerPlaylist, getArtist, getArtistTopTracks } from '@/lib/spotify';
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -272,7 +272,7 @@ const Search: React.FC = () => {
 
     try {
       // Fetch all data sources in parallel
-      const [artistStatsRes, genreCacheRes, playlistsRes, favArtistsRes, intlArtistsRes, intlTracksRes] = await Promise.all([
+      const [artistStatsRes, genreCacheRes, playlistsRes, favArtistsRes, genreBrowseRes] = await Promise.all([
         supabase
           .from('user_artist_stats')
           .select('artist_id, artist_name, total_plays, artist_image_url')
@@ -288,8 +288,9 @@ const Search: React.FC = () => {
           .select('item_id, item_title, item_cover_url')
           .eq('user_id', user.id)
           .eq('item_type', 'artist'),
-        searchArtists(genreName).catch(() => []),
-        searchTracks(genreName).catch(() => []),
+        supabase.functions.invoke('spotify-api', {
+          body: { action: 'genre-browse', genre: genreName },
+        }).then(r => r.data || { artists: [], tracks: [] }).catch(() => ({ artists: [], tracks: [] })),
       ]);
 
       const artistStats = artistStatsRes.data || [];
@@ -359,18 +360,18 @@ const Search: React.FC = () => {
         }
       }
 
-      // International artists (exclude personal ones)
+      // International artists from Deezer genre chart (exclude personal ones)
       const personalIds = new Set(personalArtistObjects.map(a => a.id));
-      const intlArtists = (intlArtistsRes || []).filter(a => !personalIds.has(a.id));
+      const intlArtists = ((genreBrowseRes as any)?.artists || []).filter((a: Artist) => !personalIds.has(a.id));
 
       // Combined artists: personal first, then international
       const combinedArtists = [...personalArtistObjects, ...intlArtists.slice(0, 12 - personalArtistObjects.length)];
 
-      // === TRACKS: first 5 personal, rest international ===
+      // === TRACKS: first 5 personal, rest international from genre chart ===
       const personalTrackSlice = personalTracks.slice(0, 5);
       for (const t of personalTrackSlice) seenTrackIds.add(t.id);
 
-      const intlTracks = (intlTracksRes || []).filter(t => !seenTrackIds.has(t.id));
+      const intlTracks = ((genreBrowseRes as any)?.tracks || []).filter((t: Track) => !seenTrackIds.has(t.id));
       const combinedTracks = [...personalTrackSlice, ...intlTracks.slice(0, 20 - personalTrackSlice.length)];
 
       setGenreResults({
