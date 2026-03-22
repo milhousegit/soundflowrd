@@ -1036,58 +1036,41 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
 
                 <div className="h-px bg-border" />
 
-                {/* Playback info */}
-                <p className="text-xs font-medium text-muted-foreground uppercase">{isItalian ? 'Riproduzione' : 'Playback'}</p>
-                <div className="space-y-2 text-sm">
-                  <InfoRow label={isItalian ? 'Sorgente audio' : 'Audio source'} value={
-                    currentStreamId ? `RealDebrid (${currentStreamId.substring(0, 8)}…)` :
-                    '—'
-                  } />
-                  {lastSearchQuery && <InfoRow label={isItalian ? 'Ultima ricerca' : 'Last search'} value={lastSearchQuery} />}
-                  {currentMappedFileId !== undefined && <InfoRow label="Mapped File ID" value={String(currentMappedFileId)} />}
-                  <InfoRow label={isItalian ? 'Sorgenti trovate' : 'Sources found'} value={String(alternatives.length)} />
-                  <InfoRow label="Torrent" value={String(torrents.length)} />
-                </div>
-
-                {/* Admin: Canvas URL editor */}
-                {isAdmin && (
-                  <>
-                    <div className="h-px bg-border" />
-                    <p className="text-xs font-medium text-muted-foreground uppercase">Canvas Video</p>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="https://canvaz.scdn.co/.../video.mp4"
-                        value={canvasUrl}
-                        onChange={(e) => setCanvasUrl(e.target.value)}
-                        className="flex-1 text-sm"
-                      />
-                      <Button
-                        onClick={async () => {
-                          if (!canvasUrl.trim() || !currentTrack?.id) return;
-                          setSavingCanvas(true);
-                          try {
-                            const { error } = await supabase
-                              .from('track_canvases')
-                              .upsert(
-                                { track_id: currentTrack.id, canvas_url: canvasUrl.trim(), updated_at: new Date().toISOString() },
-                                { onConflict: 'track_id' }
-                              );
-                            if (error) throw error;
-                            toast.success(isItalian ? 'Canvas salvato!' : 'Canvas saved!');
-                            setCanvasUrl('');
-                          } catch (err) {
-                            toast.error(String(err));
-                          } finally {
-                            setSavingCanvas(false);
-                          }
-                        }}
-                        disabled={savingCanvas || !canvasUrl.trim() || !currentTrack?.id}
-                        size="icon"
-                      >
-                        {savingCanvas ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      </Button>
+                {/* Artist info */}
+                <p className="text-xs font-medium text-muted-foreground uppercase">{isItalian ? 'Artista' : 'Artist'}</p>
+                {artistInfoLoading ? (
+                  <div className="flex items-center gap-2 py-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">{isItalian ? 'Caricamento…' : 'Loading…'}</span>
+                  </div>
+                ) : artistInfo ? (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-3">
+                      {artistInfo.imageUrl && (
+                        <img src={artistInfo.imageUrl} alt={artistInfo.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-medium text-foreground">{artistInfo.name}</p>
+                        {artistInfo.popularity !== undefined && (
+                          <p className="text-xs text-muted-foreground">{isItalian ? 'Popolarità' : 'Popularity'}: {artistInfo.popularity}/100</p>
+                        )}
+                      </div>
                     </div>
-                  </>
+                    {artistInfo.genres && artistInfo.genres.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {artistInfo.genres.map((genre) => (
+                          <span key={genre} className="px-2 py-0.5 rounded-full bg-secondary text-xs text-foreground">
+                            {genre}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {(!artistInfo.genres || artistInfo.genres.length === 0) && (
+                      <p className="text-xs text-muted-foreground italic">{isItalian ? 'Nessun genere disponibile' : 'No genres available'}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">{isItalian ? 'Nessuna info artista' : 'No artist info'}</p>
                 )}
               </div>
             )}
