@@ -1135,7 +1135,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // Try remaining scraping sources not in fallback chain
         const remainingSources = SCRAPING_SOURCES.map(s => s.id).filter(id => !triedSources.has(id));
         for (const sourceId of remainingSources) {
-          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF';
+          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'HiFi';
           addDebugLog(`🔄 Fallback extra a ${sourceName}`, '', 'info');
           setLoadingPhase('searching');
           const success = await playWithScrapingSource(sourceId);
