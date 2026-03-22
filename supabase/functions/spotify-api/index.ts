@@ -597,7 +597,7 @@ serve(async (req) => {
           console.log(`[genre-browse] Last.fm tag "${tag}": ${lastfmArtists.length} artists, ${lastfmTracks.length} tracks`);
 
           // Resolve Last.fm artists to Deezer for images
-          const artistPromises = lastfmArtists.slice(0, 12).map(async (a: any) => {
+          const artistPromises = lastfmArtists.slice(0, 12).map(async (a: any, idx: number) => {
             try {
               const searchRes = await fetch(`${DEEZER_API}/search/artist?q=${encodeURIComponent(a.name)}&limit=1`, {
                 headers: { 'User-Agent': 'Mozilla/5.0' },
@@ -608,9 +608,10 @@ serve(async (req) => {
                 id: deezerArtist ? String(deezerArtist.id) : a.mbid || a.name,
                 name: a.name,
                 imageUrl: deezerArtist?.picture_xl || deezerArtist?.picture_big || deezerArtist?.picture_medium || a.image?.[3]?.['#text'] || '',
+                popularity: deezerArtist?.nb_fan || parseInt(a.listeners || '0', 10) || 0,
               };
             } catch {
-              return { id: a.mbid || a.name, name: a.name, imageUrl: a.image?.[3]?.['#text'] || '' };
+              return { id: a.mbid || a.name, name: a.name, imageUrl: a.image?.[3]?.['#text'] || '', popularity: 0 };
             }
           });
 
