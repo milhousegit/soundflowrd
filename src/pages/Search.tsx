@@ -12,9 +12,10 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { searchAll, searchPlaylists, DeezerPlaylist } from '@/lib/spotify';
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserSearch } from '@/hooks/useUserSearch';
 import { SocialProfile } from '@/hooks/useSocialProfile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const genres = [
   { name: 'Pop', color: 'from-pink-500 to-rose-500' },
@@ -41,6 +42,8 @@ interface RecentItem {
 }
 
 const Search: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const isMobile = useIsMobile();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -57,6 +60,20 @@ const Search: React.FC = () => {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const { users: searchedUsers, searchUsers, clearResults: clearUserResults } = useUserSearch();
+
+  // Sync query from URL params (desktop top bar drives this)
+  useEffect(() => {
+    const q = searchParams.get('q') || '';
+    if (q !== query) {
+      setQuery(q);
+      if (q.trim()) {
+        debouncedSearch(q.trim());
+      } else {
+        setResults(null);
+        clearUserResults();
+      }
+    }
+  }, [searchParams]);
 
   // Load recent searches and items from localStorage
   useEffect(() => {
@@ -250,33 +267,35 @@ const Search: React.FC = () => {
 
   return (
     <div className="p-4 md:p-8 pb-32 animate-fade-in">
-      {/* Search Header */}
-      <div className="max-w-2xl mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-4 md:mb-6">{t('search')}</h1>
-        <div className="relative">
-          <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <Input
-            ref={inputRef}
-            type="text"
-            placeholder={t('searchPlaceholder')}
-            value={query}
-            onChange={(e) => handleQueryChange(e.target.value)}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-            className="pl-12 pr-12 h-12 md:h-14 text-base md:text-lg rounded-full bg-secondary"
-          />
-          {query && (
-            <Button
-              variant="ghost"
-              size="iconSm"
-              className="absolute right-3 top-1/2 -translate-y-1/2"
-              onClick={() => handleQueryChange('')}
-            >
-              <X className="w-5 h-5" />
-            </Button>
-          )}
+      {/* Search Header - mobile only, desktop uses top bar */}
+      {isMobile && (
+        <div className="max-w-2xl mb-6">
+          <h1 className="text-2xl font-bold text-foreground mb-4">{t('search')}</h1>
+          <div className="relative">
+            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <Input
+              ref={inputRef}
+              type="text"
+              placeholder={t('searchPlaceholder')}
+              value={query}
+              onChange={(e) => handleQueryChange(e.target.value)}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+              className="pl-12 pr-12 h-12 text-base rounded-full bg-secondary"
+            />
+            {query && (
+              <Button
+                variant="ghost"
+                size="iconSm"
+                className="absolute right-3 top-1/2 -translate-y-1/2"
+                onClick={() => handleQueryChange('')}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Loading */}
       {isLoading && (
