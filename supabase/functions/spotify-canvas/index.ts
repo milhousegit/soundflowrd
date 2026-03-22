@@ -259,6 +259,7 @@ async function fetchCanvasUrls(trackUris: string[], token: string): Promise<Map<
   const result = new Map<string, string>();
   try {
     const body = encodeCanvasRequest(trackUris);
+    console.log(`[Canvas] Fetching canvases for ${trackUris.length} URIs: ${trackUris.join(', ')}`);
     const res = await fetch('https://spclient.wg.spotify.com/canvaz-cache/v0/canvases', {
       method: 'POST',
       headers: {
@@ -268,11 +269,17 @@ async function fetchCanvasUrls(trackUris: string[], token: string): Promise<Map<
       },
       body,
     });
-    if (!res.ok) { console.error(`Canvas API returned ${res.status}`); return result; }
+    console.log(`[Canvas] Canvas API response: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[Canvas] Canvas API error body: ${errText.substring(0, 200)}`);
+      return result;
+    }
     const responseBytes = new Uint8Array(await res.arrayBuffer());
+    console.log(`[Canvas] Response size: ${responseBytes.length} bytes`);
     for (const c of extractCanvasResults(responseBytes)) {
       result.set(c.trackUri, c.canvasUrl);
     }
-  } catch (error) { console.error('Error fetching canvases:', error); }
+  } catch (error) { console.error('[Canvas] Error fetching canvases:', error); }
   return result;
 }
