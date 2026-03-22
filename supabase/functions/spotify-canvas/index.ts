@@ -106,6 +106,7 @@ async function getSpotifyOAuthToken(): Promise<string | null> {
   const refreshToken = Deno.env.get('SPOTIFY_REFRESH_TOKEN');
   const clientId = Deno.env.get('SPOTIFY_CLIENT_ID');
   const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
+  console.log(`[Canvas] RT length: ${refreshToken?.length || 0}, starts: ${refreshToken?.substring(0, 5) || 'N/A'}`);
   if (!refreshToken || !clientId || !clientSecret) {
     console.log('[Canvas] Missing SPOTIFY_REFRESH_TOKEN or client credentials');
     return null;
