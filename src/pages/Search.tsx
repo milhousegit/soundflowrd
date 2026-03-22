@@ -267,32 +267,35 @@ const Search: React.FC = () => {
 
   return (
     <div className="p-4 md:p-8 pb-32 animate-fade-in">
-      {/* Search Header */}
-      <div className="max-w-2xl mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-4 md:mb-6">{t('search')}</h1>
-        <div className="relative">
-          <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <Input
-            ref={inputRef}
-            type="text"
-            placeholder={t('searchPlaceholder')}
-            value={query}
-            onChange={(e) => handleQueryChange(e.target.value)}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-            className="pl-12 pr-12 h-12 md:h-14 text-base md:text-lg rounded-full bg-secondary"
-          />
-          {query && (
-            <Button
-              variant="ghost"
-              size="iconSm"
-              className="absolute right-3 top-1/2 -translate-y-1/2"
-              onClick={() => handleQueryChange('')}
-            >
-              <X className="w-5 h-5" />
-            </Button>
-          )}
+      {/* Search Header - mobile only, desktop uses top bar */}
+      {isMobile && (
+        <div className="max-w-2xl mb-6">
+          <h1 className="text-2xl font-bold text-foreground mb-4">{t('search')}</h1>
+          <div className="relative">
+            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <Input
+              ref={inputRef}
+              type="text"
+              placeholder={t('searchPlaceholder')}
+              value={query}
+              onChange={(e) => handleQueryChange(e.target.value)}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+              className="pl-12 pr-12 h-12 text-base rounded-full bg-secondary"
+            />
+            {query && (
+              <Button
+                variant="ghost"
+                size="iconSm"
+                className="absolute right-3 top-1/2 -translate-y-1/2"
+                onClick={() => handleQueryChange('')}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            )}
+          </div>
         </div>
+      )}
       </div>
 
       {/* Loading */}
