@@ -262,24 +262,21 @@ serve(async (req) => {
 
     const { action } = await req.json();
 
-    if (action === 'get') {
-      const { data: existing } = await supabase
-        .from('daily_mixes').select('*')
-        .eq('user_id', user.id)
-        .gt('expires_at', new Date().toISOString())
-        .order('mix_index');
+    const { data: existing } = await supabase
+      .from('daily_mixes').select('*')
+      .eq('user_id', user.id)
+      .gt('expires_at', new Date().toISOString())
+      .order('mix_index');
 
-      if (existing && existing.length > 0) {
-        console.log(`Returning ${existing.length} cached mixes for user ${user.id}`);
-        return new Response(JSON.stringify(existing), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+    if (action === 'get' && existing && existing.length > 0) {
+      console.log(`Returning ${existing.length} cached mixes for user ${user.id}`);
+      return new Response(JSON.stringify(existing), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     if (action === 'get' || action === 'regenerate') {
       console.log(`Generating daily mixes for user ${user.id}`);
-      await supabase.from('daily_mixes').delete().eq('user_id', user.id);
 
       // 1. Fetch user's top artists
       const { data: rawArtistStats } = await supabase
