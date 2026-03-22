@@ -113,19 +113,53 @@ export const startLibrarySync = async (userId: string, apiKey: string) => {
       }
     }
 
-    _progress = { current: 0, total: tracks.length };
+    // Split tracks into unsynced and already synced
+    const trackIds = tracks.map(t => t.id);
+    const syncedTrackIds = new Set<string>();
+
+    // Query existing mappings in batches of 500
+    for (let i = 0; i < trackIds.length; i += 500) {
+      const batch = trackIds.slice(i, i + 500);
+      const { data: mappings } = await supabase
+        .from('track_file_mappings')
+        .select('track_id')
+        .in('track_id', batch)
+        .not('direct_link', 'is', null);
+
+      if (mappings) {
+        mappings.forEach(m => syncedTrackIds.add(m.track_id));
+      }
+    }
+
+    const unsyncedTracks = tracks.filter(t => !syncedTrackIds.has(t.id));
+    const alreadySyncedTracks = tracks.filter(t => syncedTrackIds.has(t.id));
+    const total = tracks.length;
+
+    _progress = { current: 0, total };
     notify();
 
-    toast.info(`Sincronizzazione libreria: ${tracks.length} brani...`);
+    toast.info(`Sincronizzazione: ${unsyncedTracks.length} nuovi, ${alreadySyncedTracks.length} da aggiornare`);
 
-    for (let i = 0; i < tracks.length; i++) {
-      _progress = { current: i + 1, total: tracks.length };
+    // Phase 1: Sync tracks without a mapping first
+    let processed = 0;
+    for (const track of unsyncedTracks) {
+      processed++;
+      _progress = { current: processed, total };
       notify();
-      await syncTrackInBackground(tracks[i], apiKey);
+      await syncTrackInBackground(track, apiKey);
       await new Promise(r => setTimeout(r, 500));
     }
 
-    toast.success(`Libreria sincronizzata! ${tracks.length} brani elaborati`);
+    // Phase 2: Refresh tracks that already have a mapping
+    for (const track of alreadySyncedTracks) {
+      processed++;
+      _progress = { current: processed, total };
+      notify();
+      await syncTrackInBackground(track, apiKey);
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    toast.success(`Libreria sincronizzata! ${total} brani elaborati`);
   } catch (err) {
     console.error('[LibrarySync] Error:', err);
     toast.error('Errore sincronizzazione libreria');
