@@ -1,81 +1,65 @@
 
 
-# Desktop Layout Redesign — YouTube Music Style
+## Problema e Diagnosi
 
-## Overview
-Redesign the desktop layout to match a YouTube Music-inspired interface: horizontal top navigation bar, left sidebar player with canvas/lyrics, and no bottom player bar on desktop.
+Il tracker ufficiale di uptime (`tidal-uptime.jiffy-puffs-1j.workers.dev`) mostra che **quasi tutti i mirror hardcoded nella edge function sono DOWN**:
 
-## Current vs New Layout
+- `hifitui.401658.xyz` -- non esiste nel tracker
+- `triton.squid.wtf` -- **504**
+- `tidal-api.binimum.org` -- non esiste nel tracker
+- `hund/katze/maus.qqdl.site` -- **401**
+- `ohio/virginia/oregon.monochrome.tf` -- non esistono
+
+**Istanze attualmente funzionanti** (dal tracker live):
+- API (search): `eu-central.monochrome.tf`, `us-west.monochrome.tf`, `hifi-one.spotisaver.net`, `api.monochrome.tf`, `monochrome-api.samidy.com`, `tidal.kinoplus.online`
+- Streaming (track): `hifi-one.spotisaver.net`, `api.monochrome.tf`
+
+**Come fa Monochrome stesso**: non hardcoda i mirror, ma **interroga dinamicamente il tracker di uptime** per ottenere le istanze live ad ogni richiesta (con cache).
+
+## Piano
+
+### 1. Riscrivere la edge function `monochrome` con discovery dinamico
+
+Invece di una lista statica di mirror, la funzione:
+
+1. Chiama il tracker di uptime (`tidal-uptime.jiffy-puffs-1j.workers.dev` con fallback a `tidal-uptime.props-76styles.workers.dev`) per ottenere le istanze live
+2. Crea due pool: **API instances** (per search) e **streaming instances** (per `/track/`)
+3. Cache il risultato per 5 minuti (durata della vita dell'edge function)
+4. Fallback a istanze hardcoded aggiornate se entrambi i tracker sono irraggiungibili
+
+Il formato degli endpoint resta invariato:
+- Search: `GET /search/?s={query}`
+- Stream: `GET /track/?id={id}&quality={quality}`
+
+La gestione della risposta sarà più robusta: `data.data || data` per gestire wrapper variabili tra le istanze.
+
+### 2. Gestione manifest migliorata
+
+Seguendo il codice sorgente di Monochrome (`extractStreamUrlFromManifest`):
+- `application/vnd.tidal.bts` → decodifica base64 del manifest JSON, estrae `urls[0]`
+- `application/dash+xml` → decodifica base64 XML, estrae URL di inizializzazione
+- Aggiunta gestione `OriginalTrackUrl` come source primaria (come fa Monochrome)
+- Gestione di risposte dove il manifest è già un oggetto JSON (non solo stringa base64)
+
+### 3. Aggiornare CORS headers
+
+Aggiungere gli header mancanti per compatibilità con il client Supabase.
+
+### Dettagli tecnici
 
 ```text
-CURRENT:
-┌──────────┬─────────────────────────────┐
-│ Sidebar  │         Content             │
-│ (nav)    │                             │
-│          │                             │
-├──────────┴─────────────────────────────┤
-│           Bottom Player Bar            │
-└────────────────────────────────────────┘
-
-NEW:
-┌────────────────────────────────────────────┐
-│ Home  Feed  Libreria  │ 🔍 Search │ 🔔 ⚙ 👤│  ← TopBar
-├──────────┬─────────────────────────────────┤
-│  Player  │                                 │
-│  Sidebar │         Content (Outlet)        │
-│ (canvas) │                                 │
-│ (cover)  │                                 │
-│ (info)   │                                 │
-│ (controls│                                 │
-│ (lyrics) │                                 │
-└──────────┴─────────────────────────────────┘
+Edge Function Flow:
+  Request → Fetch uptime tracker (cached 5min)
+          → Get live instances (api[] + streaming[])
+          → For search: try api instances with fallback
+          → For stream: try streaming instances first, then api
+          → Parse response (handle data.data || data wrapper)
+          → Extract stream URL from manifest
+          → Return result
 ```
 
-## Changes
+File da modificare:
+- `supabase/functions/monochrome/index.ts` -- riscrittura completa con discovery dinamico
 
-### 1. Create `DesktopTopBar` component
-- Left: nav links — Home, Feed, Libreria (styled as tabs/pills)
-- Center: search input bar (navigates to /app/search with query)
-- Right: NotificationsDropdown, Settings icon (link to /app/settings), Profile avatar (link to /app/profile)
-- Hidden on mobile (`hidden md:flex`)
-
-### 2. Create `DesktopPlayerSidebar` component
-- Fixed left sidebar, ~350px wide, full height below top bar
-- Shows only when a track is playing (otherwise content takes full width)
-- Contains (top to bottom):
-  - Canvas video background (if available) or album cover
-  - Track title, artist, album (clickable)
-  - Audio source badge
-  - Progress bar with timestamps
-  - Playback controls (shuffle, prev, play/pause, next, favorite)
-  - Secondary actions (queue, lyrics, debug, download)
-  - Volume slider
-  - Inline lyrics card (scrollable)
-- Hidden on mobile (`hidden md:flex`)
-
-### 3. Modify `Layout.tsx`
-- Remove `<Sidebar />` (the old vertical nav sidebar)
-- Add `<DesktopTopBar />` above content
-- Add `<DesktopPlayerSidebar />` to the left of content area
-- Remove bottom padding for desktop player bar
-
-### 4. Modify `Player.tsx`
-- Remove the desktop bottom bar section (lines 552-658, the `hidden md:block` fixed bottom bar)
-- Keep mobile expanded view and mini player unchanged
-- Keep all modals (debug, queue, lyrics, track actions)
-
-### 5. Remove `Sidebar.tsx` usage
-- Only used in Layout, will be replaced by TopBar
-- Keep the file but remove its import from Layout
-
-### 6. Responsive behavior
-- Mobile: unchanged (bottom nav + mini player + expanded player)
-- Desktop: top bar nav + left player sidebar + no bottom bar
-
-## Technical Details
-- `DesktopTopBar`: new file `src/components/DesktopTopBar.tsx`
-- `DesktopPlayerSidebar`: new file `src/components/DesktopPlayerSidebar.tsx`
-- Player context hooks remain the same, just rendered in new location
-- Canvas background rendered inside the sidebar with contained positioning (not fixed/fullscreen)
-- Search bar in top bar: on input, navigate to `/app/search?q=...` or just focus the search page
+Nessuna modifica al client necessaria -- l'interfaccia della funzione (input/output) resta identica.
 
