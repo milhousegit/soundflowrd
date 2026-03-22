@@ -154,8 +154,8 @@ const DesktopPlayerSidebar: React.FC = () => {
       <aside className="hidden md:flex w-[380px] shrink-0 flex-col border-l border-border bg-card/50 overflow-hidden">
         <ScrollArea className="flex-1">
           <div className="flex flex-col">
-            {/* Cover / Canvas */}
-            <div className="relative w-full aspect-[4/3] bg-secondary overflow-hidden">
+            {/* Cover / Canvas area - full width, tall */}
+            <div className="relative w-full bg-secondary overflow-hidden" style={{ height: '55%', minHeight: 280 }}>
               {canvasUrl ? (
                 <video
                   src={canvasUrl}
@@ -167,11 +167,13 @@ const DesktopPlayerSidebar: React.FC = () => {
                   crossOrigin="anonymous"
                 />
               ) : currentTrack.coverUrl ? (
-                <img
-                  src={currentTrack.coverUrl}
-                  alt={currentTrack.album}
-                  className="w-full h-full object-cover"
-                />
+                <div className="w-full h-full flex items-center justify-center bg-background/40">
+                  <img
+                    src={currentTrack.coverUrl}
+                    alt={currentTrack.album}
+                    className="h-[70%] aspect-square object-cover rounded-xl shadow-2xl"
+                  />
+                </div>
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <Music className="w-16 h-16 text-muted-foreground" />
