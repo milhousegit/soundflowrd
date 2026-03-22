@@ -106,16 +106,22 @@ async function fetchSpotifyArtistGenres(artistName: string, deezerId: string): P
     const artists = searchData?.artists?.items || [];
     
     // Find best match (exact name match preferred)
-    const match = artists.find((a: any) => a.name.toLowerCase() === artistName.toLowerCase()) || artists[0];
-    console.log(`[Genres] Spotify match for ${artistName}:`, JSON.stringify({ id: match?.id, name: match?.name, genres: match?.genres, popularity: match?.popularity }));
-    if (!match) {
+    const searchMatch = artists.find((a: any) => a.name.toLowerCase() === artistName.toLowerCase()) || artists[0];
+    if (!searchMatch) {
       console.log(`[Genres] No Spotify match for ${artistName}`);
-      // Cache empty result to avoid repeated lookups
       await sb.from('artist_genres_cache').upsert({
         artist_id: deezerId, artist_name: artistName, genres: [], popularity: 0, updated_at: new Date().toISOString(),
       }, { onConflict: 'artist_id' });
       return null;
     }
+
+    // Fetch full artist profile to get genres + popularity
+    const artistRes = await fetch(`${SPOTIFY_API}/artists/${searchMatch.id}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    
+    const match = artistRes.ok ? await artistRes.json() : searchMatch;
+    console.log(`[Genres] Spotify artist ${match.name}: genres=${JSON.stringify(match.genres)}, popularity=${match.popularity}`);
 
     const result = {
       genres: match.genres || [],
