@@ -360,18 +360,18 @@ const Search: React.FC = () => {
         }
       }
 
-      // International artists (exclude personal ones)
+      // International artists from Deezer genre chart (exclude personal ones)
       const personalIds = new Set(personalArtistObjects.map(a => a.id));
-      const intlArtists = (intlArtistsRes || []).filter(a => !personalIds.has(a.id));
+      const intlArtists = ((genreBrowseRes as any)?.artists || []).filter((a: Artist) => !personalIds.has(a.id));
 
       // Combined artists: personal first, then international
       const combinedArtists = [...personalArtistObjects, ...intlArtists.slice(0, 12 - personalArtistObjects.length)];
 
-      // === TRACKS: first 5 personal, rest international ===
+      // === TRACKS: first 5 personal, rest international from genre chart ===
       const personalTrackSlice = personalTracks.slice(0, 5);
       for (const t of personalTrackSlice) seenTrackIds.add(t.id);
 
-      const intlTracks = (intlTracksRes || []).filter(t => !seenTrackIds.has(t.id));
+      const intlTracks = ((genreBrowseRes as any)?.tracks || []).filter((t: Track) => !seenTrackIds.has(t.id));
       const combinedTracks = [...personalTrackSlice, ...intlTracks.slice(0, 20 - personalTrackSlice.length)];
 
       setGenreResults({
