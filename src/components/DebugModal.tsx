@@ -247,9 +247,9 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
       setScrapingResults([]);
       
       try {
-        // Use SquidWTF to search Tidal
-        const { data, error } = await supabase.functions.invoke('squidwtf', {
-          body: { action: 'search', query: scrapingQuery.trim() },
+        // Use Monochrome to search Tidal
+        const { data, error } = await supabase.functions.invoke('monochrome', {
+          body: { action: 'search', title: scrapingQuery.trim() },
         });
         
         if (error) throw error;

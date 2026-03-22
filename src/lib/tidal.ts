@@ -137,7 +137,7 @@ export async function searchTidal(
   query: string
 ): Promise<any[]> {
   try {
-    const { data, error } = await supabase.functions.invoke('squidwtf', {
+    const { data, error } = await supabase.functions.invoke('monochrome', {
       body: { 
         action: 'search', 
         title: query,

@@ -264,7 +264,7 @@ const LandingFeatures: React.FC = () => {
     {
       icon: <Headphones className="w-5 h-5 text-primary" />,
       title: 'Musica Hi-Fi',
-      description: 'Niente YouTube. FLAC e 320kbps da Real-Debrid, HiFi, SquidWTF e Monochrome.',
+      description: 'Niente YouTube. FLAC e 320kbps da Real-Debrid, HiFi e Monochrome.',
       phone: <HiFiPhone />,
     },
     {

@@ -105,22 +105,21 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
           streamUrl = lucidaData.streamUrl;
         }
 
-        // Fallback to squidwtf
+        // Fallback to monochrome
         if (!streamUrl) {
-          const squidResponse = await fetch(`${baseUrl}/functions/v1/squidwtf`, {
+          const monoResponse = await fetch(`${baseUrl}/functions/v1/monochrome`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              action: 'getTrack',
-              trackId: track.id,
-              trackTitle: track.title,
-              artistName: track.artist,
+              action: 'search-and-stream',
+              title: track.title,
+              artist: track.artist,
             }),
           });
 
-          if (squidResponse.ok) {
-            const squidData = await squidResponse.json();
-            streamUrl = squidData.streamUrl;
+          if (monoResponse.ok) {
+            const monoData = await monoResponse.json();
+            streamUrl = monoData.streamUrl;
           }
         }
 

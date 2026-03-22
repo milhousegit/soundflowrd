@@ -2083,7 +2083,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             const streamFn = sourceId === 'monochrome' ? getMonochromeStream 
               : sourceId === 'hifi' ? getHifiStream 
               : getTidalStream;
-            const sourceLabel: AudioSource = sourceId === 'monochrome' ? 'monochrome' : 'squidwtf';
+            const sourceLabel: AudioSource = 'monochrome';
             const result = await streamFn(nextTrack.title, nextTrack.artist, tidalQuality);
             
             if ('streamUrl' in result && result.streamUrl) {
