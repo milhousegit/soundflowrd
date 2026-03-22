@@ -8,11 +8,13 @@ import BackButton from '@/components/BackButton';
 import TrackCard from '@/components/TrackCard';
 import FavoriteButton from '@/components/FavoriteButton';
 import AlbumPageSkeleton from '@/components/skeletons/AlbumPageSkeleton';
+import ChartPlaylistCover, { hasChartCover, getChartLabel } from '@/components/ChartPlaylistCover';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePlayer } from '@/contexts/PlayerContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDownloadAll } from '@/hooks/useDownloadAll';
 import { getDeezerPlaylist, DeezerPlaylist } from '@/lib/spotify';
+import { supabase } from '@/integrations/supabase/client';
 import { Track, Album } from '@/types/music';
 import { isPast } from 'date-fns';
 import { toast } from 'sonner';
@@ -21,7 +23,7 @@ const SoundFlowPlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { playTrack } = usePlayer();
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
   const { profile, isAdmin } = useAuth();
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
   
@@ -32,6 +34,8 @@ const SoundFlowPlaylistPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [linkCopied, setLinkCopied] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
+  const [chartCountryCode, setChartCountryCode] = useState<string | null>(null);
+  const [chartTitle, setChartTitle] = useState<string | null>(null);
   const shareUrl = `${window.location.origin}/soundflow-playlist/${id}`;
 
   const handleCopyShareLink = async () => {
@@ -56,6 +60,23 @@ const SoundFlowPlaylistPage: React.FC = () => {
       toast.error('Impossibile copiare l\'ID');
     }
   };
+
+  // Check if this playlist ID is a chart configuration
+  useEffect(() => {
+    if (!id) return;
+    const checkChart = async () => {
+      const { data } = await supabase
+        .from('chart_configurations')
+        .select('country_code, playlist_title')
+        .eq('playlist_id', id)
+        .maybeSingle();
+      if (data) {
+        setChartCountryCode(data.country_code);
+        setChartTitle(data.playlist_title || getChartLabel(data.country_code));
+      }
+    };
+    checkChart();
+  }, [id]);
 
   useEffect(() => {
     const fetchPlaylist = async () => {
@@ -100,11 +121,15 @@ const SoundFlowPlaylistPage: React.FC = () => {
     }
   };
 
+  // Use chart title if available, otherwise playlist title
+  const displayTitle = chartTitle || playlist.title;
+  const isChart = !!chartCountryCode && hasChartCover(chartCountryCode);
+
   // Create a playlist object for the favorite button
   const playlistForFavorite: Album = {
     id: `soundflow-playlist-${id}`,
-    title: playlist.title,
-    artist: playlist.creator || 'SoundFlow',
+    title: displayTitle,
+    artist: isChart ? 'SoundFlow' : (playlist.creator || 'SoundFlow'),
     coverUrl: playlist.coverUrl || '',
     artistId: '',
   };
@@ -119,17 +144,23 @@ const SoundFlowPlaylistPage: React.FC = () => {
       {/* Hero Section */}
       <div className="relative h-64 md:h-80 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-primary/20 to-background" />
-        {playlist.coverUrl && (
+        {isChart ? (
+          <div className="absolute inset-0 opacity-30 blur-xl">
+            <ChartPlaylistCover countryCode={chartCountryCode!} size="lg" />
+          </div>
+        ) : playlist.coverUrl ? (
           <img 
             src={playlist.coverUrl} 
-            alt={playlist.title}
+            alt={displayTitle}
             className="absolute inset-0 w-full h-full object-cover opacity-30 blur-xl"
           />
-        )}
+        ) : null}
         <div className="absolute bottom-0 left-0 right-0 p-4 md:p-8 flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-6">
           <div className="w-32 h-32 md:w-48 md:h-48 rounded-lg overflow-hidden bg-muted shadow-2xl flex-shrink-0">
-            {playlist.coverUrl ? (
-              <img src={playlist.coverUrl} alt={playlist.title} className="w-full h-full object-cover" />
+            {isChart ? (
+              <ChartPlaylistCover countryCode={chartCountryCode!} size="lg" />
+            ) : playlist.coverUrl ? (
+              <img src={playlist.coverUrl} alt={displayTitle} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <Music className="w-16 md:w-24 h-16 md:h-24 text-muted-foreground" />
@@ -137,13 +168,15 @@ const SoundFlowPlaylistPage: React.FC = () => {
             )}
           </div>
           <div className="flex-1 min-w-0 text-center md:text-left">
-            <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">Playlist SoundFlow</p>
-            <h1 className="text-2xl md:text-5xl font-bold text-foreground mb-2 truncate">{playlist.title}</h1>
-            {playlist.description && (
+            <p className="text-xs md:text-sm text-foreground/70 uppercase tracking-wider mb-1">
+              {isChart ? (settings.language === 'it' ? 'Classifica' : 'Chart') : 'Playlist SoundFlow'}
+            </p>
+            <h1 className="text-2xl md:text-5xl font-bold text-foreground mb-2 truncate">{displayTitle}</h1>
+            {playlist.description && !isChart && (
               <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{playlist.description}</p>
             )}
             <p className="text-sm text-muted-foreground">
-              {playlist.creator} • {playlist.trackCount} brani
+              SoundFlow • {playlist.trackCount} {settings.language === 'it' ? 'brani' : 'tracks'}
             </p>
           </div>
         </div>
@@ -158,7 +191,6 @@ const SoundFlowPlaylistPage: React.FC = () => {
           <Shuffle className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
         
-        {/* Favorite button */}
         <FavoriteButton
           itemType="playlist"
           item={playlistForFavorite}
@@ -166,8 +198,6 @@ const SoundFlowPlaylistPage: React.FC = () => {
           variant="ghost"
         />
         
-        {/* Download button - Premium only */}
-        {/* Share button */}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="w-10 h-10 md:w-12 md:h-12">
@@ -181,38 +211,18 @@ const SoundFlowPlaylistPage: React.FC = () => {
                 Condividi questa playlist SoundFlow con altri utenti
               </p>
               <div className="flex gap-2">
-                <Input
-                  value={shareUrl}
-                  readOnly
-                  className="text-xs"
-                />
+                <Input value={shareUrl} readOnly className="text-xs" />
                 <Button size="sm" onClick={handleCopyShareLink}>
-                  {linkCopied ? (
-                    <CheckCircle className="w-4 h-4" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
+                  {linkCopied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 </Button>
               </div>
-              
-              {/* Admin: Copy playlist ID for chart configuration */}
               {isAdmin && id && (
                 <div className="pt-2 border-t border-border">
-                  <p className="text-xs text-muted-foreground mb-2">
-                    ID playlist per classifiche:
-                  </p>
+                  <p className="text-xs text-muted-foreground mb-2">ID playlist per classifiche:</p>
                   <div className="flex gap-2">
-                    <Input
-                      value={id}
-                      readOnly
-                      className="text-xs font-mono"
-                    />
+                    <Input value={id} readOnly className="text-xs font-mono" />
                     <Button size="sm" variant="outline" onClick={handleCopyPlaylistId}>
-                      {idCopied ? (
-                        <CheckCircle className="w-4 h-4" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
+                      {idCopied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </Button>
                   </div>
                 </div>
@@ -225,7 +235,7 @@ const SoundFlowPlaylistPage: React.FC = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => downloadAll(playlist.tracks, playlist.title)}
+            onClick={() => downloadAll(playlist.tracks, displayTitle)}
             disabled={isDownloadingAll}
             className="w-10 h-10 md:w-12 md:h-12"
           >
