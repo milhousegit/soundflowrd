@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,6 +65,86 @@ async function spotifyFetchPlaylist(url: string, retries = 2): Promise<any> {
     return await res.json();
   }
   throw new Error('Max retries exceeded');
+}
+
+// ======================== SPOTIFY GENRE CACHE ========================
+
+function getSupabaseServiceClient() {
+  return createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+}
+
+async function fetchSpotifyArtistGenres(artistName: string, deezerId: string): Promise<{ genres: string[]; popularity: number; spotifyId?: string; imageUrl?: string } | null> {
+  try {
+    // Check cache first
+    const sb = getSupabaseServiceClient();
+    const { data: cached } = await sb
+      .from('artist_genres_cache')
+      .select('genres, popularity, spotify_id, image_url')
+      .eq('artist_id', deezerId)
+      .maybeSingle();
+    
+    if (cached) {
+      console.log(`[Genres] Cache hit for ${artistName} (${deezerId})`);
+      return { genres: cached.genres || [], popularity: cached.popularity || 0, spotifyId: cached.spotify_id, imageUrl: cached.image_url };
+    }
+
+    // Search Spotify for artist by name
+    const token = await getSpotifyToken();
+    const searchRes = await fetch(`${SPOTIFY_API}/search?q=${encodeURIComponent(artistName)}&type=artist&limit=3`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    
+    if (!searchRes.ok) {
+      console.warn(`[Genres] Spotify search failed: ${searchRes.status}`);
+      return null;
+    }
+
+    const searchData = await searchRes.json();
+    const artists = searchData?.artists?.items || [];
+    
+    // Find best match (exact name match preferred)
+    const searchMatch = artists.find((a: any) => a.name.toLowerCase() === artistName.toLowerCase()) || artists[0];
+    if (!searchMatch) {
+      console.log(`[Genres] No Spotify match for ${artistName}`);
+      await sb.from('artist_genres_cache').upsert({
+        artist_id: deezerId, artist_name: artistName, genres: [], popularity: 0, updated_at: new Date().toISOString(),
+      }, { onConflict: 'artist_id' });
+      return null;
+    }
+
+    // Fetch full artist profile for popularity + images
+    const artistRes = await fetch(`${SPOTIFY_API}/artists/${searchMatch.id}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const match = artistRes.ok ? await artistRes.json() : searchMatch;
+
+    const result = {
+      genres: match.genres || [],
+      popularity: match.popularity || 0,
+      spotifyId: match.id,
+      imageUrl: match.images?.[0]?.url,
+    };
+
+    // Cache result
+    await sb.from('artist_genres_cache').upsert({
+      artist_id: deezerId,
+      artist_name: artistName,
+      genres: result.genres,
+      popularity: result.popularity,
+      spotify_id: result.spotifyId,
+      image_url: result.imageUrl,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'artist_id' });
+
+    console.log(`[Genres] Cached ${result.genres.length} genres for ${artistName}`);
+    return result;
+  } catch (err) {
+    console.warn(`[Genres] Error fetching genres for ${artistName}:`, err);
+    return null;
+  }
 }
 
 // ======================== DEEZER HELPERS ========================
@@ -225,8 +306,18 @@ serve(async (req) => {
         const top = topRes.status === 'fulfilled' ? topRes.value : { data: [] };
         const related = relatedRes.status === 'fulfilled' ? relatedRes.value : { data: [] };
 
+        // Fetch genres from Spotify (cached)
+        const artistName = artist?.name || '';
+        const genreData = await fetchSpotifyArtistGenres(artistName, String(id));
+
+        const mappedArtist = mapDeezerArtist(artist);
+        if (genreData) {
+          mappedArtist.genres = genreData.genres;
+          if (genreData.popularity > 0) mappedArtist.popularity = genreData.popularity;
+        }
+
         return json({
-          ...mapDeezerArtist(artist),
+          ...mappedArtist,
           releases: (albums?.data || []).map((a: any) => mapDeezerAlbum(a)),
           topTracks: (top?.data || []).map((t: any) => mapDeezerTrack(t)),
           relatedArtists: (related?.data || []).map((a: any) => mapDeezerArtist(a)).slice(0, 10),
