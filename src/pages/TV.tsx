@@ -81,7 +81,7 @@ const TVDisplay: React.FC = () => {
     audio.src = '';
 
     const tidalQuality = mapQualityToTidal(settings.audioQuality);
-    const streamFn = selectedScrapingSource === 'monochrome' ? getMonochromeStream : getTidalStream;
+    const streamFn = selectedScrapingSource === 'hifi' ? getHifiStream : selectedScrapingSource === 'monochrome' ? getMonochromeStream : getTidalStream;
 
     console.log(`[TV-Audio] Fetching stream for "${track.title}" by ${track.artist} via ${selectedScrapingSource}`);
 
