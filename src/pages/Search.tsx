@@ -451,8 +451,8 @@ const Search: React.FC = () => {
     };
   }, [saveRecentItem]);
 
-  const showRecentSection = isFocused && !query && !results && !isLoading;
-  const showGenres = !isFocused && !query && !results && !isLoading;
+  const showRecentSection = isFocused && !query && !results && !isLoading && !selectedGenre;
+  const showGenres = !isFocused && !query && !results && !isLoading && !selectedGenre;
 
   return (
     <div className="p-4 md:p-8 pb-32 animate-fade-in">
