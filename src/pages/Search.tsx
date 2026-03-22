@@ -296,7 +296,6 @@ const Search: React.FC = () => {
           </div>
         </div>
       )}
-      </div>
 
       {/* Loading */}
       {isLoading && (
