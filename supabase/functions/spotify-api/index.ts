@@ -297,6 +297,14 @@ serve(async (req) => {
                   const data = await deezerFetch(`/playlist/${pid}`);
                   return json((data?.tracks?.data || []).slice(0, limit).map((t: any) => mapDeezerTrack(t)));
                 }
+                // Alphanumeric = Spotify playlist
+                try {
+                  const plData = await spotifyFetchPlaylist(`/playlists/${pid}?market=${mkt}`);
+                  const items = (plData?.tracks?.items || []).filter((i: any) => i?.track).slice(0, limit);
+                  return json(items.map((i: any) => mapSpotifyTrack(i.track)));
+                } catch (spotifyErr) {
+                  console.warn('Spotify chart fetch failed, falling back to Deezer:', spotifyErr);
+                }
               }
             }
           } catch (e) {
