@@ -8,7 +8,7 @@ import { usePlaylists } from '@/hooks/usePlaylists';
 import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getPopularArtists, getArtist, searchArtists } from '@/lib/spotify';
-import { supabase } from '@/integrations/supabase/client';
+
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import PlaylistCard from '@/components/PlaylistCard';
