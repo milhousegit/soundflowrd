@@ -1007,7 +1007,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (isHybridMode) {
         const chainOrder: FallbackSourceId[] = hybridFallbackChain.length > 0 
           ? hybridFallbackChain 
-          : ['real-debrid', 'squidwtf', 'hifi', 'monochrome'];
+          : ['real-debrid', 'monochrome', 'hifi'];
         addDebugLog('👑 Modalità Ibrida', `Ordine: ${chainOrder.join(' → ')}`, 'info');
         
         const triedSources = new Set<string>();
