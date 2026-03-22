@@ -77,7 +77,7 @@ export interface DebugLogEntry {
 }
 
 export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading' | 'unavailable';
-export type AudioSource = 'squidwtf' | 'monochrome' | 'real-debrid' | 'offline' | null;
+export type AudioSource = 'monochrome' | 'real-debrid' | 'offline' | null;
 
 export interface PlaybackSource {
   type: 'playlist' | 'album' | 'artist' | 'radio' | 'search' | 'queue' | null;
