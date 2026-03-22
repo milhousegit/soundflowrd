@@ -1107,6 +1107,7 @@ export type Database = {
           artist_image_url: string | null
           artist_name: string
           created_at: string
+          genre: string | null
           id: string
           last_played_at: string | null
           total_plays: number
@@ -1119,6 +1120,7 @@ export type Database = {
           artist_image_url?: string | null
           artist_name: string
           created_at?: string
+          genre?: string | null
           id?: string
           last_played_at?: string | null
           total_plays?: number
@@ -1131,6 +1133,7 @@ export type Database = {
           artist_image_url?: string | null
           artist_name?: string
           created_at?: string
+          genre?: string | null
           id?: string
           last_played_at?: string | null
           total_plays?: number
