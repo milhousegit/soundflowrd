@@ -7,8 +7,8 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { usePlaylists } from '@/hooks/usePlaylists';
 import { useRecentlyPlayed } from '@/hooks/useRecentlyPlayed';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getPopularArtists, getArtist, searchArtists, getCountryChart, getTrendingChart } from '@/lib/spotify';
-import { supabase } from '@/integrations/supabase/client';
+import { getPopularArtists, getArtist, searchArtists } from '@/lib/spotify';
+
 import AlbumCard from '@/components/AlbumCard';
 import ArtistCard from '@/components/ArtistCard';
 import PlaylistCard from '@/components/PlaylistCard';
@@ -185,32 +185,21 @@ const Home: React.FC = () => {
   // recentTracks now comes from useRecentlyPlayed hook (synced with database)
 
 
-  // Fetch trending chart albums
+  // Fetch trending albums from server cache
   useEffect(() => {
     const fetchTrending = async () => {
       setIsLoadingTrending(true);
       try {
-        if (geoCountry) {
-          // Use country-specific chart
-          const tracks = await getCountryChart(geoCountry);
-          // Convert tracks to album-like cards (use unique albums from tracks)
-          const albumMap = new Map<string, Album>();
-          for (const track of tracks) {
-            if (track.albumId && !albumMap.has(track.albumId)) {
-              albumMap.set(track.albumId, {
-                id: track.albumId,
-                title: track.album || track.title,
-                artist: track.artist,
-                artistId: track.artistId,
-                coverUrl: track.coverUrl,
-              });
-            }
-          }
-          setTrendingAlbums(Array.from(albumMap.values()).slice(0, 12));
+        const targetCountry = geoCountry || 'IT';
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-content?type=trending&country=${targetCountry}&language=${settings.language}`
+        );
+        if (res.ok) {
+          const result = await res.json();
+          setTrendingAlbums((result.data || []).slice(0, 12));
         } else {
-          // Fallback to global chart
-          const chart = await getTrendingChart();
-          setTrendingAlbums(chart.albums.slice(0, 12));
+          console.error('Failed to fetch trending:', res.status);
+          setTrendingAlbums([]);
         }
       } catch (error) {
         console.error('Failed to fetch trending:', error);
@@ -220,7 +209,7 @@ const Home: React.FC = () => {
       }
     };
     fetchTrending();
-  }, [geoCountry]);
+  }, [geoCountry, settings.language]);
 
   useEffect(() => {
     const fetchArtistsForYou = async () => {
@@ -291,70 +280,40 @@ const Home: React.FC = () => {
     fetchArtistsForYou();
   }, [favorites.length]);
 
-  // Fetch chart configurations and their display data
+  // Fetch chart configurations from server cache
   useEffect(() => {
     const fetchChartConfigs = async () => {
       setIsLoadingCharts(true);
       try {
-        const { data, error } = await supabase
-          .from('chart_configurations')
-          .select('*')
-          .order('country_code');
-        
-        if (error) throw error;
-        const configs = data || [];
-        setChartConfigs(configs);
-        
-        // Fetch display data for each chart
-        const displayData: Record<string, ChartDisplayData> = {};
-        
-        for (const chart of configs) {
-          const playlistId = chart.playlist_id;
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/home-content?type=charts&country=${geoCountry || 'IT'}&language=${settings.language}`
+        );
+        if (res.ok) {
+          const result = await res.json();
+          const chartsData = result.data || [];
           
-          if (playlistId.startsWith('sf:')) {
-            // SoundFlow playlist - get from DB
-            const sfId = playlistId.replace('sf:', '');
-            const [playlistResult, tracksResult] = await Promise.all([
-              supabase.from('playlists').select('cover_url').eq('id', sfId).single(),
-              supabase.from('playlist_tracks').select('id', { count: 'exact' }).eq('playlist_id', sfId)
-            ]);
-            
+          // Split into configs and display data
+          const configs: ChartConfig[] = [];
+          const displayData: Record<string, ChartDisplayData> = {};
+          
+          for (const chart of chartsData) {
+            configs.push({
+              id: chart.id,
+              country_code: chart.country_code,
+              playlist_id: chart.playlist_id,
+              playlist_title: chart.playlist_title,
+            });
             displayData[chart.id] = {
-              coverUrl: playlistResult.data?.cover_url || null,
-              trackCount: tracksResult.count || 0
+              coverUrl: chart.coverUrl || null,
+              trackCount: chart.trackCount || 0,
             };
-          } else {
-            // Deezer numeric or Spotify alphanumeric - fetch via API
-            try {
-              const response = await fetch(
-                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/spotify-api`,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'get-playlist', id: playlistId })
-                }
-              );
-              if (response.ok) {
-                const playlist = await response.json();
-                if (playlist && !playlist.error) {
-                  displayData[chart.id] = {
-                    coverUrl: playlist.coverUrl || null,
-                    trackCount: playlist.trackCount || playlist.tracks?.length || 0
-                  };
-                } else {
-                  displayData[chart.id] = { coverUrl: null, trackCount: 0 };
-                }
-              } else {
-                displayData[chart.id] = { coverUrl: null, trackCount: 0 };
-              }
-            } catch (e) {
-              console.error('Error fetching chart:', e);
-              displayData[chart.id] = { coverUrl: null, trackCount: 0 };
-            }
           }
+          
+          setChartConfigs(configs);
+          setChartDisplayData(displayData);
+        } else {
+          console.error('Failed to fetch charts:', res.status);
         }
-        
-        setChartDisplayData(displayData);
       } catch (error) {
         console.error('Failed to fetch chart configurations:', error);
       } finally {
@@ -363,7 +322,7 @@ const Home: React.FC = () => {
     };
 
     fetchChartConfigs();
-  }, []);
+  }, [geoCountry, settings.language]);
 
   // Navigate to chart playlist
   const handleOpenChart = (chart: ChartConfig) => {

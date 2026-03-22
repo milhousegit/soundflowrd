@@ -72,21 +72,89 @@ serve(async (req) => {
       }
     }
 
-    let data: any[] = [];
+    let data: any = [];
 
     if (contentType === 'popular_artists') {
       console.log('Fetching popular artists via spotify-api...');
       data = await callSpotifyApi('get-popular-artists', { limit: 10, market: country });
-      console.log(`Got ${(data || []).length} artists`);
       data = data || [];
     } else if (contentType === 'new_releases') {
       console.log('Fetching new releases via spotify-api...');
       data = await callSpotifyApi('get-new-releases', { limit: 10, market: country });
-      console.log(`Got ${(data || []).length} releases`);
       data = data || [];
+    } else if (contentType === 'trending') {
+      // Fetch trending chart for a specific country
+      console.log(`Fetching trending for country=${country}...`);
+      const tracks = await callSpotifyApi('get-country-chart', { country, limit: 30 });
+      // Extract unique albums from tracks
+      const albumMap: Record<string, any> = {};
+      for (const track of (tracks || [])) {
+        if (track.albumId && !albumMap[track.albumId]) {
+          albumMap[track.albumId] = {
+            id: track.albumId,
+            title: track.album || track.title,
+            artist: track.artist,
+            artistId: track.artistId,
+            coverUrl: track.coverUrl,
+          };
+        }
+      }
+      data = Object.values(albumMap).slice(0, 12);
+      console.log(`Got ${data.length} trending albums`);
+    } else if (contentType === 'charts') {
+      // Fetch all chart configurations and resolve each one
+      console.log('Fetching all chart configurations...');
+      const { data: configs, error: cfgErr } = await supabase
+        .from('chart_configurations')
+        .select('*')
+        .order('country_code');
+      
+      if (cfgErr) throw cfgErr;
+
+      const chartsData: any[] = [];
+
+      for (const config of (configs || [])) {
+        const playlistId = config.playlist_id;
+        let coverUrl: string | null = null;
+        let trackCount = 0;
+
+        if (playlistId.startsWith('sf:')) {
+          const sfId = playlistId.replace('sf:', '');
+          const [plRes, trRes] = await Promise.all([
+            supabase.from('playlists').select('cover_url').eq('id', sfId).single(),
+            supabase.from('playlist_tracks').select('id', { count: 'exact' }).eq('playlist_id', sfId)
+          ]);
+          coverUrl = plRes.data?.cover_url || null;
+          trackCount = trRes.count || 0;
+        } else {
+          // Fetch playlist metadata via spotify-api
+          try {
+            const playlist = await callSpotifyApi('get-playlist', { id: playlistId });
+            if (playlist && !playlist.error) {
+              coverUrl = playlist.coverUrl || null;
+              trackCount = playlist.trackCount || playlist.tracks?.length || 0;
+            }
+          } catch (e) {
+            console.error(`Error fetching chart playlist ${playlistId}:`, e);
+          }
+        }
+
+        chartsData.push({
+          id: config.id,
+          country_code: config.country_code,
+          playlist_id: config.playlist_id,
+          playlist_title: config.playlist_title,
+          coverUrl,
+          trackCount,
+        });
+      }
+
+      data = chartsData;
+      console.log(`Got ${data.length} chart entries`);
     }
 
-    if (data.length > 0) {
+    const dataArray = Array.isArray(data) ? data : [data];
+    if (dataArray.length > 0) {
       await supabase
         .from('home_content_cache')
         .upsert({
