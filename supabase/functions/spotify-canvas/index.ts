@@ -191,8 +191,13 @@ Deno.serve(async (req) => {
     const batch = tracks.slice(0, 10);
     console.log(`Processing ${batch.length} tracks for canvas...`);
 
-    const token = await getSpotifyAnonToken();
-    console.log(`[Canvas] Anon token obtained: ${token ? 'yes (' + token.substring(0, 20) + '...)' : 'NO'}`);
+    // Try anon token first, fall back to client credentials
+    let token = await getSpotifyAnonToken();
+    console.log(`[Canvas] Anon token: ${token ? 'yes' : 'NO'}`);
+    if (!token) {
+      token = await getSpotifyClientToken();
+      console.log(`[Canvas] Client token fallback: ${token ? 'yes' : 'NO'}`);
+    }
     if (!token) {
       return new Response(
         JSON.stringify({ error: 'Failed to get Spotify token' }),
