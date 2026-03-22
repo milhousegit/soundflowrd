@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Search as SearchIcon, X, Music, Clock, History, Trash2, User } from 'lucide-react';
+import { Search as SearchIcon, X, Music, Clock, History, Trash2, User, ArrowLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
@@ -9,13 +9,15 @@ import UserCard from '@/components/social/UserCard';
 import TapArea from '@/components/TapArea';
 import SearchResultsSkeleton from '@/components/skeletons/SearchResultsSkeleton';
 import { useSettings } from '@/contexts/SettingsContext';
-import { searchAll, searchPlaylists, DeezerPlaylist } from '@/lib/spotify';
+import { searchAll, searchPlaylists, DeezerPlaylist, getArtist, getArtistTopTracks } from '@/lib/spotify';
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserSearch } from '@/hooks/useUserSearch';
 import { SocialProfile } from '@/hooks/useSocialProfile';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 import genrePop from '@/assets/genres/pop.jpg';
 import genreHiphop from '@/assets/genres/hiphop.jpg';
@@ -53,11 +55,18 @@ interface RecentItem {
 const Search: React.FC = () => {
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
+  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [genreResults, setGenreResults] = useState<{
+    artists: Artist[];
+    tracks: Track[];
+    playlists: DeezerPlaylist[];
+  } | null>(null);
   const [results, setResults] = useState<{
     artists: Artist[];
     albums: Album[];
@@ -229,8 +238,179 @@ const Search: React.FC = () => {
 
   const debouncedSearch = useDebounce(performSearch, 500);
 
+  // Genre normalization helper (mirrors edge function logic)
+  const normalizeGenreForMatch = (genre: string): string => {
+    const g = genre.toLowerCase().trim();
+    if (g.includes('rap') || g.includes('hip hop') || g.includes('hip-hop') || g.includes('trap')) return 'hip-hop/rap';
+    if (g.includes('pop') && !g.includes('k-pop')) return 'pop';
+    if (g.includes('k-pop') || g.includes('kpop')) return 'k-pop';
+    if (g.includes('rock') || g.includes('punk') || g.includes('metal')) return 'rock';
+    if (g.includes('electro') || g.includes('dance') || g.includes('edm') || g.includes('house') || g.includes('techno')) return 'electronic';
+    if (g.includes('r&b') || g.includes('rnb') || g.includes('soul')) return 'r&b';
+    if (g.includes('jazz')) return 'jazz';
+    if (g.includes('classical') || g.includes('classica')) return 'classical';
+    if (g.includes('reggaeton') || g.includes('latin') || g.includes('latino')) return 'latin';
+    if (g.includes('indie') || g.includes('alternative')) return 'indie/alternative';
+    if (g.includes('country')) return 'country';
+    return g;
+  };
+
+  // Personalized genre search
+  const performGenreSearch = useCallback(async (genreName: string) => {
+    if (!user) {
+      // Fallback to normal search if not logged in
+      handleQueryChange(genreName);
+      return;
+    }
+
+    setSelectedGenre(genreName);
+    setResults(null);
+    setGenreResults(null);
+    setIsLoading(true);
+    setQuery('');
+
+    const targetGenre = normalizeGenreForMatch(genreName);
+
+    try {
+      // Fetch user's artist stats + genre cache + playlists in parallel
+      const [artistStatsRes, genreCacheRes, playlistsRes, favArtistsRes] = await Promise.all([
+        supabase
+          .from('user_artist_stats')
+          .select('artist_id, artist_name, total_plays, artist_image_url')
+          .eq('user_id', user.id)
+          .order('total_plays', { ascending: false })
+          .limit(100),
+        supabase
+          .from('artist_genres_cache')
+          .select('artist_id, artist_name, genres, image_url'),
+        searchPlaylists(genreName).catch(() => []),
+        supabase
+          .from('favorites')
+          .select('item_id, item_title, item_cover_url')
+          .eq('user_id', user.id)
+          .eq('item_type', 'artist'),
+      ]);
+
+      const artistStats = artistStatsRes.data || [];
+      const genreCache = genreCacheRes.data || [];
+      const favArtists = favArtistsRes.data || [];
+
+      // Build genre lookup: artist_id -> genres
+      const genreMap = new Map<string, string[]>();
+      for (const g of genreCache) {
+        genreMap.set(g.artist_id, g.genres || []);
+      }
+
+      // Find user's artists that match the genre
+      const matchingArtists: { id: string; name: string; plays: number; imageUrl?: string }[] = [];
+      const matchedIds = new Set<string>();
+
+      for (const stat of artistStats) {
+        const genres = genreMap.get(stat.artist_id) || [];
+        const matches = genres.some(g => normalizeGenreForMatch(g) === targetGenre);
+        if (matches && !matchedIds.has(stat.artist_id)) {
+          matchedIds.add(stat.artist_id);
+          matchingArtists.push({
+            id: stat.artist_id,
+            name: stat.artist_name,
+            plays: stat.total_plays,
+            imageUrl: stat.artist_image_url || undefined,
+          });
+        }
+      }
+
+      // Also check favorited artists
+      for (const fav of favArtists) {
+        if (matchedIds.has(fav.item_id)) continue;
+        const genres = genreMap.get(fav.item_id) || [];
+        const matches = genres.some(g => normalizeGenreForMatch(g) === targetGenre);
+        if (matches) {
+          matchedIds.add(fav.item_id);
+          matchingArtists.push({
+            id: fav.item_id,
+            name: fav.item_title,
+            plays: 0,
+            imageUrl: fav.item_cover_url || undefined,
+          });
+        }
+      }
+
+      // Sort by play count
+      matchingArtists.sort((a, b) => b.plays - a.plays);
+      const topMatches = matchingArtists.slice(0, 12);
+
+      // Convert to Artist objects and fetch top tracks in parallel
+      const artistObjects: Artist[] = [];
+      const allTracks: Track[] = [];
+      const seenTrackIds = new Set<string>();
+
+      // Fetch artist details + top tracks for top matches
+      const fetchPromises = topMatches.slice(0, 8).map(async (ma) => {
+        try {
+          const [artistData, tracks] = await Promise.all([
+            getArtist(ma.id, ma.name).catch(() => null),
+            getArtistTopTracks(ma.id, ma.name).catch(() => []),
+          ]);
+          return { artistData, tracks, ma };
+        } catch {
+          return { artistData: null, tracks: [], ma };
+        }
+      });
+
+      const fetchResults = await Promise.all(fetchPromises);
+
+      for (const { artistData, tracks, ma } of fetchResults) {
+        if (artistData) {
+          artistObjects.push({
+            id: artistData.id,
+            name: artistData.name,
+            imageUrl: artistData.imageUrl || ma.imageUrl || '',
+          });
+        } else {
+          artistObjects.push({
+            id: ma.id,
+            name: ma.name,
+            imageUrl: ma.imageUrl || '',
+          });
+        }
+
+        for (const track of tracks.slice(0, 5)) {
+          if (!seenTrackIds.has(track.id)) {
+            seenTrackIds.add(track.id);
+            allTracks.push(track);
+          }
+        }
+      }
+
+      // Shuffle tracks slightly to mix artists
+      for (let j = allTracks.length - 1; j > 0; j--) {
+        if (Math.random() < 0.3) {
+          const k = Math.floor(Math.random() * (j + 1));
+          [allTracks[j], allTracks[k]] = [allTracks[k], allTracks[j]];
+        }
+      }
+
+      setGenreResults({
+        artists: artistObjects,
+        tracks: allTracks.slice(0, 20),
+        playlists: playlistsRes,
+      });
+    } catch (error) {
+      console.error('Genre search error:', error);
+      setGenreResults({ artists: [], tracks: [], playlists: [] });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  const clearGenreMode = useCallback(() => {
+    setSelectedGenre(null);
+    setGenreResults(null);
+  }, []);
+
   const handleQueryChange = (value: string) => {
     setQuery(value);
+    if (selectedGenre) clearGenreMode();
     // Trim trailing spaces before searching
     const trimmedValue = value.trimEnd();
     if (trimmedValue) {
@@ -271,8 +451,8 @@ const Search: React.FC = () => {
     };
   }, [saveRecentItem]);
 
-  const showRecentSection = isFocused && !query && !results && !isLoading;
-  const showGenres = !isFocused && !query && !results && !isLoading;
+  const showRecentSection = isFocused && !query && !results && !isLoading && !selectedGenre;
+  const showGenres = !isFocused && !query && !results && !isLoading && !selectedGenre;
 
   return (
     <div className="p-4 md:p-8 pb-32 animate-fade-in">
@@ -562,6 +742,106 @@ const Search: React.FC = () => {
         </div>
       )}
 
+      {/* Genre personalized results */}
+      {selectedGenre && !isLoading && genreResults && (
+        <div className="space-y-8 md:space-y-10">
+          {/* Genre header */}
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={clearGenreMode} className="shrink-0">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold text-foreground">{selectedGenre}</h1>
+              <p className="text-sm text-muted-foreground">
+                {settings.language === 'it' ? 'Personalizzato per te' : 'Personalized for you'}
+              </p>
+            </div>
+          </div>
+
+          {/* Genre Artists */}
+          {genreResults.artists.length > 0 && (
+            <section>
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">
+                {settings.language === 'it' ? 'I tuoi artisti' : 'Your artists'}
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+                {genreResults.artists.slice(0, 12).map((artist) => (
+                  <div key={artist.id} onClick={() => saveRecentItem({ type: 'artist', id: artist.id, title: artist.name, coverUrl: artist.imageUrl })}>
+                    <ArtistCard artist={artist} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Genre Tracks */}
+          {genreResults.tracks.length > 0 && (
+            <section>
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">
+                {settings.language === 'it' ? 'Brani per te' : 'Tracks for you'}
+              </h2>
+              <div className="space-y-1">
+                {genreResults.tracks.map((track, index) => (
+                  <TrackCard key={track.id} track={track} queue={genreResults.tracks} index={index} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Genre Playlists (normal search) */}
+          {genreResults.playlists.length > 0 && (
+            <section>
+              <h2 className="text-lg md:text-xl font-bold text-foreground mb-3 md:mb-4">Playlist</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-6">
+                {genreResults.playlists.slice(0, 6).map((playlist) => (
+                  <TapArea
+                    key={playlist.id}
+                    onTap={() => {
+                      saveRecentItem({
+                        type: 'playlist',
+                        id: String(playlist.id),
+                        title: playlist.title,
+                        subtitle: `${playlist.trackCount} brani • ${playlist.creator}`,
+                        coverUrl: playlist.coverUrl,
+                      });
+                      if (playlist.isDeezerPlaylist === false) {
+                        navigate(`/app/playlist/${playlist.id}`);
+                      } else {
+                        navigate(`/app/soundflow-playlist/${playlist.id}`);
+                      }
+                    }}
+                    className="group cursor-pointer"
+                  >
+                    <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-2 relative">
+                      {playlist.coverUrl ? (
+                        <img src={playlist.coverUrl} alt={playlist.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Music className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-foreground truncate">{playlist.title}</p>
+                    <p className="text-xs text-muted-foreground">{playlist.trackCount} brani • {playlist.creator}</p>
+                  </TapArea>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Empty state */}
+          {genreResults.artists.length === 0 && genreResults.tracks.length === 0 && genreResults.playlists.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                {settings.language === 'it'
+                  ? 'Ascolta più musica di questo genere per ottenere suggerimenti personalizzati!'
+                  : 'Listen to more music in this genre to get personalized suggestions!'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Browse Genres (only when not focused) */}
       {showGenres && (
         <div>
@@ -570,7 +850,7 @@ const Search: React.FC = () => {
             {genres.map((genre) => (
               <TapArea
                 key={genre.name}
-                onTap={() => handleQueryChange(genre.name)}
+                onTap={() => performGenreSearch(genre.name)}
                 className={`relative aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
               >
                 <h3 className="absolute top-3 left-3 text-lg md:text-xl font-bold text-white z-10 drop-shadow-lg">{genre.name}</h3>
