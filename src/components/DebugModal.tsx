@@ -131,10 +131,12 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
 
 
     // Artist info state
-
-    // Artist info state
     const [artistInfo, setArtistInfo] = useState<{ name: string; imageUrl?: string; genres?: string[]; popularity?: number } | null>(null);
     const [artistInfoLoading, setArtistInfoLoading] = useState(false);
+
+    // Track tags state
+    const [trackTags, setTrackTags] = useState<{ name: string; count: number }[]>([]);
+    const [trackTagsLoading, setTrackTagsLoading] = useState(false);
 
     // Check if user has RD API key
     const hasRdKey = !!credentials?.realDebridApiKey;
