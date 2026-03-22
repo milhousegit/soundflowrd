@@ -185,7 +185,7 @@ const DesktopPlayerSidebar: React.FC = () => {
 
               {/* Gradient overlay — fades into card bg */}
               <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent pointer-events-none" />
-              <div className="absolute inset-0 bg-gradient-to-t from-card via-card/90 to-transparent pointer-events-none" style={{ top: '60%' }} />
+              <div className="absolute inset-0 bg-gradient-to-t from-card via-card/85 to-transparent pointer-events-none" style={{ top: '68%' }} />
 
               {/* Loading overlays */}
               {loadingPhase === 'searching' && (
