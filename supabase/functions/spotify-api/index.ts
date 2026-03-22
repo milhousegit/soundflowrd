@@ -67,6 +67,81 @@ async function spotifyFetchPlaylist(url: string, retries = 2): Promise<any> {
   throw new Error('Max retries exceeded');
 }
 
+// ======================== SPOTIFY GENRE CACHE ========================
+
+function getSupabaseServiceClient() {
+  return createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+}
+
+async function fetchSpotifyArtistGenres(artistName: string, deezerId: string): Promise<{ genres: string[]; popularity: number; spotifyId?: string; imageUrl?: string } | null> {
+  try {
+    // Check cache first
+    const sb = getSupabaseServiceClient();
+    const { data: cached } = await sb
+      .from('artist_genres_cache')
+      .select('genres, popularity, spotify_id, image_url')
+      .eq('artist_id', deezerId)
+      .maybeSingle();
+    
+    if (cached) {
+      console.log(`[Genres] Cache hit for ${artistName} (${deezerId})`);
+      return { genres: cached.genres || [], popularity: cached.popularity || 0, spotifyId: cached.spotify_id, imageUrl: cached.image_url };
+    }
+
+    // Search Spotify for artist by name
+    const token = await getSpotifyToken();
+    const searchRes = await fetch(`${SPOTIFY_API}/search?q=${encodeURIComponent(artistName)}&type=artist&limit=3`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    
+    if (!searchRes.ok) {
+      console.warn(`[Genres] Spotify search failed: ${searchRes.status}`);
+      return null;
+    }
+
+    const searchData = await searchRes.json();
+    const artists = searchData?.artists?.items || [];
+    
+    // Find best match (exact name match preferred)
+    const match = artists.find((a: any) => a.name.toLowerCase() === artistName.toLowerCase()) || artists[0];
+    if (!match) {
+      console.log(`[Genres] No Spotify match for ${artistName}`);
+      // Cache empty result to avoid repeated lookups
+      await sb.from('artist_genres_cache').upsert({
+        artist_id: deezerId, artist_name: artistName, genres: [], popularity: 0, updated_at: new Date().toISOString(),
+      }, { onConflict: 'artist_id' });
+      return null;
+    }
+
+    const result = {
+      genres: match.genres || [],
+      popularity: match.popularity || 0,
+      spotifyId: match.id,
+      imageUrl: match.images?.[0]?.url,
+    };
+
+    // Cache result
+    await sb.from('artist_genres_cache').upsert({
+      artist_id: deezerId,
+      artist_name: artistName,
+      genres: result.genres,
+      popularity: result.popularity,
+      spotify_id: result.spotifyId,
+      image_url: result.imageUrl,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'artist_id' });
+
+    console.log(`[Genres] Cached ${result.genres.length} genres for ${artistName}`);
+    return result;
+  } catch (err) {
+    console.warn(`[Genres] Error fetching genres for ${artistName}:`, err);
+    return null;
+  }
+}
+
 // ======================== DEEZER HELPERS ========================
 
 async function deezerFetch(path: string): Promise<any> {
