@@ -647,6 +647,9 @@ serve(async (req) => {
 
           const tracks = trackResults.filter(Boolean);
 
+          // Sort artists by popularity (nb_fan) descending
+          artists.sort((a: any, b: any) => (b.popularity || 0) - (a.popularity || 0));
+
           return json({ artists, tracks });
         } catch (err) {
           console.error('Genre browse error:', err);
