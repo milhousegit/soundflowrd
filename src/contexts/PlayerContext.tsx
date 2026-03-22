@@ -887,7 +887,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Helper function for scraping source fallback
       const playWithScrapingSource = async (sourceId: string): Promise<boolean> => {
         const tidalQuality = mapQualityToTidal(settings.audioQuality);
-        const sourceName = sourceId === 'monochrome' ? 'Monochrome' : sourceId === 'hifi' ? 'HiFi' : 'SquidWTF';
+        const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'HiFi';
         addDebugLog(`🎵 ${sourceName}`, `Ricerca "${enrichedTrack.title}" di ${enrichedTrack.artist} (${tidalQuality})`, 'info');
         try {
           const streamFn = sourceId === 'monochrome' ? getMonochromeStream : sourceId === 'hifi' ? getHifiStream : getTidalStream;
