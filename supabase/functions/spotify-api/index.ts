@@ -115,25 +115,11 @@ async function fetchSpotifyArtistGenres(artistName: string, deezerId: string): P
       return null;
     }
 
-    // Fetch full artist profile to get genres + popularity
-    const artistUrl = `${SPOTIFY_API}/artists/${searchMatch.id}`;
-    console.log(`[Genres] Fetching full artist: ${artistUrl}`);
-    const artistRes = await fetch(artistUrl, {
+    // Fetch full artist profile for popularity + images
+    const artistRes = await fetch(`${SPOTIFY_API}/artists/${searchMatch.id}`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
-    console.log(`[Genres] Artist response: ${artistRes.status}`);
-    
-    let match;
-    if (artistRes.ok) {
-      const body = await artistRes.json();
-      console.log(`[Genres] Artist body keys: ${Object.keys(body).join(', ')}`);
-      console.log(`[Genres] Artist genres: ${JSON.stringify(body.genres)}, popularity: ${body.popularity}`);
-      match = body;
-    } else {
-      const errText = await artistRes.text().catch(() => '');
-      console.warn(`[Genres] Artist fetch failed: ${artistRes.status} ${errText.slice(0, 200)}`);
-      match = searchMatch;
-    }
+    const match = artistRes.ok ? await artistRes.json() : searchMatch;
 
     const result = {
       genres: match.genres || [],
