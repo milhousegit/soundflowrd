@@ -116,12 +116,24 @@ async function fetchSpotifyArtistGenres(artistName: string, deezerId: string): P
     }
 
     // Fetch full artist profile to get genres + popularity
-    const artistRes = await fetch(`${SPOTIFY_API}/artists/${searchMatch.id}`, {
+    const artistUrl = `${SPOTIFY_API}/artists/${searchMatch.id}`;
+    console.log(`[Genres] Fetching full artist: ${artistUrl}`);
+    const artistRes = await fetch(artistUrl, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
+    console.log(`[Genres] Artist response: ${artistRes.status}`);
     
-    const match = artistRes.ok ? await artistRes.json() : searchMatch;
-    console.log(`[Genres] Spotify artist ${match.name}: genres=${JSON.stringify(match.genres)}, popularity=${match.popularity}`);
+    let match;
+    if (artistRes.ok) {
+      const body = await artistRes.json();
+      console.log(`[Genres] Artist body keys: ${Object.keys(body).join(', ')}`);
+      console.log(`[Genres] Artist genres: ${JSON.stringify(body.genres)}, popularity: ${body.popularity}`);
+      match = body;
+    } else {
+      const errText = await artistRes.text().catch(() => '');
+      console.warn(`[Genres] Artist fetch failed: ${artistRes.status} ${errText.slice(0, 200)}`);
+      match = searchMatch;
+    }
 
     const result = {
       genres: match.genres || [],
