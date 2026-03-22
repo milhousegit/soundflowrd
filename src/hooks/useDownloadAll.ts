@@ -43,8 +43,8 @@ export const useDownloadAll = () => {
         }
       }
 
-      // Fallback to squidwtf (Tidal)
-      const squidResponse = await fetch(`${baseUrl}/functions/v1/squidwtf`, {
+      // Fallback to monochrome (Tidal)
+      const monoResponse = await fetch(`${baseUrl}/functions/v1/monochrome`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -54,10 +54,10 @@ export const useDownloadAll = () => {
         }),
       });
 
-      if (squidResponse.ok) {
-        const squidData = await squidResponse.json();
-        if (squidData.streamUrl) {
-          const audioResponse = await fetch(squidData.streamUrl);
+      if (monoResponse.ok) {
+        const monoData = await monoResponse.json();
+        if (monoData.streamUrl) {
+          const audioResponse = await fetch(monoData.streamUrl);
           if (audioResponse.ok) {
             const blob = await audioResponse.blob();
             await saveTrackOffline(track, blob);

@@ -111,7 +111,7 @@ const DebugModal = forwardRef<HTMLDivElement, DebugModalProps>(
     const [selectingFiles, setSelectingFiles] = useState<Set<string>>(new Set());
     const [showDebugLogs, setShowDebugLogs] = useState(false);
     
-    // Scraping (Tidal/SquidWTF) state
+    // Scraping (Tidal/Monochrome) state
     const [scrapingResults, setScrapingResults] = useState<TidalResult[]>([]);
     const [scrapingLoading, setScrapingLoading] = useState(false);
     const [scrapingQuery, setScrapingQuery] = useState('');

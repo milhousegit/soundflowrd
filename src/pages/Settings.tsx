@@ -546,7 +546,7 @@ const Settings: React.FC = () => {
                         }
                       }
                     }}
-                    placeholder="https://tidal.squid.wtf o https://monochrome.tf/"
+                    placeholder="https://monochrome.tf/"
                     className="h-9 text-sm"
                   />
                 </div>
