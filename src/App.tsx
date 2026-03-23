@@ -36,6 +36,7 @@ import Playlist from "@/pages/Playlist";
 import SoundFlowPlaylist from "@/pages/SoundFlowPlaylist";
 import DailyMix from "@/pages/DailyMix";
 import NotFound from "./pages/NotFound";
+import ResetPassword from "./pages/ResetPassword";
 import TV from "./pages/TV";
 import { MobileRemotePage } from "./pages/TV";
 import { Loader2 } from "lucide-react";
