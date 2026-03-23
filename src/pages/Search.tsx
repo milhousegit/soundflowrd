@@ -524,9 +524,12 @@ const Search: React.FC = () => {
         }
       }
 
-      // International artists from Deezer genre chart (exclude personal ones)
+      // International artists from genre browse (exclude personal ones)
       const personalIds = new Set(personalArtistObjects.map(a => a.id));
-      const intlArtists = ((genreBrowseRes as any)?.artists || []).filter((a: Artist) => !personalIds.has(a.id));
+      const browseArtists = (genreBrowseRes as any)?.artists || [];
+      const browseTracks = (genreBrowseRes as any)?.tracks || [];
+      console.log(`[GenreSearch] Personal: ${personalArtistObjects.length}, Browse artists: ${browseArtists.length}, Browse tracks: ${browseTracks.length}`);
+      const intlArtists = browseArtists.filter((a: Artist) => !personalIds.has(a.id));
 
       // Combined artists: personal first, then international
       const combinedArtists = [...personalArtistObjects, ...intlArtists.slice(0, 12 - personalArtistObjects.length)];
