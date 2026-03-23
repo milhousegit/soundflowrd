@@ -120,6 +120,7 @@ const AppRoutes = () => {
         <Route path="remote" element={<MobileRemotePage />} />
       </Route>
       <Route path="/tv" element={<TV />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
