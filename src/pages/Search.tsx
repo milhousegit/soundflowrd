@@ -13,7 +13,7 @@ import { searchAll, searchPlaylists, DeezerPlaylist, getArtist, getArtistTopTrac
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useUserSearch } from '@/hooks/useUserSearch';
+import { useGeoLanguage } from '@/hooks/useGeoLanguage';
 import { SocialProfile } from '@/hooks/useSocialProfile';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
