@@ -68,6 +68,8 @@ const Search: React.FC = () => {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [dynamicGenres, setDynamicGenres] = useState<DynamicGenre[]>([]);
+  const [genresLoading, setGenresLoading] = useState(true);
   const [genreResults, setGenreResults] = useState<{
     artists: Artist[];
     tracks: Track[];
