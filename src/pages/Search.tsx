@@ -838,23 +838,30 @@ const Search: React.FC = () => {
       {showGenres && (
         <div>
           <h2 className="text-lg md:text-xl font-bold text-foreground mb-4 md:mb-6">{t('exploreByGenre')}</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-            {genres.map((genre) => (
-              <TapArea
-                key={genre.name}
-                onTap={() => performGenreSearch(genre.name)}
-                className={`relative aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
-              >
-                <h3 className="absolute top-3 left-3 text-lg md:text-xl font-bold text-white z-10 drop-shadow-lg">{genre.name}</h3>
-                <img
-                  src={genre.image}
-                  alt={genre.name}
-                  className="absolute bottom-[-4px] right-[-12px] w-[55%] aspect-square rounded-md rotate-[25deg] shadow-xl object-cover"
-                  loading="lazy"
-                />
-              </TapArea>
-            ))}
-          </div>
+          {genresLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="aspect-[2/1] rounded-xl bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+              {dynamicGenres.map((genre) => (
+                <TapArea
+                  key={genre.name}
+                  onTap={() => performGenreSearch(genre.name)}
+                  className={`relative aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
+                >
+                  <h3 className="absolute top-3 left-3 text-lg md:text-xl font-bold text-white z-10 drop-shadow-lg">{genre.name}</h3>
+                  {genre.isPersonal && (
+                    <div className="absolute top-2 right-2 bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 z-10">
+                      <span className="text-[10px] font-medium text-white">Per te</span>
+                    </div>
+                  )}
+                </TapArea>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
