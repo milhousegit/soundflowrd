@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Search as SearchIcon, X, Music, Clock, History, Trash2, User, ArrowLeft } from 'lucide-react';
+import { Search as SearchIcon, X, Music, Clock, History, Trash2, User, ArrowLeft, Heart } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import TrackCard from '@/components/TrackCard';
