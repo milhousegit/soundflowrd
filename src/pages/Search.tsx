@@ -213,7 +213,7 @@ const Search: React.FC = () => {
     };
     loadGenres();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, geoCountry]);
 
 
   useEffect(() => {
