@@ -17,24 +17,39 @@ const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for recovery event from the auth state change
+    let mounted = true;
+
+    // Listen for PASSWORD_RECOVERY event
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (!mounted) return;
       if (event === 'PASSWORD_RECOVERY') {
         setIsRecovery(true);
+        setChecking(false);
       }
-      setChecking(false);
     });
 
     // Also check hash params for type=recovery
     const hash = window.location.hash;
     if (hash.includes('type=recovery')) {
       setIsRecovery(true);
+      setChecking(false);
     }
+
+    // If we're on this page and have an active session, assume recovery
+    // (the user got here via the email link which auto-logs them in)
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (mounted && session) {
+        setIsRecovery(true);
+      }
+      if (mounted) setChecking(false);
+    };
     
-    // Timeout fallback
-    const timeout = setTimeout(() => setChecking(false), 2000);
+    // Small delay to let onAuthStateChange fire first
+    const timeout = setTimeout(checkSession, 500);
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
       clearTimeout(timeout);
     };
