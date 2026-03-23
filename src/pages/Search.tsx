@@ -1010,8 +1010,8 @@ const Search: React.FC = () => {
                 >
                   <h3 className="absolute top-3 left-3 text-lg md:text-xl font-bold text-white z-10 drop-shadow-lg">{genre.name}</h3>
                   {genre.isPersonal && (
-                    <div className="absolute top-2 right-2 bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 z-10">
-                      <span className="text-[10px] font-medium text-white">Per te</span>
+                    <div className="absolute top-2 right-2 bg-white/20 backdrop-blur-sm rounded-full p-1 z-10">
+                      <Heart className="w-3 h-3 text-white fill-white" />
                     </div>
                   )}
                 </TapArea>
