@@ -19,25 +19,31 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
-import genrePop from '@/assets/genres/pop.jpg';
-import genreHiphop from '@/assets/genres/hiphop.jpg';
-import genreRock from '@/assets/genres/rock.jpg';
-import genreElectronic from '@/assets/genres/electronic.jpg';
-import genreRnb from '@/assets/genres/rnb.jpg';
-import genreJazz from '@/assets/genres/jazz.jpg';
-import genreClassical from '@/assets/genres/classical.jpg';
-import genreCountry from '@/assets/genres/country.jpg';
-
-const genres = [
-  { name: 'Pop', color: 'from-pink-500 to-rose-500', image: genrePop },
-  { name: 'Hip-Hop', color: 'from-orange-500 to-amber-500', image: genreHiphop },
-  { name: 'Rock', color: 'from-red-500 to-rose-600', image: genreRock },
-  { name: 'Electronic', color: 'from-blue-500 to-cyan-500', image: genreElectronic },
-  { name: 'R&B', color: 'from-purple-500 to-violet-500', image: genreRnb },
-  { name: 'Jazz', color: 'from-amber-500 to-yellow-500', image: genreJazz },
-  { name: 'Classical', color: 'from-emerald-500 to-teal-500', image: genreClassical },
-  { name: 'Country', color: 'from-lime-500 to-green-500', image: genreCountry },
+// Genre color palette for dynamic genres
+const GENRE_COLORS = [
+  'from-pink-500 to-rose-500',
+  'from-orange-500 to-amber-500',
+  'from-red-500 to-rose-600',
+  'from-blue-500 to-cyan-500',
+  'from-purple-500 to-violet-500',
+  'from-amber-500 to-yellow-500',
+  'from-emerald-500 to-teal-500',
+  'from-lime-500 to-green-500',
+  'from-indigo-500 to-blue-500',
+  'from-fuchsia-500 to-pink-500',
+  'from-cyan-500 to-teal-500',
+  'from-violet-500 to-purple-500',
+  'from-rose-500 to-red-500',
+  'from-sky-500 to-indigo-500',
+  'from-teal-500 to-emerald-500',
+  'from-yellow-500 to-orange-500',
 ];
+
+interface DynamicGenre {
+  name: string;
+  color: string;
+  isPersonal?: boolean;
+}
 
 const RECENT_SEARCHES_KEY = 'recentSearches';
 const RECENT_ITEMS_KEY = 'recentSearchItems';
@@ -62,6 +68,8 @@ const Search: React.FC = () => {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [dynamicGenres, setDynamicGenres] = useState<DynamicGenre[]>([]);
+  const [genresLoading, setGenresLoading] = useState(true);
   const [genreResults, setGenreResults] = useState<{
     artists: Artist[];
     tracks: Track[];
@@ -78,8 +86,123 @@ const Search: React.FC = () => {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const { users: searchedUsers, searchUsers, clearResults: clearUserResults } = useUserSearch();
+  // Load dynamic genres: personal from user stats + global from Last.fm
+  useEffect(() => {
+    let cancelled = false;
+    const loadGenres = async () => {
+      setGenresLoading(true);
+      try {
+        const personalGenres: DynamicGenre[] = [];
+        const addedNames = new Set<string>();
 
-  // Sync query from URL params (desktop top bar drives this)
+        // 1. Get personal genres from user's artist stats
+        if (user) {
+          const [statsRes, cacheRes] = await Promise.all([
+            supabase
+              .from('user_artist_stats')
+              .select('artist_id, total_plays')
+              .eq('user_id', user.id)
+              .order('total_plays', { ascending: false })
+              .limit(50),
+            supabase
+              .from('artist_genres_cache')
+              .select('artist_id, genres'),
+          ]);
+
+          const stats = statsRes.data || [];
+          const cache = cacheRes.data || [];
+          const genreMap = new Map<string, string[]>();
+          for (const c of cache) {
+            genreMap.set(c.artist_id, c.genres || []);
+          }
+
+          // Count genre frequency weighted by plays
+          const genreScores = new Map<string, number>();
+          for (const stat of stats) {
+            const genres = genreMap.get(stat.artist_id) || [];
+            for (const g of genres) {
+              const normalized = g.charAt(0).toUpperCase() + g.slice(1).toLowerCase();
+              if (normalized.length < 2) continue;
+              genreScores.set(normalized, (genreScores.get(normalized) || 0) + (stat.total_plays || 1));
+            }
+          }
+
+          // Pick top personal genres
+          const sorted = [...genreScores.entries()].sort((a, b) => b[1] - a[1]);
+          let colorIdx = 0;
+          for (const [name] of sorted) {
+            if (personalGenres.length >= 4) break;
+            const key = name.toLowerCase();
+            if (addedNames.has(key)) continue;
+            addedNames.add(key);
+            personalGenres.push({
+              name,
+              color: GENRE_COLORS[colorIdx % GENRE_COLORS.length],
+              isPersonal: true,
+            });
+            colorIdx++;
+          }
+        }
+
+        // 2. Fetch global top tags from Last.fm
+        let globalGenres: DynamicGenre[] = [];
+        try {
+          const { data } = await supabase.functions.invoke('spotify-api', {
+            body: { action: 'get-top-tags', limit: 30 },
+          });
+          const tags = data?.tags || [];
+          // Filter to meaningful genre tags
+          const skipTags = new Set(['seen live', 'favorites', 'favourite', 'albums i own', 'under 2000 listeners', 'spotify', 'love', 'beautiful', 'awesome', 'cool', 'chill', '00s', '90s', '80s', '70s', '60s']);
+          let colorIdx = personalGenres.length;
+          for (const tag of tags) {
+            if (globalGenres.length >= (16 - personalGenres.length)) break;
+            const name = tag.name.charAt(0).toUpperCase() + tag.name.slice(1);
+            const key = name.toLowerCase();
+            if (addedNames.has(key) || skipTags.has(key)) continue;
+            addedNames.add(key);
+            globalGenres.push({
+              name,
+              color: GENRE_COLORS[colorIdx % GENRE_COLORS.length],
+            });
+            colorIdx++;
+          }
+        } catch {
+          // Fallback to hardcoded if Last.fm fails
+          const fallback = ['Pop', 'Hip-Hop', 'Rock', 'Electronic', 'R&B', 'Jazz', 'Classical', 'Country'];
+          let colorIdx = personalGenres.length;
+          for (const name of fallback) {
+            const key = name.toLowerCase();
+            if (addedNames.has(key)) continue;
+            addedNames.add(key);
+            globalGenres.push({
+              name,
+              color: GENRE_COLORS[colorIdx % GENRE_COLORS.length],
+            });
+            colorIdx++;
+          }
+        }
+
+        if (!cancelled) {
+          setDynamicGenres([...personalGenres, ...globalGenres]);
+          setGenresLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setDynamicGenres([
+            { name: 'Pop', color: GENRE_COLORS[0] },
+            { name: 'Hip-Hop', color: GENRE_COLORS[1] },
+            { name: 'Rock', color: GENRE_COLORS[2] },
+            { name: 'Electronic', color: GENRE_COLORS[3] },
+          ]);
+          setGenresLoading(false);
+        }
+      }
+    };
+    loadGenres();
+    return () => { cancelled = true; };
+  }, [user]);
+
+
   useEffect(() => {
     const q = searchParams.get('q') || '';
     if (q !== query) {
@@ -830,23 +953,30 @@ const Search: React.FC = () => {
       {showGenres && (
         <div>
           <h2 className="text-lg md:text-xl font-bold text-foreground mb-4 md:mb-6">{t('exploreByGenre')}</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-            {genres.map((genre) => (
-              <TapArea
-                key={genre.name}
-                onTap={() => performGenreSearch(genre.name)}
-                className={`relative aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
-              >
-                <h3 className="absolute top-3 left-3 text-lg md:text-xl font-bold text-white z-10 drop-shadow-lg">{genre.name}</h3>
-                <img
-                  src={genre.image}
-                  alt={genre.name}
-                  className="absolute bottom-[-4px] right-[-12px] w-[55%] aspect-square rounded-md rotate-[25deg] shadow-xl object-cover"
-                  loading="lazy"
-                />
-              </TapArea>
-            ))}
-          </div>
+          {genresLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="aspect-[2/1] rounded-xl bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+              {dynamicGenres.map((genre) => (
+                <TapArea
+                  key={genre.name}
+                  onTap={() => performGenreSearch(genre.name)}
+                  className={`relative aspect-[2/1] rounded-xl bg-gradient-to-br ${genre.color} overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform touch-manipulation`}
+                >
+                  <h3 className="absolute top-3 left-3 text-lg md:text-xl font-bold text-white z-10 drop-shadow-lg">{genre.name}</h3>
+                  {genre.isPersonal && (
+                    <div className="absolute top-2 right-2 bg-white/20 backdrop-blur-sm rounded-full px-2 py-0.5 z-10">
+                      <span className="text-[10px] font-medium text-white">Per te</span>
+                    </div>
+                  )}
+                </TapArea>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

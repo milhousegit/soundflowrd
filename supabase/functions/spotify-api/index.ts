@@ -719,6 +719,26 @@ serve(async (req) => {
         }
       }
 
+      case 'get-top-tags': {
+        try {
+          const lastfmKey = Deno.env.get('LASTFM_API_KEY');
+          if (!lastfmKey) return json({ tags: [] });
+          const limit = body.limit || 50;
+          const res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=chart.gettoptags&api_key=${lastfmKey}&format=json&limit=${limit}`);
+          if (!res.ok) return json({ tags: [] });
+          const data = await res.json();
+          const tags = (data?.tags?.tag || []).map((t: any) => ({
+            name: t.name,
+            reach: parseInt(t.reach || '0', 10),
+            taggings: parseInt(t.taggings || '0', 10),
+          }));
+          return json({ tags });
+        } catch (err) {
+          console.error('get-top-tags error:', err);
+          return json({ tags: [] });
+        }
+      }
+
       default:
         return json({ error: `Unknown action: ${action}` });
     }
