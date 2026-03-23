@@ -19,25 +19,31 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
-import genrePop from '@/assets/genres/pop.jpg';
-import genreHiphop from '@/assets/genres/hiphop.jpg';
-import genreRock from '@/assets/genres/rock.jpg';
-import genreElectronic from '@/assets/genres/electronic.jpg';
-import genreRnb from '@/assets/genres/rnb.jpg';
-import genreJazz from '@/assets/genres/jazz.jpg';
-import genreClassical from '@/assets/genres/classical.jpg';
-import genreCountry from '@/assets/genres/country.jpg';
-
-const genres = [
-  { name: 'Pop', color: 'from-pink-500 to-rose-500', image: genrePop },
-  { name: 'Hip-Hop', color: 'from-orange-500 to-amber-500', image: genreHiphop },
-  { name: 'Rock', color: 'from-red-500 to-rose-600', image: genreRock },
-  { name: 'Electronic', color: 'from-blue-500 to-cyan-500', image: genreElectronic },
-  { name: 'R&B', color: 'from-purple-500 to-violet-500', image: genreRnb },
-  { name: 'Jazz', color: 'from-amber-500 to-yellow-500', image: genreJazz },
-  { name: 'Classical', color: 'from-emerald-500 to-teal-500', image: genreClassical },
-  { name: 'Country', color: 'from-lime-500 to-green-500', image: genreCountry },
+// Genre color palette for dynamic genres
+const GENRE_COLORS = [
+  'from-pink-500 to-rose-500',
+  'from-orange-500 to-amber-500',
+  'from-red-500 to-rose-600',
+  'from-blue-500 to-cyan-500',
+  'from-purple-500 to-violet-500',
+  'from-amber-500 to-yellow-500',
+  'from-emerald-500 to-teal-500',
+  'from-lime-500 to-green-500',
+  'from-indigo-500 to-blue-500',
+  'from-fuchsia-500 to-pink-500',
+  'from-cyan-500 to-teal-500',
+  'from-violet-500 to-purple-500',
+  'from-rose-500 to-red-500',
+  'from-sky-500 to-indigo-500',
+  'from-teal-500 to-emerald-500',
+  'from-yellow-500 to-orange-500',
 ];
+
+interface DynamicGenre {
+  name: string;
+  color: string;
+  isPersonal?: boolean;
+}
 
 const RECENT_SEARCHES_KEY = 'recentSearches';
 const RECENT_ITEMS_KEY = 'recentSearchItems';
