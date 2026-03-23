@@ -13,6 +13,7 @@ import { searchAll, searchPlaylists, DeezerPlaylist, getArtist, getArtistTopTrac
 import { Track, Album, Artist } from '@/types/music';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useGeoLanguage } from '@/hooks/useGeoLanguage';
 import { useUserSearch } from '@/hooks/useUserSearch';
 import { SocialProfile } from '@/hooks/useSocialProfile';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -62,6 +63,7 @@ const Search: React.FC = () => {
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  const { country: geoCountry } = useGeoLanguage();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -144,11 +146,22 @@ const Search: React.FC = () => {
           }
         }
 
-        // 2. Fetch global top tags from Last.fm
+        // 2. Fetch popular tags for user's country from Last.fm
         let globalGenres: DynamicGenre[] = [];
         try {
+          // Map country code to Last.fm country name
+          const countryNameMap: Record<string, string> = {
+            'IT': 'Italy', 'US': 'United States', 'GB': 'United Kingdom', 'DE': 'Germany',
+            'FR': 'France', 'ES': 'Spain', 'BR': 'Brazil', 'JP': 'Japan', 'KR': 'South Korea',
+            'CA': 'Canada', 'AU': 'Australia', 'MX': 'Mexico', 'AR': 'Argentina', 'NL': 'Netherlands',
+            'SE': 'Sweden', 'NO': 'Norway', 'PL': 'Poland', 'PT': 'Portugal', 'TR': 'Turkey',
+            'RU': 'Russia', 'IN': 'India', 'CH': 'Switzerland', 'AT': 'Austria', 'BE': 'Belgium',
+            'CL': 'Chile', 'CO': 'Colombia', 'DK': 'Denmark', 'FI': 'Finland', 'IE': 'Ireland',
+            'NZ': 'New Zealand', 'PH': 'Philippines', 'RO': 'Romania', 'ZA': 'South Africa',
+          };
+          const countryName = countryNameMap[geoCountry] || '';
           const { data } = await supabase.functions.invoke('spotify-api', {
-            body: { action: 'get-top-tags', limit: 30 },
+            body: { action: 'get-top-tags', limit: 30, country: countryName },
           });
           const tags = data?.tags || [];
           // Filter to meaningful genre tags
@@ -200,7 +213,7 @@ const Search: React.FC = () => {
     };
     loadGenres();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, geoCountry]);
 
 
   useEffect(() => {

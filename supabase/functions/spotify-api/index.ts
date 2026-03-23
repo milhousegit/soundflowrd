@@ -723,7 +723,54 @@ serve(async (req) => {
         try {
           const lastfmKey = Deno.env.get('LASTFM_API_KEY');
           if (!lastfmKey) return json({ tags: [] });
+          const country = body.country || '';
           const limit = body.limit || 50;
+
+          if (country) {
+            // Country-specific: get top artists for this country, then extract their genres
+            const geoRes = await fetch(`https://ws.audioscrobbler.com/2.0/?method=geo.gettopartists&country=${encodeURIComponent(country)}&api_key=${lastfmKey}&format=json&limit=100`);
+            if (!geoRes.ok) return json({ tags: [] });
+            const geoData = await geoRes.json();
+            const topArtists = geoData?.topartists?.artist || [];
+
+            // Get genres for each artist via tag.gettopartists cross-reference
+            const genreCount = new Map<string, number>();
+            const batchSize = 10;
+            for (let i = 0; i < Math.min(topArtists.length, 50); i += batchSize) {
+              const batch = topArtists.slice(i, i + batchSize);
+              const results = await Promise.all(batch.map(async (a: any) => {
+                try {
+                  const r = await fetch(`https://ws.audioscrobbler.com/2.0/?method=artist.gettoptags&artist=${encodeURIComponent(a.name)}&api_key=${lastfmKey}&format=json&limit=5`);
+                  if (!r.ok) return [];
+                  const d = await r.json();
+                  return (d?.toptags?.tag || []).slice(0, 3).map((t: any) => t.name?.toLowerCase());
+                } catch { return []; }
+              }));
+              for (const tags of results) {
+                for (const tag of tags) {
+                  if (tag && tag.length > 1) {
+                    genreCount.set(tag, (genreCount.get(tag) || 0) + 1);
+                  }
+                }
+              }
+            }
+
+            // Sort by frequency and return
+            const skipTags = new Set(['seen live', 'favorites', 'favourite', 'albums i own', 'under 2000 listeners', 'spotify', 'love', 'beautiful', 'awesome', 'cool', '00s', '90s', '80s', '70s', '60s']);
+            const sorted = [...genreCount.entries()]
+              .filter(([name]) => !skipTags.has(name))
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, limit);
+
+            const tags = sorted.map(([name, count]) => ({
+              name,
+              reach: count,
+              taggings: count,
+            }));
+            return json({ tags });
+          }
+
+          // Global fallback
           const res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=chart.gettoptags&api_key=${lastfmKey}&format=json&limit=${limit}`);
           if (!res.ok) return json({ tags: [] });
           const data = await res.json();
