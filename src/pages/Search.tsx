@@ -88,11 +88,35 @@ const Search: React.FC = () => {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const { users: searchedUsers, searchUsers, clearResults: clearUserResults } = useUserSearch();
-  // Load dynamic genres: personal from user stats + global from Last.fm
+  // Load dynamic genres: personal from user stats + country from Last.fm (cached 1 week)
   useEffect(() => {
     let cancelled = false;
+    const GENRE_CACHE_KEY = 'sf_genre_cache';
+    const GENRE_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
+
     const loadGenres = async () => {
       setGenresLoading(true);
+
+      // Check localStorage cache first
+      try {
+        const cached = localStorage.getItem(GENRE_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (
+            parsed.timestamp && (Date.now() - parsed.timestamp) < GENRE_CACHE_TTL &&
+            parsed.userId === (user?.id || null) &&
+            parsed.country === geoCountry &&
+            parsed.genres?.length > 0
+          ) {
+            if (!cancelled) {
+              setDynamicGenres(parsed.genres);
+              setGenresLoading(false);
+            }
+            return;
+          }
+        }
+      } catch { /* ignore corrupt cache */ }
+
       try {
         const personalGenres: DynamicGenre[] = [];
         const addedNames = new Set<string>();
@@ -118,7 +142,6 @@ const Search: React.FC = () => {
             genreMap.set(c.artist_id, c.genres || []);
           }
 
-          // Count genre frequency weighted by plays
           const genreScores = new Map<string, number>();
           for (const stat of stats) {
             const genres = genreMap.get(stat.artist_id) || [];
@@ -129,7 +152,6 @@ const Search: React.FC = () => {
             }
           }
 
-          // Pick top personal genres
           const sorted = [...genreScores.entries()].sort((a, b) => b[1] - a[1]);
           let colorIdx = 0;
           for (const [name] of sorted) {
@@ -149,7 +171,6 @@ const Search: React.FC = () => {
         // 2. Fetch popular tags for user's country from Last.fm
         let globalGenres: DynamicGenre[] = [];
         try {
-          // Map country code to Last.fm country name
           const countryNameMap: Record<string, string> = {
             'IT': 'Italy', 'US': 'United States', 'GB': 'United Kingdom', 'DE': 'Germany',
             'FR': 'France', 'ES': 'Spain', 'BR': 'Brazil', 'JP': 'Japan', 'KR': 'South Korea',
@@ -164,7 +185,6 @@ const Search: React.FC = () => {
             body: { action: 'get-top-tags', limit: 30, country: countryName },
           });
           const tags = data?.tags || [];
-          // Filter to meaningful genre tags
           const skipTags = new Set(['seen live', 'favorites', 'favourite', 'albums i own', 'under 2000 listeners', 'spotify', 'love', 'beautiful', 'awesome', 'cool', 'chill', '00s', '90s', '80s', '70s', '60s']);
           let colorIdx = personalGenres.length;
           for (const tag of tags) {
@@ -180,7 +200,6 @@ const Search: React.FC = () => {
             colorIdx++;
           }
         } catch {
-          // Fallback to hardcoded if Last.fm fails
           const fallback = ['Pop', 'Hip-Hop', 'Rock', 'Electronic', 'R&B', 'Jazz', 'Classical', 'Country'];
           let colorIdx = personalGenres.length;
           for (const name of fallback) {
@@ -195,9 +214,18 @@ const Search: React.FC = () => {
           }
         }
 
+        const allGenres = [...personalGenres, ...globalGenres];
         if (!cancelled) {
-          setDynamicGenres([...personalGenres, ...globalGenres]);
+          setDynamicGenres(allGenres);
           setGenresLoading(false);
+          try {
+            localStorage.setItem(GENRE_CACHE_KEY, JSON.stringify({
+              genres: allGenres,
+              timestamp: Date.now(),
+              userId: user?.id || null,
+              country: geoCountry,
+            }));
+          } catch { /* storage full */ }
         }
       } catch {
         if (!cancelled) {
