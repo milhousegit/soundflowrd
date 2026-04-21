@@ -112,6 +112,7 @@ const AppRoutes = () => {
         <Route path="settings" element={<Settings />} />
         <Route path="profile/:id" element={<UserProfile />} />
         <Route path="info" element={<Info />} />
+        <Route path="info/plugins" element={<PluginDocs />} />
         <Route path="artist/:id" element={<Artist />} />
         <Route path="album/:id" element={<Album />} />
         <Route path="playlist/:id" element={<Playlist />} />
