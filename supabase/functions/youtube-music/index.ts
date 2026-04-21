@@ -8,8 +8,21 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Public InnerTube key used by the Android Music client (well-known)
-const INNERTUBE_KEY = "AIzaSyAOghZGza2MQSZkY_zfZ370N-PUdXEo8AI";
+// Public InnerTube keys (well-known, embedded in the YouTube apps)
+const WEB_REMIX_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30";
+const ANDROID_MUSIC_KEY = "AIzaSyAOghZGza2MQSZkY_zfZ370N-PUdXEo8AI";
+
+// WEB_REMIX (YT Music web) → parsable JSON for search
+const WEB_REMIX_CONTEXT = {
+  client: {
+    clientName: "WEB_REMIX",
+    clientVersion: "1.20240101.01.00",
+    hl: "en",
+    gl: "US",
+  },
+};
+
+// ANDROID_MUSIC → returns playable URLs (no signature cipher) for /player
 const ANDROID_MUSIC_CONTEXT = {
   client: {
     clientName: "ANDROID_MUSIC",
@@ -23,13 +36,21 @@ const ANDROID_MUSIC_CONTEXT = {
   },
 };
 
-const COMMON_HEADERS: Record<string, string> = {
+const WEB_HEADERS: Record<string, string> = {
+  "Content-Type": "application/json",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Origin": "https://music.youtube.com",
+  "Referer": "https://music.youtube.com/",
+  "Accept-Encoding": "identity",
+};
+
+const ANDROID_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",
   "User-Agent":
     "com.google.android.apps.youtube.music/7.27.52 (Linux; U; Android 11) gzip",
   "X-Goog-Api-Format-Version": "1",
   "Accept-Language": "en-US,en;q=0.9",
-  // Force identity to bypass the Deno brotli bug
   "Accept-Encoding": "identity",
 };
 
