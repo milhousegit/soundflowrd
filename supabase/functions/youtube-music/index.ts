@@ -1,35 +1,58 @@
-// YouTube Music plugin endpoint for SoundFlow.
-// Uses youtubei.js (the same unofficial InnerTube client used by
-// the YouTube-Music-V2/youtube-music desktop app) to search YouTube Music
-// and resolve a direct audio stream URL (GoogleVideo CDN, decifrato).
-//
-// Plugin contract (SoundFlow):
-//   POST { action: "search-and-stream", title, artist, album?, quality? }
-//   -> { streamUrl, quality, mimeType, ... } | { error }
-//
-// Extra debug actions:
-//   POST { action: "search", title, artist }   -> { results: [...] }
-//   POST { action: "get-stream", videoId }     -> { streamUrl, ... }
+// YouTube Music plugin – calls the InnerTube API directly (no youtubei.js)
+// to avoid the Deno edge-runtime Brotli decompression bug.
 
-import { Innertube, UniversalCache } from "npm:youtubei.js@10.5.0";
-
-const corsHeaders = {
+const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Cache the Innertube client across invocations within the same isolate.
-let ytPromise: Promise<Innertube> | null = null;
-function getYT(): Promise<Innertube> {
-  if (!ytPromise) {
-    ytPromise = Innertube.create({
-      cache: new UniversalCache(false),
-      generate_session_locally: true,
-    });
-  }
-  return ytPromise;
-}
+// Public InnerTube keys (well-known, embedded in the YouTube apps)
+const WEB_REMIX_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30";
+const ANDROID_MUSIC_KEY = "AIzaSyAOghZGza2MQSZkY_zfZ370N-PUdXEo8AI";
+
+// WEB_REMIX (YT Music web) → parsable JSON for search
+const WEB_REMIX_CONTEXT = {
+  client: {
+    clientName: "WEB_REMIX",
+    clientVersion: "1.20240101.01.00",
+    hl: "en",
+    gl: "US",
+  },
+};
+
+// ANDROID_MUSIC → returns playable URLs (no signature cipher) for /player
+const ANDROID_MUSIC_CONTEXT = {
+  client: {
+    clientName: "ANDROID_MUSIC",
+    clientVersion: "7.27.52",
+    androidSdkVersion: 30,
+    osName: "Android",
+    osVersion: "11",
+    hl: "en",
+    gl: "US",
+    utcOffsetMinutes: 0,
+  },
+};
+
+const WEB_HEADERS: Record<string, string> = {
+  "Content-Type": "application/json",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Origin": "https://music.youtube.com",
+  "Referer": "https://music.youtube.com/",
+  "Accept-Encoding": "identity",
+};
+
+const ANDROID_HEADERS: Record<string, string> = {
+  "Content-Type": "application/json",
+  "User-Agent":
+    "com.google.android.apps.youtube.music/7.27.52 (Linux; U; Android 11) gzip",
+  "X-Goog-Api-Format-Version": "1",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Encoding": "identity",
+};
 
 interface YTSearchResult {
   videoId: string;
@@ -41,85 +64,170 @@ interface YTSearchResult {
 }
 
 function normalize(s: string): string {
-  return s
+  return (s || "")
     .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\(.*?\)|\[.*?\]/g, "")
+    .replace(/[^\w\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function scoreMatch(
-  query: { title: string; artist: string },
-  result: { title: string; artist: string },
+  q: { title: string; artist: string },
+  r: { title: string; artist: string },
 ): number {
-  const qt = normalize(query.title);
-  const qa = normalize(query.artist);
-  const rt = normalize(result.title);
-  const ra = normalize(result.artist);
+  const qt = normalize(q.title);
+  const qa = normalize(q.artist);
+  const rt = normalize(r.title);
+  const ra = normalize(r.artist);
   let score = 0;
-  if (rt === qt) score += 50;
-  else if (rt.includes(qt) || qt.includes(rt)) score += 25;
-  if (ra === qa) score += 50;
-  else if (ra.includes(qa) || qa.includes(ra)) score += 25;
-  // Penalize live / sped up / remix / cover unless the query asked for them
-  const noisy = /(live|sped\s?up|nightcore|cover|karaoke|instrumental|remix)/;
-  if (noisy.test(rt) && !noisy.test(qt)) score -= 30;
+  if (rt === qt) score += 100;
+  else if (rt.includes(qt) || qt.includes(rt)) score += 60;
+  if (ra === qa) score += 100;
+  else if (ra.includes(qa) || qa.includes(ra)) score += 60;
+  const lower = (rt + " " + ra).toLowerCase();
+  if (/(live|remix|sped\s?up|slowed|cover|karaoke|instrumental|nightcore)/.test(lower)) {
+    score -= 40;
+  }
   return score;
+}
+
+interface RawRun { text?: string }
+interface MusicResponsiveItem {
+  musicResponsiveListItemRenderer?: {
+    playlistItemData?: { videoId?: string };
+    flexColumns?: Array<{
+      musicResponsiveListItemFlexColumnRenderer?: {
+        text?: { runs?: RawRun[] };
+      };
+    }>;
+    thumbnail?: {
+      musicThumbnailRenderer?: {
+        thumbnail?: { thumbnails?: Array<{ url: string }> };
+      };
+    };
+  };
+}
+
+function parseDuration(s: string): number | undefined {
+  if (!s || !/^\d+(:\d+){1,2}$/.test(s)) return undefined;
+  const parts = s.split(":").map((x) => parseInt(x, 10));
+  let total = 0;
+  for (const p of parts) total = total * 60 + p;
+  return total;
 }
 
 async function searchYouTubeMusic(
   title: string,
   artist: string,
 ): Promise<YTSearchResult[]> {
-  const yt = await getYT();
   const query = `${title} ${artist}`.trim();
-  // Music.search returns YTMusic-shaped results (songs, videos, albums...).
-  const search = await yt.music.search(query, { type: "song" });
-
-  const out: YTSearchResult[] = [];
-  // Walk the contents — youtubei.js types are loose, we coerce defensively.
-  // deno-lint-ignore no-explicit-any
-  const songs: any[] =
-    // deno-lint-ignore no-explicit-any
-    (search?.songs as any)?.contents ??
-    // deno-lint-ignore no-explicit-any
-    (search?.contents as any) ??
-    [];
-
-  for (const item of songs) {
-    // deno-lint-ignore no-explicit-any
-    const it: any = item;
-    const videoId: string | undefined =
-      it?.id ?? it?.video_id ?? it?.endpoint?.payload?.videoId;
-    if (!videoId) continue;
-    const titleStr: string =
-      typeof it?.title === "string" ? it.title : it?.title?.text ?? "";
-    const artists =
-      it?.artists?.map?.((a: { name?: string }) => a?.name).filter(Boolean) ??
-      [];
-    const artistStr: string = artists.join(", ") ||
-      (typeof it?.author === "string" ? it.author : it?.author?.name ?? "");
-    const album: string | undefined = typeof it?.album === "string"
-      ? it.album
-      : it?.album?.name;
-    const duration: number | undefined = it?.duration?.seconds ??
-      (typeof it?.duration === "number" ? it.duration : undefined);
-    const thumbnail: string | undefined = it?.thumbnail?.contents?.[0]?.url ??
-      it?.thumbnails?.[0]?.url;
-
-    out.push({
-      videoId,
-      title: titleStr,
-      artist: artistStr,
-      album,
-      duration,
-      thumbnail,
-    });
-    if (out.length >= 10) break;
+  const body = {
+    context: WEB_REMIX_CONTEXT,
+    query,
+    // Filter: Songs only
+    params: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D",
+  };
+  const url =
+    `https://music.youtube.com/youtubei/v1/search?key=${WEB_REMIX_KEY}&prettyPrint=false`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: WEB_HEADERS,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`search failed ${res.status}: ${txt.slice(0, 200)}`);
   }
-  return out;
+  const data = await res.json();
+
+  const results: YTSearchResult[] = [];
+  const stack: unknown[] = [data];
+  const seen = new Set<string>();
+  while (stack.length) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object") continue;
+    const obj = cur as Record<string, unknown>;
+    if ("musicResponsiveListItemRenderer" in obj) {
+      const r = (obj as MusicResponsiveItem).musicResponsiveListItemRenderer;
+      const videoId = r?.playlistItemData?.videoId;
+      if (videoId && !seen.has(videoId)) {
+        seen.add(videoId);
+        const cols = r?.flexColumns ?? [];
+        const titleText =
+          cols[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]
+            ?.text ?? "";
+        const subRuns =
+          cols[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ?? [];
+        const subTexts = subRuns.map((x) => x.text ?? "").filter((t) =>
+          t && t !== " • " && t !== " · "
+        );
+        const artistName = subTexts[0] ?? "";
+        const album = subTexts[1] ?? undefined;
+        const durStr = subTexts[subTexts.length - 1] ?? "";
+        const duration = parseDuration(durStr);
+        const thumbs =
+          r?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails;
+        const thumbnail = thumbs?.[thumbs.length - 1]?.url;
+        results.push({
+          videoId,
+          title: titleText,
+          artist: artistName,
+          album,
+          duration,
+          thumbnail,
+        });
+      }
+    }
+    for (const v of Object.values(obj)) {
+      if (v && typeof v === "object") stack.push(v);
+    }
+  }
+  return results;
+}
+
+interface AdaptiveFormat {
+  itag: number;
+  url?: string;
+  signatureCipher?: string;
+  mimeType: string;
+  bitrate?: number;
+  audioSampleRate?: string;
+  contentLength?: string;
+  approxDurationMs?: string;
+}
+
+interface PlayerResponse {
+  playabilityStatus?: { status?: string; reason?: string };
+  streamingData?: {
+    adaptiveFormats?: AdaptiveFormat[];
+    formats?: AdaptiveFormat[];
+    expiresInSeconds?: string;
+  };
+}
+
+async function getPlayerResponse(videoId: string): Promise<PlayerResponse> {
+  const body = {
+    context: ANDROID_MUSIC_CONTEXT,
+    videoId,
+    playbackContext: {
+      contentPlaybackContext: { html5Preference: "HTML5_PREF_WANTS" },
+    },
+    contentCheckOk: true,
+    racyCheckOk: true,
+  };
+  const url =
+    `https://music.youtube.com/youtubei/v1/player?key=${ANDROID_MUSIC_KEY}&prettyPrint=false`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: ANDROID_HEADERS,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`player failed ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  return await res.json() as PlayerResponse;
 }
 
 interface StreamPick {
@@ -128,53 +236,47 @@ interface StreamPick {
   bitrate?: number;
   sampleRate?: number;
   itag?: number;
-  container?: string;
+  contentLength?: number;
 }
 
-async function getStreamForVideo(
-  videoId: string,
-  quality: "high" | "medium" | "low" | "lossless" = "high",
-): Promise<StreamPick> {
-  const yt = await getYT();
-  // Use ANDROID client — most reliable for unsigned audio URLs.
-  const info = await yt.getInfo(videoId, "ANDROID");
-
-  // Filter audio-only adaptive formats.
-  // deno-lint-ignore no-explicit-any
-  const adaptive: any[] = (info as any)?.streaming_data?.adaptive_formats ?? [];
-  const audio = adaptive.filter((f) =>
-    typeof f?.mime_type === "string" && f.mime_type.startsWith("audio/")
-  );
-  if (audio.length === 0) {
-    throw new Error("No audio formats available for this video");
+function pickAudioFormat(
+  player: PlayerResponse,
+  quality: "high" | "medium" | "low" | "lossless",
+): StreamPick {
+  const status = player.playabilityStatus?.status;
+  if (status && status !== "OK") {
+    throw new Error(
+      `playability=${status}: ${player.playabilityStatus?.reason ?? ""}`,
+    );
   }
-
-  // Sort by bitrate desc; pick by quality.
-  audio.sort((a, b) => (b?.bitrate ?? 0) - (a?.bitrate ?? 0));
-  const pickIndex = quality === "low"
-    ? audio.length - 1
-    : quality === "medium"
-    ? Math.floor(audio.length / 2)
-    : 0; // high / lossless -> best
-  const chosen = audio[pickIndex] ?? audio[0];
-
-  // Decipher / build playable URL.
-  // deno-lint-ignore no-explicit-any
-  const url = typeof (chosen as any)?.decipher === "function"
-    // deno-lint-ignore no-explicit-any
-    ? (chosen as any).decipher(yt.session.player)
-    // deno-lint-ignore no-explicit-any
-    : ((chosen as any)?.url as string);
-
-  if (!url) throw new Error("Failed to resolve audio URL");
+  const formats = [
+    ...(player.streamingData?.adaptiveFormats ?? []),
+    ...(player.streamingData?.formats ?? []),
+  ];
+  const audios = formats.filter((f) =>
+    f.mimeType?.startsWith("audio/") && f.url
+  );
+  if (audios.length === 0) {
+    throw new Error("no playable audio formats (signature ciphered)");
+  }
+  audios.sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0));
+  let chosen: AdaptiveFormat;
+  if (quality === "high" || quality === "lossless") chosen = audios[0];
+  else if (quality === "medium") {
+    chosen = audios[Math.floor(audios.length / 2)];
+  } else chosen = audios[audios.length - 1];
 
   return {
-    streamUrl: url,
-    mimeType: chosen?.mime_type ?? "audio/webm",
-    bitrate: chosen?.bitrate,
-    sampleRate: chosen?.sample_rate,
-    itag: chosen?.itag,
-    container: chosen?.mime_type?.split(";")[0]?.split("/")?.[1],
+    streamUrl: chosen.url!,
+    mimeType: chosen.mimeType,
+    bitrate: chosen.bitrate,
+    sampleRate: chosen.audioSampleRate
+      ? parseInt(chosen.audioSampleRate, 10)
+      : undefined,
+    itag: chosen.itag,
+    contentLength: chosen.contentLength
+      ? parseInt(chosen.contentLength, 10)
+      : undefined,
   };
 }
 
@@ -184,6 +286,7 @@ interface RequestBody {
   artist?: string;
   album?: string;
   videoId?: string;
+  trackId?: string;
   quality?: "high" | "medium" | "low" | "lossless";
   config?: Record<string, unknown>;
 }
@@ -192,27 +295,28 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
-
   try {
     const body = (await req.json().catch(() => ({}))) as RequestBody;
     const action = body.action ?? "search-and-stream";
 
     if (action === "verify") {
-      // No config required, but we still confirm the client can boot.
-      try {
-        await getYT();
-        return new Response(JSON.stringify({ valid: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      } catch (e) {
-        return new Response(
-          JSON.stringify({ valid: false, error: (e as Error).message }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
+      const res = await fetch(
+        `https://music.youtube.com/youtubei/v1/search?key=${WEB_REMIX_KEY}&prettyPrint=false`,
+        {
+          method: "POST",
+          headers: WEB_HEADERS,
+          body: JSON.stringify({
+            context: WEB_REMIX_CONTEXT,
+            query: "test",
+          }),
+        },
+      );
+      const ok = res.ok;
+      await res.text();
+      return new Response(
+        JSON.stringify({ ok, message: ok ? "InnerTube reachable" : `HTTP ${res.status}` }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     if (action === "search") {
@@ -231,24 +335,25 @@ Deno.serve(async (req) => {
     }
 
     if (action === "get-stream") {
-      if (!body.videoId) {
+      const videoId = body.videoId;
+      if (!videoId) {
         return new Response(JSON.stringify({ error: "videoId required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const stream = await getStreamForVideo(body.videoId, body.quality);
+      const player = await getPlayerResponse(videoId);
+      const pick = pickAudioFormat(player, body.quality ?? "high");
       return new Response(
         JSON.stringify({
-          streamUrl: stream.streamUrl,
-          mimeType: stream.mimeType,
-          quality: String(stream.bitrate ?? ""),
-          sampleRate: stream.sampleRate,
-          itag: stream.itag,
+          streamUrl: pick.streamUrl,
+          mimeType: pick.mimeType,
+          bitrate: pick.bitrate,
+          sampleRate: pick.sampleRate,
+          quality: body.quality ?? "high",
+          videoId,
         }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -261,64 +366,59 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const candidates = await searchYouTubeMusic(title, artist);
-    if (candidates.length === 0) {
-      return new Response(JSON.stringify({ error: "No matches on YouTube Music" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const results = await searchYouTubeMusic(title, artist);
+    if (results.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "no results", query: { title, artist } }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
+    const ranked = results
+      .map((r) => ({ r, s: scoreMatch({ title, artist }, r) }))
+      .sort((a, b) => b.s - a.s)
+      .slice(0, 4);
 
-    // Rank by string similarity, optionally by duration if provided.
-    const ranked = candidates
-      .map((c) => ({ c, score: scoreMatch({ title, artist }, c) }))
-      .sort((a, b) => b.score - a.score);
-
-    let lastError: string | null = null;
-    for (const { c } of ranked.slice(0, 3)) {
+    const errors: string[] = [];
+    for (const cand of ranked) {
       try {
-        const stream = await getStreamForVideo(c.videoId, body.quality);
+        const player = await getPlayerResponse(cand.r.videoId);
+        const pick = pickAudioFormat(player, body.quality ?? "high");
         return new Response(
           JSON.stringify({
-            streamUrl: stream.streamUrl,
-            mimeType: stream.mimeType,
-            quality: String(stream.bitrate ?? ""),
-            sampleRate: stream.sampleRate,
-            itag: stream.itag,
-            source: "youtube-music",
-            videoId: c.videoId,
-            matchedTitle: c.title,
-            matchedArtist: c.artist,
-            matchedAlbum: c.album,
+            streamUrl: pick.streamUrl,
+            mimeType: pick.mimeType,
+            bitrate: pick.bitrate,
+            sampleRate: pick.sampleRate,
+            quality: body.quality ?? "high",
+            videoId: cand.r.videoId,
+            matched: {
+              title: cand.r.title,
+              artist: cand.r.artist,
+              album: cand.r.album,
+              duration: cand.r.duration,
+              thumbnail: cand.r.thumbnail,
+              score: cand.s,
+            },
           }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       } catch (e) {
-        lastError = (e as Error).message;
-        console.error(`[youtube-music] stream failed for ${c.videoId}:`, lastError);
+        errors.push(`${cand.r.videoId}: ${(e as Error).message}`);
       }
     }
-
     return new Response(
       JSON.stringify({
-        error: lastError ?? "Unable to resolve any stream from YouTube Music",
+        error: "no playable candidate",
+        details: errors,
+        candidates: ranked.map((x) => x.r),
       }),
-      {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
+      { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
-    console.error("[youtube-music] handler error:", e);
+    console.error("[youtube-music] error", e);
     return new Response(
-      JSON.stringify({ error: (e as Error).message ?? "Unknown error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
+      JSON.stringify({ error: (e as Error).message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
