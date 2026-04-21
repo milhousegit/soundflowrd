@@ -5,10 +5,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// HiFi public REST API
+// HiFi public REST API (kept aligned with currently-live Tidal mirrors)
 const API_TARGETS = [
-  'https://hifitui.401658.xyz',
-  'https://hifitui.pages.dev',
+  'https://triton.squid.wtf',
+  'https://hifi.geeked.wtf',
+  'https://hifi-two.spotisaver.net',
+  'https://wolf.qqdl.site',
+  'https://hund.qqdl.site',
+  'https://us-west.monochrome.tf',
+  'https://api.monochrome.tf',
 ] as const;
 
 async function fetchJsonWithFallback(path: string): Promise<any> {
@@ -21,6 +26,7 @@ async function fetchJsonWithFallback(path: string): Promise<any> {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'application/json',
         },
+        signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) {
         const text = await res.text();
@@ -28,7 +34,19 @@ async function fetchJsonWithFallback(path: string): Promise<any> {
         lastErr = new Error(`HTTP ${res.status}`);
         continue;
       }
-      return await res.json();
+      const ct = res.headers.get('content-type') || '';
+      const raw = await res.text();
+      if (!ct.includes('json') && raw.trim().startsWith('<')) {
+        console.error(`[HiFi] ${url} returned non-JSON (${ct})`);
+        lastErr = new Error('Non-JSON response');
+        continue;
+      }
+      try {
+        return JSON.parse(raw);
+      } catch {
+        lastErr = new Error('JSON parse failed');
+        continue;
+      }
     } catch (e) {
       console.error(`[HiFi] Fetch failed for ${url}:`, e);
       lastErr = e;
@@ -51,8 +69,8 @@ async function getTrackStream(
 ): Promise<{ streamUrl: string; quality: string; bitDepth?: number; sampleRate?: number }> {
   console.log(`[HiFi] Getting stream for Tidal ID: ${tidalId}, quality: ${quality}`);
   const data = await fetchJsonWithFallback(`/track/?id=${encodeURIComponent(tidalId)}&quality=${encodeURIComponent(quality)}`);
-  if (!data?.data) throw new Error('No track data returned');
-  const trackData = data.data;
+  const trackData = data?.data ?? data;
+  if (!trackData) throw new Error('No track data returned');
 
   if (trackData.manifestMimeType === 'application/vnd.tidal.bts') {
     const manifestJson = JSON.parse(atob(trackData.manifest));

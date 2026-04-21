@@ -11,17 +11,19 @@ const UPTIME_TRACKERS = [
   'https://tidal-uptime.props-76styles.workers.dev',
 ];
 
-// Fallback instances if all trackers are down
+// Fallback instances if all trackers are down (kept fresh, last verified live)
 const FALLBACK_API = [
-  'https://eu-central.monochrome.tf',
+  'https://triton.squid.wtf',
+  'https://hifi.geeked.wtf',
+  'https://hifi-two.spotisaver.net',
+  'https://wolf.qqdl.site',
+  'https://hund.qqdl.site',
   'https://us-west.monochrome.tf',
   'https://api.monochrome.tf',
-  'https://hifi-one.spotisaver.net',
-  'https://tidal.kinoplus.online',
+  'https://monochrome-api.samidy.com',
 ];
 const FALLBACK_STREAM = [
-  'https://hifi-one.spotisaver.net',
-  'https://api.monochrome.tf',
+  'https://triton.squid.wtf',
 ];
 
 // ── Instance cache (lives as long as the edge function isolate, ~5min) ──
@@ -46,18 +48,15 @@ async function getLiveInstances(): Promise<{ api: string[]; stream: string[] }> 
       const apiInstances: string[] = [];
       const streamInstances: string[] = [];
 
-      // The tracker returns an object with instance URLs as keys
-      // Each has { search: status, track: status } where status is HTTP code or "error"
-      if (data && typeof data === 'object') {
-        for (const [url, status] of Object.entries(data)) {
-          const s = status as any;
-          // An instance is "up" for search if search status is 200 or 400 (400 = missing param but alive)
-          if (s?.search === 200 || s?.search === 400) {
-            apiInstances.push(url.replace(/\/$/, ''));
-          }
-          if (s?.track === 200 || s?.track === 400) {
-            streamInstances.push(url.replace(/\/$/, ''));
-          }
+      // The tracker returns: { api: [{url, version}], streaming: [{url, version}], down: [...] }
+      if (data && Array.isArray(data.api)) {
+        for (const item of data.api) {
+          if (item?.url) apiInstances.push(String(item.url).replace(/\/$/, ''));
+        }
+      }
+      if (data && Array.isArray(data.streaming)) {
+        for (const item of data.streaming) {
+          if (item?.url) streamInstances.push(String(item.url).replace(/\/$/, ''));
         }
       }
 
@@ -100,7 +99,22 @@ async function fetchWithFallback(path: string, instances: string[]): Promise<any
         continue;
       }
 
-      const json = await res.json();
+      // Some instances return HTML on error even with 200 — guard against it
+      const ct = res.headers.get('content-type') || '';
+      const raw = await res.text();
+      if (!ct.includes('json') && raw.trim().startsWith('<')) {
+        console.error(`[Monochrome] ${url} returned non-JSON (${ct})`);
+        lastErr = new Error('Non-JSON response');
+        continue;
+      }
+      let json: any;
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        console.error(`[Monochrome] ${url} JSON parse failed`);
+        lastErr = new Error('JSON parse failed');
+        continue;
+      }
       // Normalize: some instances wrap in { data: ... }
       return json?.data ?? json;
     } catch (e) {
