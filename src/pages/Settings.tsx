@@ -28,6 +28,7 @@ import ReferralShareMinimal from '@/components/ReferralShareMinimal';
 import { isPast } from 'date-fns';
 import BackButton from '@/components/BackButton';
 import { useLibrarySync } from '@/hooks/useLibrarySync';
+import { PluginManager } from '@/components/plugins/PluginManager';
 
 interface CloudFile {
   id: string;
