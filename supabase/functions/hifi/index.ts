@@ -26,6 +26,7 @@ async function fetchJsonWithFallback(path: string): Promise<any> {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'application/json',
         },
+        signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) {
         const text = await res.text();
@@ -33,7 +34,19 @@ async function fetchJsonWithFallback(path: string): Promise<any> {
         lastErr = new Error(`HTTP ${res.status}`);
         continue;
       }
-      return await res.json();
+      const ct = res.headers.get('content-type') || '';
+      const raw = await res.text();
+      if (!ct.includes('json') && raw.trim().startsWith('<')) {
+        console.error(`[HiFi] ${url} returned non-JSON (${ct})`);
+        lastErr = new Error('Non-JSON response');
+        continue;
+      }
+      try {
+        return JSON.parse(raw);
+      } catch {
+        lastErr = new Error('JSON parse failed');
+        continue;
+      }
     } catch (e) {
       console.error(`[HiFi] Fetch failed for ${url}:`, e);
       lastErr = e;
