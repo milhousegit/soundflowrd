@@ -422,10 +422,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const hybridFallbackChain = effectiveHybridChain.length > 0 ? effectiveHybridChain : settingsHybridChain;
 
   // Effective Real-Debrid API key: from the installed real-debrid plugin's config,
-  // falling back to legacy credentials.realDebridApiKey.
+  // falling back to legacy effectiveRdApiKey.
   const rdPlugin = activePluginChain.find((p) => p.plugin_id === 'real-debrid');
   const effectiveRdApiKey = (rdPlugin?.config as { apiKey?: string } | undefined)?.apiKey
-    || credentials?.realDebridApiKey
+    || effectiveRdApiKey
     || '';
 
   const hasUsablePlugins = activePluginChain.length > 0;
@@ -816,7 +816,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const loadSavedMapping = useCallback(async () => {
     const track = state.currentTrack;
-    if (!track?.albumId || !credentials?.realDebridApiKey) return;
+    if (!track?.albumId || !effectiveRdApiKey) return;
 
     try {
       const { data: trackMapping } = await supabase
@@ -923,7 +923,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       const isDeezerPriorityMode = audioSourceMode === 'deezer_priority';
       const isHybridMode = audioSourceMode === 'hybrid_priority';
-      const hasRdKey = !!credentials?.realDebridApiKey;
+      const hasRdKey = !!effectiveRdApiKey;
 
       // Helper to start tracking playback time (called when playback actually starts)
       const startTrackingPlayback = () => {
@@ -1111,9 +1111,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 addDebugLog('⚠️ Link RD scaduto', 'Rigenero link...', 'warning');
                 const torrentId = trackMapping.album_torrent_mappings?.torrent_id;
                 const fileId = trackMapping.file_id;
-                if (torrentId && Number.isFinite(fileId) && fileId > 0 && credentials?.realDebridApiKey) {
+                if (torrentId && Number.isFinite(fileId) && fileId > 0 && effectiveRdApiKey) {
                   try {
-                    const freshResult = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, [fileId]);
+                    const freshResult = await selectFilesAndPlay(effectiveRdApiKey, torrentId, [fileId]);
                     if (currentSearchTrackIdRef.current !== enrichedTrack.id) return false;
                     if (freshResult.streams?.length > 0 && freshResult.streams[0].streamUrl && audioRef.current) {
                       audioRef.current.src = freshResult.streams[0].streamUrl;
@@ -1559,10 +1559,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const selectTorrentFile = useCallback(
     async (torrentId: string, fileIds: number[]) => {
-      if (!credentials?.realDebridApiKey || !state.currentTrack) return;
+      if (!effectiveRdApiKey || !state.currentTrack) return;
 
       setLoadingPhase('loading');
-      const result = await selectFilesAndPlay(credentials.realDebridApiKey, torrentId, fileIds);
+      const result = await selectFilesAndPlay(effectiveRdApiKey, torrentId, fileIds);
 
       if (result.error || result.status === 'error') {
         setLoadingPhase('unavailable');
@@ -1608,8 +1608,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const refreshTorrent = useCallback(
     async (torrentId: string) => {
-      if (!credentials?.realDebridApiKey) return;
-      const result = await checkTorrentStatus(credentials.realDebridApiKey, torrentId);
+      if (!effectiveRdApiKey) return;
+      const result = await checkTorrentStatus(effectiveRdApiKey, torrentId);
       setAvailableTorrents((prev) =>
         prev.map((t) => (t.torrentId === torrentId ? { ...t, ...result } : t))
       );
@@ -1619,7 +1619,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const manualSearch = useCallback(
     async (query: string) => {
-      if (!credentials?.realDebridApiKey) {
+      if (!effectiveRdApiKey) {
         toast.error('Real-Debrid non configurato');
         return;
       }
@@ -1635,7 +1635,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       addDebugLog('🔎 Ricerca torrent', `Query: "${query}"`, 'info');
 
       try {
-        const result = await searchStreams(credentials.realDebridApiKey, query);
+        const result = await searchStreams(effectiveRdApiKey, query);
         setAvailableTorrents(result.torrents);
         setAlternativeStreams(result.streams || []);
 
@@ -2176,7 +2176,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Auto-poll downloading torrents (kept, without YouTube interplay)
   useEffect(() => {
     if (loadingPhase !== 'downloading' || availableTorrents.length === 0) return;
-    if (!credentials?.realDebridApiKey) return;
+    if (!effectiveRdApiKey) return;
 
     const downloadingTorrents = availableTorrents.filter((t) =>
       ['downloading', 'queued', 'magnet_conversion'].includes(t.status)
@@ -2189,7 +2189,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const pollInterval = setInterval(async () => {
       for (const torrent of downloadingTorrents) {
         try {
-          const result = await checkTorrentStatus(credentials.realDebridApiKey, torrent.torrentId);
+          const result = await checkTorrentStatus(effectiveRdApiKey, torrent.torrentId);
 
           if (['error', 'dead', 'magnet_error'].includes(result.status)) {
             addDebugLog('❌ Download fallito', `Torrent in stato: ${result.status}`, 'error');
@@ -2262,7 +2262,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // Pre-sync next track in queue (kept behavior)
   useEffect(() => {
-    if (!credentials?.realDebridApiKey) return;
+    if (!effectiveRdApiKey) return;
     if (!state.currentTrack || !state.isPlaying) return;
 
     const currentAlbumId = state.currentTrack.albumId;
@@ -2289,7 +2289,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
 
         if (nextTrack.album?.trim() && nextTrack.artist?.trim()) {
-          const result = await searchStreams(credentials.realDebridApiKey, `${nextTrack.album} ${nextTrack.artist}`);
+          const result = await searchStreams(effectiveRdApiKey, `${nextTrack.album} ${nextTrack.artist}`);
 
           for (const torrent of result.torrents) {
             if (!torrent.files?.length) continue;
@@ -2298,7 +2298,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             );
             if (!matchingFile) continue;
 
-            const selectResult = await selectFilesAndPlay(credentials.realDebridApiKey, torrent.torrentId, [matchingFile.id]);
+            const selectResult = await selectFilesAndPlay(effectiveRdApiKey, torrent.torrentId, [matchingFile.id]);
             if (!selectResult.error && selectResult.status !== 'error') {
               const directLink = selectResult.streams.length > 0 ? selectResult.streams[0].streamUrl : undefined;
               await saveFileMapping({
