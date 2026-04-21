@@ -31,6 +31,7 @@ import Settings from "@/pages/Settings";
 import UserProfile from "@/pages/UserProfile";
 import Info from "@/pages/Info";
 import PluginDocs from "@/pages/PluginDocs";
+import { NoPluginDialog } from "@/components/plugins/NoPluginDialog";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
@@ -176,6 +177,7 @@ const AppContent = () => {
       <LandscapeBlocker />
       <AutoModePrompt />
       <BrowserRouter>
+        <NoPluginDialog />
         <AppRoutes />
       </BrowserRouter>
     </>
