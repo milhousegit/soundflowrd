@@ -188,17 +188,16 @@ export const PluginManager: React.FC<Props> = ({ onUpgrade }) => {
                     onCheckedChange={(v) => handleToggle(p, v)}
                     disabled={busyId !== null}
                   />
-                  {(p.manifest.config?.fields?.length ?? 0) > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setConfigPlugin(p)}
-                      disabled={busyId !== null}
-                    >
-                      <SettingsIcon className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setConfigPlugin(p)}
+                    disabled={busyId !== null}
+                    aria-label="Impostazioni plugin"
+                  >
+                    <SettingsIcon className="h-3.5 w-3.5" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"

@@ -89,7 +89,9 @@ export const InstallPluginModal: React.FC<Props> = ({ open, onOpenChange, onInst
     }
 
     setInstalling(true);
-    const { error } = await installPlugin(manifest, config);
+    const source: { kind: 'url' | 'inline'; value: string } =
+      tab === 'url' ? { kind: 'url', value: url.trim() } : { kind: 'inline', value: json.trim() };
+    const { error } = await installPlugin(manifest, config, source);
     setInstalling(false);
     if (error) {
       toast.error(`Installazione fallita: ${error}`);
