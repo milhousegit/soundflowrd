@@ -1200,6 +1200,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_plugins: {
+        Row: {
+          config: Json
+          enabled: boolean
+          id: string
+          installed_at: string
+          manifest: Json
+          plugin_id: string
+          position: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          config?: Json
+          enabled?: boolean
+          id?: string
+          installed_at?: string
+          manifest: Json
+          plugin_id: string
+          position?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          config?: Json
+          enabled?: boolean
+          id?: string
+          installed_at?: string
+          manifest?: Json
+          plugin_id?: string
+          position?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

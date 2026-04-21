@@ -1,0 +1,24 @@
+{
+  "id": "real-debrid",
+  "name": "Real Debrid",
+  "version": "1.0.0",
+  "author": "SoundFlow",
+  "description": "High-quality streaming via Real-Debrid torrents",
+  "type": "audio-source",
+  "transport": "edge-function",
+  "endpoint": "real-debrid",
+  "capabilities": ["search", "stream", "verify"],
+  "config": {
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "type": "password",
+        "required": true,
+        "verifyAction": "verify",
+        "helpText": "Get your API token from Real-Debrid",
+        "helpUrl": "https://real-debrid.com/apitoken"
+      }
+    ]
+  }
+}

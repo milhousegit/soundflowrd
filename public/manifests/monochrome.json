@@ -1,0 +1,12 @@
+{
+  "id": "monochrome",
+  "name": "Monochrome",
+  "version": "1.0.0",
+  "author": "SoundFlow",
+  "description": "FLAC streaming via Tidal mirrors discovered dynamically",
+  "type": "audio-source",
+  "transport": "edge-function",
+  "endpoint": "monochrome",
+  "capabilities": ["search", "stream", "lossless"],
+  "config": { "fields": [] }
+}
