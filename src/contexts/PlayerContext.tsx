@@ -368,8 +368,68 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Audio element reference
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { credentials, user } = useAuth();
-  const { audioSourceMode, settings, selectedScrapingSource, hybridFallbackChain } = useSettings();
+  const { audioSourceMode: settingsAudioSourceMode, settings, selectedScrapingSource, hybridFallbackChain: settingsHybridChain } = useSettings();
   const { reportFailure, reportSuccess } = useServiceStatus();
+
+  // ============== PLUGIN SYSTEM ==============
+  // Plugins replace the legacy hybrid/RD/Monochrome mode selection.
+  // We derive an "effective" audioSourceMode and fallback chain from the user's installed plugins.
+  const [installedPlugins, setInstalledPlugins] = useState<InstalledPlugin[]>([]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setInstalledPlugins([]);
+      return;
+    }
+    let mounted = true;
+    const load = async () => {
+      const { data } = await supabase
+        .from('user_plugins')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('position', { ascending: true });
+      if (mounted && data) setInstalledPlugins(data as unknown as InstalledPlugin[]);
+    };
+    load();
+    const channel = supabase
+      .channel(`player_user_plugins_${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_plugins', filter: `user_id=eq.${user.id}` },
+        () => load()
+      )
+      .subscribe();
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  // Active plugin chain: enabled + configured, sorted by position
+  const activePluginChain = installedPlugins
+    .filter((p) => p.enabled && isPluginConfigured(p))
+    .sort((a, b) => a.position - b.position);
+
+  // Derive effective fallback chain from plugin order. Only includes plugin_ids
+  // that map to legacy FallbackSourceId values.
+  const effectiveHybridChain: FallbackSourceId[] = activePluginChain
+    .map((p) => p.plugin_id)
+    .filter((id): id is FallbackSourceId => id === 'real-debrid' || id === 'monochrome' || id === 'hifi');
+
+  // If user has plugins, force hybrid mode so the chain is followed.
+  // If no plugins, keep settingsAudioSourceMode (will be gated by playTrack guard anyway).
+  const audioSourceMode = activePluginChain.length > 0 ? 'hybrid_priority' : settingsAudioSourceMode;
+  const hybridFallbackChain = effectiveHybridChain.length > 0 ? effectiveHybridChain : settingsHybridChain;
+
+  // Effective Real-Debrid API key: from the installed real-debrid plugin's config,
+  // falling back to legacy credentials.realDebridApiKey.
+  const rdPlugin = activePluginChain.find((p) => p.plugin_id === 'real-debrid');
+  const effectiveRdApiKey = (rdPlugin?.config as { apiKey?: string } | undefined)?.apiKey
+    || credentials?.realDebridApiKey
+    || '';
+
+  const hasUsablePlugins = activePluginChain.length > 0;
+
 
   const [alternativeStreams, setAlternativeStreams] = useState<StreamResult[]>([]);
   const [availableTorrents, setAvailableTorrents] = useState<TorrentInfo[]>([]);
