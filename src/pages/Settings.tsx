@@ -485,7 +485,18 @@ const Settings: React.FC = () => {
           </div>
         </section>
 
-        {/* Playback Section */}
+        {/* Plugin Section (new) */}
+        <section className="rounded-xl bg-card overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
+            <Volume2 className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Plugin</h2>
+          </div>
+          <div className="p-4">
+            <PluginManager onUpgrade={() => setShowPremiumModal(true)} />
+          </div>
+        </section>
+
+        {/* Playback Section (legacy fallback controls) */}
         <section className="rounded-xl bg-card overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
             <Volume2 className="w-4 h-4 text-primary" />
