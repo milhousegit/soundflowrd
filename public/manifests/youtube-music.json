@@ -1,0 +1,13 @@
+{
+  "id": "youtube-music",
+  "name": "YouTube Music",
+  "version": "1.0.0",
+  "author": "SoundFlow",
+  "description": "Riproduce brani da YouTube Music tramite il client InnerTube non ufficiale (youtubei.js). Nessuna chiave richiesta.",
+  "type": "audio-source",
+  "transport": "edge-function",
+  "endpoint": "youtube-music",
+  "capabilities": ["search", "stream", "verify"],
+  "config": { "fields": [] },
+  "homepage": "https://github.com/YouTube-Music-V2/youtube-music"
+}
