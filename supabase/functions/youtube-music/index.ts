@@ -104,8 +104,6 @@ async function searchYouTubeMusic(
   const body = {
     context: ANDROID_MUSIC_CONTEXT,
     query,
-    // Filter: Songs only
-    params: "EgWKAQIIAWoKEAkQAxAEEAkQBRAK",
   };
   const url =
     `https://music.youtube.com/youtubei/v1/search?key=${INNERTUBE_KEY}&prettyPrint=false`;
