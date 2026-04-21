@@ -30,6 +30,7 @@ import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
 import UserProfile from "@/pages/UserProfile";
 import Info from "@/pages/Info";
+import PluginDocs from "@/pages/PluginDocs";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
@@ -112,6 +113,7 @@ const AppRoutes = () => {
         <Route path="settings" element={<Settings />} />
         <Route path="profile/:id" element={<UserProfile />} />
         <Route path="info" element={<Info />} />
+        <Route path="info/plugins" element={<PluginDocs />} />
         <Route path="artist/:id" element={<Artist />} />
         <Route path="album/:id" element={<Album />} />
         <Route path="playlist/:id" element={<Playlist />} />
