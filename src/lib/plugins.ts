@@ -156,10 +156,14 @@ export async function verifyConfigField(
   return { ok: true };
 }
 
-/** Install a plugin for the current user. */
+/** Install a plugin for the current user.
+ * Optionally pass `source` to record where the manifest came from
+ * (URL string, or 'inline' for raw JSON installs). Stored inside manifest.__source.
+ */
 export async function installPlugin(
   manifest: PluginManifest,
-  config: Record<string, unknown> = {}
+  config: Record<string, unknown> = {},
+  source?: { kind: 'url' | 'inline'; value: string }
 ): Promise<{ data?: InstalledPlugin; error?: string }> {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
@@ -174,12 +178,16 @@ export async function installPlugin(
     .limit(1);
   const nextPos = (existing?.[0]?.position ?? -1) + 1;
 
+  const manifestWithSource = source
+    ? { ...manifest, __source: source }
+    : manifest;
+
   const { data, error } = await supabase
     .from('user_plugins')
     .insert({
       user_id: userId,
       plugin_id: manifest.id,
-      manifest: manifest as unknown as never,
+      manifest: manifestWithSource as unknown as never,
       config: config as unknown as never,
       enabled: true,
       position: nextPos,

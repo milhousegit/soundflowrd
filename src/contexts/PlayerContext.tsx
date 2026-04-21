@@ -846,9 +846,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Offline tracks bypass this guard (handled below in this same function).
       const offlineAvailable = await getOfflineTrackUrl(track.id);
       if (!offlineAvailable && !hasUsablePlugins) {
-        toast.error('Installa un plugin di riproduzione per continuare', {
-          action: { label: 'Apri Plugin', onClick: () => { window.location.href = '/app/settings'; } },
-        });
+        window.dispatchEvent(new CustomEvent('soundflow:no-plugin'));
         return;
       }
 
