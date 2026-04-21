@@ -5,10 +5,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// HiFi public REST API
+// HiFi public REST API (kept aligned with currently-live Tidal mirrors)
 const API_TARGETS = [
-  'https://hifitui.401658.xyz',
-  'https://hifitui.pages.dev',
+  'https://triton.squid.wtf',
+  'https://hifi.geeked.wtf',
+  'https://hifi-two.spotisaver.net',
+  'https://wolf.qqdl.site',
+  'https://hund.qqdl.site',
+  'https://us-west.monochrome.tf',
+  'https://api.monochrome.tf',
 ] as const;
 
 async function fetchJsonWithFallback(path: string): Promise<any> {
