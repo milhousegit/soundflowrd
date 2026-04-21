@@ -34,3 +34,6 @@ verify_jwt = false
 [functions.hifi]
 verify_jwt = false
 
+[functions.youtube-music]
+verify_jwt = false
+
