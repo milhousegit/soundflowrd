@@ -301,12 +301,12 @@ Deno.serve(async (req) => {
 
     if (action === "verify") {
       const res = await fetch(
-        `https://music.youtube.com/youtubei/v1/search?key=${INNERTUBE_KEY}&prettyPrint=false`,
+        `https://music.youtube.com/youtubei/v1/search?key=${WEB_REMIX_KEY}&prettyPrint=false`,
         {
           method: "POST",
-          headers: COMMON_HEADERS,
+          headers: WEB_HEADERS,
           body: JSON.stringify({
-            context: ANDROID_MUSIC_CONTEXT,
+            context: WEB_REMIX_CONTEXT,
             query: "test",
           }),
         },
