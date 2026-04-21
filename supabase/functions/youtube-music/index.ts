@@ -217,10 +217,10 @@ async function getPlayerResponse(videoId: string): Promise<PlayerResponse> {
     racyCheckOk: true,
   };
   const url =
-    `https://music.youtube.com/youtubei/v1/player?key=${INNERTUBE_KEY}&prettyPrint=false`;
+    `https://music.youtube.com/youtubei/v1/player?key=${ANDROID_MUSIC_KEY}&prettyPrint=false`;
   const res = await fetch(url, {
     method: "POST",
-    headers: COMMON_HEADERS,
+    headers: ANDROID_HEADERS,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
