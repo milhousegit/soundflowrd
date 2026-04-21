@@ -123,14 +123,16 @@ async function searchYouTubeMusic(
 ): Promise<YTSearchResult[]> {
   const query = `${title} ${artist}`.trim();
   const body = {
-    context: ANDROID_MUSIC_CONTEXT,
+    context: WEB_REMIX_CONTEXT,
     query,
+    // Filter: Songs only
+    params: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D",
   };
   const url =
-    `https://music.youtube.com/youtubei/v1/search?key=${INNERTUBE_KEY}&prettyPrint=false`;
+    `https://music.youtube.com/youtubei/v1/search?key=${WEB_REMIX_KEY}&prettyPrint=false`;
   const res = await fetch(url, {
     method: "POST",
-    headers: COMMON_HEADERS,
+    headers: WEB_HEADERS,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
