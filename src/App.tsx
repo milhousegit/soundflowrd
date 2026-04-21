@@ -30,6 +30,7 @@ import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
 import UserProfile from "@/pages/UserProfile";
 import Info from "@/pages/Info";
+import PluginDocs from "@/pages/PluginDocs";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
 import Playlist from "@/pages/Playlist";
