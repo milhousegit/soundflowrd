@@ -69,8 +69,8 @@ async function getTrackStream(
 ): Promise<{ streamUrl: string; quality: string; bitDepth?: number; sampleRate?: number }> {
   console.log(`[HiFi] Getting stream for Tidal ID: ${tidalId}, quality: ${quality}`);
   const data = await fetchJsonWithFallback(`/track/?id=${encodeURIComponent(tidalId)}&quality=${encodeURIComponent(quality)}`);
-  if (!data?.data) throw new Error('No track data returned');
-  const trackData = data.data;
+  const trackData = data?.data ?? data;
+  if (!trackData) throw new Error('No track data returned');
 
   if (trackData.manifestMimeType === 'application/vnd.tidal.bts') {
     const manifestJson = JSON.parse(atob(trackData.manifest));
