@@ -422,10 +422,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const hybridFallbackChain = effectiveHybridChain.length > 0 ? effectiveHybridChain : settingsHybridChain;
 
   // Effective Real-Debrid API key: from the installed real-debrid plugin's config,
-  // falling back to legacy effectiveRdApiKey.
+  // falling back to legacy credentials.realDebridApiKey.
   const rdPlugin = activePluginChain.find((p) => p.plugin_id === 'real-debrid');
   const effectiveRdApiKey = (rdPlugin?.config as { apiKey?: string } | undefined)?.apiKey
-    || effectiveRdApiKey
+    || credentials?.realDebridApiKey
     || '';
 
   const hasUsablePlugins = activePluginChain.length > 0;
