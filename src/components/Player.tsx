@@ -41,6 +41,7 @@ import {
   ChevronRight } from
 'lucide-react';
 import { cn, hdCover } from '@/lib/utils';
+import { getAudioSourceLabel, getAudioSourceClass } from '@/lib/audioSourceLabel';
 import { StreamResult } from '@/lib/realdebrid';
 
 const formatTime = (seconds: number) => {
