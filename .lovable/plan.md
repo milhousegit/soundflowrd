@@ -1,115 +1,47 @@
+# Plugin Amazon Music (via Lucida)
 
+Aggiungo un nuovo plugin `amazon-music` che usa Lucida come backend per cercare e riprodurre brani Amazon Music in streaming diretto (URL `download` di Lucida, ~1h di validità). Nessun upload Send.cm — non necessario perché lo stream diretto già funziona come URL audio riproducibile.
 
-# Sistema Plugin con Manifest
+## Cosa farà il plugin
 
-Trasformiamo la sezione "Riproduzione" in **"Plugin"**. La riproduzione richiede almeno un plugin installato e configurato — senza plugin nessun audio parte. Monochrome e Real‑Debrid diventano plugin esterni come qualsiasi altro, ma vengono pre‑installati per gli utenti esistenti.
+1. **Ricerca**: query → Lucida cerca su Amazon Music → ritorna lista brani con metadati (titolo, artista, album, cover, durata, URL Amazon)
+2. **Stream**: dato un URL `music.amazon.com/tracks/...` → flusso identico al Lucida-Deezer attuale (resolve pagina → CSRF → POST `/api/load` → poll handoff → `download` URL)
+3. **Compatibile** con il sistema plugin esistente (manifest JSON + edge function + impostazioni)
 
-## Concetti chiave
+## File da creare/modificare
 
-- **Plugin manifest**: file JSON che descrive una sorgente audio (id, nome, versione, transport, endpoint, capacità, schema config).
-- **Installazione**: l'utente incolla un URL del manifest **oppure** il JSON grezzo. Il sistema valida e salva.
-- **Limite Free**: massimo 2 plugin attivi. Tentando di installarne un terzo appare un dialog "Passa a Premium" con CTA secondaria "Rimuovi un plugin esistente" che mostra la lista per scegliere quale eliminare e poi continuare l'installazione.
-- **Premium / Admin**: plugin illimitati.
-- **Riproduzione**: la `hybridFallbackChain` è sostituita da una **catena di plugin installati** ordinabile. Se nessun plugin abilitato e configurato → toast "Installa un plugin di riproduzione per continuare" + CTA verso Settings → Plugin.
+### Nuovi
+- **`public/manifests/amazon-music.json`** — manifest del plugin con:
+  - `id: amazon-music`, `name: Amazon Music (Lucida)`
+  - `endpoint`: URL della nuova edge function
+  - `settings`: campo "Region" (auto/us/uk/de/fr/it/jp…), default `auto`
+  - `capabilities: ['search', 'stream']`
 
-## Struttura manifest standard
+- **`supabase/functions/amazon-music/index.ts`** — edge function basata su `lucida/index.ts`. Due action:
+  - `search`: chiama `https://lucida.to/?country=X` con query Amazon, oppure usa direttamente l'API interna di Lucida per la ricerca su Amazon Music. Estrae risultati con stesso pattern `parseEnclosedValue` o via Firecrawl JSON extract come fallback.
+  - `get-stream`: identico al flusso Lucida ma con URL `https://music.amazon.com/tracks/{id}` (o accetta direttamente l'URL Amazon dal risultato della search).
 
-```text
-{
-  "id": "real-debrid",                // slug univoco
-  "name": "Real Debrid",
-  "version": "1.0.0",
-  "author": "SoundFlow",
-  "description": "Streaming via torrents su Real-Debrid",
-  "type": "audio-source",             // futuro: lyrics, metadata
-  "transport": "edge-function",       // edge-function | http
-  "endpoint": "real-debrid",          // nome edge-function o URL HTTP
-  "capabilities": ["search", "stream"],
-  "config": {
-    "fields": [
-      {
-        "key": "apiKey",
-        "label": "API Key",
-        "type": "password",
-        "required": true,
-        "verifyAction": "verify"
-      }
-    ]
-  },
-  "icon": "https://..."
-}
-```
-
-Monochrome avrà `config.fields = []`. Real‑Debrid richiederà l'API Key al momento dell'installazione, con verifica via `action: "verify"` sull'edge-function.
-
-## Backend
-
-**Nuova tabella `user_plugins`**
-- `id uuid pk`, `user_id uuid → auth.users`, `plugin_id text` (slug), `manifest jsonb`, `config jsonb`, `enabled boolean default true`, `position int`, `installed_at timestamptz`
-- Unique `(user_id, plugin_id)`
-- RLS: solo proprietario CRUD
-
-**Migrazione one‑shot per utenti esistenti** (eseguita in SQL dentro la migration):
-- Per ogni `profiles.id` esistente: inserisce riga `monochrome` (config vuota, position 0).
-- Se `profiles.real_debrid_api_key IS NOT NULL`: inserisce riga `real-debrid` con `config = {"apiKey": "..."}` (position 1).
-- I nuovi utenti registrati dopo la migrazione **non ricevono nulla** — devono installare manualmente.
-
-## Frontend
-
-### Nuova sezione "Plugin" in Settings (sostituisce "Riproduzione")
-Mantenuti: qualità audio, crossfade. Rimossi: Audio Source Mode, RD inline, Hybrid chain, Bridge URL.
-
-Componenti:
-1. **Lista plugin installati**: card con icona, nome, versione, badge stato (`Attivo` / `Da configurare` / `Disattivato`), drag‑handle per riordinare la fallback chain, switch enable/disable, pulsante config (apre modal con `config.fields`), pulsante elimina.
-2. **Counter**: `2/2 plugin (Free)` o `3/∞ (Premium)`.
-3. **Pulsante "Installa plugin"** → modal con due tab: **"Da URL"** / **"Da JSON"**. Validazione del manifest, anteprima campi/capabilities, e se `config.fields` non è vuoto chiede subito i valori (con verifica per RD).
-4. **Link "Documentazione plugin"** → `/app/info/plugins`.
-
-### Player & playback
-- `PlayerContext` non legge più `audioSourceMode` / `selectedScrapingSource` / `hybridFallbackChain`.
-- Legge la lista `user_plugins` ordinata per `position`, filtra solo `enabled === true` e config valida (campi required popolati).
-- Per ogni plugin nella catena chiama dinamicamente l'edge‑function (`manifest.endpoint`) con payload standard `{action: "search-and-stream", title, artist, quality, config}`.
-- Lista vuota o tutti senza config → `play()` mostra toast "Installa un plugin di riproduzione per continuare" + CTA Settings.
-
-### Login.tsx
-- Rimosso il campo "Real‑Debrid API Key" dalla registrazione.
-- Rimossa logica `pendingApiKey` post‑signup.
-
-### Documentazione
-Pagina `/app/info/plugins` con:
-- Specifica completa del manifest (campi obbligatori/opzionali, tipi field).
-- Contratto API che endpoint deve rispettare:
-  - Input: `{action: "search-and-stream" | "search" | "get-stream" | "verify", title?, artist?, tidalId?, quality?, config?}`
-  - Output success: `{streamUrl, quality, bitDepth?, sampleRate?}`
-  - Output error: `{error: string}`
-- Esempi: manifest Monochrome, manifest Real‑Debrid.
-- Istruzioni installazione (URL vs JSON).
+### Modificati
+- **`supabase/config.toml`** — registra la nuova function
+- **`src/lib/plugins.ts`** — aggiungi `amazon-music` ai built-in disponibili (se hai una lista)
+- **`src/components/plugins/InstallPluginModal.tsx`** — mostra il nuovo plugin nella lista installabile
 
 ## Dettagli tecnici
 
-**File da creare**
-- `supabase/migrations/<ts>_user_plugins.sql` — tabella + RLS + seed utenti esistenti
-- `src/types/plugins.ts` — tipi `PluginManifest`, `PluginConfigField`, `InstalledPlugin`
-- `src/lib/plugins.ts` — `fetchManifest`, `validateManifest`, `invokePlugin`, `installPlugin`, `removePlugin`, `reorderPlugins`, `updatePluginConfig`
-- `src/hooks/usePlugins.ts` — load + realtime subscription su `user_plugins`
-- `src/components/plugins/PluginManager.tsx` — sezione Settings
-- `src/components/plugins/InstallPluginModal.tsx` — tab URL/JSON + validazione + form config inline
-- `src/components/plugins/PluginConfigModal.tsx` — modifica config plugin installato
-- `src/components/plugins/PluginLimitDialog.tsx` — dialog limite Free con CTA Premium / Rimuovi
-- `public/manifests/monochrome.json` + `public/manifests/real-debrid.json` — manifest ufficiali (URL pubblico riutilizzabile)
+**Riuso massimo**: la funzione `resolveTrackViaLucida` esistente nel file `lucida/index.ts` è già generica (prende un URL qualsiasi). La copio in `amazon-music/index.ts` ma cambio il prefisso URL da `deezer.com/track/` a `music.amazon.com/tracks/`.
 
-**File da modificare**
-- `src/pages/Settings.tsx` — sostituire sezione Playback con `<PluginManager />`
-- `src/contexts/PlayerContext.tsx` — sostituire chain hardcoded con loop sui plugin installati
-- `src/components/Login.tsx` — rimuovere campo API Key e logica pending
-- `src/pages/Info.tsx` — aggiungere link/sezione "Documentazione plugin"
-- `src/types/settings.ts` — deprecare `audioSourceMode`, `hybridFallbackChain`, `selectedScrapingSource`, `bridgeUrl`
+**Search via Lucida**: Lucida non espone un endpoint API pubblico di ricerca documentato, quindi la search avviene scraping della pagina home con `?service=amazon&q=...` e parsing del SvelteKit pageData (con fallback Firecrawl come già fa la function `lucida`). Il connector Firecrawl è già configurato nel progetto.
 
-**Edge functions** (`monochrome`, `real-debrid`): nessuna modifica — già compatibili col contratto. Real‑Debrid riceverà l'API Key dal `config` invece che dal profilo.
+**Stream**: l'URL finale `https://{server}.lucida.to/api/fetch/request/{handoff}/download` è già un endpoint HTTP audio diretto (Content-Type audio/flac o audio/mp4) — il `<audio>` HTML lo riproduce nativamente. Nessun upload necessario.
 
-**Edge cases**
-- Manifest invalido → errore inline nel modal con dettaglio campo mancante
-- Plugin senza config required compilata → badge giallo "Da configurare", saltato nella catena
-- Verifica API Key RD al salvataggio (azione `verify` con apiKey nel body)
-- Migrazione idempotente: `ON CONFLICT (user_id, plugin_id) DO NOTHING`
+**Caching**: gli URL hanno scadenza ~1h (token expiry). La logica di cache esistente del player gestisce già la riacquisizione on-demand quando il brano viene rimesso in coda.
 
+## Limiti noti
+
+- Lucida può rate-limitare se molte richieste consecutive
+- Alcune tracce Amazon Music (esclusive HD/Atmos) potrebbero non essere disponibili in tutte le regioni → il setting "Region" del plugin permette all'utente di scegliere
+- Ricerca più lenta della Deezer perché fa scraping pagina (~2-4s vs ~500ms)
+
+## Output finale per l'utente
+
+Una volta pronto: plugin installabile dalla sezione **Impostazioni → Plugin → Installa** scegliendo "Amazon Music (Lucida)" dalla lista, oppure incollando l'URL del manifest.
