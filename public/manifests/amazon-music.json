@@ -1,0 +1,24 @@
+{
+  "id": "amazon-music",
+  "name": "Amazon Music (Lucida)",
+  "version": "1.0.0",
+  "author": "SoundFlow",
+  "description": "Cerca e riproduce brani da Amazon Music tramite Lucida.to. Streaming diretto in alta qualità senza upload esterno.",
+  "type": "audio-source",
+  "transport": "edge-function",
+  "endpoint": "amazon-music",
+  "capabilities": ["search", "stream"],
+  "config": {
+    "fields": [
+      {
+        "key": "country",
+        "label": "Regione",
+        "type": "text",
+        "required": false,
+        "placeholder": "auto",
+        "helpText": "Regione Amazon Music (auto, us, uk, de, fr, it, jp, br, ca, mx, au, in). Default: auto."
+      }
+    ]
+  },
+  "homepage": "https://lucida.to/"
+}
