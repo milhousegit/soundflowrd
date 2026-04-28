@@ -79,7 +79,8 @@ export interface DebugLogEntry {
 }
 
 export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading' | 'unavailable';
-export type AudioSource = 'monochrome' | 'real-debrid' | 'offline' | null;
+// Known built-in sources, but allow any string id (plugin sources like 'tidal', 'amazon-music', etc.)
+export type AudioSource = 'monochrome' | 'hifi' | 'real-debrid' | 'offline' | (string & {}) | null;
 
 export interface PlaybackSource {
   type: 'playlist' | 'album' | 'artist' | 'radio' | 'search' | 'queue' | null;
@@ -979,7 +980,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               
               setState((prev) => ({ ...prev, isPlaying: true }));
               setLoadingPhase('idle');
-              setCurrentAudioSource('monochrome');
+              setCurrentAudioSource(sourceId as AudioSource);
               startTrackingPlayback();
               
               const qualityInfo = result.bitDepth && result.sampleRate 

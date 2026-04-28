@@ -41,6 +41,7 @@ import {
   ChevronRight } from
 'lucide-react';
 import { cn, hdCover } from '@/lib/utils';
+import { getAudioSourceLabel, getAudioSourceClass } from '@/lib/audioSourceLabel';
 import { StreamResult } from '@/lib/realdebrid';
 
 const formatTime = (seconds: number) => {
@@ -430,15 +431,9 @@ const Player: React.FC = () => {
           <div className="mt-2">
                 <span className={cn(
               "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
-              currentAudioSource === 'monochrome' ?
-              "bg-sky-500/20 text-sky-400" :
-              currentAudioSource === 'offline' ?
-              "bg-emerald-500/20 text-emerald-400" :
-              "bg-orange-500/20 text-orange-400"
+              getAudioSourceClass(currentAudioSource)
             )}>
-                  {currentAudioSource === 'monochrome' ? 'Monochrome' :
-              currentAudioSource === 'offline' ? 'Offline' :
-              'Real-Debrid'}
+                  {getAudioSourceLabel(currentAudioSource)}
                 </span>
               </div>
           }
