@@ -34,16 +34,41 @@ function replaceMergedArtistIds<T extends { artistId?: string }>(items: T[], mer
 }
 
 // Helper: invoke spotify-api edge function (now Deezer-primary)
+// Retries on transient edge runtime degradation (503) and returns null instead of throwing,
+// so callers can render an empty/fallback state without a blank screen.
 async function apiInvoke(body: Record<string, any>): Promise<any> {
-  try {
-    const { data, error } = await supabase.functions.invoke('spotify-api', { body });
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error(`API error for action=${body.action}:`, error);
-    throw error;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const { data, error } = await supabase.functions.invoke('spotify-api', { body });
+      if (error) throw error;
+      return data;
+    } catch (error: any) {
+      const msg = String(error?.message || error || '');
+      const isTransient =
+        msg.includes('503') ||
+        msg.includes('SERVICE_DEGRADED') ||
+        msg.includes('temporarily unavailable') ||
+        msg.includes('Failed to fetch');
+
+      if (isTransient && attempt < maxAttempts) {
+        const delay = 400 * attempt;
+        console.warn(`[spotify-api] transient error (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms:`, msg);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+
+      console.error(`API error for action=${body.action}:`, error);
+      if (isTransient) {
+        // Don't crash UI on edge runtime degradation
+        return null;
+      }
+      throw error;
+    }
   }
+  return null;
 }
+
 
 async function resolveArtistId(id: string, artistName?: string): Promise<string | null> {
   const merges = await getMergedArtists();
