@@ -4,7 +4,7 @@ export function getAudioSourceLabel(source: AudioSource): string {
   if (!source) return '';
   switch (source) {
     case 'monochrome': return 'Monochrome';
-    case 'hifi': return 'HiFi';
+    case 'hifi': return 'Monochrome';
     case 'real-debrid': return 'Real-Debrid';
     case 'offline': return 'Offline';
     case 'amazon-music': return 'Amazon Music';
@@ -23,7 +23,7 @@ export function getAudioSourceLabel(source: AudioSource): string {
 export function getAudioSourceClass(source: AudioSource): string {
   switch (source) {
     case 'monochrome': return 'bg-sky-500/20 text-sky-400';
-    case 'hifi': return 'bg-violet-500/20 text-violet-400';
+    case 'hifi': return 'bg-sky-500/20 text-sky-400';
     case 'offline': return 'bg-emerald-500/20 text-emerald-400';
     case 'real-debrid': return 'bg-orange-500/20 text-orange-400';
     case 'amazon-music': return 'bg-amber-500/20 text-amber-400';
