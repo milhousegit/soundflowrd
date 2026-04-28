@@ -37,3 +37,6 @@ verify_jwt = false
 [functions.youtube-music]
 verify_jwt = false
 
+[functions.amazon-music]
+verify_jwt = false
+
