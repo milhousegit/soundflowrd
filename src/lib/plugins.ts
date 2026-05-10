@@ -113,12 +113,27 @@ export async function invokePlugin<T = unknown>(
 
   try {
     if (manifest.transport === 'edge-function') {
-      const { data, error } = await supabase.functions.invoke(manifest.endpoint, { body });
-      if (error) return { error: error.message };
-      if (data && typeof data === 'object' && 'error' in data && data.error) {
-        return { error: String((data as { error: unknown }).error) };
-      }
-      return { data: data as T };
+      // Use direct fetch (not supabase.functions.invoke) so non-2xx responses
+      // don't trigger SDK console.error logging — plugin failures are expected
+      // (e.g. "no results", "login required") and we want to fall back silently.
+      const projectId = (import.meta as { env?: Record<string, string> }).env?.VITE_SUPABASE_PROJECT_ID || '';
+      const anonKey = (import.meta as { env?: Record<string, string> }).env?.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+      const url = `https://${projectId}.supabase.co/functions/v1/${manifest.endpoint}`;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token || anonKey;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'apikey': anonKey,
+        },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) return { error: json?.error || `HTTP ${res.status}` };
+      if (json?.error) return { error: String(json.error) };
+      return { data: json as T };
     }
     // HTTP transport
     const res = await fetch(manifest.endpoint, {
