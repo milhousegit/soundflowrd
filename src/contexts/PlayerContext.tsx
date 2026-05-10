@@ -2175,13 +2175,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             continue;
           }
 
-          // Scraping source
+          // Built-in scraping source
+          if (sourceId !== 'monochrome' && sourceId !== 'hifi') {
+            // Custom plugin — skip prefetch (resolved on actual play)
+            continue;
+          }
           try {
             const tidalQuality = mapQualityToTidal(settings.audioQuality);
-            const streamFn = sourceId === 'monochrome' ? getMonochromeStream 
-              : sourceId === 'hifi' ? getHifiStream 
-              : getMonochromeStream;
-            const sourceLabel: AudioSource = 'monochrome';
+            const streamFn = sourceId === 'monochrome' ? getMonochromeStream : getHifiStream;
+            const sourceLabel: AudioSource = sourceId as AudioSource;
             const result = await streamFn(nextTrack.title, nextTrack.artist, tidalQuality);
             
             if ('streamUrl' in result && result.streamUrl) {
