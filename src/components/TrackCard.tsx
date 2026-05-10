@@ -362,6 +362,15 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
             )}>
               {track.title}
             </p>
+            {track.explicit && (
+              <span
+                title="Explicit"
+                aria-label="Explicit"
+                className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-[3px] bg-muted text-muted-foreground text-[9px] font-bold leading-none"
+              >
+                E
+              </span>
+            )}
             {renderStatusIcon()}
           </div>
           {showArtist && (
