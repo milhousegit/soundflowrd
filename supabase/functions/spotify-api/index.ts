@@ -167,6 +167,7 @@ function mapDeezerTrack(track: any, albumOverride?: any): any {
     duration: Math.round(track?.duration || 0),
     coverUrl: deezerCover(album) || deezerCover(track?.artist),
     previewUrl: track?.preview || undefined,
+    explicit: !!(track?.explicit_lyrics ?? album?.explicit_lyrics),
   };
 }
 
@@ -211,6 +212,7 @@ function mapSpotifyTrack(track: any, albumOverride?: any): any {
     duration: Math.round((track.duration_ms || 0) / 1000),
     coverUrl: bestSpotifyImage(album?.images),
     previewUrl: track.preview_url || undefined,
+    explicit: !!track.explicit,
   };
 }
 

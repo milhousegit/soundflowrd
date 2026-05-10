@@ -8,6 +8,7 @@ export interface Track {
   duration: number;
   coverUrl?: string;
   streamUrl?: string;
+  explicit?: boolean;
 }
 
 export interface Artist {
