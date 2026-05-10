@@ -411,11 +411,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     .filter((p) => p.enabled && isPluginConfigured(p))
     .sort((a, b) => a.position - b.position);
 
-  // Derive effective fallback chain from plugin order. Only includes plugin_ids
-  // that map to legacy FallbackSourceId values.
-  const effectiveHybridChain: FallbackSourceId[] = activePluginChain
-    .map((p) => p.plugin_id)
-    .filter((id): id is FallbackSourceId => id === 'real-debrid' || id === 'monochrome' || id === 'hifi');
+  // Derive effective fallback chain from plugin order.
+  // Includes ALL plugin ids — built-in (real-debrid/monochrome/hifi) AND custom plugins
+  // (amazon-music, youtube-music, ...). Custom plugins are invoked via invokePlugin().
+  const effectiveHybridChain: string[] = activePluginChain.map((p) => p.plugin_id);
 
   // If user has plugins, force hybrid mode so the chain is followed.
   // If no plugins, keep settingsAudioSourceMode (will be gated by playTrack guard anyway).
