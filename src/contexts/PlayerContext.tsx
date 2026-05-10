@@ -2148,7 +2148,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       try {
         const isHybrid = audioSourceMode === 'hybrid_priority';
-        const chainOrder: FallbackSourceId[] = isHybrid && hybridFallbackChain.length > 0
+        const chainOrder: string[] = isHybrid && hybridFallbackChain.length > 0
           ? hybridFallbackChain
           : ['real-debrid', 'monochrome', 'hifi'];
 
