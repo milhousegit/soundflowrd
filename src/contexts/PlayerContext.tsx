@@ -29,8 +29,8 @@ import { getTidalStream, mapQualityToTidal, type TidalStreamResult, type TidalSt
 import { getMonochromeStream } from '@/lib/monochrome';
 import { getHifiStream } from '@/lib/hifi';
 import { SCRAPING_SOURCES, type FallbackSourceId } from '@/types/settings';
-import type { InstalledPlugin } from '@/types/plugins';
-import { isPluginConfigured } from '@/lib/plugins';
+import type { InstalledPlugin, PluginStreamResult } from '@/types/plugins';
+import { isPluginConfigured, invokePlugin } from '@/lib/plugins';
 import { useServiceStatus } from '@/contexts/ServiceStatusContext';
 import { searchTracks, getArtistTopTracks } from '@/lib/spotify';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
@@ -411,11 +411,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     .filter((p) => p.enabled && isPluginConfigured(p))
     .sort((a, b) => a.position - b.position);
 
-  // Derive effective fallback chain from plugin order. Only includes plugin_ids
-  // that map to legacy FallbackSourceId values.
-  const effectiveHybridChain: FallbackSourceId[] = activePluginChain
-    .map((p) => p.plugin_id)
-    .filter((id): id is FallbackSourceId => id === 'real-debrid' || id === 'monochrome' || id === 'hifi');
+  // Derive effective fallback chain from plugin order.
+  // Includes ALL plugin ids — built-in (real-debrid/monochrome/hifi) AND custom plugins
+  // (amazon-music, youtube-music, ...). Custom plugins are invoked via invokePlugin().
+  const effectiveHybridChain: string[] = activePluginChain.map((p) => p.plugin_id);
 
   // If user has plugins, force hybrid mode so the chain is followed.
   // If no plugins, keep settingsAudioSourceMode (will be gated by playTrack guard anyway).
@@ -1076,7 +1075,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       // =============== HYBRID MODE: Strictly follow user-defined fallback chain order ===============
       if (isHybridMode) {
-        const chainOrder: FallbackSourceId[] = hybridFallbackChain.length > 0 
+        const chainOrder: string[] = hybridFallbackChain.length > 0 
           ? hybridFallbackChain 
           : ['real-debrid', 'monochrome', 'hifi'];
         addDebugLog('👑 Modalità Ibrida', `Ordine: ${chainOrder.join(' → ')}`, 'info');
@@ -1188,36 +1187,64 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             continue;
           }
 
-          // Scraping source (monochrome, hifi)
-          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'HiFi';
-          addDebugLog(`🔄 Provo ${sourceName}`, `Posizione ${Array.from(triedSources).indexOf(sourceId) + 1} nella catena`, 'info');
-          setLoadingPhase('searching');
-          const success = await playWithScrapingSource(sourceId);
-          if (success) {
-            // Playback started — now fire background RD if it was scheduled
-            if (rdScheduledBackground && hasRdKey) {
-              addDebugLog('📥 RD: avvio download in background', `Audio da ${sourceName}, RD preparerà per ascolti futuri`, 'info');
-              startBackgroundRdDownload(enrichedTrack);
+          // Built-in scraping sources
+          if (sourceId === 'monochrome' || sourceId === 'hifi') {
+            const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'HiFi';
+            addDebugLog(`🔄 Provo ${sourceName}`, `Posizione ${Array.from(triedSources).indexOf(sourceId) + 1} nella catena`, 'info');
+            setLoadingPhase('searching');
+            const success = await playWithScrapingSource(sourceId);
+            if (success) {
+              if (rdScheduledBackground && hasRdKey) {
+                addDebugLog('📥 RD: avvio download in background', `Audio da ${sourceName}, RD preparerà per ascolti futuri`, 'info');
+                startBackgroundRdDownload(enrichedTrack);
+              }
+              return;
             }
-            return;
+            continue;
+          }
+
+          // Custom plugin source — invoke via plugin manifest
+          const plugin = activePluginChain.find((p) => p.plugin_id === sourceId);
+          if (!plugin) {
+            addDebugLog(`⏭️ Plugin ${sourceId} non trovato`, 'Salto', 'warning');
+            continue;
+          }
+          const pluginName = plugin.manifest.name || sourceId;
+          addDebugLog(`🔌 Provo plugin ${pluginName}`, `Posizione ${Array.from(triedSources).indexOf(sourceId) + 1}`, 'info');
+          setLoadingPhase('searching');
+          try {
+            const { data, error } = await invokePlugin<PluginStreamResult>(plugin, {
+              action: 'search-and-stream',
+              title: enrichedTrack.title,
+              artist: enrichedTrack.artist,
+              album: enrichedTrack.album,
+              quality: mapQualityToTidal(settings.audioQuality) as 'high' | 'medium' | 'low' | 'lossless',
+            });
+            if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
+            if (error || !data?.streamUrl || !audioRef.current) {
+              addDebugLog(`❌ ${pluginName} fallito`, error || 'Nessun streamUrl', 'error');
+              continue;
+            }
+            audioRef.current.src = data.streamUrl;
+            const ok = await safePlay(audioRef.current);
+            if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
+            if (ok) {
+              setState((prev) => ({ ...prev, isPlaying: true }));
+              setLoadingPhase('idle');
+              setCurrentAudioSource(sourceId as AudioSource);
+              startTrackingPlayback();
+              addDebugLog(`✅ ${pluginName} avviato`, data.quality || '', 'success');
+              if (rdScheduledBackground && hasRdKey) {
+                startBackgroundRdDownload(enrichedTrack);
+              }
+              return;
+            }
+          } catch (e) {
+            addDebugLog(`❌ ${pluginName} errore`, e instanceof Error ? e.message : 'Errore', 'error');
           }
         }
         
-        // Try remaining scraping sources not in fallback chain
-        const remainingSources = SCRAPING_SOURCES.map(s => s.id).filter(id => !triedSources.has(id));
-        for (const sourceId of remainingSources) {
-          const sourceName = sourceId === 'monochrome' ? 'Monochrome' : 'HiFi';
-          addDebugLog(`🔄 Fallback extra a ${sourceName}`, '', 'info');
-          setLoadingPhase('searching');
-          const success = await playWithScrapingSource(sourceId);
-          if (success) {
-            if (rdScheduledBackground && hasRdKey) {
-              addDebugLog('📥 RD: avvio download in background', 'Preparazione per ascolti futuri', 'info');
-              startBackgroundRdDownload(enrichedTrack);
-            }
-            return;
-          }
-        }
+        // No extra fallback to sources outside the user's chain — respect user order strictly
         
         // ALL scraping sources failed — if RD was scheduled, do a full search as last resort
         if (rdScheduledBackground && hasRdKey) {
@@ -2121,7 +2148,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       try {
         const isHybrid = audioSourceMode === 'hybrid_priority';
-        const chainOrder: FallbackSourceId[] = isHybrid && hybridFallbackChain.length > 0
+        const chainOrder: string[] = isHybrid && hybridFallbackChain.length > 0
           ? hybridFallbackChain
           : ['real-debrid', 'monochrome', 'hifi'];
 
@@ -2148,13 +2175,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             continue;
           }
 
-          // Scraping source
+          // Built-in scraping source
+          if (sourceId !== 'monochrome' && sourceId !== 'hifi') {
+            // Custom plugin — skip prefetch (resolved on actual play)
+            continue;
+          }
           try {
             const tidalQuality = mapQualityToTidal(settings.audioQuality);
-            const streamFn = sourceId === 'monochrome' ? getMonochromeStream 
-              : sourceId === 'hifi' ? getHifiStream 
-              : getMonochromeStream;
-            const sourceLabel: AudioSource = 'monochrome';
+            const streamFn = sourceId === 'monochrome' ? getMonochromeStream : getHifiStream;
+            const sourceLabel: AudioSource = sourceId as AudioSource;
             const result = await streamFn(nextTrack.title, nextTrack.artist, tidalQuality);
             
             if ('streamUrl' in result && result.streamUrl) {
