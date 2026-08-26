@@ -124,8 +124,15 @@ async function fetchWithFallback(path: string, instances: string[]): Promise<any
         lastErr = new Error('JSON parse failed');
         continue;
       }
+      // Instances return { detail: "Upstream API error" } when their Tidal session is dead
+      if (json?.detail && !json?.data) {
+        console.error(`[Monochrome] ${url} -> detail: ${json.detail}`);
+        lastErr = new Error(String(json.detail));
+        continue;
+      }
       // Normalize: some instances wrap in { data: ... }
       return json?.data ?? json;
+
     } catch (e) {
       console.error(`[Monochrome] Fetch failed ${url}:`, e);
       lastErr = e;
