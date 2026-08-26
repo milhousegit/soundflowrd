@@ -385,10 +385,15 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
   } catch (error) {
-    console.error('[Monochrome] Error:', error);
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[Monochrome] Error:', msg);
+    // Instance network down (403 / dead Tidal session) -> 404 so the plugin chain
+    // moves on to the next source instead of surfacing a hard 500.
+    const status = msg.includes('All instances failed') ? 404 : 500;
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: msg }),
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+
   }
 });
