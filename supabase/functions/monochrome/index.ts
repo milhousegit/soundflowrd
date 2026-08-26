@@ -7,24 +7,33 @@ const corsHeaders = {
 
 // ── Uptime tracker URLs ──
 const UPTIME_TRACKERS = [
-  'https://tidal-uptime.jiffy-puffs-1j.workers.dev',
   'https://tidal-uptime.props-76styles.workers.dev',
+  'https://tidal-uptime.jiffy-puffs-1j.workers.dev',
 ];
 
-// Fallback instances if all trackers are down (kept fresh, last verified live)
+// Fallback instances if all trackers are down
 const FALLBACK_API = [
-  'https://triton.squid.wtf',
+  'https://monochrome-api.samidy.com',
   'https://hifi.geeked.wtf',
+  'https://hifi-one.spotisaver.net',
   'https://hifi-two.spotisaver.net',
+  'https://triton.squid.wtf',
   'https://wolf.qqdl.site',
   'https://hund.qqdl.site',
+  'https://maus.qqdl.site',
+  'https://vogel.qqdl.site',
+  'https://katze.qqdl.site',
+  'https://eu-central.monochrome.tf',
+  'https://frankfurt-2.monochrome.tf',
   'https://us-west.monochrome.tf',
   'https://api.monochrome.tf',
-  'https://monochrome-api.samidy.com',
+  'https://hfapi.dyamuh.dev',
+  'https://hfapi.aluratech.org',
+  'https://api.studentsneed.help',
+  'https://tidal-api.binimum.org',
 ];
-const FALLBACK_STREAM = [
-  'https://triton.squid.wtf',
-];
+const FALLBACK_STREAM = FALLBACK_API;
+
 
 // ── Instance cache (lives as long as the edge function isolate, ~5min) ──
 let cachedInstances: { api: string[]; stream: string[] } | null = null;
@@ -115,8 +124,15 @@ async function fetchWithFallback(path: string, instances: string[]): Promise<any
         lastErr = new Error('JSON parse failed');
         continue;
       }
+      // Instances return { detail: "Upstream API error" } when their Tidal session is dead
+      if (json?.detail && !json?.data) {
+        console.error(`[Monochrome] ${url} -> detail: ${json.detail}`);
+        lastErr = new Error(String(json.detail));
+        continue;
+      }
       // Normalize: some instances wrap in { data: ... }
       return json?.data ?? json;
+
     } catch (e) {
       console.error(`[Monochrome] Fetch failed ${url}:`, e);
       lastErr = e;
@@ -369,10 +385,15 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
   } catch (error) {
-    console.error('[Monochrome] Error:', error);
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[Monochrome] Error:', msg);
+    // Instance network down (403 / dead Tidal session) -> 404 so the plugin chain
+    // moves on to the next source instead of surfacing a hard 500.
+    const status = msg.includes('All instances failed') ? 404 : 500;
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: msg }),
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+
   }
 });
