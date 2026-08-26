@@ -7,24 +7,33 @@ const corsHeaders = {
 
 // ── Uptime tracker URLs ──
 const UPTIME_TRACKERS = [
-  'https://tidal-uptime.jiffy-puffs-1j.workers.dev',
   'https://tidal-uptime.props-76styles.workers.dev',
+  'https://tidal-uptime.jiffy-puffs-1j.workers.dev',
 ];
 
-// Fallback instances if all trackers are down (kept fresh, last verified live)
+// Fallback instances if all trackers are down
 const FALLBACK_API = [
-  'https://triton.squid.wtf',
+  'https://monochrome-api.samidy.com',
   'https://hifi.geeked.wtf',
+  'https://hifi-one.spotisaver.net',
   'https://hifi-two.spotisaver.net',
+  'https://triton.squid.wtf',
   'https://wolf.qqdl.site',
   'https://hund.qqdl.site',
+  'https://maus.qqdl.site',
+  'https://vogel.qqdl.site',
+  'https://katze.qqdl.site',
+  'https://eu-central.monochrome.tf',
+  'https://frankfurt-2.monochrome.tf',
   'https://us-west.monochrome.tf',
   'https://api.monochrome.tf',
-  'https://monochrome-api.samidy.com',
+  'https://hfapi.dyamuh.dev',
+  'https://hfapi.aluratech.org',
+  'https://api.studentsneed.help',
+  'https://tidal-api.binimum.org',
 ];
-const FALLBACK_STREAM = [
-  'https://triton.squid.wtf',
-];
+const FALLBACK_STREAM = FALLBACK_API;
+
 
 // ── Instance cache (lives as long as the edge function isolate, ~5min) ──
 let cachedInstances: { api: string[]; stream: string[] } | null = null;
