@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 const SoundFlowPlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { playTrack } = usePlayer();
+  const { playTrack, restartCurrentTrack, currentTrack } = usePlayer();
   const { t, settings } = useSettings();
   const { profile, isAdmin } = useAuth();
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
@@ -110,14 +110,16 @@ const SoundFlowPlaylistPage: React.FC = () => {
 
   const handlePlayAll = () => {
     if (playlist.tracks.length > 0) {
-      playTrack(playlist.tracks[0], playlist.tracks);
+      if (currentTrack?.id === playlist.tracks[0].id) restartCurrentTrack();
+      else playTrack(playlist.tracks[0], playlist.tracks);
     }
   };
 
   const handleShuffle = () => {
     if (playlist.tracks.length > 0) {
       const shuffled = [...playlist.tracks].sort(() => Math.random() - 0.5);
-      playTrack(shuffled[0], shuffled);
+      if (currentTrack?.id === shuffled[0].id) restartCurrentTrack();
+      else playTrack(shuffled[0], shuffled);
     }
   };
 

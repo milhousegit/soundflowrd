@@ -44,7 +44,7 @@ import {
 const PlaylistPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { playTrack, setPlaybackSource } = usePlayer();
+  const { playTrack, restartCurrentTrack, currentTrack, setPlaybackSource } = usePlayer();
   const { t } = useSettings();
   const { profile, isAdmin, user } = useAuth();
   const { getPlaylistTracks, deletePlaylist, updatePlaylist, removeTrackFromPlaylist, reorderPlaylistTracks, addTrackToPlaylist } = usePlaylists();
@@ -360,7 +360,8 @@ const PlaylistPage: React.FC = () => {
   const handlePlayAll = () => {
     if (tracks.length > 0) {
       setPlaybackSource({ type: 'playlist', name: playlist?.name || null, path: `/playlist/${id}` });
-      playTrack(tracks[0], tracks);
+      if (currentTrack?.id === tracks[0].id) restartCurrentTrack();
+      else playTrack(tracks[0], tracks);
     }
   };
 
@@ -368,7 +369,8 @@ const PlaylistPage: React.FC = () => {
     if (tracks.length > 0) {
       const shuffled = [...tracks].sort(() => Math.random() - 0.5);
       setPlaybackSource({ type: 'playlist', name: playlist?.name || null, path: `/playlist/${id}` });
-      playTrack(shuffled[0], shuffled);
+      if (currentTrack?.id === shuffled[0].id) restartCurrentTrack();
+      else playTrack(shuffled[0], shuffled);
     }
   };
 

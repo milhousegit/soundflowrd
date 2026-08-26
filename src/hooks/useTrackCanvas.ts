@@ -11,10 +11,13 @@ export const useTrackCanvas = (trackId: string | undefined, trackTitle?: string,
 
   useEffect(() => {
     abortRef.current = false;
+    setCanvasUrl(null);
+    setIsLoading(Boolean(trackId));
 
     const fetchCanvas = async () => {
       if (!trackId) {
         setCanvasUrl(null);
+        setIsLoading(false);
         return;
       }
 

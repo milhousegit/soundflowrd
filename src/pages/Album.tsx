@@ -21,7 +21,7 @@ import { isPast } from 'date-fns';
 const Album: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { playTrack, setPlaybackSource } = usePlayer();
+  const { playTrack, restartCurrentTrack, currentTrack, setPlaybackSource } = usePlayer();
   const { t, settings } = useSettings();
   const { profile, isAdmin } = useAuth();
   const { downloadAll, isDownloading: isDownloadingAll } = useDownloadAll();
@@ -109,7 +109,8 @@ const Album: React.FC = () => {
   const handlePlayAll = () => {
     if (displayTracks.length > 0) {
       setPlaybackSource({ type: 'album', name: album?.title || null, path: `/album/${id}` });
-      playTrack(displayTracks[0], displayTracks);
+      if (currentTrack?.id === displayTracks[0].id) restartCurrentTrack();
+      else playTrack(displayTracks[0], displayTracks);
     }
   };
 

@@ -19,7 +19,7 @@ const PlaylistRecommendations: React.FC<PlaylistRecommendationsProps> = ({
   const [recommendations, setRecommendations] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [addingTrackId, setAddingTrackId] = useState<string | null>(null);
-  const { playTrack, currentTrack, isPlaying, toggle } = usePlayer();
+  const { playTrack, restartCurrentTrack, currentTrack, isPlaying } = usePlayer();
 
   const fetchRecommendations = async () => {
     if (tracks.length === 0) {
@@ -95,7 +95,7 @@ const PlaylistRecommendations: React.FC<PlaylistRecommendationsProps> = ({
   const handlePlayTrack = (track: Track) => {
     const isCurrentTrack = currentTrack?.id === track.id;
     if (isCurrentTrack) {
-      toggle();
+      restartCurrentTrack();
     } else {
       // Play with full queue: playlist tracks + recommendations
       const fullQueue = [...tracks, ...recommendations];

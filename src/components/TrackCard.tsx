@@ -53,7 +53,7 @@ interface TrackCardProps {
 
 const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
   ({ track, queue, showArtist = true, showFavorite = true, showSyncStatus = true, index, isSynced: propIsSynced, isSyncing: propIsSyncing, isDownloading: propIsDownloading, onCreatePlaylist, onRemoveFromPlaylist, playlistId, onPlay }, ref) => {
-    const { currentTrack, isPlaying, playTrack, toggle, addToQueue, loadingPhase } = usePlayer();
+    const { currentTrack, isPlaying, playTrack, restartCurrentTrack, addToQueue, loadingPhase } = usePlayer();
     const { profile, isAdmin } = useAuth();
     const { isSynced: hookIsSynced, isSyncing: hookIsSyncing, isDownloading: hookIsDownloading } = useSyncedTracks([track.id]);
     const { playlists, addTrackToPlaylist } = usePlaylists();
@@ -197,12 +197,12 @@ const TrackCard = forwardRef<HTMLDivElement, TrackCardProps>(
     const handleTapClick = useCallback(() => {
       if (isMenuOpen || longPressTriggeredRef.current) return;
       if (isCurrentTrack) {
-        toggle();
+        restartCurrentTrack();
       } else {
         onPlay?.();
         playTrack(track, queue);
       }
-    }, [isMenuOpen, isCurrentTrack, toggle, playTrack, track, queue, onPlay]);
+    }, [isMenuOpen, isCurrentTrack, restartCurrentTrack, playTrack, track, queue, onPlay]);
 
     // Handle copy ID
     const handleCopyId = (e: React.MouseEvent) => {

@@ -84,7 +84,7 @@ export type LoadingPhase = 'idle' | 'searching' | 'downloading' | 'loading' | 'u
 export type AudioSource = 'monochrome' | 'hifi' | 'real-debrid' | 'offline' | (string & {}) | null;
 
 export interface PlaybackSource {
-  type: 'playlist' | 'album' | 'artist' | 'radio' | 'search' | 'queue' | null;
+  type: 'playlist' | 'album' | 'artist' | 'profile' | 'radio' | 'search' | 'queue' | null;
   name: string | null;
   path: string | null; // e.g. /playlist/123, /album/456, /artist/789
 }
@@ -100,6 +100,7 @@ interface PlayerContextType extends PlayerState {
 
   addToQueue: (tracks: Track[]) => void;
   playTrack: (track: Track, queue?: Track[]) => void;
+  restartCurrentTrack: () => void;
   playQueueIndex: (index: number) => void;
   clearQueue: () => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
@@ -461,11 +462,21 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const queueIdRef = useRef(0);
   const manualSourceQueueIdRef = useRef(-1);
   const pendingManualSourceRef = useRef(false);
+
+  const normalizePlaybackPath = useCallback((path: string | null) => {
+    if (!path) return null;
+    if (path === '/app' || path.startsWith('/app/')) return path;
+    if (path === '/') return '/app';
+    return path.startsWith('/') ? `/app${path}` : `/app/${path}`;
+  }, []);
   
   const setPlaybackSource = useCallback((source: PlaybackSource) => {
     pendingManualSourceRef.current = true;
-    setPlaybackSourceInternal(source);
-  }, []);
+    setPlaybackSourceInternal({
+      ...source,
+      path: normalizePlaybackPath(source.path),
+    });
+  }, [normalizePlaybackPath]);
 
   const [isShuffled, setIsShuffled] = useState(false);
   const originalQueueRef = useRef<Track[]>([]);
@@ -1343,7 +1354,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
               setState((prev) => ({
                 ...prev,
-                isPlaying: true,
+                // YouTube may still be waiting for the iframe to become ready.
+                // Keep the control in "play" state until the iframe confirms
+                // PLAYING, otherwise the first iOS tap is interpreted as pause.
+                isPlaying: false,
                 progress: 0,
                 duration: data.duration || enrichedTrack.duration,
               }));
@@ -2004,7 +2018,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setPlaybackSourceInternal({
             type: 'playlist',
             name: pl.name || null,
-            path: `/playlist/${pl.id}`,
+            path: `/app/playlist/${pl.id}`,
           });
           return;
         }
@@ -2014,7 +2028,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setPlaybackSourceInternal({
             type: 'album',
             name: state.currentTrack.album || null,
-            path: `/album/${state.currentTrack.albumId}`,
+            path: `/app/album/${state.currentTrack.albumId}`,
           });
           return;
         }
@@ -2024,7 +2038,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setPlaybackSourceInternal({
             type: 'artist',
             name: state.currentTrack.artist || null,
-            path: `/artist/${state.currentTrack.artistId}`,
+            path: `/app/artist/${state.currentTrack.artistId}`,
           });
         }
       } catch (err) {
@@ -2127,6 +2141,25 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     queueIndexRef.current = state.queueIndex;
     currentTrackRef.current = state.currentTrack;
   }, [state.queue, state.queueIndex, state.currentTrack]);
+
+  const restartCurrentTrack = useCallback(() => {
+    if (!currentTrackRef.current) return;
+
+    if (currentAudioSource === 'youtube-music' && youtubeVideoId) {
+      seekYoutube(0);
+      playYoutube();
+      setState((prev) => ({ ...prev, isPlaying: true, progress: 0 }));
+      return;
+    }
+
+    const audio = audioRef.current;
+    if (!audio?.src) return;
+
+    audio.currentTime = 0;
+    safePlay(audio).then((success) => {
+      if (success) setState((prev) => ({ ...prev, isPlaying: true, progress: 0 }));
+    });
+  }, [currentAudioSource, playYoutube, safePlay, seekYoutube, youtubeVideoId]);
 
   // Internal play: advances within existing queue without resetting it
   const playTrackInternal = useCallback(async (track: Track, index: number) => {
@@ -2530,6 +2563,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setVolume,
         addToQueue,
         playTrack,
+        restartCurrentTrack,
         playQueueIndex,
         clearQueue,
         reorderQueue,

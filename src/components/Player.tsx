@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '@/contexts/PlayerContext';
+import { useYouTubePlayer } from '@/contexts/YouTubePlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import { Skeleton } from '@/components/ui/skeleton';
 import DebugModal from './DebugModal';
 import QueueModal from './QueueModal';
 import FavoriteButton from './FavoriteButton';
@@ -101,11 +103,29 @@ const Player: React.FC = () => {
   const canDownload = contextIsAdmin || isPremiumActive;
 
   const { saveTrackOffline } = useOfflineStorage();
-  const { canvasUrl } = useTrackCanvas(currentTrack?.id, currentTrack?.title, currentTrack?.artist);
+  const { canvasUrl, isLoading: isCanvasLoading } = useTrackCanvas(currentTrack?.id, currentTrack?.title, currentTrack?.artist);
+  const { videoId: youtubeVideoId, setMobilePlayerExpanded, setYoutubeVisualVisible } = useYouTubePlayer();
+  const showYoutubeBackground = currentAudioSource === 'youtube-music' && Boolean(youtubeVideoId) && !canvasUrl && !isCanvasLoading;
+  const hasPlayerVideoBackground = Boolean(canvasUrl || showYoutubeBackground);
+  const isSourceLoading = Boolean(currentTrack && !currentAudioSource && loadingPhase !== 'unavailable');
+  const lastSourceLabelRef = useRef('YouTube Music');
+
+  useEffect(() => {
+    if (currentAudioSource) {
+      lastSourceLabelRef.current = getAudioSourceLabel(currentAudioSource);
+    }
+  }, [currentAudioSource]);
   const [isDownloading, setIsDownloading] = useState(false);
 
   // Get current stream URL from alternatives
   const currentStreamUrl = alternativeStreams.find((s) => s.id === currentStreamId)?.streamUrl;
+  const playbackSourcePath = playbackSource.path
+    ? playbackSource.path === '/'
+      ? '/app'
+      : playbackSource.path === '/app' || playbackSource.path.startsWith('/app/')
+        ? playbackSource.path
+        : `/app${playbackSource.path.startsWith('/') ? playbackSource.path : `/${playbackSource.path}`}`
+    : null;
 
   const [showDebugModal, setShowDebugModal] = useState(false);
   const [showTrackActions, setShowTrackActions] = useState(false);
@@ -114,6 +134,16 @@ const Player: React.FC = () => {
   
   const [isExpanded, setIsExpanded] = useState(false);
   const [showAlwaysOn, setShowAlwaysOn] = useState(false);
+
+  useEffect(() => {
+    setMobilePlayerExpanded(isExpanded);
+    return () => setMobilePlayerExpanded(false);
+  }, [isExpanded, setMobilePlayerExpanded]);
+
+  useEffect(() => {
+    setYoutubeVisualVisible(showYoutubeBackground);
+    return () => setYoutubeVisualVisible(false);
+  }, [setYoutubeVisualVisible, showYoutubeBackground]);
 
   // Swipe to close state
   const [dragY, setDragY] = useState(0);
@@ -270,15 +300,23 @@ const Player: React.FC = () => {
       {isExpanded &&
       <div
         ref={containerRef}
-        className={cn("fixed inset-0 z-[60] bg-background md:hidden overflow-y-auto", canvasUrl && "bg-black dark")}
+        className={cn(
+          "fixed inset-0 z-[60] md:hidden overflow-y-auto",
+          hasPlayerVideoBackground ? "youtube-player-content text-white" : "bg-transparent",
+          canvasUrl && !showYoutubeBackground && "bg-black dark"
+        )}
         style={expandedStyle}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}>
-        
-          {canvasUrl && <CanvasBackground canvasUrl={canvasUrl} isPlaying={isPlaying} />}
+          {/* Keep the underlying app covered while the next visual source loads. */}
+          {!showYoutubeBackground && (
+            <div aria-hidden="true" className="fixed inset-0 z-0 bg-black" />
+          )}
 
-          <div className={cn("relative", canvasUrl && "z-[1]")}>
+          {canvasUrl && !showYoutubeBackground && <CanvasBackground canvasUrl={canvasUrl} isPlaying={isPlaying} />}
+
+          <div className={cn("relative", (canvasUrl || showYoutubeBackground) && "z-[1]")}>
           <div className="flex justify-center pt-3 pb-1">
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full" />
           </div>
@@ -305,8 +343,8 @@ const Player: React.FC = () => {
               {playbackSource.type && playbackSource.name ?
             <button
               onClick={() => {
-                if (playbackSource.path) {
-                  navigate(playbackSource.path);
+                if (playbackSourcePath) {
+                  navigate(playbackSourcePath);
                   setIsExpanded(false);
                 }
               }}
@@ -342,11 +380,11 @@ const Player: React.FC = () => {
             <div
             className={cn(
               "w-full aspect-square relative select-none cursor-pointer",
-              !canvasUrl && "rounded-2xl bg-secondary overflow-hidden shadow-2xl"
+              !canvasUrl && !showYoutubeBackground && "rounded-2xl bg-secondary overflow-hidden shadow-2xl"
             )}
             onClick={handleCoverTripleTap}>
             
-              {!canvasUrl && (
+              {!canvasUrl && !showYoutubeBackground && (
                 currentTrack.coverUrl ?
             <img
               src={currentTrack.coverUrl}
@@ -427,14 +465,21 @@ const Player: React.FC = () => {
                 </>
             }
             </div>
-            {currentAudioSource &&
-          <div className="mt-2">
+            {(currentAudioSource || isSourceLoading) &&
+          <div className="mt-2" role={isSourceLoading ? 'status' : undefined} aria-label={isSourceLoading ? 'Caricamento sorgente audio' : undefined}>
+            {isSourceLoading ? (
+              <div className="relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium">
+                <span className="invisible whitespace-nowrap">{lastSourceLabelRef.current}</span>
+                <Skeleton className="absolute inset-0 h-full w-full rounded-full bg-white/25" />
+              </div>
+            ) : (
                 <span className={cn(
               "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
               getAudioSourceClass(currentAudioSource)
             )}>
                   {getAudioSourceLabel(currentAudioSource)}
                 </span>
+            )}
               </div>
           }
           </div>

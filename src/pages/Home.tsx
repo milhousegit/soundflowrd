@@ -53,13 +53,13 @@ const RecentTrackItem: React.FC<{
   displayRecent: Track[];
   currentTrack: Track | null;
   isPlaying: boolean;
-  toggle: () => void;
+  restartCurrentTrack: () => void;
   playTrack: (track: Track, queue?: Track[]) => void;
   setPlaybackSource: (source: any) => void;
   addToQueue: (tracks: Track[]) => void;
   settings: any;
   isMobile: boolean;
-}> = ({ track, displayRecent, currentTrack, isPlaying, toggle, playTrack, setPlaybackSource, addToQueue, settings, isMobile }) => {
+}> = ({ track, displayRecent, currentTrack, isPlaying, restartCurrentTrack, playTrack, setPlaybackSource, addToQueue, settings, isMobile }) => {
   const [showActionsModal, setShowActionsModal] = useState(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
@@ -85,12 +85,12 @@ const RecentTrackItem: React.FC<{
   const handleTap = useCallback(() => {
     if (longPressTriggeredRef.current) return;
     if (isCurrentTrack) {
-      toggle();
+      restartCurrentTrack();
     } else {
       setPlaybackSource({ type: 'playlist', name: settings.language === 'it' ? 'Ascoltati di recente' : 'Recently Played', path: '/' });
       playTrack(track, displayRecent);
     }
-  }, [isCurrentTrack, toggle, playTrack, track, displayRecent, setPlaybackSource, settings.language]);
+  }, [isCurrentTrack, restartCurrentTrack, playTrack, track, displayRecent, setPlaybackSource, settings.language]);
 
   return (
     <>
@@ -148,7 +148,7 @@ const Home: React.FC = () => {
   const [isAddingToPlaylist, setIsAddingToPlaylist] = useState<string | null>(null);
   
   const { settings, t } = useSettings();
-  const { currentTrack, isPlaying, playTrack, toggle, addToQueue, setPlaybackSource } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, restartCurrentTrack, addToQueue, setPlaybackSource } = usePlayer();
   const { favorites, getFavoritesByType } = useFavorites();
   const { playlists, isLoading: isLoadingPlaylists, addTrackToPlaylist } = usePlaylists();
   const { recentTracks, isLoading: isLoadingRecent } = useRecentlyPlayed();
@@ -376,7 +376,7 @@ const Home: React.FC = () => {
                 displayRecent={displayRecent}
                 currentTrack={currentTrack}
                 isPlaying={isPlaying}
-                toggle={toggle}
+                restartCurrentTrack={restartCurrentTrack}
                 playTrack={playTrack}
                 setPlaybackSource={setPlaybackSource}
                 addToQueue={addToQueue}

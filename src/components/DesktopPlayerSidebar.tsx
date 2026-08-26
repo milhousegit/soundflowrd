@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayer } from '@/contexts/PlayerContext';
+import { useYouTubePlayer } from '@/contexts/YouTubePlayerContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTrackCanvas } from '@/hooks/useTrackCanvas';
@@ -9,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import FavoriteButton from './FavoriteButton';
 import InlineLyricsCard from './InlineLyricsCard';
 import DebugModal from './DebugModal';
@@ -85,7 +87,18 @@ const DesktopPlayerSidebar: React.FC = () => {
     updateTrackMetadata,
   } = usePlayer();
 
-  const { canvasUrl } = useTrackCanvas(currentTrack?.id, currentTrack?.title, currentTrack?.artist);
+  const { canvasUrl, isLoading: isCanvasLoading } = useTrackCanvas(currentTrack?.id, currentTrack?.title, currentTrack?.artist);
+  const { videoId: youtubeVideoId } = useYouTubePlayer();
+  const showYoutubeBackground = currentAudioSource === 'youtube-music' && Boolean(youtubeVideoId) && !canvasUrl && !isCanvasLoading;
+  const hasPlayerVideoBackground = Boolean(canvasUrl || showYoutubeBackground);
+  const isSourceLoading = Boolean(currentTrack && !currentAudioSource && loadingPhase !== 'unavailable');
+  const lastSourceLabelRef = React.useRef('YouTube Music');
+
+  React.useEffect(() => {
+    if (currentAudioSource) {
+      lastSourceLabelRef.current = getAudioSourceLabel(currentAudioSource);
+    }
+  }, [currentAudioSource]);
   const { saveTrackOffline } = useOfflineStorage();
 
   const isPremiumActive = !simulateFreeUser && profile?.is_premium && (
@@ -152,14 +165,17 @@ const DesktopPlayerSidebar: React.FC = () => {
 
   return (
     <>
-      <aside className="hidden md:flex w-[380px] shrink-0 flex-col border-l border-border bg-card overflow-hidden">
+      <aside className={cn(
+        'relative z-[40] hidden md:flex w-[380px] shrink-0 flex-col border-l border-border overflow-hidden',
+        hasPlayerVideoBackground ? 'youtube-player-content bg-card/70 backdrop-blur-sm' : 'bg-card'
+      )}>
         <ScrollArea className="flex-1">
           <div className="flex flex-col">
             {/* Canvas/Cover + overlaid controls — seamless */}
             <div className="relative w-full h-[72vh] min-h-[680px] max-h-[920px]">
               {/* Media background */}
               <div className="absolute inset-0">
-                {canvasUrl ? (
+                {canvasUrl && !showYoutubeBackground ? (
                   <video
                     src={canvasUrl}
                     className="w-full h-full object-cover"
@@ -169,6 +185,8 @@ const DesktopPlayerSidebar: React.FC = () => {
                     autoPlay={isPlaying}
                     crossOrigin="anonymous"
                   />
+                ) : showYoutubeBackground ? (
+                  <div className="w-full h-full bg-transparent" />
                 ) : currentTrack.coverUrl ? (
                   <div className="w-full h-full flex items-center justify-center bg-secondary">
                     <img
@@ -222,14 +240,21 @@ const DesktopPlayerSidebar: React.FC = () => {
                     )}
                   </div>
 
-                  {currentAudioSource && (
+                  {(currentAudioSource || isSourceLoading) && (
                     <div className="mt-1.5">
-                      <span className={cn(
-                        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-                        getAudioSourceClass(currentAudioSource)
-                      )}>
-                        {getAudioSourceLabel(currentAudioSource)}
-                      </span>
+                      {isSourceLoading ? (
+                        <div className="relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium">
+                          <span className="invisible whitespace-nowrap">{lastSourceLabelRef.current}</span>
+                          <Skeleton className="absolute inset-0 h-full w-full rounded-full bg-white/25" />
+                        </div>
+                      ) : (
+                        <span className={cn(
+                          'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+                          getAudioSourceClass(currentAudioSource)
+                        )}>
+                          {getAudioSourceLabel(currentAudioSource)}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

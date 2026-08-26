@@ -25,7 +25,7 @@ const AutoDetailView: React.FC<AutoDetailViewProps> = ({ detail, onBack }) => {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { playTrack, currentTrack, isPlaying } = usePlayer();
+  const { playTrack, restartCurrentTrack, currentTrack, isPlaying } = usePlayer();
 
   useEffect(() => {
     const loadData = async () => {
@@ -77,7 +77,8 @@ const AutoDetailView: React.FC<AutoDetailViewProps> = ({ detail, onBack }) => {
   }, [detail]);
 
   const handleTrackClick = (track: Track) => {
-    playTrack(track, tracks);
+    if (currentTrack?.id === track.id) restartCurrentTrack();
+    else playTrack(track, tracks);
   };
 
   const handleAlbumClick = (album: Album) => {

@@ -17,7 +17,7 @@ const DailyMixPage: React.FC = () => {
   const { index } = useParams<{ index: string }>();
   const navigate = useNavigate();
   const { mixes, isLoading } = useDailyMixes();
-  const { playTrack, setPlaybackSource, currentTrack, isPlaying, toggle } = usePlayer();
+  const { playTrack, restartCurrentTrack, setPlaybackSource, currentTrack } = usePlayer();
   const { settings } = useSettings();
   const { createPlaylist, addTracksToPlaylist } = usePlaylists();
   const { toast } = useToast();
@@ -34,14 +34,16 @@ const DailyMixPage: React.FC = () => {
   const handlePlayAll = () => {
     if (!mix || mix.tracks.length === 0) return;
     setPlaybackSource({ type: 'playlist', name: mix.mix_label, path: `/daily-mix/${mixIndex}` });
-    playTrack(mix.tracks[0], mix.tracks);
+    if (currentTrack?.id === mix.tracks[0].id) restartCurrentTrack();
+    else playTrack(mix.tracks[0], mix.tracks);
   };
 
   const handleShuffle = () => {
     if (!mix || mix.tracks.length === 0) return;
     const shuffled = [...mix.tracks].sort(() => Math.random() - 0.5);
     setPlaybackSource({ type: 'playlist', name: mix.mix_label, path: `/daily-mix/${mixIndex}` });
-    playTrack(shuffled[0], shuffled);
+    if (currentTrack?.id === shuffled[0].id) restartCurrentTrack();
+    else playTrack(shuffled[0], shuffled);
   };
 
   const handleSaveAsPlaylist = async () => {
