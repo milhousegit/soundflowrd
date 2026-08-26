@@ -64,6 +64,7 @@ const Player: React.FC = () => {
     volume,
     queue,
     queueIndex,
+    play,
     toggle,
     next,
     previous,
@@ -134,6 +135,7 @@ const Player: React.FC = () => {
   
   const [isExpanded, setIsExpanded] = useState(false);
   const [showAlwaysOn, setShowAlwaysOn] = useState(false);
+  const playGestureHandledRef = useRef(false);
 
   useEffect(() => {
     setMobilePlayerExpanded(isExpanded);
@@ -183,8 +185,30 @@ const Player: React.FC = () => {
   );
 
   const handleToggle = useCallback(() => {
+    // On iOS the pointer/touch handler below already issued the play command
+    // during the user gesture. Ignore the synthetic click that follows it so
+    // the same tap cannot immediately turn playback back off.
+    if (playGestureHandledRef.current) {
+      playGestureHandledRef.current = false;
+      return;
+    }
     toggle();
   }, [toggle]);
+
+  const handlePlayButtonPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (
+      event.pointerType !== 'touch' &&
+      event.pointerType !== 'pen'
+    ) return;
+    if (isPlaying || currentAudioSource !== 'youtube-music' || !youtubeVideoId) return;
+
+    event.stopPropagation();
+    playGestureHandledRef.current = true;
+    play();
+    window.setTimeout(() => {
+      playGestureHandledRef.current = false;
+    }, 1200);
+  }, [currentAudioSource, isPlaying, play, youtubeVideoId]);
 
   if (!currentTrack) return null;
 
@@ -518,7 +542,7 @@ const Player: React.FC = () => {
               <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={(e) => {e.stopPropagation();previous();}}>
                 <SkipBack className="w-6 h-6" />
               </Button>
-              <Button variant="player" className="h-16 w-16" onClick={(e) => {e.stopPropagation();handleToggle();}}>
+              <Button variant="player" className="h-16 w-16" onPointerDown={handlePlayButtonPointerDown} onClick={(e) => {e.stopPropagation();handleToggle();}}>
                 {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
               </Button>
               <Button variant="playerSecondary" size="icon" className="h-11 w-11" onClick={(e) => {e.stopPropagation();next();}}>
@@ -574,7 +598,7 @@ const Player: React.FC = () => {
               <p className="font-medium text-foreground truncate text-sm">{currentTrack.title}</p>
               <p className="text-xs text-muted-foreground truncate">{currentTrack.artist}</p>
             </div>
-            <Button variant="playerSecondary" size="icon" className="h-9 w-9" onClick={(e) => {e.stopPropagation();handleToggle();}}>
+            <Button variant="playerSecondary" size="icon" className="h-9 w-9" onPointerDown={handlePlayButtonPointerDown} onClick={(e) => {e.stopPropagation();handleToggle();}}>
               {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
             </Button>
             <ChevronUp className="w-4 h-4 text-muted-foreground" />

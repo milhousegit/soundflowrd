@@ -36,6 +36,7 @@ import { searchTracks, getArtistTopTracks } from '@/lib/spotify';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
 import { updateListeningStats } from '@/hooks/useListeningStats';
 import { addSyncedTrack, addSyncingTrack, removeSyncingTrack } from '@/hooks/useSyncedTracks';
+import { useIOSAudioSession } from '@/hooks/useIOSAudioSession';
 import { useYouTubePlayer, YOUTUBE_PLAYER_STATES } from './YouTubePlayerContext';
 
 // IndexedDB helper for offline playback
@@ -370,6 +371,7 @@ const fetchTrackMetadata = async (track: Track): Promise<Track> => {
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Audio element reference
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { quickUnlock } = useIOSAudioSession();
   const {
     videoId: youtubeVideoId,
     playerState: youtubePlayerState,
@@ -862,10 +864,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     youtubeVideoId,
   ]);
 
-  // Simplified unlock - no-op without iOS audio session
+  // Unlock the browser audio session synchronously from the original gesture.
   const tryUnlockAudioFromUserGesture = useCallback(() => {
-    // No-op: iOS workarounds removed
-  }, []);
+    // This must run synchronously from the original tap, before the plugin
+    // search starts. It gives iOS the best chance to allow the later YouTube
+    // iframe play call once the video id has been resolved.
+    quickUnlock();
+  }, [quickUnlock]);
 
   const saveFileMapping = useCallback(async (params: {
     track: Track;
@@ -1854,7 +1859,6 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         playTrack(track);
       } else if (currentAudioSource === 'youtube-music' && youtubeVideoId) {
         playYoutube();
-        setState((prev) => ({ ...prev, isPlaying: true }));
       } else if (audioRef.current) {
         safePlay(audioRef.current).then((success) => {
           if (success) setState((prev) => ({ ...prev, isPlaying: true }));
