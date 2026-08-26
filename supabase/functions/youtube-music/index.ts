@@ -378,42 +378,25 @@ Deno.serve(async (req) => {
       .sort((a, b) => b.s - a.s)
       .slice(0, 4);
 
-    const errors: string[] = [];
-    for (const cand of ranked) {
-      try {
-        const player = await getPlayerResponse(cand.r.videoId);
-        const pick = pickAudioFormat(player, body.quality ?? "high");
-        return new Response(
-          JSON.stringify({
-            streamUrl: pick.streamUrl,
-            mimeType: pick.mimeType,
-            bitrate: pick.bitrate,
-            sampleRate: pick.sampleRate,
-            quality: body.quality ?? "high",
-            videoId: cand.r.videoId,
-            matched: {
-              title: cand.r.title,
-              artist: cand.r.artist,
-              album: cand.r.album,
-              duration: cand.r.duration,
-              thumbnail: cand.r.thumbnail,
-              score: cand.s,
-            },
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      } catch (e) {
-        errors.push(`${cand.r.videoId}: ${(e as Error).message}`);
-      }
-    }
+    // Playback is delegated to the official YouTube IFrame player in the client.
+    // The previous implementation called the private InnerTube player endpoint
+    // and attempted to expose a direct audio URL, which is where LOGIN_REQUIRED
+    // and signature/playability failures occurred.
+    const cand = ranked[0];
     return new Response(
       JSON.stringify({
-        error: "no playable candidate",
-        details: errors,
-        candidates: ranked.map((x) => x.r),
+        videoId: cand.r.videoId,
+        title: cand.r.title,
+        artist: cand.r.artist,
+        album: cand.r.album,
+        duration: cand.r.duration,
+        thumbnail: cand.r.thumbnail,
+        score: cand.s,
+        playback: "youtube-iframe",
       }),
-      { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+
   } catch (e) {
     console.error("[youtube-music] error", e);
     return new Response(

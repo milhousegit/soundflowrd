@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PlayerProvider } from "@/contexts/PlayerContext";
+import { YouTubePlayerProvider } from "@/contexts/YouTubePlayerContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { AutoModeProvider, useAutoMode } from "@/components/auto/AutoModeContext";
 import { TVConnectionProvider } from "@/contexts/TVConnectionContext";
@@ -189,15 +190,17 @@ const App = () => (
     <AuthProvider>
       <SettingsProvider>
         <ServiceStatusProvider>
-          <PlayerProvider>
-            <AutoModeProvider>
-              <TVConnectionProvider>
-                <TooltipProvider>
-                  <AppContent />
-                </TooltipProvider>
-              </TVConnectionProvider>
-            </AutoModeProvider>
-          </PlayerProvider>
+          <YouTubePlayerProvider>
+            <PlayerProvider>
+              <AutoModeProvider>
+                <TVConnectionProvider>
+                  <TooltipProvider>
+                    <AppContent />
+                  </TooltipProvider>
+                </TVConnectionProvider>
+              </AutoModeProvider>
+            </PlayerProvider>
+          </YouTubePlayerProvider>
         </ServiceStatusProvider>
       </SettingsProvider>
     </AuthProvider>

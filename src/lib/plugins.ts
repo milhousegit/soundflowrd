@@ -264,7 +264,7 @@ export async function streamWithPluginChain(
       lastError = error;
       continue;
     }
-    if (data && typeof data === 'object' && 'streamUrl' in data && data.streamUrl) {
+    if (data && typeof data === 'object' && (data.streamUrl || data.videoId)) {
       return { result: data, pluginUsed: plugin };
     }
   }

@@ -61,7 +61,13 @@ export interface PluginInvokePayload {
 }
 
 export interface PluginStreamResult {
-  streamUrl: string;
+  streamUrl?: string;
+  /** Video identifier for plugins that delegate playback to an embedded player. */
+  videoId?: string;
+  duration?: number;
+  title?: string;
+  artist?: string;
+  album?: string;
   quality?: string;
   bitDepth?: number;
   sampleRate?: number;

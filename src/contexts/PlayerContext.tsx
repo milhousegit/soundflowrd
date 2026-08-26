@@ -36,6 +36,7 @@ import { searchTracks, getArtistTopTracks } from '@/lib/spotify';
 import { saveRecentlyPlayedTrack } from '@/hooks/useRecentlyPlayed';
 import { updateListeningStats } from '@/hooks/useListeningStats';
 import { addSyncedTrack, addSyncingTrack, removeSyncingTrack } from '@/hooks/useSyncedTracks';
+import { useYouTubePlayer, YOUTUBE_PLAYER_STATES } from './YouTubePlayerContext';
 
 // IndexedDB helper for offline playback
 const getOfflineTrackUrl = async (trackId: string): Promise<string | null> => {
@@ -368,6 +369,19 @@ const fetchTrackMetadata = async (track: Track): Promise<Track> => {
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Audio element reference
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const {
+    videoId: youtubeVideoId,
+    playerState: youtubePlayerState,
+    currentTime: youtubeCurrentTime,
+    duration: youtubeDuration,
+    errorCode: youtubeErrorCode,
+    loadVideo: loadYoutubeVideo,
+    play: playYoutube,
+    pause: pauseYoutube,
+    stop: stopYoutube,
+    seek: seekYoutube,
+    setVolume: setYoutubeVolume,
+  } = useYouTubePlayer();
   const { credentials, user } = useAuth();
   const { audioSourceMode: settingsAudioSourceMode, settings, selectedScrapingSource, hybridFallbackChain: settingsHybridChain } = useSettings();
   const { reportFailure, reportSuccess } = useServiceStatus();
@@ -470,6 +484,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Track actual listening time
   const playbackStartTimeRef = useRef<number | null>(null);
   const lastSavedTrackRef = useRef<{ track: Track; startTime: number } | null>(null);
+  const handledYoutubeEndedVideoRef = useRef<string | null>(null);
+  const handledYoutubeErrorVideoRef = useRef<string | null>(null);
+  const currentAudioSourceRef = useRef<AudioSource>(null);
+  const youtubeVideoIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentAudioSourceRef.current = currentAudioSource;
+    youtubeVideoIdRef.current = youtubeVideoId;
+  }, [currentAudioSource, youtubeVideoId]);
 
   // Auto-skip to next track when current track is unavailable
   const autoSkipToNext = useCallback(() => {
@@ -687,11 +710,19 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     if ('mediaSession' in navigator) {
       navigator.mediaSession.setActionHandler('play', () => {
-        audio.play();
+        if (currentAudioSourceRef.current === 'youtube-music' && youtubeVideoIdRef.current) {
+          playYoutube();
+        } else {
+          audio.play();
+        }
         setState((prev) => ({ ...prev, isPlaying: true }));
       });
       navigator.mediaSession.setActionHandler('pause', () => {
-        audio.pause();
+        if (currentAudioSourceRef.current === 'youtube-music' && youtubeVideoIdRef.current) {
+          pauseYoutube();
+        } else {
+          audio.pause();
+        }
         setState((prev) => ({ ...prev, isPlaying: false }));
       });
       navigator.mediaSession.setActionHandler('previoustrack', () => {
@@ -701,7 +732,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         nextRef.current();
       });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime !== undefined && audio.duration) {
+        if (details.seekTime === undefined) return;
+        if (currentAudioSourceRef.current === 'youtube-music' && youtubeVideoIdRef.current) {
+          seekYoutube(details.seekTime);
+          setState((prev) => ({ ...prev, progress: details.seekTime! }));
+        } else if (audio.duration) {
           audio.currentTime = details.seekTime;
           setState((prev) => ({ ...prev, progress: details.seekTime! }));
         }
@@ -741,6 +776,80 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Mirror the embedded YouTube player into the same state used by the native
+  // audio element. The existing controls can therefore drive either source.
+  useEffect(() => {
+    if (currentAudioSource !== 'youtube-music') return;
+
+    setState((prev) => ({
+      ...prev,
+      progress: youtubeCurrentTime,
+      duration: youtubeDuration || prev.duration,
+      isPlaying: youtubePlayerState === YOUTUBE_PLAYER_STATES.PLAYING
+        ? true
+        : youtubePlayerState === YOUTUBE_PLAYER_STATES.PAUSED
+          ? false
+          : prev.isPlaying,
+    }));
+
+    if (youtubePlayerState === YOUTUBE_PLAYER_STATES.PLAYING) {
+      handledYoutubeEndedVideoRef.current = null;
+      handledYoutubeErrorVideoRef.current = null;
+      if (state.currentTrack && !lastSavedTrackRef.current) {
+        lastSavedTrackRef.current = { track: state.currentTrack, startTime: Date.now() };
+      }
+    }
+
+    if (youtubePlayerState === YOUTUBE_PLAYER_STATES.PAUSED && lastSavedTrackRef.current) {
+      const { track: pausedTrack, startTime } = lastSavedTrackRef.current;
+      const secondsListened = Math.round((Date.now() - startTime) / 1000);
+      if (secondsListened >= 10) {
+        saveRecentlyPlayedTrack(pausedTrack, user?.id, secondsListened);
+        if (user?.id) updateListeningStats(pausedTrack, user.id, secondsListened);
+      }
+      lastSavedTrackRef.current = null;
+    }
+
+    if (
+      youtubePlayerState === YOUTUBE_PLAYER_STATES.ENDED &&
+      youtubeVideoId &&
+      handledYoutubeEndedVideoRef.current !== youtubeVideoId
+    ) {
+      handledYoutubeEndedVideoRef.current = youtubeVideoId;
+      if (lastSavedTrackRef.current) {
+        const { track: endedTrack, startTime } = lastSavedTrackRef.current;
+        const secondsListened = Math.round((Date.now() - startTime) / 1000);
+        saveRecentlyPlayedTrack(endedTrack, user?.id, secondsListened);
+        if (user?.id) updateListeningStats(endedTrack, user.id, secondsListened);
+        lastSavedTrackRef.current = null;
+      }
+      nextRef.current();
+    }
+
+    if (
+      youtubeErrorCode !== null &&
+      youtubeVideoId &&
+      handledYoutubeErrorVideoRef.current !== youtubeVideoId
+    ) {
+      handledYoutubeErrorVideoRef.current = youtubeVideoId;
+      setLoadingPhase('unavailable');
+      setState((prev) => ({ ...prev, isPlaying: false }));
+      addDebugLog('❌ YouTube non disponibile', `Errore player ${youtubeErrorCode}`, 'error');
+      autoSkipToNext();
+    }
+  }, [
+    addDebugLog,
+    autoSkipToNext,
+    currentAudioSource,
+    state.currentTrack,
+    user,
+    youtubeCurrentTime,
+    youtubeDuration,
+    youtubeErrorCode,
+    youtubePlayerState,
+    youtubeVideoId,
+  ]);
 
   // Simplified unlock - no-op without iOS audio session
   const tryUnlockAudioFromUserGesture = useCallback(() => {
@@ -867,6 +976,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         audioRef.current.pause();
         audioRef.current.src = '';
       }
+      stopYoutube();
 
       currentSearchTrackIdRef.current = track.id;
       queueIdRef.current += 1;
@@ -1221,8 +1331,31 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               quality: mapQualityToTidal(settings.audioQuality) as 'high' | 'medium' | 'low' | 'lossless',
             });
             if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
-            if (error || !data?.streamUrl || !audioRef.current) {
-              addDebugLog(`❌ ${pluginName} fallito`, error || 'Nessun streamUrl', 'error');
+            const youtubeId = sourceId === 'youtube-music' ? data?.videoId : undefined;
+            if (error || !data || (!data.streamUrl && !youtubeId)) {
+              addDebugLog(`❌ ${pluginName} fallito`, error || 'Nessuna sorgente riproducibile', 'error');
+              continue;
+            }
+
+            if (youtubeId) {
+              loadYoutubeVideo(youtubeId, true);
+              if (currentSearchTrackIdRef.current !== enrichedTrack.id) return;
+
+              setState((prev) => ({
+                ...prev,
+                isPlaying: true,
+                progress: 0,
+                duration: data.duration || enrichedTrack.duration,
+              }));
+              setLoadingPhase('idle');
+              setCurrentAudioSource(sourceId as AudioSource);
+              startTrackingPlayback();
+              addDebugLog(`✅ ${pluginName} avviato`, `YouTube video ${youtubeId}`, 'success');
+              return;
+            }
+
+            if (!audioRef.current || !data.streamUrl) {
+              addDebugLog(`❌ ${pluginName} fallito`, 'Nessun stream audio disponibile', 'error');
               continue;
             }
             audioRef.current.src = data.streamUrl;
@@ -1565,6 +1698,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       credentials,
       safePlay,
       saveFileMapping,
+      loadYoutubeVideo,
+      stopYoutube,
       tryUnlockAudioFromUserGesture,
       user,
       settings.audioQuality,
@@ -1703,6 +1838,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     (track?: Track) => {
       if (track) {
         playTrack(track);
+      } else if (currentAudioSource === 'youtube-music' && youtubeVideoId) {
+        playYoutube();
+        setState((prev) => ({ ...prev, isPlaying: true }));
       } else if (audioRef.current) {
         safePlay(audioRef.current).then((success) => {
           if (success) setState((prev) => ({ ...prev, isPlaying: true }));
@@ -1711,13 +1849,17 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setState((prev) => ({ ...prev, isPlaying: true }));
       }
     },
-    [playTrack, safePlay]
+    [currentAudioSource, playTrack, playYoutube, safePlay, youtubeVideoId]
   );
 
   const pause = useCallback(() => {
-    audioRef.current?.pause();
+    if (currentAudioSource === 'youtube-music' && youtubeVideoId) {
+      pauseYoutube();
+    } else {
+      audioRef.current?.pause();
+    }
     setState((prev) => ({ ...prev, isPlaying: false }));
-  }, []);
+  }, [currentAudioSource, pauseYoutube, youtubeVideoId]);
 
   const toggle = useCallback(() => {
     if (state.isPlaying) pause();
@@ -1725,14 +1867,22 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [pause, play, state.isPlaying]);
 
   const seek = useCallback((time: number) => {
-    if (audioRef.current) audioRef.current.currentTime = time;
+    if (currentAudioSource === 'youtube-music' && youtubeVideoId) {
+      seekYoutube(time);
+    } else if (audioRef.current) {
+      audioRef.current.currentTime = time;
+    }
     setState((prev) => ({ ...prev, progress: time }));
-  }, []);
+  }, [currentAudioSource, seekYoutube, youtubeVideoId]);
 
   const setVolume = useCallback((volume: number) => {
-    if (audioRef.current) audioRef.current.volume = volume;
+    if (currentAudioSource === 'youtube-music' && youtubeVideoId) {
+      setYoutubeVolume(volume);
+    } else if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
     setState((prev) => ({ ...prev, volume }));
-  }, []);
+  }, [currentAudioSource, setYoutubeVolume, youtubeVideoId]);
 
   const addToQueue = useCallback((tracks: Track[]) => {
     setState((prev) => {
